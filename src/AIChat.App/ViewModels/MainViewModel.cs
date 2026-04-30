@@ -15,6 +15,7 @@ using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
+using AIChat.Application.Workspace;
 using AIChat.Domain.Context;
 
 namespace AIChat.App.ViewModels;
@@ -37,6 +38,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly IChatCompletionService _chatService;
     private readonly IContextEstimator _contextEstimator;
     private readonly ConversationContextBuilder _contextBuilder;
+    private readonly WorkspaceChangeService _workspaceChangeService;
     private AgentHarness? _agentHarness;
     private AgentToolCatalog? _toolCatalog;
     private ProjectViewModel? _selectedProject;
@@ -59,19 +61,27 @@ public sealed class MainViewModel : ObservableObject
     private string _selectedCallRequestJson = "请选择左侧调用记录。";
     private string _selectedCallResponseJson = "请选择左侧调用记录。";
     private bool _showSelectedCallRawEvents;
+    private WorkspaceChangeViewModel? _selectedWorkspaceChange;
+    private string _workspaceBranch = "";
+    private string _workspaceStatusText = "尚未刷新";
+    private string _workspaceDiffText = "选择一个变更文件查看 diff。";
+    private bool _isRefreshingWorkspaceChanges;
     // Guards against older async JSON loads overwriting a newer selection.
     private int _callDetailLoadVersion;
+    private int _workspaceDiffLoadVersion;
 
     public MainViewModel(
         IAppRepository repository,
         IChatCompletionService chatService,
         IContextEstimator contextEstimator,
-        ConversationContextBuilder contextBuilder)
+        ConversationContextBuilder contextBuilder,
+        WorkspaceChangeService workspaceChangeService)
     {
         _repository = repository;
         _chatService = chatService;
         _contextEstimator = contextEstimator;
         _contextBuilder = contextBuilder;
+        _workspaceChangeService = workspaceChangeService;
         // Commands are the bridge from XAML buttons/menu items to ViewModel methods.
         NewChatCommand = new RelayCommand(_ => NewChat(), _ => SelectedProject is not null && !IsSending);
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
@@ -95,6 +105,7 @@ public sealed class MainViewModel : ObservableObject
         RemoveConfiguredProviderCommand = new RelayCommand(async _ => await RemoveConfiguredProviderAsync(), _ => SelectedConfiguredProvider is not null);
         ToggleNewProviderApiKeyVisibilityCommand = new RelayCommand(_ => IsNewProviderApiKeyVisible = !IsNewProviderApiKeyVisible);
         TestProviderConnectionCommand = new RelayCommand(async _ => await TestProviderConnectionAsync(), _ => !IsTestingProviderConnection && !string.IsNullOrWhiteSpace(NewProviderApiKey));
+        RefreshWorkspaceChangesCommand = new RelayCommand(async _ => await RefreshWorkspaceChangesAsync(), _ => SelectedProject is not null && !IsRefreshingWorkspaceChanges);
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -103,6 +114,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
     public ObservableCollection<ToolOptionViewModel> ToolOptions { get; } = [];
     public ObservableCollection<ModelParameterOptionViewModel> ModelParameterOptions { get; } = [];
+    public ObservableCollection<WorkspaceChangeViewModel> WorkspaceChanges { get; } = [];
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
         new() { Id = nameof(ToolPermissionMode.AutoReadOnly), Name = "只读自动" },
@@ -129,6 +141,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RemoveConfiguredProviderCommand { get; }
     public RelayCommand ToggleNewProviderApiKeyVisibilityCommand { get; }
     public RelayCommand TestProviderConnectionCommand { get; }
+    public RelayCommand RefreshWorkspaceChangesCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -178,6 +191,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(CurrentProjectName));
                 NewChatCommand.RaiseCanExecuteChanged();
+                RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -229,6 +243,44 @@ public sealed class MainViewModel : ObservableObject
         }
     }
     public bool HasApiKey => SelectedConfiguredProvider is not null && !string.IsNullOrWhiteSpace(SelectedConfiguredProvider.ApiKey);
+    public bool HasWorkspaceChanges => WorkspaceChanges.Count > 0;
+    public string WorkspaceBranch
+    {
+        get => _workspaceBranch;
+        private set => SetProperty(ref _workspaceBranch, value);
+    }
+    public string WorkspaceStatusText
+    {
+        get => _workspaceStatusText;
+        private set => SetProperty(ref _workspaceStatusText, value);
+    }
+    public string WorkspaceDiffText
+    {
+        get => _workspaceDiffText;
+        private set => SetProperty(ref _workspaceDiffText, value);
+    }
+    public bool IsRefreshingWorkspaceChanges
+    {
+        get => _isRefreshingWorkspaceChanges;
+        private set
+        {
+            if (SetProperty(ref _isRefreshingWorkspaceChanges, value))
+            {
+                RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+    public WorkspaceChangeViewModel? SelectedWorkspaceChange
+    {
+        get => _selectedWorkspaceChange;
+        set
+        {
+            if (SetProperty(ref _selectedWorkspaceChange, value))
+            {
+                _ = LoadSelectedWorkspaceDiffAsync();
+            }
+        }
+    }
     public string SelectedProviderId
     {
         get => Settings.ProviderId;
@@ -502,6 +554,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         SelectProject(Projects.FirstOrDefault(project => project.Name == "AIChat") ?? Projects.FirstOrDefault());
+        await RefreshWorkspaceChangesAsync();
         StatusText = HasApiKey ? "可直接对话" : "请先在设置中添加模型提供商";
     }
 
@@ -547,6 +600,8 @@ public sealed class MainViewModel : ObservableObject
         {
             SelectedConversation = null;
         }
+
+        _ = RefreshWorkspaceChangesAsync();
     }
 
     private void SelectConversation(ConversationViewModel conversation)
@@ -653,6 +708,75 @@ public sealed class MainViewModel : ObservableObject
 
         await SaveProjectsAsync();
         StatusText = "对话已删除";
+    }
+
+    private async Task RefreshWorkspaceChangesAsync()
+    {
+        if (SelectedProject is null || IsRefreshingWorkspaceChanges)
+        {
+            return;
+        }
+
+        IsRefreshingWorkspaceChanges = true;
+        try
+        {
+            var changeSet = await _workspaceChangeService.GetChangesAsync(SelectedProject.Path);
+            WorkspaceChanges.Clear();
+            foreach (var change in changeSet.Changes)
+            {
+                WorkspaceChanges.Add(new WorkspaceChangeViewModel(change));
+            }
+
+            WorkspaceBranch = changeSet.Branch;
+            WorkspaceStatusText = changeSet.HasChanges
+                ? $"{changeSet.Changes.Count} 个变更{(changeSet.IsTruncated ? "，列表已截断" : "")}"
+                : "工作区干净";
+            SelectedWorkspaceChange = WorkspaceChanges.FirstOrDefault();
+            if (SelectedWorkspaceChange is null)
+            {
+                WorkspaceDiffText = "当前没有可查看的工作区变更。";
+            }
+
+            OnPropertyChanged(nameof(HasWorkspaceChanges));
+        }
+        catch (Exception ex)
+        {
+            WorkspaceStatusText = $"读取失败：{ex.Message}";
+            WorkspaceDiffText = "无法读取当前项目的 Git 状态。";
+        }
+        finally
+        {
+            IsRefreshingWorkspaceChanges = false;
+        }
+    }
+
+    private async Task LoadSelectedWorkspaceDiffAsync()
+    {
+        var version = ++_workspaceDiffLoadVersion;
+        if (SelectedProject is null || SelectedWorkspaceChange is null)
+        {
+            WorkspaceDiffText = "选择一个变更文件查看 diff。";
+            return;
+        }
+
+        WorkspaceDiffText = "正在读取 diff...";
+        try
+        {
+            var diff = await _workspaceChangeService.GetDiffAsync(SelectedProject.Path, SelectedWorkspaceChange.Path);
+            if (version != _workspaceDiffLoadVersion)
+            {
+                return;
+            }
+
+            WorkspaceDiffText = diff.HasDiff ? diff.DiffText : "该文件没有未暂存 diff，可能只有暂存区变更或未跟踪状态。";
+        }
+        catch (Exception ex)
+        {
+            if (version == _workspaceDiffLoadVersion)
+            {
+                WorkspaceDiffText = $"读取 diff 失败：{ex.Message}";
+            }
+        }
     }
 
     private async Task SendAsync()
@@ -978,6 +1102,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 StatusText = "回复完成";
             }
+            await RefreshWorkspaceChangesAsync();
             await CompleteCallDetailAsync(callDetail, "完成", new
             {
                 status = "completed",

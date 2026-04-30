@@ -507,6 +507,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="292" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="350" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Left sidebar: project-scoped conversation list and settings entry. -->
@@ -689,7 +690,7 @@
                     </Grid>
                 </Border>
 
-                <Grid Grid.Column="1" Margin="14,0,12,12">
+                <Grid Grid.Column="1" Margin="14,0,10,12">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                         <RowDefinition Height="158" />
@@ -918,6 +919,133 @@
                         </Grid>
                     </Border>
                 </Grid>
+
+                <Border Grid.Column="2"
+                        Margin="0,0,12,12"
+                        Background="#FFFFFF"
+                        CornerRadius="10"
+                        BorderBrush="#CFD9E4"
+                        BorderThickness="1.5">
+                    <Grid Margin="14">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="148" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Workspace Changes"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="#1E252E" />
+                                <TextBlock Text="{Binding WorkspaceStatusText}"
+                                           Margin="0,4,0,0"
+                                           FontSize="12"
+                                           Foreground="#748092"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding RefreshWorkspaceChangesCommand}"
+                                    Content="刷新"
+                                    Width="62"
+                                    Height="32"
+                                    Style="{StaticResource SubtleButtonStyle}" />
+                        </DockPanel>
+
+                        <Border Grid.Row="1"
+                                Padding="10"
+                                CornerRadius="8"
+                                Background="#F8FAFC"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="1">
+                            <Grid>
+                                <ListBox ItemsSource="{Binding WorkspaceChanges}"
+                                         SelectedItem="{Binding SelectedWorkspaceChange, Mode=TwoWay}"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2" MinHeight="28">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="48" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Padding="5,2"
+                                                        CornerRadius="5"
+                                                        Background="#EEF5F3"
+                                                        BorderBrush="#D9E9E5"
+                                                        BorderThickness="1"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding DisplayStatus}"
+                                                               FontSize="10"
+                                                               Foreground="#3E6F68"
+                                                               TextAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </Border>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding Path}"
+                                                           Margin="8,0,0,0"
+                                                           VerticalAlignment="Center"
+                                                           FontSize="12"
+                                                           Foreground="#2A3340"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock Text="当前没有工作区变更"
+                                           Foreground="#98A2B0"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasWorkspaceChanges}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+
+                        <DockPanel Grid.Row="2" Margin="0,13,0,8">
+                            <TextBlock Text="Diff"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="#667386" />
+                            <TextBlock DockPanel.Dock="Right"
+                                       Text="{Binding WorkspaceBranch}"
+                                       FontSize="11"
+                                       Foreground="#98A2B0"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="190" />
+                        </DockPanel>
+
+                        <Border Grid.Row="3"
+                                Padding="10"
+                                CornerRadius="8"
+                                Background="#FBFCFD"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="1">
+                            <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding WorkspaceDiffText}"
+                                           FontFamily="Consolas"
+                                           FontSize="11"
+                                           Foreground="#2A3340"
+                                           TextWrapping="NoWrap" />
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Border>
             </Grid>
             <!-- Call-detail overlay for inspecting the exact provider request/response. -->
             <Grid Grid.RowSpan="2" Background="#B8EEF1F4">

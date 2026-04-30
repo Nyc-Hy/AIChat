@@ -9,6 +9,7 @@ using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
+using AIChat.Application.Workspace;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
 using AIChat.Storage.Json;
@@ -42,7 +43,8 @@ public partial class MainWindow : Window
             contextEstimator,
             new ConversationContextBuilder(
                 contextEstimator,
-                new SystemPromptBuilder()));
+                new SystemPromptBuilder()),
+            new WorkspaceChangeService());
         var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(
             new AgentHarness(agentRunner),
