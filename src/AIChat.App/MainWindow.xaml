@@ -245,31 +245,61 @@
                     Background="#F7FBFA"
                     BorderBrush="#D7E8E4"
                     BorderThickness="1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="{Binding Path}"
-                                   FontSize="12"
-                                   FontWeight="SemiBold"
-                                   Foreground="#1E252E"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding ToolName}"
-                                   Margin="0,2,0,0"
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Path}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="#1E252E"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding ToolName}"
+                                       Margin="0,2,0,0"
+                                       FontSize="11"
+                                       Foreground="#748092"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding SizeText}"
+                                   Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
                                    FontSize="11"
-                                   Foreground="#748092"
-                                   TextTrimming="CharacterEllipsis" />
-                    </StackPanel>
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding SizeText}"
-                               Margin="12,0,0,0"
-                               VerticalAlignment="Center"
-                               FontSize="11"
-                               Foreground="#596473" />
-                </Grid>
+                                   Foreground="#596473" />
+                    </Grid>
+                    <Expander x:Name="DiffExpander"
+                              Header="查看 diff"
+                              Margin="0,7,0,0"
+                              FontSize="11"
+                              Foreground="#596473"
+                              Visibility="Collapsed">
+                        <Border Margin="0,6,0,0"
+                                Padding="8"
+                                CornerRadius="6"
+                                Background="#FFFFFF"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="1">
+                            <ScrollViewer MaxHeight="180"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto">
+                                <TextBlock Text="{Binding DiffText}"
+                                           FontFamily="Consolas"
+                                           FontSize="11"
+                                           Foreground="#2A3340"
+                                           TextWrapping="NoWrap" />
+                            </ScrollViewer>
+                        </Border>
+                    </Expander>
+                </StackPanel>
             </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding HasDiff}" Value="True">
+                    <Setter TargetName="DiffExpander" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
         </DataTemplate>
 
         <!-- A message bubble switches layout/style based on ChatMessageViewModel flags. -->
