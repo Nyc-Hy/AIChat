@@ -7,6 +7,7 @@ using AIChat.App.ViewModels;
 using AIChat.Application.Agents;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
+using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
@@ -34,10 +35,14 @@ public partial class MainWindow : Window
             new AnthropicChatProvider()
         ]);
         var toolCatalog = AgentToolCatalog.CreateDefault();
+        var contextEstimator = new SimpleContextEstimator();
         _viewModel = new MainViewModel(
             new JsonAppRepository(),
             chatService,
-            new SimpleContextEstimator());
+            contextEstimator,
+            new ConversationContextBuilder(
+                contextEstimator,
+                new SystemPromptBuilder()));
         _viewModel.ConfigureAgent(
             new AgentRunner(chatService, toolCatalog),
             toolCatalog);

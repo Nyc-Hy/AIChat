@@ -1,6 +1,6 @@
 # AIChat
 
-AIChat is a .NET WPF desktop MVP for project-scoped LLM conversations.
+AIChat is a .NET WPF desktop MVP for project-scoped LLM conversations and early code-agent workflows.
 
 ## MVP scope
 
@@ -17,6 +17,11 @@ AIChat is a .NET WPF desktop MVP for project-scoped LLM conversations.
 - Internal code-agent default temperature set to `0.3`
 - Combined context usage ring in the composer area
 - No demo conversations or sample messages on first launch
+- Agent loop that can expose enabled tools to compatible models and feed tool results back into the transcript
+- Project-scoped tools for listing files, reading files, searching text, writing files, editing files, and running guarded shell commands
+- Tool permission modes for disabled, read-only auto execution, per-call confirmation, and session approval
+- System prompt and conversation context builders that keep model instructions centralized and reserve context headroom
+- xUnit test project covering prompt/context behavior and high-risk tool safety checks
 
 ## Run
 
@@ -25,6 +30,12 @@ dotnet run --project src\AIChat.App\AIChat.App.csproj
 ```
 
 On first launch, open Settings, choose 小米 MIMO (TokenPlan), enter the API key, and add it to the configured provider list.
+
+## Test
+
+```powershell
+dotnet test AIChat.sln
+```
 
 ## Architecture
 
@@ -37,6 +48,8 @@ src/
   AIChat.Providers.OpenAI/     OpenAI-compatible protocol implementation
   AIChat.Providers.Anthropic/  Anthropic protocol implementation
   AIChat.Storage.Json/         Local JSON repository implementation
+tests/
+  AIChat.Tests/                Unit tests for application services and agent tools
 ```
 
-The first version intentionally avoids file editing, command execution, plugins, and agent tools. Those can be added behind the existing abstractions without changing the main product shape.
+The current version has the first agent slice wired in. It is still conservative: tools are project-scoped, write/shell actions are guarded, and the next major work is improving observability and expanding tests before adding broader automation.

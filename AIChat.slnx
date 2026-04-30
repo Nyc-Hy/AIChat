@@ -8,4 +8,7 @@
     <Project Path="src/AIChat.Providers.OpenAI/AIChat.Providers.OpenAI.csproj" />
     <Project Path="src/AIChat.Storage.Json/AIChat.Storage.Json.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AIChat.Tests/AIChat.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -11,7 +11,9 @@ using AIChat.Abstractions.Context;
 using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.Application.Agents;
+using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
+using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Domain.Context;
 
@@ -34,6 +36,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly IAppRepository _repository;
     private readonly IChatCompletionService _chatService;
     private readonly IContextEstimator _contextEstimator;
+    private readonly ConversationContextBuilder _contextBuilder;
     private AgentRunner? _agentRunner;
     private AgentToolCatalog? _toolCatalog;
     private ProjectViewModel? _selectedProject;
@@ -62,11 +65,13 @@ public sealed class MainViewModel : ObservableObject
     public MainViewModel(
         IAppRepository repository,
         IChatCompletionService chatService,
-        IContextEstimator contextEstimator)
+        IContextEstimator contextEstimator,
+        ConversationContextBuilder contextBuilder)
     {
         _repository = repository;
         _chatService = chatService;
         _contextEstimator = contextEstimator;
+        _contextBuilder = contextBuilder;
         // Commands are the bridge from XAML buttons/menu items to ViewModel methods.
         NewChatCommand = new RelayCommand(_ => NewChat(), _ => SelectedProject is not null && !IsSending);
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
@@ -745,6 +750,20 @@ public sealed class MainViewModel : ObservableObject
         _sendCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         var rawResponseEvents = new List<string>();
         var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
+        var contextMessages = _contextBuilder.Build(new ConversationContextBuildRequest
+        {
+            Messages = SelectedConversation.Conversation.Messages
+                .Where(message => message.Id != assistantMessage.Id && !string.IsNullOrWhiteSpace(message.Content))
+                .ToList(),
+            Settings = effectiveSettings,
+            PromptContext = new SystemPromptContext
+            {
+                ProjectName = SelectedProject?.Name ?? "AIChat",
+                ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
+                EnabledToolIds = Settings.EnabledToolIds,
+                ToolPermissionModes = Settings.ToolPermissionModes
+            }
+        });
 
         try
         {
@@ -756,9 +775,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 Model = effectiveSettings.Model,
                 Temperature = effectiveSettings.Temperature,
-                Messages = BuildAgentMessages(SelectedConversation.Conversation.Messages
-                    .Where(message => message.Id != assistantMessage.Id && !string.IsNullOrWhiteSpace(message.Content))
-                    .ToList())
+                Messages = contextMessages
             };
 
             await Task.Run(async () =>
@@ -1007,30 +1024,6 @@ public sealed class MainViewModel : ObservableObject
         return content.StartsWith("LLM 请求失败：", StringComparison.Ordinal) ||
                content.StartsWith("Anthropic 请求失败：", StringComparison.Ordinal) ||
                content.StartsWith("还没有配置", StringComparison.Ordinal);
-    }
-
-    private static List<ChatMessage> BuildAgentMessages(IReadOnlyList<ChatMessage> messages)
-    {
-        const string systemPrompt = """
-        你是 AIChat 的项目 Agent。工作时遵守这些规则：
-        1. 先理解项目和用户目标，再选择必要工具。
-        2. 读取、搜索等只读工具可直接使用；写文件、改文件、运行 shell 前要等待用户确认。
-        3. 修改代码前先读取相关文件，尽量小步修改，并在回答中说明改动和验证结果。
-        4. shell 命令优先使用安全、非交互式命令；避免删除、重置、清理、格式化等破坏性操作。
-        5. 工具返回失败时，不要反复无意义重试；改用更具体的命令或向用户说明阻塞点。
-        6. 如果用户要求修改项目，必须调用写入/修改工具并获得成功结果后，才能声称已经修改完成。
-        """;
-
-        return
-        [
-            new ChatMessage
-            {
-                Role = ChatRole.System,
-                Content = systemPrompt,
-                CreatedAt = DateTimeOffset.Now
-            },
-            .. messages
-        ];
     }
 
     private async Task<ToolApprovalDecision> RequestToolApprovalAsync(
