@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AIChat.Abstractions/AIChat.Abstractions.csproj" />
+    <Project Path="src/AIChat.App/AIChat.App.csproj" />
+    <Project Path="src/AIChat.Application/AIChat.Application.csproj" />
+    <Project Path="src/AIChat.Domain/AIChat.Domain.csproj" />
+    <Project Path="src/AIChat.Providers.Anthropic/AIChat.Providers.Anthropic.csproj" />
+    <Project Path="src/AIChat.Providers.OpenAI/AIChat.Providers.OpenAI.csproj" />
+    <Project Path="src/AIChat.Storage.Json/AIChat.Storage.Json.csproj" />
+  </Folder>
+</Solution>

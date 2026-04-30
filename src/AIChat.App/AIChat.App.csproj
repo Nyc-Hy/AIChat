@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\AIChat.Abstractions\AIChat.Abstractions.csproj" />
+    <ProjectReference Include="..\AIChat.Application\AIChat.Application.csproj" />
+    <ProjectReference Include="..\AIChat.Domain\AIChat.Domain.csproj" />
+    <ProjectReference Include="..\AIChat.Providers.Anthropic\AIChat.Providers.Anthropic.csproj" />
+    <ProjectReference Include="..\AIChat.Providers.OpenAI\AIChat.Providers.OpenAI.csproj" />
+    <ProjectReference Include="..\AIChat.Storage.Json\AIChat.Storage.Json.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,69 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{38AC6C99-BB69-4B09-BF59-8F91E4613747}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.Abstractions", "src\AIChat.Abstractions\AIChat.Abstractions.csproj", "{011C52E9-AF60-4356-8CCA-7283CF57F6A8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.App", "src\AIChat.App\AIChat.App.csproj", "{E29055EF-6C5B-47A2-8C00-A7F0167FCA99}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.Application", "src\AIChat.Application\AIChat.Application.csproj", "{12C6F3C7-3EB2-4050-879B-896EF49B218D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.Domain", "src\AIChat.Domain\AIChat.Domain.csproj", "{D1F2339A-DC01-4C39-9E4B-F3A2994A4B4F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.Providers.Anthropic", "src\AIChat.Providers.Anthropic\AIChat.Providers.Anthropic.csproj", "{4271ED1C-2324-4065-A290-31B11163028F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.Providers.OpenAI", "src\AIChat.Providers.OpenAI\AIChat.Providers.OpenAI.csproj", "{0853A3FA-7A79-4704-B934-78C7B6E7CFA7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AIChat.Storage.Json", "src\AIChat.Storage.Json\AIChat.Storage.Json.csproj", "{0D5D90D3-EDE4-4605-AC2B-35991967ABEA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{011C52E9-AF60-4356-8CCA-7283CF57F6A8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{011C52E9-AF60-4356-8CCA-7283CF57F6A8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{011C52E9-AF60-4356-8CCA-7283CF57F6A8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{011C52E9-AF60-4356-8CCA-7283CF57F6A8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E29055EF-6C5B-47A2-8C00-A7F0167FCA99}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E29055EF-6C5B-47A2-8C00-A7F0167FCA99}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E29055EF-6C5B-47A2-8C00-A7F0167FCA99}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E29055EF-6C5B-47A2-8C00-A7F0167FCA99}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12C6F3C7-3EB2-4050-879B-896EF49B218D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12C6F3C7-3EB2-4050-879B-896EF49B218D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12C6F3C7-3EB2-4050-879B-896EF49B218D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12C6F3C7-3EB2-4050-879B-896EF49B218D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D1F2339A-DC01-4C39-9E4B-F3A2994A4B4F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D1F2339A-DC01-4C39-9E4B-F3A2994A4B4F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D1F2339A-DC01-4C39-9E4B-F3A2994A4B4F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D1F2339A-DC01-4C39-9E4B-F3A2994A4B4F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4271ED1C-2324-4065-A290-31B11163028F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4271ED1C-2324-4065-A290-31B11163028F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4271ED1C-2324-4065-A290-31B11163028F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4271ED1C-2324-4065-A290-31B11163028F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0853A3FA-7A79-4704-B934-78C7B6E7CFA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0853A3FA-7A79-4704-B934-78C7B6E7CFA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0853A3FA-7A79-4704-B934-78C7B6E7CFA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0853A3FA-7A79-4704-B934-78C7B6E7CFA7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0D5D90D3-EDE4-4605-AC2B-35991967ABEA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0D5D90D3-EDE4-4605-AC2B-35991967ABEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0D5D90D3-EDE4-4605-AC2B-35991967ABEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0D5D90D3-EDE4-4605-AC2B-35991967ABEA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{011C52E9-AF60-4356-8CCA-7283CF57F6A8} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+		{E29055EF-6C5B-47A2-8C00-A7F0167FCA99} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+		{12C6F3C7-3EB2-4050-879B-896EF49B218D} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+		{D1F2339A-DC01-4C39-9E4B-F3A2994A4B4F} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+		{4271ED1C-2324-4065-A290-31B11163028F} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+		{0853A3FA-7A79-4704-B934-78C7B6E7CFA7} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+		{0D5D90D3-EDE4-4605-AC2B-35991967ABEA} = {38AC6C99-BB69-4B09-BF59-8F91E4613747}
+	EndGlobalSection
+EndGlobal
