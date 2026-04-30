@@ -37,7 +37,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly IChatCompletionService _chatService;
     private readonly IContextEstimator _contextEstimator;
     private readonly ConversationContextBuilder _contextBuilder;
-    private AgentRunner? _agentRunner;
+    private AgentHarness? _agentHarness;
     private AgentToolCatalog? _toolCatalog;
     private ProjectViewModel? _selectedProject;
     private ConversationViewModel? _selectedConversation;
@@ -476,9 +476,9 @@ public sealed class MainViewModel : ObservableObject
 
     private bool CanSend => !IsSending && !string.IsNullOrWhiteSpace(DraftMessage) && SelectedProject is not null;
 
-    public void ConfigureAgent(AgentRunner agentRunner, AgentToolCatalog toolCatalog)
+    public void ConfigureAgent(AgentHarness agentHarness, AgentToolCatalog toolCatalog)
     {
-        _agentRunner = agentRunner;
+        _agentHarness = agentHarness;
         _toolCatalog = toolCatalog;
         RebuildToolOptions();
     }
@@ -708,20 +708,6 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasMessages));
         var assistantViewModel = SelectedConversation.Messages.Last();
         assistantViewModel.IsStreaming = true;
-        var agentRun = SelectedConversation.AddAgentRun(assistantViewModel, userMessage.Id, text);
-        var agentStepNumber = 0;
-        _ = assistantViewModel.AddAgentStep(new AgentStep
-        {
-            RunId = agentRun.Id,
-            Number = ++agentStepNumber,
-            Type = AgentStepType.Model,
-            Status = AgentStepStatus.Completed,
-            Title = "准备上下文",
-            Input = text,
-            Output = "已生成系统提示和会话上下文。",
-            StartedAt = DateTimeOffset.Now,
-            CompletedAt = DateTimeOffset.Now
-        });
         var hasReceivedContent = false;
         var hasShownToolProgress = false;
         var hasUsedTools = false;
@@ -797,7 +783,7 @@ public sealed class MainViewModel : ObservableObject
 
             await Task.Run(async () =>
             {
-                if (_agentRunner is null)
+                if (_agentHarness is null)
                 {
                     await foreach (var delta in _chatService.SendAsync(request, effectiveSettings, _sendCts.Token))
                     {
@@ -828,27 +814,52 @@ public sealed class MainViewModel : ObservableObject
                     return;
                 }
 
-                await foreach (var agentEvent in _agentRunner.RunAsync(
-                                   request,
-                                   effectiveSettings,
-                                   new AgentRunContext
+                await foreach (var agentEvent in _agentHarness.RunAsync(
+                                   new AgentHarnessRunRequest
                                    {
-                                       ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
-                                       EnabledToolIds = Settings.EnabledToolIds,
-                                       ToolPermissionModes = Settings.ToolPermissionModes,
-                                       RequestToolApprovalAsync = RequestToolApprovalAsync
+                                       Conversation = SelectedConversation.Conversation,
+                                       UserMessageId = userMessage.Id,
+                                       AssistantMessageId = assistantMessage.Id,
+                                       Goal = text,
+                                       ChatRequest = request,
+                                       Settings = effectiveSettings,
+                                       Context = new AgentRunContext
+                                       {
+                                           ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
+                                           EnabledToolIds = Settings.EnabledToolIds,
+                                           ToolPermissionModes = Settings.ToolPermissionModes,
+                                           RequestToolApprovalAsync = RequestToolApprovalAsync
+                                       }
                                    },
                                    _sendCts.Token))
                 {
                     switch (agentEvent.Type)
                     {
-                        case AgentRunEventType.RawProviderEvent:
+                        case AgentHarnessEventType.RunStarted:
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                if (agentEvent.Run is not null)
+                                {
+                                    assistantViewModel.AttachAgentRun(agentEvent.Run);
+                                }
+                            });
+                            break;
+                        case AgentHarnessEventType.StepAdded:
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                if (agentEvent.Step is not null)
+                                {
+                                    _ = assistantViewModel.AddAgentStep(agentEvent.Step);
+                                }
+                            });
+                            break;
+                        case AgentHarnessEventType.RawProviderEvent:
                             if (!string.IsNullOrWhiteSpace(agentEvent.RawJson))
                             {
                                 rawResponseEvents.Add(agentEvent.RawJson);
                             }
                             break;
-                        case AgentRunEventType.ContentDelta:
+                        case AgentHarnessEventType.ContentDelta:
                             if (!hasReceivedContent)
                             {
                                 hasReceivedContent = true;
@@ -862,7 +873,7 @@ public sealed class MainViewModel : ObservableObject
 
                             await AppendAssistantContentAsync(assistantViewModel, agentEvent.Content, _sendCts.Token);
                             break;
-                        case AgentRunEventType.ToolCall:
+                        case AgentHarnessEventType.ToolCall:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusText = $"调用工具：{agentEvent.ToolCall?.Name}";
@@ -876,18 +887,9 @@ public sealed class MainViewModel : ObservableObject
                                 if (agentEvent.ToolCall is not null)
                                 {
                                     toolTraceByCallId[agentEvent.ToolCall.Id] = assistantViewModel.AddToolTrace(agentEvent.ToolCall);
-                                    var step = new AgentStep
-                                    {
-                                        RunId = agentRun.Id,
-                                        Number = ++agentStepNumber,
-                                        Type = AgentStepType.ToolCall,
-                                        Title = $"调用工具：{agentEvent.ToolCall.Name}",
-                                        Input = agentEvent.ToolCall.ArgumentsJson,
-                                        ToolCallId = agentEvent.ToolCall.Id,
-                                        ToolName = agentEvent.ToolCall.Name,
-                                        StartedAt = DateTimeOffset.Now
-                                    };
-                                    var stepViewModel = assistantViewModel.AddAgentStep(step);
+                                    var stepViewModel = agentEvent.Step is null
+                                        ? null
+                                        : assistantViewModel.AddAgentStep(agentEvent.Step);
                                     if (stepViewModel is not null)
                                     {
                                         stepByToolCallId[agentEvent.ToolCall.Id] = stepViewModel;
@@ -902,19 +904,19 @@ public sealed class MainViewModel : ObservableObject
                                 arguments = agentEvent.ToolCall?.ArgumentsJson
                             }));
                             break;
-                        case AgentRunEventType.ToolApprovalRequired:
+                        case AgentHarnessEventType.ToolApprovalRequired:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusText = $"等待确认工具：{agentEvent.ToolCall?.Name}";
                             });
                             break;
-                        case AgentRunEventType.ToolApprovalRejected:
+                        case AgentHarnessEventType.ToolApprovalRejected:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusText = $"已拒绝工具：{agentEvent.ToolCall?.Name}";
                             });
                             break;
-                        case AgentRunEventType.ToolResult:
+                        case AgentHarnessEventType.ToolResult:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 if (agentEvent.ToolCall is not null &&
@@ -928,7 +930,7 @@ public sealed class MainViewModel : ObservableObject
                                     agentEvent.ToolResult is not null &&
                                     stepByToolCallId.TryGetValue(agentEvent.ToolCall.Id, out var step))
                                 {
-                                    step.Complete(agentEvent.ToolResult.Content, agentEvent.ToolResult.IsError);
+                                    step.Refresh();
                                 }
                             });
                             rawResponseEvents.Add(SerializeJson(new
@@ -938,6 +940,20 @@ public sealed class MainViewModel : ObservableObject
                                 isError = agentEvent.ToolResult?.IsError,
                                 content = agentEvent.ToolResult?.Content
                             }));
+                            break;
+                        case AgentHarnessEventType.RunCompleted:
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                if (agentEvent.Step is not null)
+                                {
+                                    _ = assistantViewModel.AddAgentStep(agentEvent.Step);
+                                }
+
+                                if (agentEvent.Run is not null)
+                                {
+                                    assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
+                                }
+                            });
                             break;
                     }
                 }
@@ -959,18 +975,6 @@ public sealed class MainViewModel : ObservableObject
             {
                 StatusText = "回复完成";
             }
-            _ = assistantViewModel.AddAgentStep(new AgentStep
-            {
-                RunId = agentRun.Id,
-                Number = ++agentStepNumber,
-                Type = AgentStepType.Final,
-                Status = AgentStepStatus.Completed,
-                Title = "生成最终回复",
-                Output = assistantViewModel.Content,
-                StartedAt = DateTimeOffset.Now,
-                CompletedAt = DateTimeOffset.Now
-            });
-            assistantViewModel.AgentRun?.Complete(assistantViewModel.IsError ? AgentRunStatus.Failed : AgentRunStatus.Completed);
             await CompleteCallDetailAsync(callDetail, "完成", new
             {
                 status = "completed",

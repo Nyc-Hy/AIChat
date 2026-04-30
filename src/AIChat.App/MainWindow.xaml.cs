@@ -43,8 +43,9 @@ public partial class MainWindow : Window
             new ConversationContextBuilder(
                 contextEstimator,
                 new SystemPromptBuilder()));
+        var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(
-            new AgentRunner(chatService, toolCatalog),
+            new AgentHarness(agentRunner),
             toolCatalog);
         DataContext = _viewModel;
     }

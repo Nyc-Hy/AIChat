@@ -12,6 +12,7 @@ public sealed class AgentStepViewModel : ObservableObject
     }
 
     public string Id => _step.Id;
+    public string ToolCallId => _step.ToolCallId;
     public string Title => _step.Title;
     public string Subtitle => _step.Type switch
     {
@@ -45,6 +46,11 @@ public sealed class AgentStepViewModel : ObservableObject
         _step.IsError = isError;
         _step.Status = isError ? AgentStepStatus.Failed : AgentStepStatus.Completed;
         _step.CompletedAt = DateTimeOffset.Now;
+        RaiseAll();
+    }
+
+    public void Refresh()
+    {
         RaiseAll();
     }
 

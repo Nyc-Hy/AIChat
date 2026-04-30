@@ -20,7 +20,18 @@ public sealed class AgentRunViewModel : ObservableObject
 
     public AgentStepViewModel AddStep(AgentStep step)
     {
-        _run.Steps.Add(step);
+        if (_run.Steps.All(item => item.Id != step.Id))
+        {
+            _run.Steps.Add(step);
+        }
+
+        var existing = Steps.FirstOrDefault(item => item.Id == step.Id);
+        if (existing is not null)
+        {
+            existing.Refresh();
+            return existing;
+        }
+
         var viewModel = new AgentStepViewModel(step);
         Steps.Add(viewModel);
         OnPropertyChanged(nameof(HasSteps));
