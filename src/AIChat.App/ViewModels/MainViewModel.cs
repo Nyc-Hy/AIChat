@@ -110,10 +110,12 @@ public sealed class MainViewModel : ObservableObject
         CommitWorkspaceFileCommand = new RelayCommand(async _ => await CommitSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasWorkspaceChanges && !IsRefreshingWorkspaceChanges);
         OpenWorkspaceFileCommand = new RelayCommand(_ => OpenWorkspaceFile(), _ => SelectedWorkspaceChange is not null && SelectedProject is not null);
+        CopyWorkspaceDiffCommand = new RelayCommand(_ => CopyWorkspaceDiff(), _ => !string.IsNullOrWhiteSpace(WorkspaceDiffText));
         CommitAgentRunChangesCommand = new RelayCommand(async parameter => await CommitAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
+        CopyAgentFileDiffCommand = new RelayCommand(parameter => CopyAgentFileDiff((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel { HasDiff: true });
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -154,10 +156,12 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CommitWorkspaceFileCommand { get; }
     public RelayCommand CommitAllWorkspaceChangesCommand { get; }
     public RelayCommand OpenWorkspaceFileCommand { get; }
+    public RelayCommand CopyWorkspaceDiffCommand { get; }
     public RelayCommand CommitAgentRunChangesCommand { get; }
     public RelayCommand RestoreAgentRunChangesCommand { get; }
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
     public RelayCommand OpenAgentFileChangeCommand { get; }
+    public RelayCommand CopyAgentFileDiffCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -273,7 +277,13 @@ public sealed class MainViewModel : ObservableObject
     public string WorkspaceDiffText
     {
         get => _workspaceDiffText;
-        private set => SetProperty(ref _workspaceDiffText, value);
+        private set
+        {
+            if (SetProperty(ref _workspaceDiffText, value))
+            {
+                CopyWorkspaceDiffCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
     public bool IsRefreshingWorkspaceChanges
     {
@@ -927,9 +937,31 @@ public sealed class MainViewModel : ObservableObject
         OpenProjectPath(SelectedWorkspaceChange.Path);
     }
 
+    private void CopyWorkspaceDiff()
+    {
+        if (string.IsNullOrWhiteSpace(WorkspaceDiffText))
+        {
+            return;
+        }
+
+        System.Windows.Clipboard.SetText(WorkspaceDiffText);
+        StatusText = "当前 diff 已复制";
+    }
+
     private void OpenAgentFileChange(AgentFileChangeViewModel change)
     {
         OpenProjectPath(change.Path);
+    }
+
+    private void CopyAgentFileDiff(AgentFileChangeViewModel change)
+    {
+        if (!change.HasDiff)
+        {
+            return;
+        }
+
+        System.Windows.Clipboard.SetText(change.DiffText);
+        StatusText = $"已复制 diff：{change.Path}";
     }
 
     private async Task CommitAgentRunChangesAsync(ChatMessageViewModel message)
