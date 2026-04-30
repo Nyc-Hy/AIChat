@@ -12,11 +12,21 @@ public sealed class AgentRunner
 {
     private readonly IChatCompletionService _chatService;
     private readonly AgentToolCatalog _toolCatalog;
+    private readonly ToolExecutionService _toolExecutionService;
 
     public AgentRunner(IChatCompletionService chatService, AgentToolCatalog toolCatalog)
+        : this(chatService, toolCatalog, new ToolExecutionService(toolCatalog))
+    {
+    }
+
+    public AgentRunner(
+        IChatCompletionService chatService,
+        AgentToolCatalog toolCatalog,
+        ToolExecutionService toolExecutionService)
     {
         _chatService = chatService;
         _toolCatalog = toolCatalog;
+        _toolExecutionService = toolExecutionService;
     }
 
     public async IAsyncEnumerable<AgentRunEvent> RunAsync(
@@ -127,119 +137,74 @@ public sealed class AgentRunner
                     ToolCall = toolCall
                 };
 
-                var tool = _toolCatalog.Find(toolCall.Name);
-                AgentToolResult result;
-                if (tool is null)
+                AgentToolResult? result = null;
+                await foreach (var toolEvent in _toolExecutionService.ExecuteAsync(
+                                   new ToolExecutionRequest
+                                   {
+                                       ToolCall = toolCall,
+                                       ProjectPath = context.ProjectPath,
+                                       ToolPermissionModes = context.ToolPermissionModes,
+                                       SessionAllowedToolIds = sessionAllowedTools,
+                                       RequestToolApprovalAsync = context.RequestToolApprovalAsync
+                                   },
+                                   cancellationToken))
+                {
+                    switch (toolEvent.Type)
+                    {
+                        case ToolExecutionEventType.ApprovalRequired:
+                            yield return new AgentRunEvent
+                            {
+                                Type = AgentRunEventType.ToolApprovalRequired,
+                                ToolCall = toolEvent.ToolCall,
+                                ToolPreview = toolEvent.Preview
+                            };
+                            break;
+                        case ToolExecutionEventType.ApprovalRejected:
+                            yield return new AgentRunEvent
+                            {
+                                Type = AgentRunEventType.ToolApprovalRejected,
+                                ToolCall = toolEvent.ToolCall,
+                                ToolPreview = toolEvent.Preview
+                            };
+                            break;
+                        case ToolExecutionEventType.SessionAllowed:
+                            if (!string.IsNullOrWhiteSpace(toolEvent.SessionAllowedToolId))
+                            {
+                                sessionAllowedTools.Add(toolEvent.SessionAllowedToolId);
+                            }
+                            break;
+                        case ToolExecutionEventType.Result:
+                            result = toolEvent.Result;
+                            if (toolEvent.IsMutation)
+                            {
+                                hasMutationToolResult = true;
+                            }
+                            yield return new AgentRunEvent
+                            {
+                                Type = AgentRunEventType.ToolResult,
+                                ToolCall = toolEvent.ToolCall,
+                                ToolResult = toolEvent.Result
+                            };
+                            break;
+                    }
+                }
+
+                if (result is null)
                 {
                     result = new AgentToolResult
                     {
                         ToolName = toolCall.Name,
-                        Content = $"未知工具：{toolCall.Name}",
+                        Content = "工具没有返回结果。",
                         IsError = true
                     };
-                }
-                else
-                {
-                    var preview = await tool.PreviewAsync(
-                        toolCall.ArgumentsJson,
-                        new AgentToolContext { ProjectPath = context.ProjectPath },
-                        cancellationToken);
-                    var mode = ResolvePermissionMode(context, tool);
-                    if (mode == ToolPermissionMode.Disabled)
+                    yield return new AgentRunEvent
                     {
-                        result = new AgentToolResult
-                        {
-                            ToolName = toolCall.Name,
-                            IsError = true,
-                            Content = "该工具已在设置中关闭，未执行。"
-                        };
-                        yield return new AgentRunEvent
-                        {
-                            Type = AgentRunEventType.ToolResult,
-                            ToolCall = toolCall,
-                            ToolResult = result
-                        };
-                        transcript.Add(new ChatMessage
-                        {
-                            Role = ChatRole.Tool,
-                            ToolCallId = toolCall.Id,
-                            ToolName = toolCall.Name,
-                            Content = result.Content,
-                            CreatedAt = DateTimeOffset.Now
-                        });
-                        continue;
-                    }
-
-                    if (!IsAutoApproved(tool, mode, sessionAllowedTools))
-                    {
-                        yield return new AgentRunEvent
-                        {
-                            Type = AgentRunEventType.ToolApprovalRequired,
-                            ToolCall = toolCall,
-                            ToolPreview = preview
-                        };
-
-                        var approval = context.RequestToolApprovalAsync is null
-                            ? ToolApprovalDecision.Reject("工具需要确认，但当前界面没有提供确认处理器。")
-                            : await context.RequestToolApprovalAsync(
-                                new ToolApprovalRequest { ToolCall = toolCall, Preview = preview },
-                                cancellationToken);
-
-                        if (!approval.IsApproved)
-                        {
-                            yield return new AgentRunEvent
-                            {
-                                Type = AgentRunEventType.ToolApprovalRejected,
-                                ToolCall = toolCall,
-                                ToolPreview = preview
-                            };
-                            result = new AgentToolResult
-                            {
-                                ToolName = toolCall.Name,
-                                IsError = true,
-                                Content = string.IsNullOrWhiteSpace(approval.Reason)
-                                    ? "用户拒绝执行该工具。"
-                                    : $"用户拒绝执行该工具：{approval.Reason}"
-                            };
-                            yield return new AgentRunEvent
-                            {
-                                Type = AgentRunEventType.ToolResult,
-                                ToolCall = toolCall,
-                                ToolResult = result
-                            };
-                            transcript.Add(new ChatMessage
-                            {
-                                Role = ChatRole.Tool,
-                                ToolCallId = toolCall.Id,
-                                ToolName = toolCall.Name,
-                                Content = result.Content,
-                                CreatedAt = DateTimeOffset.Now
-                            });
-                            continue;
-                        }
-
-                        if (approval.AllowForSession)
-                        {
-                            sessionAllowedTools.Add(tool.Id);
-                        }
-                    }
-
-                    result = await tool.ExecuteAsync(
-                        toolCall.ArgumentsJson,
-                        new AgentToolContext { ProjectPath = context.ProjectPath },
-                        cancellationToken);
-                    if (tool.Risk != AgentToolRisk.ReadOnly && !result.IsError)
-                    {
-                        hasMutationToolResult = true;
-                    }
+                        Type = AgentRunEventType.ToolResult,
+                        ToolCall = toolCall,
+                        ToolResult = result
+                    };
                 }
 
-                yield return new AgentRunEvent
-                {
-                    Type = AgentRunEventType.ToolResult,
-                    ToolCall = toolCall,
-                    ToolResult = result
-                };
                 lastToolResult = result;
 
                 transcript.Add(new ChatMessage
@@ -278,32 +243,6 @@ public sealed class AgentRunner
             "create", "implement", "write", "modify", "change", "replace", "fix", "update", "add"
         };
         return mutationWords.Any(word => latestUser.Contains(word, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static ToolPermissionMode ResolvePermissionMode(AgentRunContext context, IAgentTool tool)
-    {
-        if (context.ToolPermissionModes.TryGetValue(tool.Id, out var mode))
-        {
-            return mode;
-        }
-
-        return tool.Risk == AgentToolRisk.ReadOnly
-            ? ToolPermissionMode.AutoReadOnly
-            : ToolPermissionMode.ConfirmEachTime;
-    }
-
-    private static bool IsAutoApproved(
-        IAgentTool tool,
-        ToolPermissionMode mode,
-        HashSet<string> sessionAllowedTools)
-    {
-        return mode switch
-        {
-            ToolPermissionMode.Disabled => false,
-            ToolPermissionMode.AutoReadOnly => tool.Risk == AgentToolRisk.ReadOnly,
-            ToolPermissionMode.AllowForSession => sessionAllowedTools.Contains(tool.Id),
-            _ => false
-        };
     }
 
     private static ChatMessage CloneMessage(ChatMessage message)
