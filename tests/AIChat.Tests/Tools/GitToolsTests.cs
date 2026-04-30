@@ -55,6 +55,69 @@ public sealed class GitToolsTests
         Assert.Contains("路径超出", result.Content);
     }
 
+    [Fact]
+    public async Task GitRestoreFileTool_RestoresTrackedFile()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var targetPath = Path.Combine(workspace.Path, "tracked.txt");
+        await File.WriteAllTextAsync(targetPath, "changed\n");
+        var tool = new GitRestoreFileTool();
+
+        var preview = await tool.PreviewAsync(
+            """{"path":"tracked.txt"}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+        var result = await tool.ExecuteAsync(
+            """{"path":"tracked.txt"}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.Contains("-original", preview.DiffText);
+        Assert.Contains("+changed", preview.DiffText);
+        Assert.False(result.IsError, result.Content);
+        Assert.Equal("original\n", (await File.ReadAllTextAsync(targetPath)).ReplaceLineEndings("\n"));
+        using var document = JsonDocument.Parse(result.Content);
+        Assert.True(document.RootElement.GetProperty("restored").GetBoolean());
+        Assert.Equal("tracked.txt", document.RootElement.GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public async Task GitRestoreFileTool_RequiresExplicitDeleteForUntrackedFile()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var targetPath = Path.Combine(workspace.Path, "new.txt");
+        await File.WriteAllTextAsync(targetPath, "new\n");
+        var tool = new GitRestoreFileTool();
+
+        var result = await tool.ExecuteAsync(
+            """{"path":"new.txt"}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.True(result.IsError);
+        Assert.Contains("delete_untracked=true", result.Content);
+        Assert.True(File.Exists(targetPath));
+    }
+
+    [Fact]
+    public async Task GitRestoreFileTool_DeletesUntrackedFileWhenExplicitlyAllowed()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var targetPath = Path.Combine(workspace.Path, "new.txt");
+        await File.WriteAllTextAsync(targetPath, "new\n");
+        var tool = new GitRestoreFileTool();
+
+        var preview = await tool.PreviewAsync(
+            """{"path":"new.txt","delete_untracked":true}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+        var result = await tool.ExecuteAsync(
+            """{"path":"new.txt","delete_untracked":true}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.Contains("-new", preview.DiffText);
+        Assert.False(result.IsError, result.Content);
+        Assert.False(File.Exists(targetPath));
+        using var document = JsonDocument.Parse(result.Content);
+        Assert.True(document.RootElement.GetProperty("deletedUntracked").GetBoolean());
+    }
+
     private sealed class GitWorkspace : IDisposable
     {
         private readonly TemporaryWorkspace _workspace;
