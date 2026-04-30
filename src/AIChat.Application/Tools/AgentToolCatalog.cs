@@ -33,6 +33,7 @@ public sealed class AgentToolCatalog
             new SearchTextTool(),
             new WriteFileTool(),
             new EditFileTool(),
+            new ApplyPatchTool(),
             new ShellCommandTool()
         ]);
     }
