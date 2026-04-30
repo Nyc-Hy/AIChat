@@ -109,6 +109,9 @@ public sealed class MainViewModel : ObservableObject
         RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitWorkspaceFileCommand = new RelayCommand(async _ => await CommitSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasWorkspaceChanges && !IsRefreshingWorkspaceChanges);
+        CommitAgentRunChangesCommand = new RelayCommand(async parameter => await CommitAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
+        RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
+        CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -148,6 +151,9 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RestoreWorkspaceFileCommand { get; }
     public RelayCommand CommitWorkspaceFileCommand { get; }
     public RelayCommand CommitAllWorkspaceChangesCommand { get; }
+    public RelayCommand CommitAgentRunChangesCommand { get; }
+    public RelayCommand RestoreAgentRunChangesCommand { get; }
+    public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -903,6 +909,116 @@ public sealed class MainViewModel : ObservableObject
             StatusText = $"提交失败：{ex.Message}";
             WorkspaceDiffText = $"提交失败：{ex.Message}";
         }
+    }
+
+    private async Task CommitAgentRunChangesAsync(ChatMessageViewModel message)
+    {
+        if (SelectedProject is null || message.AgentRun is null)
+        {
+            return;
+        }
+
+        var paths = message.AgentRun.ChangedPaths;
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        var defaultMessage = $"Update agent changes ({paths.Count} files)";
+        var commitMessage = TextPromptDialog.Show(
+            System.Windows.Application.Current.MainWindow,
+            "提交本轮变更",
+            defaultMessage);
+        if (string.IsNullOrWhiteSpace(commitMessage))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _workspaceChangeService.CommitAsync(
+                SelectedProject.Path,
+                commitMessage,
+                paths);
+            StatusText = string.IsNullOrWhiteSpace(result.Commit)
+                ? $"已提交本轮 {result.Paths.Count} 个文件：{result.Message}"
+                : $"已提交本轮 {result.Commit}：{result.Message}";
+            await RefreshWorkspaceChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"提交本轮失败：{ex.Message}";
+            WorkspaceDiffText = $"提交本轮失败：{ex.Message}";
+        }
+    }
+
+    private async Task RestoreAgentRunChangesAsync(ChatMessageViewModel message)
+    {
+        if (SelectedProject is null || message.AgentRun is null)
+        {
+            return;
+        }
+
+        var paths = message.AgentRun.ChangedPaths;
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        var decision = System.Windows.MessageBox.Show(
+            System.Windows.Application.Current.MainWindow,
+            $"撤销本轮记录的 {paths.Count} 个文件变更？\n\n这会恢复已跟踪文件，并删除本轮创建后仍未跟踪的文件。",
+            "确认撤销本轮变更",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (decision != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var restored = 0;
+        var errors = new List<string>();
+        foreach (var path in paths)
+        {
+            try
+            {
+                _ = await _workspaceChangeService.RestoreFileAsync(
+                    SelectedProject.Path,
+                    path,
+                    deleteUntracked: true);
+                restored++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{path}: {ex.Message}");
+            }
+        }
+
+        StatusText = errors.Count == 0
+            ? $"已撤销本轮 {restored} 个文件变更"
+            : $"已撤销 {restored} 个文件，{errors.Count} 个失败";
+        if (errors.Count > 0)
+        {
+            WorkspaceDiffText = string.Join(Environment.NewLine, errors);
+        }
+
+        await RefreshWorkspaceChangesAsync();
+    }
+
+    private void CopyAgentRunChangeSummary(ChatMessageViewModel message)
+    {
+        if (message.AgentRun is null || message.AgentRun.ChangedPaths.Count == 0)
+        {
+            return;
+        }
+
+        System.Windows.Clipboard.SetText(message.AgentRun.ChangeSummary);
+        StatusText = "本轮变更摘要已复制";
+    }
+
+    private static bool CanOperateAgentRunChanges(object? parameter)
+    {
+        return parameter is ChatMessageViewModel { AgentRun.HasFileChanges: true };
     }
 
     private async Task SendAsync()

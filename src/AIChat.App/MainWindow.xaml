@@ -347,11 +347,36 @@
                                         Margin="0,5,0,0"
                                         Visibility="Collapsed">
                                     <StackPanel>
-                                        <TextBlock Text="文件变更"
-                                                   Margin="0,0,0,7"
-                                                   FontSize="12"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#667386" />
+                                        <DockPanel Margin="0,0,0,7">
+                                            <TextBlock Text="文件变更"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#667386"
+                                                       VerticalAlignment="Center" />
+                                            <StackPanel DockPanel.Dock="Right"
+                                                        Orientation="Horizontal">
+                                                <Button Command="{Binding DataContext.CommitAgentRunChangesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="提交本轮"
+                                                        Width="78"
+                                                        Height="28"
+                                                        Margin="0,0,6,0"
+                                                        Style="{StaticResource SubtleButtonStyle}" />
+                                                <Button Command="{Binding DataContext.RestoreAgentRunChangesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="撤销"
+                                                        Width="54"
+                                                        Height="28"
+                                                        Margin="0,0,6,0"
+                                                        Style="{StaticResource SubtleButtonStyle}" />
+                                                <Button Command="{Binding DataContext.CopyAgentRunChangeSummaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="复制"
+                                                        Width="54"
+                                                        Height="28"
+                                                        Style="{StaticResource SubtleButtonStyle}" />
+                                            </StackPanel>
+                                        </DockPanel>
                                         <ItemsControl ItemsSource="{Binding AgentRun.FileChanges}"
                                                       ItemTemplate="{StaticResource AgentFileChangeTemplate}" />
                                     </StackPanel>

@@ -21,6 +21,14 @@ public sealed class AgentRunViewModel : ObservableObject
     public ObservableCollection<AgentFileChangeViewModel> FileChanges { get; }
     public bool HasSteps => Steps.Count > 0;
     public bool HasFileChanges => FileChanges.Count > 0;
+    public IReadOnlyList<string> ChangedPaths => FileChanges
+        .Select(change => change.Path)
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+    public string ChangeSummary => ChangedPaths.Count == 0
+        ? "本轮没有记录文件变更。"
+        : string.Join(Environment.NewLine, ChangedPaths.Select(path => $"- {path}"));
 
     public AgentStepViewModel AddStep(AgentStep step)
     {
@@ -61,5 +69,7 @@ public sealed class AgentRunViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasFileChanges));
+        OnPropertyChanged(nameof(ChangedPaths));
+        OnPropertyChanged(nameof(ChangeSummary));
     }
 }
