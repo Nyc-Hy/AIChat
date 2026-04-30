@@ -183,6 +183,7 @@ public sealed class AgentRunner
                             {
                                 Type = AgentRunEventType.ToolResult,
                                 ToolCall = toolEvent.ToolCall,
+                                ToolPreview = toolEvent.Preview,
                                 ToolResult = toolEvent.Result
                             };
                             break;

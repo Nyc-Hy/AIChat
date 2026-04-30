@@ -44,7 +44,8 @@ public sealed class ToolExecutionService
                     ToolName = request.ToolCall.Name,
                     IsError = true,
                     Content = "该工具已在设置中关闭，未执行。"
-                });
+                },
+                preview);
             yield break;
         }
 
@@ -80,7 +81,8 @@ public sealed class ToolExecutionService
                         Content = string.IsNullOrWhiteSpace(approval.Reason)
                             ? "用户拒绝执行该工具。"
                             : $"用户拒绝执行该工具：{approval.Reason}"
-                    });
+                    },
+                    preview);
                 yield break;
             }
 
@@ -97,15 +99,20 @@ public sealed class ToolExecutionService
         }
 
         var result = await tool.ExecuteAsync(request.ToolCall.ArgumentsJson, context, cancellationToken);
-        yield return Result(request.ToolCall, result, tool.Risk != AgentToolRisk.ReadOnly && !result.IsError);
+        yield return Result(request.ToolCall, result, preview, tool.Risk != AgentToolRisk.ReadOnly && !result.IsError);
     }
 
-    private static ToolExecutionEvent Result(ChatToolCall toolCall, AgentToolResult result, bool isMutation = false)
+    private static ToolExecutionEvent Result(
+        ChatToolCall toolCall,
+        AgentToolResult result,
+        AgentToolPreview? preview = null,
+        bool isMutation = false)
     {
         return new ToolExecutionEvent
         {
             Type = ToolExecutionEventType.Result,
             ToolCall = toolCall,
+            Preview = preview,
             Result = result,
             IsMutation = isMutation
         };

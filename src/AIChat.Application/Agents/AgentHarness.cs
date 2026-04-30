@@ -1,4 +1,6 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
 
 namespace AIChat.Application.Agents;
@@ -125,6 +127,12 @@ public sealed class AgentHarness
                             agentEvent.ToolCall,
                             agentEvent.ToolResult.Content,
                             agentEvent.ToolResult.IsError);
+                        RecordFileChanges(
+                            run,
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolPreview,
+                            agentEvent.ToolResult);
                     }
 
                     yield return new AgentHarnessEvent
@@ -226,9 +234,105 @@ public sealed class AgentHarness
         step.CompletedAt = DateTimeOffset.Now;
     }
 
+    private static void RecordFileChanges(
+        AgentRun run,
+        Dictionary<string, AgentStep> stepByToolCallId,
+        ChatToolCall? toolCall,
+        AgentToolPreview? preview,
+        AgentToolResult toolResult)
+    {
+        if (toolCall is null ||
+            toolResult.IsError ||
+            preview is null ||
+            preview.Risk == AgentToolRisk.ReadOnly ||
+            string.IsNullOrWhiteSpace(preview.DiffText))
+        {
+            return;
+        }
+
+        var stepId = stepByToolCallId.TryGetValue(toolCall.Id, out var step)
+            ? step.Id
+            : "";
+
+        foreach (var changedFile in ParseChangedFiles(toolResult.Content))
+        {
+            run.FileChanges.Add(new AgentFileChange
+            {
+                RunId = run.Id,
+                StepId = stepId,
+                ToolCallId = toolCall.Id,
+                ToolName = toolResult.ToolName,
+                Path = changedFile.Path,
+                DiffText = preview.DiffText,
+                OldChars = changedFile.OldChars,
+                NewChars = changedFile.NewChars,
+                CreatedAt = DateTimeOffset.Now
+            });
+        }
+    }
+
+    private static IReadOnlyList<ChangedFileInfo> ParseChangedFiles(string content)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return [];
+            }
+
+            if (root.TryGetProperty("changedFiles", out var changedFiles) &&
+                changedFiles.ValueKind == JsonValueKind.Array)
+            {
+                return changedFiles
+                    .EnumerateArray()
+                    .Select(ParseChangedFile)
+                    .Where(file => !string.IsNullOrWhiteSpace(file.Path))
+                    .ToList();
+            }
+
+            var single = ParseChangedFile(root);
+            return string.IsNullOrWhiteSpace(single.Path) ? [] : [single];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static ChangedFileInfo ParseChangedFile(JsonElement element)
+    {
+        return new ChangedFileInfo(
+            GetString(element, "path"),
+            GetInt(element, "oldChars"),
+            GetInt(element, "newChars", GetInt(element, "chars")));
+    }
+
+    private static string GetString(JsonElement element, string propertyName)
+    {
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var value) &&
+               value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? ""
+            : "";
+    }
+
+    private static int GetInt(JsonElement element, string propertyName, int defaultValue = 0)
+    {
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var value) &&
+               value.ValueKind == JsonValueKind.Number &&
+               value.TryGetInt32(out var result)
+            ? result
+            : defaultValue;
+    }
+
     private static void CompleteRun(AgentRun run, AgentRunStatus status)
     {
         run.Status = status;
         run.CompletedAt = DateTimeOffset.Now;
     }
+
+    private sealed record ChangedFileInfo(string Path, int OldChars, int NewChars);
 }

@@ -40,6 +40,20 @@ public sealed class AgentRunSerializationTests
                             Title = "调用工具：read_file",
                             ToolName = "read_file"
                         }
+                    ],
+                    FileChanges =
+                    [
+                        new AgentFileChange
+                        {
+                            RunId = "run-1",
+                            StepId = "step-1",
+                            ToolCallId = "tool-call-1",
+                            ToolName = "apply_patch",
+                            Path = "src/App.cs",
+                            DiffText = "--- a/src/App.cs\n+++ b/src/App.cs",
+                            OldChars = 12,
+                            NewChars = 18
+                        }
                     ]
                 }
             ]
@@ -52,6 +66,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("run-1", roundTripped.Messages[0].AgentRunId);
         Assert.Single(roundTripped.AgentRuns);
         Assert.Single(roundTripped.AgentRuns[0].Steps);
+        Assert.Single(roundTripped.AgentRuns[0].FileChanges);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
+        Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
+        Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
     }
 }
