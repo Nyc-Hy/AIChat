@@ -106,6 +106,7 @@ public sealed class MainViewModel : ObservableObject
         ToggleNewProviderApiKeyVisibilityCommand = new RelayCommand(_ => IsNewProviderApiKeyVisible = !IsNewProviderApiKeyVisible);
         TestProviderConnectionCommand = new RelayCommand(async _ => await TestProviderConnectionAsync(), _ => !IsTestingProviderConnection && !string.IsNullOrWhiteSpace(NewProviderApiKey));
         RefreshWorkspaceChangesCommand = new RelayCommand(async _ => await RefreshWorkspaceChangesAsync(), _ => SelectedProject is not null && !IsRefreshingWorkspaceChanges);
+        RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -142,6 +143,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ToggleNewProviderApiKeyVisibilityCommand { get; }
     public RelayCommand TestProviderConnectionCommand { get; }
     public RelayCommand RefreshWorkspaceChangesCommand { get; }
+    public RelayCommand RestoreWorkspaceFileCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -267,6 +269,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _isRefreshingWorkspaceChanges, value))
             {
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
+                RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -277,6 +280,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedWorkspaceChange, value))
             {
+                RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
                 _ = LoadSelectedWorkspaceDiffAsync();
             }
         }
@@ -776,6 +780,46 @@ public sealed class MainViewModel : ObservableObject
             {
                 WorkspaceDiffText = $"读取 diff 失败：{ex.Message}";
             }
+        }
+    }
+
+    private async Task RestoreSelectedWorkspaceFileAsync()
+    {
+        if (SelectedProject is null || SelectedWorkspaceChange is null)
+        {
+            return;
+        }
+
+        var change = SelectedWorkspaceChange;
+        var message = change.IsUntracked
+            ? $"删除未跟踪文件？\n\n{change.Path}"
+            : $"恢复该文件的未提交改动？\n\n{change.Path}";
+        var decision = System.Windows.MessageBox.Show(
+            System.Windows.Application.Current.MainWindow,
+            message,
+            "确认恢复文件",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (decision != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _workspaceChangeService.RestoreFileAsync(
+                SelectedProject.Path,
+                change.Path,
+                deleteUntracked: change.IsUntracked);
+            StatusText = result.DeletedUntracked
+                ? $"已删除未跟踪文件：{result.Path}"
+                : $"已恢复文件：{result.Path}";
+            await RefreshWorkspaceChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"恢复失败：{ex.Message}";
+            WorkspaceDiffText = $"恢复失败：{ex.Message}";
         }
     }
 

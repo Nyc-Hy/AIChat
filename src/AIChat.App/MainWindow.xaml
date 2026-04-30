@@ -946,12 +946,20 @@
                                            Foreground="#748092"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                            <Button DockPanel.Dock="Right"
-                                    Command="{Binding RefreshWorkspaceChangesCommand}"
-                                    Content="刷新"
-                                    Width="62"
-                                    Height="32"
-                                    Style="{StaticResource SubtleButtonStyle}" />
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal">
+                                <Button Command="{Binding RestoreWorkspaceFileCommand}"
+                                        Content="恢复"
+                                        Width="62"
+                                        Height="32"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource SubtleButtonStyle}" />
+                                <Button Command="{Binding RefreshWorkspaceChangesCommand}"
+                                        Content="刷新"
+                                        Width="62"
+                                        Height="32"
+                                        Style="{StaticResource SubtleButtonStyle}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <Border Grid.Row="1"

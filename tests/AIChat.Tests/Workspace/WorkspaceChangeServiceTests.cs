@@ -47,6 +47,49 @@ public sealed class WorkspaceChangeServiceTests
         Assert.Contains("路径超出", ex.Message);
     }
 
+    [Fact]
+    public async Task RestoreFileAsync_RestoresTrackedFile()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var targetPath = Path.Combine(workspace.Path, "tracked.txt");
+        await File.WriteAllTextAsync(targetPath, "changed\n");
+        var service = new WorkspaceChangeService();
+
+        var result = await service.RestoreFileAsync(workspace.Path, "tracked.txt");
+
+        Assert.True(result.Restored);
+        Assert.Equal("original\n", (await File.ReadAllTextAsync(targetPath)).ReplaceLineEndings("\n"));
+    }
+
+    [Fact]
+    public async Task RestoreFileAsync_RequiresExplicitDeleteForUntrackedFile()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var targetPath = Path.Combine(workspace.Path, "new.txt");
+        await File.WriteAllTextAsync(targetPath, "new\n");
+        var service = new WorkspaceChangeService();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.RestoreFileAsync(workspace.Path, "new.txt"));
+
+        Assert.Contains("明确允许删除", ex.Message);
+        Assert.True(File.Exists(targetPath));
+    }
+
+    [Fact]
+    public async Task RestoreFileAsync_DeletesUntrackedFileWhenExplicitlyAllowed()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var targetPath = Path.Combine(workspace.Path, "new.txt");
+        await File.WriteAllTextAsync(targetPath, "new\n");
+        var service = new WorkspaceChangeService();
+
+        var result = await service.RestoreFileAsync(workspace.Path, "new.txt", deleteUntracked: true);
+
+        Assert.True(result.DeletedUntracked);
+        Assert.False(File.Exists(targetPath));
+    }
+
     private sealed class GitWorkspace : IDisposable
     {
         private readonly TemporaryWorkspace _workspace;
