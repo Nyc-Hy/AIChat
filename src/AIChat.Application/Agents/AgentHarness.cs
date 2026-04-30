@@ -263,12 +263,44 @@ public sealed class AgentHarness
                 ToolCallId = toolCall.Id,
                 ToolName = toolResult.ToolName,
                 Path = changedFile.Path,
-                DiffText = preview.DiffText,
+                DiffText = ExtractDiffForPath(preview.DiffText, changedFile.Path),
                 OldChars = changedFile.OldChars,
                 NewChars = changedFile.NewChars,
                 CreatedAt = DateTimeOffset.Now
             });
         }
+    }
+
+    private static string ExtractDiffForPath(string diffText, string path)
+    {
+        var normalizedPath = path.Replace('\\', '/');
+        var expectedHeader = $"--- a/{normalizedPath}";
+        var lines = diffText.ReplaceLineEndings("\n").Split('\n');
+        var current = new List<string>();
+        var isCurrentMatch = false;
+
+        foreach (var line in lines)
+        {
+            if (line.StartsWith("--- a/", StringComparison.Ordinal))
+            {
+                if (isCurrentMatch && current.Count > 0)
+                {
+                    return string.Join(Environment.NewLine, current).TrimEnd();
+                }
+
+                current.Clear();
+                isCurrentMatch = string.Equals(line, expectedHeader, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (current.Count > 0 || line.StartsWith("--- a/", StringComparison.Ordinal))
+            {
+                current.Add(line);
+            }
+        }
+
+        return isCurrentMatch && current.Count > 0
+            ? string.Join(Environment.NewLine, current).TrimEnd()
+            : diffText;
     }
 
     private static IReadOnlyList<ChangedFileInfo> ParseChangedFiles(string content)

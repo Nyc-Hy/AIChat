@@ -53,7 +53,9 @@ public sealed class AgentHarnessTests
     {
         using var workspace = TemporaryWorkspace.Create();
         var targetPath = Path.Combine(workspace.Path, "notes.txt");
+        var secondTargetPath = Path.Combine(workspace.Path, "todo.txt");
         await File.WriteAllTextAsync(targetPath, "old value");
+        await File.WriteAllTextAsync(secondTargetPath, "todo old");
 
         var conversation = new Conversation { Id = "conversation-1" };
         var toolCall = new ChatToolCall
@@ -67,6 +69,11 @@ public sealed class AgentHarnessTests
                   "path": "notes.txt",
                   "old_text": "old value",
                   "new_text": "new value"
+                },
+                {
+                  "path": "todo.txt",
+                  "old_text": "todo old",
+                  "new_text": "todo new"
                 }
               ]
             }
@@ -101,8 +108,10 @@ public sealed class AgentHarnessTests
         }
 
         Assert.Equal("new value", await File.ReadAllTextAsync(targetPath));
+        Assert.Equal("todo new", await File.ReadAllTextAsync(secondTargetPath));
         var run = Assert.Single(conversation.AgentRuns);
-        var fileChange = Assert.Single(run.FileChanges);
+        Assert.Equal(2, run.FileChanges.Count);
+        var fileChange = run.FileChanges.Single(change => change.Path == "notes.txt");
         Assert.Equal("notes.txt", fileChange.Path);
         Assert.Equal("apply_patch", fileChange.ToolName);
         Assert.Equal("tool-call-1", fileChange.ToolCallId);
@@ -110,6 +119,12 @@ public sealed class AgentHarnessTests
         Assert.Equal("new value".Length, fileChange.NewChars);
         Assert.Contains("-old value", fileChange.DiffText);
         Assert.Contains("+new value", fileChange.DiffText);
+        Assert.DoesNotContain("todo old", fileChange.DiffText);
+
+        var secondFileChange = run.FileChanges.Single(change => change.Path == "todo.txt");
+        Assert.Contains("-todo old", secondFileChange.DiffText);
+        Assert.Contains("+todo new", secondFileChange.DiffText);
+        Assert.DoesNotContain("old value", secondFileChange.DiffText);
     }
 
     private sealed class FakeChatCompletionService : IChatCompletionService
