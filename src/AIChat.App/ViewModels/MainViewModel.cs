@@ -109,9 +109,11 @@ public sealed class MainViewModel : ObservableObject
         RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitWorkspaceFileCommand = new RelayCommand(async _ => await CommitSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasWorkspaceChanges && !IsRefreshingWorkspaceChanges);
+        OpenWorkspaceFileCommand = new RelayCommand(_ => OpenWorkspaceFile(), _ => SelectedWorkspaceChange is not null && SelectedProject is not null);
         CommitAgentRunChangesCommand = new RelayCommand(async parameter => await CommitAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
+        OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -151,9 +153,11 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RestoreWorkspaceFileCommand { get; }
     public RelayCommand CommitWorkspaceFileCommand { get; }
     public RelayCommand CommitAllWorkspaceChangesCommand { get; }
+    public RelayCommand OpenWorkspaceFileCommand { get; }
     public RelayCommand CommitAgentRunChangesCommand { get; }
     public RelayCommand RestoreAgentRunChangesCommand { get; }
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
+    public RelayCommand OpenAgentFileChangeCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -282,6 +286,7 @@ public sealed class MainViewModel : ObservableObject
                 RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
                 CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
                 CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
+                OpenWorkspaceFileCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -294,6 +299,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
                 CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
+                OpenWorkspaceFileCommand.RaiseCanExecuteChanged();
                 _ = LoadSelectedWorkspaceDiffAsync();
             }
         }
@@ -911,6 +917,21 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private void OpenWorkspaceFile()
+    {
+        if (SelectedWorkspaceChange is null)
+        {
+            return;
+        }
+
+        OpenProjectPath(SelectedWorkspaceChange.Path);
+    }
+
+    private void OpenAgentFileChange(AgentFileChangeViewModel change)
+    {
+        OpenProjectPath(change.Path);
+    }
+
     private async Task CommitAgentRunChangesAsync(ChatMessageViewModel message)
     {
         if (SelectedProject is null || message.AgentRun is null)
@@ -1019,6 +1040,61 @@ public sealed class MainViewModel : ObservableObject
     private static bool CanOperateAgentRunChanges(object? parameter)
     {
         return parameter is ChatMessageViewModel { AgentRun.HasFileChanges: true };
+    }
+
+    private void OpenProjectPath(string relativePath)
+    {
+        if (SelectedProject is null || string.IsNullOrWhiteSpace(relativePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var root = System.IO.Path.GetFullPath(SelectedProject.Path);
+            var fullPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(root, relativePath));
+            if (!fullPath.StartsWith(root.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
+            {
+                StatusText = "无法打开项目外路径";
+                return;
+            }
+
+            var target = System.IO.File.Exists(fullPath) || System.IO.Directory.Exists(fullPath)
+                ? fullPath
+                : FindExistingParent(fullPath, root);
+            var arguments = System.IO.File.Exists(target)
+                ? $"/select,\"{target}\""
+                : $"\"{target}\"";
+            using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = arguments,
+                UseShellExecute = true
+            });
+            StatusText = $"已打开：{relativePath}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"打开失败：{ex.Message}";
+        }
+    }
+
+    private static string FindExistingParent(string fullPath, string root)
+    {
+        var directory = System.IO.Path.GetDirectoryName(fullPath);
+        while (!string.IsNullOrWhiteSpace(directory) && directory.Length >= root.Length)
+        {
+            if (System.IO.Directory.Exists(directory))
+            {
+                return directory;
+            }
+
+            directory = System.IO.Path.GetDirectoryName(directory);
+        }
+
+        return root;
     }
 
     private async Task SendAsync()

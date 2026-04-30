@@ -250,6 +250,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="{Binding Path}"
@@ -269,6 +270,14 @@
                                    VerticalAlignment="Center"
                                    FontSize="11"
                                    Foreground="#596473" />
+                        <Button Grid.Column="2"
+                                Command="{Binding DataContext.OpenAgentFileChangeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                Content="打开"
+                                Width="48"
+                                Height="26"
+                                Margin="10,0,0,0"
+                                Style="{StaticResource SubtleButtonStyle}" />
                     </Grid>
                     <Expander x:Name="DiffExpander"
                               Header="查看 diff"
@@ -973,6 +982,12 @@
                             </StackPanel>
                             <StackPanel DockPanel.Dock="Right"
                                         Orientation="Horizontal">
+                                <Button Command="{Binding OpenWorkspaceFileCommand}"
+                                        Content="打开"
+                                        Width="62"
+                                        Height="32"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource SubtleButtonStyle}" />
                                 <Button Command="{Binding CommitWorkspaceFileCommand}"
                                         Content="提交"
                                         Width="62"
