@@ -12,11 +12,15 @@ public sealed class AgentRunViewModel : ObservableObject
         _run = run;
         Steps = new ObservableCollection<AgentStepViewModel>(
             run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
+        FileChanges = new ObservableCollection<AgentFileChangeViewModel>(
+            run.FileChanges.Select(change => new AgentFileChangeViewModel(change)));
     }
 
     public string Id => _run.Id;
     public ObservableCollection<AgentStepViewModel> Steps { get; }
+    public ObservableCollection<AgentFileChangeViewModel> FileChanges { get; }
     public bool HasSteps => Steps.Count > 0;
+    public bool HasFileChanges => FileChanges.Count > 0;
 
     public AgentStepViewModel AddStep(AgentStep step)
     {
@@ -42,5 +46,20 @@ public sealed class AgentRunViewModel : ObservableObject
     {
         _run.Status = status;
         _run.CompletedAt = DateTimeOffset.Now;
+    }
+
+    public void SyncFileChanges()
+    {
+        foreach (var change in _run.FileChanges)
+        {
+            if (FileChanges.Any(item => item.Id == change.Id))
+            {
+                continue;
+            }
+
+            FileChanges.Add(new AgentFileChangeViewModel(change));
+        }
+
+        OnPropertyChanged(nameof(HasFileChanges));
     }
 }

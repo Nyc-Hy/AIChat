@@ -932,6 +932,8 @@ public sealed class MainViewModel : ObservableObject
                                 {
                                     step.Refresh();
                                 }
+
+                                assistantViewModel.SyncAgentFileChanges();
                             });
                             rawResponseEvents.Add(SerializeJson(new
                             {
@@ -951,6 +953,7 @@ public sealed class MainViewModel : ObservableObject
 
                                 if (agentEvent.Run is not null)
                                 {
+                                    assistantViewModel.SyncAgentFileChanges();
                                     assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
                                 }
                             });

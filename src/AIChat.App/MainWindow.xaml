@@ -238,6 +238,40 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <DataTemplate x:Key="AgentFileChangeTemplate">
+            <Border Margin="0,0,0,6"
+                    Padding="9,7"
+                    CornerRadius="7"
+                    Background="#F7FBFA"
+                    BorderBrush="#D7E8E4"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="{Binding Path}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="#1E252E"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding ToolName}"
+                                   Margin="0,2,0,0"
+                                   FontSize="11"
+                                   Foreground="#748092"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SizeText}"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               FontSize="11"
+                               Foreground="#596473" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
         <!-- A message bubble switches layout/style based on ChatMessageViewModel flags. -->
         <DataTemplate x:Key="MessageTemplate">
             <Grid Margin="0,11">
@@ -279,6 +313,19 @@
                                            Foreground="#667386" />
                                 <ItemsControl ItemsSource="{Binding AgentRun.Steps}"
                                               ItemTemplate="{StaticResource AgentStepTemplate}" />
+                                <Border x:Name="FileChangePanel"
+                                        Margin="0,5,0,0"
+                                        Visibility="Collapsed">
+                                    <StackPanel>
+                                        <TextBlock Text="文件变更"
+                                                   Margin="0,0,0,7"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#667386" />
+                                        <ItemsControl ItemsSource="{Binding AgentRun.FileChanges}"
+                                                      ItemTemplate="{StaticResource AgentFileChangeTemplate}" />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
                         <Border x:Name="ToolTracePanel"
@@ -342,6 +389,9 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding HasAgentRun}" Value="True">
                     <Setter TargetName="AgentRunPanel" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding AgentRun.HasFileChanges}" Value="True">
+                    <Setter TargetName="FileChangePanel" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>

@@ -118,4 +118,9 @@ public sealed class ChatMessageViewModel : ObservableObject
         OnPropertyChanged(nameof(HasAgentRun));
         return viewModel;
     }
+
+    public void SyncAgentFileChanges()
+    {
+        AgentRun?.SyncFileChanges();
+    }
 }
