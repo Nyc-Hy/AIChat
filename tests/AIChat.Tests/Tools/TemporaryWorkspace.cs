@@ -23,6 +23,16 @@ internal sealed class TemporaryWorkspace : IDisposable
             return;
         }
 
+        foreach (var file in Directory.EnumerateFiles(Path, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(file, FileAttributes.Normal);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(Path, "*", SearchOption.AllDirectories))
+        {
+            File.SetAttributes(directory, FileAttributes.Normal);
+        }
+
         Directory.Delete(Path, recursive: true);
     }
 }
