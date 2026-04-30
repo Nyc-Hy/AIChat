@@ -136,6 +136,57 @@ public sealed class WorkspaceChangeService
         };
     }
 
+    public async Task<WorkspaceCommitResult> CommitAsync(
+        string projectPath,
+        string message,
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            throw new InvalidOperationException("提交信息不能为空。");
+        }
+
+        var normalizedPaths = NormalizePaths(projectPath, paths);
+        if (normalizedPaths.Count == 0)
+        {
+            throw new InvalidOperationException("至少需要一个明确文件路径。");
+        }
+
+        var addResult = await GitCommand.RunAsync(
+            projectPath,
+            ["add", "--", .. normalizedPaths],
+            timeoutSeconds: 20,
+            cancellationToken);
+        if (addResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(CreateErrorMessage(addResult));
+        }
+
+        var commitResult = await GitCommand.RunAsync(
+            projectPath,
+            ["commit", "-m", message.Trim()],
+            timeoutSeconds: 30,
+            cancellationToken);
+        if (commitResult.ExitCode != 0)
+        {
+            throw new InvalidOperationException(CreateErrorMessage(commitResult));
+        }
+
+        var hashResult = await GitCommand.RunAsync(
+            projectPath,
+            ["rev-parse", "--short", "HEAD"],
+            timeoutSeconds: 10,
+            cancellationToken);
+
+        return new WorkspaceCommitResult
+        {
+            Commit = hashResult.ExitCode == 0 ? hashResult.Stdout.Trim() : "",
+            Message = message.Trim(),
+            Paths = normalizedPaths
+        };
+    }
+
     private static WorkspaceChange ParseStatusLine(string line)
     {
         var status = line.Length >= 2 ? line[..2] : line;
@@ -145,6 +196,20 @@ public sealed class WorkspaceChangeService
             Status = status,
             Path = path.Replace('\\', '/')
         };
+    }
+
+    private static IReadOnlyList<string> NormalizePaths(string projectPath, IReadOnlyList<string> paths)
+    {
+        return paths
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path =>
+            {
+                var fullPath = ProjectPathGuard.ResolveInsideProject(projectPath, path);
+                ProjectPathGuard.EnsureWritableProjectPath(projectPath, fullPath);
+                return ProjectPathGuard.ToProjectRelativePath(projectPath, fullPath).Replace('\\', '/');
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static async Task<PathGitStatus> GetPathStatusAsync(

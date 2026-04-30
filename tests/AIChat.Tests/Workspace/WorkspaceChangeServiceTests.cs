@@ -90,6 +90,35 @@ public sealed class WorkspaceChangeServiceTests
         Assert.False(File.Exists(targetPath));
     }
 
+    [Fact]
+    public async Task CommitAsync_CommitsOnlyExplicitPaths()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "tracked.txt"), "changed\n");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "other.txt"), "other\n");
+        var service = new WorkspaceChangeService();
+
+        var result = await service.CommitAsync(workspace.Path, "Update tracked", ["tracked.txt"]);
+
+        Assert.False(string.IsNullOrWhiteSpace(result.Commit));
+        Assert.Equal(["tracked.txt"], result.Paths);
+        var changes = await service.GetChangesAsync(workspace.Path);
+        Assert.DoesNotContain(changes.Changes, change => change.Path == "tracked.txt");
+        Assert.Contains(changes.Changes, change => change.Path == "other.txt");
+    }
+
+    [Fact]
+    public async Task CommitAsync_RejectsMissingMessage()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var service = new WorkspaceChangeService();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CommitAsync(workspace.Path, "", ["tracked.txt"]));
+
+        Assert.Contains("提交信息", ex.Message);
+    }
+
     private sealed class GitWorkspace : IDisposable
     {
         private readonly TemporaryWorkspace _workspace;
