@@ -37,6 +37,7 @@ public sealed class AgentToolCatalog
             new GitStatusTool(),
             new GitDiffTool(),
             new GitRestoreFileTool(),
+            new GitCommitTool(),
             new RunBuildTool(),
             new RunTestTool(),
             new ShellCommandTool()

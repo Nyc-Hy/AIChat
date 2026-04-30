@@ -1325,10 +1325,10 @@ public sealed class MainViewModel : ObservableObject
         }
         else if (Settings.EnabledToolIds.Contains("git_status", StringComparer.OrdinalIgnoreCase) &&
                  Settings.EnabledToolIds.Contains("git_diff", StringComparer.OrdinalIgnoreCase) &&
-                 knownIds.Contains("git_restore_file") &&
-                 !Settings.EnabledToolIds.Contains("git_restore_file", StringComparer.OrdinalIgnoreCase))
+                 knownIds.Contains("git_restore_file"))
         {
-            Settings.EnabledToolIds.Add("git_restore_file");
+            AddEnabledToolIfKnown("git_restore_file");
+            AddEnabledToolIfKnown("git_commit");
         }
 
         Settings.ToolPermissionModes = Settings.ToolPermissionModes
@@ -1338,6 +1338,15 @@ public sealed class MainViewModel : ObservableObject
         foreach (var tool in _toolCatalog.All)
         {
             Settings.ToolPermissionModes.TryAdd(tool.Id, DefaultPermissionMode(tool));
+        }
+
+        void AddEnabledToolIfKnown(string toolId)
+        {
+            if (knownIds.Contains(toolId) &&
+                !Settings.EnabledToolIds.Contains(toolId, StringComparer.OrdinalIgnoreCase))
+            {
+                Settings.EnabledToolIds.Add(toolId);
+            }
         }
     }
 

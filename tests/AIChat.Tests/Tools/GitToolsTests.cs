@@ -118,6 +118,55 @@ public sealed class GitToolsTests
         Assert.True(document.RootElement.GetProperty("deletedUntracked").GetBoolean());
     }
 
+    [Fact]
+    public async Task GitCommitTool_CommitsExplicitPaths()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "tracked.txt"), "changed\n");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "ignored.txt"), "left out\n");
+        var tool = new GitCommitTool();
+
+        var result = await tool.ExecuteAsync(
+            """{"message":"Update tracked file","paths":["tracked.txt"]}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.False(result.IsError, result.Content);
+        using var document = JsonDocument.Parse(result.Content);
+        Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("commit").GetString()));
+
+        var status = await RunGitCaptureAsync(workspace.Path, "status", "--short", "--untracked-files=all");
+        Assert.DoesNotContain("tracked.txt", status);
+        Assert.Contains("ignored.txt", status);
+    }
+
+    [Fact]
+    public async Task GitCommitTool_RejectsMissingPaths()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var tool = new GitCommitTool();
+
+        var result = await tool.ExecuteAsync(
+            """{"message":"No paths","paths":[]}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.True(result.IsError);
+        Assert.Contains("paths", result.Content);
+    }
+
+    [Fact]
+    public async Task GitCommitTool_RejectsPathOutsideProject()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        var tool = new GitCommitTool();
+
+        var result = await tool.ExecuteAsync(
+            """{"message":"Bad path","paths":["../outside.txt"]}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.True(result.IsError);
+        Assert.Contains("路径超出", result.Content);
+    }
+
     private sealed class GitWorkspace : IDisposable
     {
         private readonly TemporaryWorkspace _workspace;
@@ -149,32 +198,39 @@ public sealed class GitToolsTests
 
         private static async Task RunGitAsync(string workingDirectory, params string[] arguments)
         {
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "git",
-                    WorkingDirectory = workingDirectory,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                }
-            };
-
-            foreach (var argument in arguments)
-            {
-                process.StartInfo.ArgumentList.Add(argument);
-            }
-
-            process.Start();
-            var stdout = await process.StandardOutput.ReadToEndAsync();
-            var stderr = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {stdout}\n{stderr}");
-            }
+            _ = await RunGitCaptureAsync(workingDirectory, arguments);
         }
+    }
+
+    private static async Task<string> RunGitCaptureAsync(string workingDirectory, params string[] arguments)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "git",
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }
+        };
+
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        process.Start();
+        var stdout = await process.StandardOutput.ReadToEndAsync();
+        var stderr = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"git {string.Join(' ', arguments)} failed: {stdout}\n{stderr}");
+        }
+
+        return stdout;
     }
 }
