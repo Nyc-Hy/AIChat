@@ -17,11 +17,13 @@ public sealed class SystemPromptBuilder
         builder.AppendLine("6. 工具返回失败时，不要反复无意义重试；改用更具体的命令或向用户说明阻塞点。");
         builder.AppendLine("7. 回答中说明实际改动、检查过的 diff/status、验证命令和结果。");
         builder.AppendLine("8. 如果用户要求修改项目，必须调用 apply_patch/edit_file/write_file 并获得成功结果后，才能声称已经修改完成。");
+        builder.AppendLine("9. 如果用户要求撤销某个文件的未提交改动，优先用 git_restore_file；未跟踪文件只有在用户明确同意删除时才设置 delete_untracked=true。");
         builder.AppendLine();
         builder.AppendLine("工具优先级：");
         builder.AppendLine("- 理解项目：list_files、search_text、read_file。");
         builder.AppendLine("- 修改已有文件：apply_patch 优先，其次 edit_file；创建新文件才考虑 write_file。");
         builder.AppendLine("- 检查变更：git_status、git_diff。");
+        builder.AppendLine("- 撤销文件改动：git_restore_file，只处理用户明确指定的文件。");
         builder.AppendLine("- 验证：run_build、run_test。");
         builder.AppendLine("- 兜底：run_shell，仅当没有专用工具可用。");
         builder.AppendLine();

@@ -37,6 +37,7 @@ public sealed class SystemPromptBuilderTests
                 "apply_patch",
                 "git_status",
                 "git_diff",
+                "git_restore_file",
                 "run_build",
                 "run_test",
                 "run_shell"
@@ -45,6 +46,7 @@ public sealed class SystemPromptBuilderTests
 
         Assert.Contains("优先用 apply_patch", prompt);
         Assert.Contains("git_status 和 git_diff", prompt);
+        Assert.Contains("git_restore_file", prompt);
         Assert.Contains("run_build 或 run_test", prompt);
         Assert.Contains("run_shell 只作为最后手段", prompt);
     }

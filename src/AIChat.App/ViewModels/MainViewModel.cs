@@ -1317,6 +1317,20 @@ public sealed class MainViewModel : ObservableObject
             .Where(knownIds.Contains)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+        if (Settings.EnabledToolIds.Count == 0)
+        {
+            Settings.EnabledToolIds = _toolCatalog.All
+                .Select(tool => tool.Id)
+                .ToList();
+        }
+        else if (Settings.EnabledToolIds.Contains("git_status", StringComparer.OrdinalIgnoreCase) &&
+                 Settings.EnabledToolIds.Contains("git_diff", StringComparer.OrdinalIgnoreCase) &&
+                 knownIds.Contains("git_restore_file") &&
+                 !Settings.EnabledToolIds.Contains("git_restore_file", StringComparer.OrdinalIgnoreCase))
+        {
+            Settings.EnabledToolIds.Add("git_restore_file");
+        }
+
         Settings.ToolPermissionModes = Settings.ToolPermissionModes
             .Where(entry => knownIds.Contains(entry.Key))
             .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
