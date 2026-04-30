@@ -13,6 +13,7 @@ public sealed class ChatMessage
     // the assistant tool call that requested it.
     public string ToolCallId { get; set; } = "";
     public string ToolName { get; set; } = "";
+    public string AgentRunId { get; set; } = "";
     // Assistant messages can carry requested tool calls in the Agent transcript.
     public List<ChatToolCall> ToolCalls { get; set; } = [];
     // Visible assistant messages keep a readable chain of tool calls/results.

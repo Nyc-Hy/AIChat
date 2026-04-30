@@ -185,6 +185,59 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <DataTemplate x:Key="AgentStepTemplate">
+            <Border Margin="0,0,0,6"
+                    Padding="9,7"
+                    CornerRadius="7"
+                    Background="#F8FAFC"
+                    BorderBrush="#E2E8F0"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="StepDot"
+                            Width="7"
+                            Height="7"
+                            CornerRadius="4"
+                            Background="#2B7A72"
+                            VerticalAlignment="Center"
+                            Margin="0,0,8,0" />
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="{Binding Title}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="#1E252E"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Subtitle}"
+                                   Margin="0,2,0,0"
+                                   FontSize="11"
+                                   Foreground="#748092"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="12,0,0,0">
+                        <TextBlock Text="{Binding StatusText}"
+                                   FontSize="11"
+                                   Foreground="#596473" />
+                        <TextBlock Text="{Binding DurationText}"
+                                   Margin="8,0,0,0"
+                                   FontSize="11"
+                                   Foreground="#98A2B0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsError}" Value="True">
+                    <Setter TargetName="StepDot" Property="Background" Value="#B64034" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- A message bubble switches layout/style based on ChatMessageViewModel flags. -->
         <DataTemplate x:Key="MessageTemplate">
             <Grid Margin="0,11">
@@ -215,6 +268,19 @@
                             <TextBlock Text="{Binding Author}" FontWeight="SemiBold" Foreground="#202832" />
                             <TextBlock Text="{Binding TimeText}" Foreground="#98A2B0" FontSize="12" HorizontalAlignment="Right" DockPanel.Dock="Right" />
                         </DockPanel>
+                        <Border x:Name="AgentRunPanel"
+                                Margin="0,0,0,10"
+                                Visibility="Collapsed">
+                            <StackPanel>
+                                <TextBlock Text="执行步骤"
+                                           Margin="0,0,0,7"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="#667386" />
+                                <ItemsControl ItemsSource="{Binding AgentRun.Steps}"
+                                              ItemTemplate="{StaticResource AgentStepTemplate}" />
+                            </StackPanel>
+                        </Border>
                         <Border x:Name="ToolTracePanel"
                                 Margin="0,0,0,10"
                                 Visibility="Collapsed">
@@ -273,6 +339,9 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding HasToolTraces}" Value="True">
                     <Setter TargetName="ToolTracePanel" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding HasAgentRun}" Value="True">
+                    <Setter TargetName="AgentRunPanel" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>

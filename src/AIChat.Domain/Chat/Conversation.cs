@@ -12,4 +12,5 @@ public sealed class Conversation
     // These records are not part of the model context; they exist for learning,
     // debugging, and later observability.
     public List<LlmCallDetail> CallDetails { get; set; } = [];
+    public List<AgentRun> AgentRuns { get; set; } = [];
 }

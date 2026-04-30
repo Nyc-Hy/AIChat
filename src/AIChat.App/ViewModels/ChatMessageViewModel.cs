@@ -9,23 +9,40 @@ public sealed class ChatMessageViewModel : ObservableObject
 {
     private string _content;
     private bool _isStreaming;
+    private AgentRunViewModel? _agentRun;
 
-    public ChatMessageViewModel(ChatMessage message)
+    public ChatMessageViewModel(ChatMessage message, AgentRun? agentRun = null)
     {
         Message = message;
         _content = message.Content;
         ToolTraces = new ObservableCollection<ToolTraceViewModel>(
             message.ToolTraces.Select(trace => new ToolTraceViewModel(trace)));
+        if (agentRun is not null)
+        {
+            _agentRun = new AgentRunViewModel(agentRun);
+        }
     }
 
     public ChatMessage Message { get; }
     public ObservableCollection<ToolTraceViewModel> ToolTraces { get; }
+    public AgentRunViewModel? AgentRun
+    {
+        get => _agentRun;
+        private set
+        {
+            if (SetProperty(ref _agentRun, value))
+            {
+                OnPropertyChanged(nameof(HasAgentRun));
+            }
+        }
+    }
     public ChatRole Role => Message.Role;
     public string Author => Role == ChatRole.User ? "你" : "AIChat";
     public string TimeText => Message.CreatedAt.ToLocalTime().ToString("HH:mm");
     public bool IsUser => Role == ChatRole.User;
     public bool IsAssistant => Role == ChatRole.Assistant;
     public bool HasToolTraces => ToolTraces.Count > 0;
+    public bool HasAgentRun => AgentRun?.HasSteps == true;
     public bool IsError
     {
         get => Message.IsError;
@@ -81,5 +98,24 @@ public sealed class ChatMessageViewModel : ObservableObject
     {
         return ToolTraces.FirstOrDefault(trace =>
             string.Equals(trace.ToolCallId, toolCallId, StringComparison.Ordinal));
+    }
+
+    public void AttachAgentRun(AgentRun run)
+    {
+        Message.AgentRunId = run.Id;
+        AgentRun = new AgentRunViewModel(run);
+    }
+
+    public AgentStepViewModel? AddAgentStep(AgentStep step)
+    {
+        var run = AgentRun;
+        if (run is null)
+        {
+            return null;
+        }
+
+        var viewModel = run.AddStep(step);
+        OnPropertyChanged(nameof(HasAgentRun));
+        return viewModel;
     }
 }

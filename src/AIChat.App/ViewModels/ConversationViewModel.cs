@@ -14,7 +14,9 @@ public sealed class ConversationViewModel : ObservableObject
     {
         Conversation = conversation;
         Messages = new ObservableCollection<ChatMessageViewModel>(
-            conversation.Messages.Select(message => new ChatMessageViewModel(message)));
+            conversation.Messages.Select(message => new ChatMessageViewModel(
+                message,
+                conversation.AgentRuns.FirstOrDefault(run => run.Id == message.AgentRunId))));
         CallDetails = new ObservableCollection<LlmCallDetailViewModel>(
             conversation.CallDetails
                 .OrderByDescending(detail => detail.CreatedAt)
@@ -58,6 +60,23 @@ public sealed class ConversationViewModel : ObservableObject
         Messages.Add(new ChatMessageViewModel(message));
         Conversation.UpdatedAt = DateTimeOffset.Now;
         OnPropertyChanged(nameof(UpdatedText));
+    }
+
+    public AgentRun AddAgentRun(ChatMessageViewModel assistantMessage, string userMessageId, string goal)
+    {
+        var run = new AgentRun
+        {
+            ConversationId = Conversation.Id,
+            UserMessageId = userMessageId,
+            AssistantMessageId = assistantMessage.Message.Id,
+            Goal = goal,
+            StartedAt = DateTimeOffset.Now
+        };
+        Conversation.AgentRuns.Add(run);
+        assistantMessage.AttachAgentRun(run);
+        Conversation.UpdatedAt = DateTimeOffset.Now;
+        OnPropertyChanged(nameof(UpdatedText));
+        return run;
     }
 
     public bool ApplySearch(string searchText)

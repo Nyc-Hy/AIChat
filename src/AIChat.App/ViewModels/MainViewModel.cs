@@ -708,6 +708,20 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasMessages));
         var assistantViewModel = SelectedConversation.Messages.Last();
         assistantViewModel.IsStreaming = true;
+        var agentRun = SelectedConversation.AddAgentRun(assistantViewModel, userMessage.Id, text);
+        var agentStepNumber = 0;
+        _ = assistantViewModel.AddAgentStep(new AgentStep
+        {
+            RunId = agentRun.Id,
+            Number = ++agentStepNumber,
+            Type = AgentStepType.Model,
+            Status = AgentStepStatus.Completed,
+            Title = "准备上下文",
+            Input = text,
+            Output = "已生成系统提示和会话上下文。",
+            StartedAt = DateTimeOffset.Now,
+            CompletedAt = DateTimeOffset.Now
+        });
         var hasReceivedContent = false;
         var hasShownToolProgress = false;
         var hasUsedTools = false;
@@ -752,6 +766,7 @@ public sealed class MainViewModel : ObservableObject
         _sendCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         var rawResponseEvents = new List<string>();
         var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
+        var stepByToolCallId = new Dictionary<string, AgentStepViewModel>(StringComparer.Ordinal);
         var contextMessages = _contextBuilder.Build(new ConversationContextBuildRequest
         {
             Messages = SelectedConversation.Conversation.Messages
@@ -861,6 +876,22 @@ public sealed class MainViewModel : ObservableObject
                                 if (agentEvent.ToolCall is not null)
                                 {
                                     toolTraceByCallId[agentEvent.ToolCall.Id] = assistantViewModel.AddToolTrace(agentEvent.ToolCall);
+                                    var step = new AgentStep
+                                    {
+                                        RunId = agentRun.Id,
+                                        Number = ++agentStepNumber,
+                                        Type = AgentStepType.ToolCall,
+                                        Title = $"调用工具：{agentEvent.ToolCall.Name}",
+                                        Input = agentEvent.ToolCall.ArgumentsJson,
+                                        ToolCallId = agentEvent.ToolCall.Id,
+                                        ToolName = agentEvent.ToolCall.Name,
+                                        StartedAt = DateTimeOffset.Now
+                                    };
+                                    var stepViewModel = assistantViewModel.AddAgentStep(step);
+                                    if (stepViewModel is not null)
+                                    {
+                                        stepByToolCallId[agentEvent.ToolCall.Id] = stepViewModel;
+                                    }
                                 }
                             });
                             rawResponseEvents.Add(SerializeJson(new
@@ -892,6 +923,13 @@ public sealed class MainViewModel : ObservableObject
                                 {
                                     trace.Complete(agentEvent.ToolResult.Content, agentEvent.ToolResult.IsError);
                                 }
+
+                                if (agentEvent.ToolCall is not null &&
+                                    agentEvent.ToolResult is not null &&
+                                    stepByToolCallId.TryGetValue(agentEvent.ToolCall.Id, out var step))
+                                {
+                                    step.Complete(agentEvent.ToolResult.Content, agentEvent.ToolResult.IsError);
+                                }
                             });
                             rawResponseEvents.Add(SerializeJson(new
                             {
@@ -921,6 +959,18 @@ public sealed class MainViewModel : ObservableObject
             {
                 StatusText = "回复完成";
             }
+            _ = assistantViewModel.AddAgentStep(new AgentStep
+            {
+                RunId = agentRun.Id,
+                Number = ++agentStepNumber,
+                Type = AgentStepType.Final,
+                Status = AgentStepStatus.Completed,
+                Title = "生成最终回复",
+                Output = assistantViewModel.Content,
+                StartedAt = DateTimeOffset.Now,
+                CompletedAt = DateTimeOffset.Now
+            });
+            assistantViewModel.AgentRun?.Complete(assistantViewModel.IsError ? AgentRunStatus.Failed : AgentRunStatus.Completed);
             await CompleteCallDetailAsync(callDetail, "完成", new
             {
                 status = "completed",
@@ -941,6 +991,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             StatusText = "已停止生成";
+            assistantViewModel.AgentRun?.Complete(AgentRunStatus.Cancelled);
             await CompleteCallDetailAsync(callDetail, "已停止", new
             {
                 status = "cancelled",
@@ -957,6 +1008,7 @@ public sealed class MainViewModel : ObservableObject
             assistantViewModel.Content += $"\n\n请求出错：{ex.Message}";
             assistantViewModel.IsError = true;
             StatusText = "请求失败";
+            assistantViewModel.AgentRun?.Complete(AgentRunStatus.Failed);
             await CompleteCallDetailAsync(callDetail, "失败", new
             {
                 status = "failed",
