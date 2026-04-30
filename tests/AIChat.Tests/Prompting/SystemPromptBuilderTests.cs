@@ -26,4 +26,26 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("write_file：每次执行前需要确认", prompt);
         Assert.Contains("不能声称", new SystemPromptBuilder().Build(new SystemPromptContext()));
     }
+
+    [Fact]
+    public void Build_IncludesToolPreferencePolicy()
+    {
+        var prompt = new SystemPromptBuilder().Build(new SystemPromptContext
+        {
+            EnabledToolIds =
+            [
+                "apply_patch",
+                "git_status",
+                "git_diff",
+                "run_build",
+                "run_test",
+                "run_shell"
+            ]
+        });
+
+        Assert.Contains("优先用 apply_patch", prompt);
+        Assert.Contains("git_status 和 git_diff", prompt);
+        Assert.Contains("run_build 或 run_test", prompt);
+        Assert.Contains("run_shell 只作为最后手段", prompt);
+    }
 }

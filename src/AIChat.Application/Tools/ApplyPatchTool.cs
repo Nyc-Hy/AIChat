@@ -11,7 +11,7 @@ public sealed class ApplyPatchTool : IAgentTool
     public ChatToolDefinition Definition { get; } = new()
     {
         Name = "apply_patch",
-        Description = "对当前项目内一个或多个文本文件应用精确补丁。每个操作必须提供 path、old_text、new_text；old_text 必须在文件中唯一匹配。",
+        Description = "首选代码修改工具。对当前项目内一个或多个文本文件应用精确补丁。每个操作必须提供 path、old_text、new_text；old_text 必须在文件中唯一匹配。",
         ParametersJson = """
         {
           "type": "object",

@@ -32,7 +32,7 @@ public sealed class ShellCommandTool : IAgentTool
     public ChatToolDefinition Definition { get; } = new()
     {
         Name = "run_shell",
-        Description = "在当前项目目录内运行非交互式 shell 命令。默认优先使用 Git Bash，适合构建、测试、查看状态。会阻断常见破坏性命令。",
+        Description = "在当前项目目录内运行非交互式 shell 命令。仅作为兜底工具；构建/测试优先用 run_build/run_test，Git 状态/diff 优先用 git_status/git_diff。会阻断常见破坏性命令。",
         ParametersJson = """
         {
           "type": "object",

@@ -11,7 +11,7 @@ public sealed class WriteFileTool : IAgentTool
     public ChatToolDefinition Definition { get; } = new()
     {
         Name = "write_file",
-        Description = "在当前项目内写入文本文件。可创建新文件；覆盖已有文件时必须显式传 overwrite=true。",
+        Description = "在当前项目内写入文本文件。主要用于创建新文件；修改已有文件时优先使用 apply_patch 或 edit_file。覆盖已有文件必须显式传 overwrite=true。",
         ParametersJson = """
         {
           "type": "object",
