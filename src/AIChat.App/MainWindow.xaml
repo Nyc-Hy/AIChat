@@ -1034,12 +1034,21 @@
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        Foreground="#667386" />
-                            <TextBlock DockPanel.Dock="Right"
-                                       Text="{Binding WorkspaceBranch}"
-                                       FontSize="11"
-                                       Foreground="#98A2B0"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxWidth="190" />
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal">
+                                <Button Command="{Binding CommitAllWorkspaceChangesCommand}"
+                                        Content="提交全部"
+                                        Width="76"
+                                        Height="28"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource SubtleButtonStyle}" />
+                                <TextBlock Text="{Binding WorkspaceBranch}"
+                                           FontSize="11"
+                                           Foreground="#98A2B0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxWidth="110" />
+                            </StackPanel>
                         </DockPanel>
 
                         <Border Grid.Row="3"

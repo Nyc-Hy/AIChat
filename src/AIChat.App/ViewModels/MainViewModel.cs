@@ -108,6 +108,7 @@ public sealed class MainViewModel : ObservableObject
         RefreshWorkspaceChangesCommand = new RelayCommand(async _ => await RefreshWorkspaceChangesAsync(), _ => SelectedProject is not null && !IsRefreshingWorkspaceChanges);
         RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitWorkspaceFileCommand = new RelayCommand(async _ => await CommitSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
+        CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasWorkspaceChanges && !IsRefreshingWorkspaceChanges);
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -146,6 +147,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RefreshWorkspaceChangesCommand { get; }
     public RelayCommand RestoreWorkspaceFileCommand { get; }
     public RelayCommand CommitWorkspaceFileCommand { get; }
+    public RelayCommand CommitAllWorkspaceChangesCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -273,6 +275,7 @@ public sealed class MainViewModel : ObservableObject
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
                 RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
                 CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
+                CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -746,6 +749,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(HasWorkspaceChanges));
+            CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
         }
         catch (Exception ex)
         {
@@ -853,6 +857,44 @@ public sealed class MainViewModel : ObservableObject
                 [change.Path]);
             StatusText = string.IsNullOrWhiteSpace(result.Commit)
                 ? $"已提交：{result.Message}"
+                : $"已提交 {result.Commit}：{result.Message}";
+            await RefreshWorkspaceChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"提交失败：{ex.Message}";
+            WorkspaceDiffText = $"提交失败：{ex.Message}";
+        }
+    }
+
+    private async Task CommitAllWorkspaceChangesAsync()
+    {
+        if (SelectedProject is null || WorkspaceChanges.Count == 0)
+        {
+            return;
+        }
+
+        var paths = WorkspaceChanges
+            .Select(change => change.Path)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var message = TextPromptDialog.Show(
+            System.Windows.Application.Current.MainWindow,
+            "提交当前工作区变更",
+            $"Update {paths.Count} files");
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await _workspaceChangeService.CommitAsync(
+                SelectedProject.Path,
+                message,
+                paths);
+            StatusText = string.IsNullOrWhiteSpace(result.Commit)
+                ? $"已提交 {result.Paths.Count} 个文件：{result.Message}"
                 : $"已提交 {result.Commit}：{result.Message}";
             await RefreshWorkspaceChangesAsync();
         }
