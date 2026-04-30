@@ -58,6 +58,28 @@ public sealed class WorkspaceChangeService
         {
             var fullPath = ProjectPathGuard.ResolveInsideProject(projectPath, path);
             normalizedPath = ProjectPathGuard.ToProjectRelativePath(projectPath, fullPath).Replace('\\', '/');
+            var status = await GetPathStatusAsync(projectPath, normalizedPath, cancellationToken);
+            if (status.IsUntracked)
+            {
+                var content = File.Exists(fullPath)
+                    ? await File.ReadAllTextAsync(fullPath, cancellationToken)
+                    : "";
+                var untrackedDiff = ToolDiff.CreateUnifiedDiff(normalizedPath, "", content, maxLines: 260);
+                var untrackedTruncated = untrackedDiff.Length > maxChars;
+                if (untrackedTruncated)
+                {
+                    untrackedDiff = untrackedDiff[..maxChars];
+                }
+
+                return new WorkspaceDiff
+                {
+                    Path = normalizedPath,
+                    Staged = staged,
+                    DiffText = untrackedDiff,
+                    IsTruncated = untrackedTruncated
+                };
+            }
+
             arguments.Add("--");
             arguments.Add(normalizedPath);
         }

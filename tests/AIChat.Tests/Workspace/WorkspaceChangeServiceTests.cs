@@ -48,6 +48,19 @@ public sealed class WorkspaceChangeServiceTests
     }
 
     [Fact]
+    public async Task GetDiffAsync_ReturnsSyntheticDiffForUntrackedFile()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "new.txt"), "new line\n");
+        var service = new WorkspaceChangeService();
+
+        var diff = await service.GetDiffAsync(workspace.Path, "new.txt");
+
+        Assert.Contains("+++ b/new.txt", diff.DiffText);
+        Assert.Contains("+new line", diff.DiffText);
+    }
+
+    [Fact]
     public async Task RestoreFileAsync_RestoresTrackedFile()
     {
         using var workspace = await GitWorkspace.CreateAsync();
