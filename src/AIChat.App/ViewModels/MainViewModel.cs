@@ -709,6 +709,8 @@ public sealed class MainViewModel : ObservableObject
         var assistantViewModel = SelectedConversation.Messages.Last();
         assistantViewModel.IsStreaming = true;
         var hasReceivedContent = false;
+        var hasShownToolProgress = false;
+        var hasUsedTools = false;
         var callDetail = new LlmCallDetail
         {
             // Call details intentionally capture both the user-facing settings and
@@ -835,6 +837,7 @@ public sealed class MainViewModel : ObservableObject
                             if (!hasReceivedContent)
                             {
                                 hasReceivedContent = true;
+                                hasShownToolProgress = false;
                                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     assistantViewModel.Content = "";
@@ -848,6 +851,13 @@ public sealed class MainViewModel : ObservableObject
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusText = $"调用工具：{agentEvent.ToolCall?.Name}";
+                                hasUsedTools = true;
+                                if (!hasReceivedContent && !hasShownToolProgress)
+                                {
+                                    hasShownToolProgress = true;
+                                    assistantViewModel.Content = "正在查看项目文件并分析结果...";
+                                }
+
                                 if (agentEvent.ToolCall is not null)
                                 {
                                     toolTraceByCallId[agentEvent.ToolCall.Id] = assistantViewModel.AddToolTrace(agentEvent.ToolCall);
@@ -897,7 +907,9 @@ public sealed class MainViewModel : ObservableObject
 
             if (!hasReceivedContent)
             {
-                assistantViewModel.Content = "模型没有返回可显示内容。";
+                assistantViewModel.Content = hasUsedTools
+                    ? "已完成工具调用，但模型没有继续返回最终回复。请重试，或打开调用详情查看模型和工具的原始结果。"
+                    : "模型没有返回可显示内容。";
             }
             else if (IsProviderErrorContent(assistantViewModel.Content))
             {
