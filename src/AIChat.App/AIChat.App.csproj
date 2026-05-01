@@ -9,6 +9,10 @@
     <ProjectReference Include="..\AIChat.Storage.Json\AIChat.Storage.Json.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Ookii.Dialogs.Wpf" Version="5.0.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>

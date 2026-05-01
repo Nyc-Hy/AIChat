@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Encodings.Web;
@@ -7,6 +8,7 @@ using System.Windows;
 using AIChat.App.Controls;
 using AIChat.Domain.Audit;
 using AIChat.Domain.Chat;
+using AIChat.Domain.Projects;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Context;
 using AIChat.Abstractions.Llm;
@@ -14,10 +16,12 @@ using AIChat.Abstractions.Persistence;
 using AIChat.Application.Agents;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
+using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Storage.Json;
+using Ookii.Dialogs.Wpf;
 using AIChat.Domain.Context;
 
 namespace AIChat.App.ViewModels;
@@ -156,6 +160,8 @@ public sealed class MainViewModel : ObservableObject
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
         AddProjectToolOverrideCommand = new RelayCommand(_ => AddProjectToolOverride());
         RemoveProjectToolOverrideCommand = new RelayCommand(param => RemoveProjectToolOverride(param as string));
+        AddProjectCommand = new RelayCommand(async _ => await AddProjectAsync());
+        RemoveProjectCommand = new RelayCommand(param => RemoveProject(param as ProjectViewModel), param => param is ProjectViewModel && Projects.Count > 1);
     }
 
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
@@ -234,6 +240,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RejectToolCommand { get; }
     public RelayCommand AddProjectToolOverrideCommand { get; }
     public RelayCommand RemoveProjectToolOverrideCommand { get; }
+    public RelayCommand AddProjectCommand { get; }
+    public RelayCommand RemoveProjectCommand { get; }
 
     public PendingToolApprovalViewModel? PendingToolApproval
     {
@@ -954,6 +962,88 @@ public sealed class MainViewModel : ObservableObject
         }
 
         _ = RefreshWorkspaceChangesAsync();
+    }
+
+    private async Task AddProjectAsync()
+    {
+        var dialog = new VistaFolderBrowserDialog
+        {
+            Description = "选择项目文件夹",
+            ShowNewFolderButton = false,
+            RootFolder = Environment.SpecialFolder.MyComputer
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var folderPath = dialog.SelectedPath;
+        if (!Directory.Exists(folderPath))
+        {
+            return;
+        }
+
+        // Check for duplicates
+        if (Projects.Any(project => string.Equals(project.Path, folderPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            // Already added — just select it
+            SelectProject(Projects.First(project => string.Equals(project.Path, folderPath, StringComparison.OrdinalIgnoreCase)));
+            return;
+        }
+
+        var projectName = Path.GetFileName(folderPath);
+        var workspace = new ProjectWorkspace
+        {
+            Name = projectName,
+            Path = folderPath,
+            UpdatedAt = DateTimeOffset.Now
+        };
+
+        var projectVm = new ProjectViewModel(workspace);
+        Projects.Add(projectVm);
+        await _repository.SaveProjectsAsync(Projects.Select(project => project.Project).ToList());
+        SelectProject(projectVm);
+
+        // Initialize project (generate AGENTS.md if missing)
+        try
+        {
+            var initializer = new ProjectInitializer();
+            await initializer.InitializeProjectAsync(folderPath);
+        }
+        catch
+        {
+            // Non-fatal — project still usable without AGENTS.md
+        }
+    }
+
+    private void RemoveProject(ProjectViewModel? project)
+    {
+        if (project is null || Projects.Count <= 1)
+        {
+            return;
+        }
+
+        var result = System.Windows.MessageBox.Show(
+            $"确定要移除项目 \"{project.Name}\" 吗？\n\n项目文件不会被删除，只是从列表中移除。",
+            "移除项目",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var wasSelected = project.IsSelected;
+        Projects.Remove(project);
+
+        if (wasSelected)
+        {
+            SelectProject(Projects.FirstOrDefault());
+        }
+
+        _ = _repository.SaveProjectsAsync(Projects.Select(project => project.Project).ToList());
     }
 
     private void SelectConversation(ConversationViewModel conversation)

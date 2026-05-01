@@ -39,6 +39,30 @@ public sealed class SystemPromptBuilder
         builder.AppendLine($"- 名称：{Normalize(context.ProjectName, "AIChat")}");
         builder.AppendLine($"- 路径：{Normalize(context.ProjectPath, "(未设置)")}");
         builder.AppendLine();
+
+        // Inject AGENTS.md content if it exists
+        if (!string.IsNullOrWhiteSpace(context.ProjectPath))
+        {
+            var agentsPath = Path.Combine(context.ProjectPath, "AGENTS.md");
+            if (File.Exists(agentsPath))
+            {
+                try
+                {
+                    var agentsContent = File.ReadAllText(agentsPath);
+                    if (!string.IsNullOrWhiteSpace(agentsContent))
+                    {
+                        builder.AppendLine("项目说明文件 (AGENTS.md)：");
+                        builder.AppendLine(agentsContent.Trim());
+                        builder.AppendLine();
+                    }
+                }
+                catch
+                {
+                    // Non-fatal — continue without AGENTS.md
+                }
+            }
+        }
+
         builder.AppendLine("当前启用工具：");
 
         if (context.EnabledToolIds.Count == 0)
