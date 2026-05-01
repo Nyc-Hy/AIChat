@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Windows;
 using AIChat.App.Controls;
+using AIChat.Domain.Audit;
 using AIChat.Domain.Chat;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Context;
@@ -16,6 +17,7 @@ using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
+using AIChat.Storage.Json;
 using AIChat.Domain.Context;
 
 namespace AIChat.App.ViewModels;
@@ -39,6 +41,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly IContextEstimator _contextEstimator;
     private readonly ConversationContextBuilder _contextBuilder;
     private readonly WorkspaceChangeService _workspaceChangeService;
+    private readonly AuditLogRepository? _auditLogRepository;
     private AgentHarness? _agentHarness;
     private AgentToolCatalog? _toolCatalog;
     private readonly AgentRunQueue _agentRunQueue = new();
@@ -84,13 +87,15 @@ public sealed class MainViewModel : ObservableObject
         IChatCompletionService chatService,
         IContextEstimator contextEstimator,
         ConversationContextBuilder contextBuilder,
-        WorkspaceChangeService workspaceChangeService)
+        WorkspaceChangeService workspaceChangeService,
+        AuditLogRepository? auditLogRepository = null)
     {
         _repository = repository;
         _chatService = chatService;
         _contextEstimator = contextEstimator;
         _contextBuilder = contextBuilder;
         _workspaceChangeService = workspaceChangeService;
+        _auditLogRepository = auditLogRepository;
         // Commands are the bridge from XAML buttons/menu items to ViewModel methods.
         NewChatCommand = new RelayCommand(_ => NewChat(), _ => SelectedProject is not null && !IsSending);
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
@@ -145,10 +150,13 @@ public sealed class MainViewModel : ObservableObject
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
+        AddProjectToolOverrideCommand = new RelayCommand(_ => AddProjectToolOverride());
+        RemoveProjectToolOverrideCommand = new RelayCommand(param => RemoveProjectToolOverride(param as string));
     }
 
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
     public ObservableCollection<ToolOptionViewModel> ToolOptions { get; } = [];
+    public ObservableCollection<ProjectToolPermissionOverrideViewModel> ProjectToolPermissionOverrides { get; } = [];
     public ObservableCollection<ModelParameterOptionViewModel> ModelParameterOptions { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> WorkspaceChanges { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> StagedWorkspaceChanges { get; } = [];
@@ -220,6 +228,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
+    public RelayCommand AddProjectToolOverrideCommand { get; }
+    public RelayCommand RemoveProjectToolOverrideCommand { get; }
 
     public PendingToolApprovalViewModel? PendingToolApproval
     {
@@ -270,6 +280,7 @@ public sealed class MainViewModel : ObservableObject
                 NewChatCommand.RaiseCanExecuteChanged();
                 OpenAgentRunHistoryCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
+                LoadProjectToolPermissionOverrides();
             }
         }
     }
@@ -791,6 +802,7 @@ public sealed class MainViewModel : ObservableObject
         NormalizeModelParameters();
         RebuildToolOptions();
         RebuildModelParameterOptions();
+        SaveProjectToolPermissionOverrides();
         await _repository.SaveSettingsAsync(Settings);
         UpdateContextUsage();
         OnPropertyChanged(nameof(ModelName));
@@ -1982,7 +1994,9 @@ public sealed class MainViewModel : ObservableObject
                                        {
                                            ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
                                            EnabledToolIds = Settings.EnabledToolIds,
-                                           ToolPermissionModes = Settings.ToolPermissionModes,
+                                           ToolPermissionModes = MergeToolPermissionModes(
+                                               Settings.ToolPermissionModes,
+                                               SelectedProject?.Project.ProjectToolPermissionModes),
                                            MaxToolRounds = Settings.AgentMaxToolRounds,
                                            RequestToolApprovalAsync = RequestToolApprovalAsync,
                                            AutoVerifyAgentRuns = Settings.AutoVerifyAgentRuns,
@@ -2003,6 +2017,9 @@ public sealed class MainViewModel : ObservableObject
                                     RebuildAgentRunHistory();
                                 }
                             });
+                            await RecordAuditEventAsync(AuditEventType.AgentRunStarted,
+                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                                summary: text);
                             break;
                         case AgentHarnessEventType.StepAdded:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -2056,6 +2073,11 @@ public sealed class MainViewModel : ObservableObject
                                     }
                                 }
                             });
+                            await RecordAuditEventAsync(AuditEventType.ToolCallRequested,
+                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                                toolName: agentEvent.ToolCall?.Name ?? "",
+                                summary: $"Tool call: {agentEvent.ToolCall?.Name}",
+                                detail: agentEvent.ToolCall?.ArgumentsJson ?? "");
                             rawResponseEvents.Add(SerializeJson(new
                             {
                                 type = "tool_call",
@@ -2075,6 +2097,10 @@ public sealed class MainViewModel : ObservableObject
                             {
                                 StatusText = $"已拒绝工具：{agentEvent.ToolCall?.Name}";
                             });
+                            await RecordAuditEventAsync(AuditEventType.ToolCallRejected,
+                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                                toolName: agentEvent.ToolCall?.Name ?? "",
+                                summary: $"Rejected: {agentEvent.ToolCall?.Name}");
                             break;
                         case AgentHarnessEventType.ToolResult:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -2121,6 +2147,19 @@ public sealed class MainViewModel : ObservableObject
                                     RebuildAgentRunHistory();
                                 }
                             });
+                            {
+                                var runStatus = agentEvent.Run?.Status;
+                                var auditType = runStatus switch
+                                {
+                                    AgentRunStatus.Completed => AuditEventType.AgentRunCompleted,
+                                    AgentRunStatus.Failed => AuditEventType.AgentRunFailed,
+                                    AgentRunStatus.Cancelled => AuditEventType.AgentRunCancelled,
+                                    _ => AuditEventType.AgentRunCompleted
+                                };
+                                await RecordAuditEventAsync(auditType,
+                                    SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                                    summary: $"Run {runStatus}");
+                            }
                             break;
                     }
                 }
@@ -2634,6 +2673,106 @@ public sealed class MainViewModel : ObservableObject
         return tool.Risk == AgentToolRisk.ReadOnly
             ? ToolPermissionMode.AutoReadOnly
             : ToolPermissionMode.ConfirmEachTime;
+    }
+
+    private async Task RecordAuditEventAsync(AuditEventType type, string projectId, string runId, string toolName = "", string summary = "", string detail = "")
+    {
+        if (_auditLogRepository is null) return;
+        try
+        {
+            await _auditLogRepository.AppendAsync(new AuditEvent
+            {
+                ProjectId = projectId,
+                RunId = runId,
+                Type = type,
+                ToolName = toolName,
+                Summary = summary,
+                Detail = detail
+            });
+        }
+        catch
+        {
+            // Audit logging is best-effort; don't break the agent run.
+        }
+    }
+
+    private static Dictionary<string, ToolPermissionMode> MergeToolPermissionModes(
+        Dictionary<string, ToolPermissionMode> global,
+        Dictionary<string, string>? projectOverrides)
+    {
+        if (projectOverrides is null or { Count: 0 })
+        {
+            return global;
+        }
+
+        var merged = new Dictionary<string, ToolPermissionMode>(global, StringComparer.OrdinalIgnoreCase);
+        foreach (var (toolId, modeName) in projectOverrides)
+        {
+            if (Enum.TryParse<ToolPermissionMode>(modeName, ignoreCase: true, out var mode))
+            {
+                merged[toolId] = mode;
+            }
+        }
+
+        return merged;
+    }
+
+    private void LoadProjectToolPermissionOverrides()
+    {
+        ProjectToolPermissionOverrides.Clear();
+        var project = SelectedProject?.Project;
+        if (project is null) return;
+
+        foreach (var (toolId, modeName) in project.ProjectToolPermissionModes)
+        {
+            var vm = new ProjectToolPermissionOverrideViewModel
+            {
+                ToolId = toolId,
+                PermissionMode = modeName,
+                PermissionModeOptions = ToolPermissionModeOptions
+            };
+            vm.PropertyChanged += (_, _) => SaveProjectToolPermissionOverrides();
+            ProjectToolPermissionOverrides.Add(vm);
+        }
+    }
+
+    private void SaveProjectToolPermissionOverrides()
+    {
+        var project = SelectedProject?.Project;
+        if (project is null) return;
+
+        project.ProjectToolPermissionModes = ProjectToolPermissionOverrides
+            .Where(o => !string.IsNullOrWhiteSpace(o.ToolId))
+            .ToDictionary(
+                o => o.ToolId,
+                o => o.PermissionMode,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void AddProjectToolOverride()
+    {
+        var firstTool = _toolCatalog?.All.FirstOrDefault();
+        var vm = new ProjectToolPermissionOverrideViewModel
+        {
+            ToolId = firstTool?.Id ?? "",
+            PermissionMode = nameof(ToolPermissionMode.ConfirmEachTime),
+            PermissionModeOptions = ToolPermissionModeOptions
+        };
+        vm.PropertyChanged += (_, _) => SaveProjectToolPermissionOverrides();
+        ProjectToolPermissionOverrides.Add(vm);
+        SaveProjectToolPermissionOverrides();
+    }
+
+    private void RemoveProjectToolOverride(string? toolId)
+    {
+        if (string.IsNullOrWhiteSpace(toolId)) return;
+        var existing = ProjectToolPermissionOverrides.FirstOrDefault(o =>
+            string.Equals(o.ToolId, toolId, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            ProjectToolPermissionOverrides.Remove(existing);
+            SaveProjectToolPermissionOverrides();
+        }
     }
 
     private sealed record WorkspaceRunSnapshot(string Branch, int ChangeCount, bool IsTruncated);

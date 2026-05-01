@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -12,6 +13,7 @@ using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
+using AIChat.Domain.Audit;
 using AIChat.Storage.Json;
 
 namespace AIChat.App;
@@ -37,6 +39,8 @@ public partial class MainWindow : Window
         ]);
         var toolCatalog = AgentToolCatalog.CreateDefault();
         var contextEstimator = new SimpleContextEstimator();
+        var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat");
+        var auditLogRepository = new AuditLogRepository(appDataPath);
         _viewModel = new MainViewModel(
             new JsonAppRepository(),
             chatService,
@@ -44,7 +48,8 @@ public partial class MainWindow : Window
             new ConversationContextBuilder(
                 contextEstimator,
                 new SystemPromptBuilder()),
-            new WorkspaceChangeService());
+            new WorkspaceChangeService(),
+            auditLogRepository);
         var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(
             new AgentHarness(agentRunner),

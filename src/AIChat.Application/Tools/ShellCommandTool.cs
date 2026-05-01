@@ -16,7 +16,25 @@ public sealed class ShellCommandTool : IAgentTool
     [
         "Remove-Item", " rm ", " rm-", "del ", "erase ", "rmdir ", " rd ",
         "git reset", "git clean", "format ", "shutdown", "Stop-Computer",
-        "mkfs", ":(){", "Set-ExecutionPolicy"
+        "mkfs", ":(){", "Set-ExecutionPolicy",
+        " -rf ", " -rf/", "-r -f ", "--force", "rm -r",
+        "git push.*--force", "git push.*-f ",
+        "mv /", "cp /",
+        "chmod 777", "chown -R",
+        "dd if=", "mkfs.",
+        "> /dev/", "shutdown", "reboot", "init 0", "init 6"
+    ];
+
+    // Commands that are always safe to run without extra confirmation.
+    internal static readonly string[] AllowlistedPrefixes =
+    [
+        "dotnet build", "dotnet test", "dotnet restore", "dotnet run",
+        "git status", "git diff", "git log", "git branch", "git show",
+        "git remote", "git tag",
+        "rg ", "grep ", "find ", "ls ", "dir ", "cat ", "head ", "tail ",
+        "wc ", "file ", "stat ", "which ", "where ", "echo ", "pwd",
+        "npm list", "npm ls", "npm outdated",
+        "node --version", "dotnet --version", "git --version"
     ];
 
     private static readonly string[] GitBashCandidates =
@@ -164,6 +182,12 @@ public sealed class ShellCommandTool : IAgentTool
     {
         var padded = " " + command + " ";
         return BlockedCommandFragments.Any(fragment => padded.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsAllowlisted(string command)
+    {
+        var trimmed = command.Trim();
+        return AllowlistedPrefixes.Any(prefix => trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string NormalizeShell(string? shell)

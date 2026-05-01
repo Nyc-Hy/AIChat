@@ -679,7 +679,7 @@ Gate agent mode by model capabilities
 Cover provider tool call parsing variants
 ```
 
-> ✅ 第 12 阶段已完成（commit `TBD`）。
+> ✅ 第 12 阶段已完成（commit `db17d2d`）。
 >
 > 已实现：
 > - `MainViewModel.SendAsync` 在进入 Harness 前解析 `SupportsTools`，不支持时回退到普通聊天并设置状态提示。
@@ -759,6 +759,16 @@ Record audit events for agent actions
 ```text
 Harden shell command policy
 ```
+
+> ✅ 第 13 阶段已完成（commit `TBD`）。
+>
+> 已实现：
+> - `ProjectWorkspace.ProjectToolPermissionModes` 存储项目级工具权限覆盖，合并时项目值优先。
+> - UI 工具设置页新增"项目工具权限覆盖"区域，支持添加/删除覆盖项。
+> - `AuditLogRepository` 以 JSONL 格式追加审计事件，支持按项目、类型、时间过滤。
+> - AgentHarness 事件循环中记录工具调用、拒绝、运行开始/完成等审计事件。
+> - `ShellCommandTool` 扩展阻断列表（`-rf`、`--force`、`git push --force` 等），新增命令白名单（`dotnet build/test`、`git status/diff`、`rg` 等）。
+> - 36 个 Shell 命令策略测试覆盖白名单和危险命令检测。
 
 ## 第 14 阶段：插件化工具与 MCP/A2A 预留
 

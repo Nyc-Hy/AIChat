@@ -2396,6 +2396,72 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+
+                                        <!-- Project-level tool permission overrides -->
+                                        <Border Padding="14"
+                                                CornerRadius="8"
+                                                Background="#F5F8FA"
+                                                BorderBrush="#E1E8EF"
+                                                BorderThickness="1"
+                                                Margin="0,10,0,14">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="项目工具权限覆盖"
+                                                               FontSize="15"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#1E252E" />
+                                                    <Button Command="{Binding AddProjectToolOverrideCommand}"
+                                                            Content="+ 添加"
+                                                            Margin="12,0,0,0"
+                                                            Padding="8,2"
+                                                            Style="{StaticResource SubtleButtonStyle}"
+                                                            VerticalAlignment="Center" />
+                                                </StackPanel>
+                                                <TextBlock Text="为当前项目单独设置工具权限，覆盖全局配置。项目设置随项目一起保存。"
+                                                           Margin="0,6,0,0"
+                                                           Foreground="#667386"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+
+                                        <ItemsControl ItemsSource="{Binding ProjectToolPermissionOverrides}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,8"
+                                                            Padding="14,10"
+                                                            CornerRadius="8"
+                                                            Background="#FFFFFF"
+                                                            BorderBrush="#E2E8F0"
+                                                            BorderThickness="1">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="148" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBox Text="{Binding ToolId, UpdateSourceTrigger=PropertyChanged}"
+                                                                     VerticalAlignment="Center"
+                                                                     Padding="10,4"
+                                                                     Style="{StaticResource SettingsTextBoxStyle}" />
+                                                            <ComboBox Grid.Column="1"
+                                                                      ItemsSource="{Binding PermissionModeOptions}"
+                                                                      SelectedValue="{Binding PermissionMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                      SelectedValuePath="Id"
+                                                                      ItemTemplate="{StaticResource SelectionOptionTemplate}"
+                                                                      Padding="10,0"
+                                                                      VerticalAlignment="Center" />
+                                                            <Button Grid.Column="2"
+                                                                    Command="{Binding DataContext.RemoveProjectToolOverrideCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding ToolId}"
+                                                                    Content="×"
+                                                                    Margin="8,0,0,0"
+                                                                    Style="{StaticResource IconButtonStyle}"
+                                                                    VerticalAlignment="Center" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </StackPanel>
                                 </ScrollViewer>
                             </TabItem>

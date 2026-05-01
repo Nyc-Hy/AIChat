@@ -322,4 +322,44 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns);
         Assert.Null(roundTripped.AgentRuns[0].Plan);
     }
+
+    [Fact]
+    public void ProjectWorkspace_RoundTripsProjectToolPermissionModes()
+    {
+        var workspace = new AIChat.Domain.Projects.ProjectWorkspace
+        {
+            Id = "project-1",
+            Name = "TestProject",
+            Path = "D:/Code/TestProject",
+            ProjectToolPermissionModes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["write_file"] = "AutoReadOnly",
+                ["run_shell"] = "Disabled"
+            }
+        };
+
+        var json = JsonSerializer.Serialize(workspace, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<AIChat.Domain.Projects.ProjectWorkspace>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(2, roundTripped.ProjectToolPermissionModes.Count);
+        Assert.Equal("AutoReadOnly", roundTripped.ProjectToolPermissionModes["write_file"]);
+        Assert.Equal("Disabled", roundTripped.ProjectToolPermissionModes["run_shell"]);
+    }
+
+    [Fact]
+    public void ProjectWorkspace_HandlesEmptyProjectToolPermissionModes()
+    {
+        var workspace = new AIChat.Domain.Projects.ProjectWorkspace
+        {
+            Id = "project-1",
+            Name = "TestProject"
+        };
+
+        var json = JsonSerializer.Serialize(workspace, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<AIChat.Domain.Projects.ProjectWorkspace>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        Assert.Empty(roundTripped.ProjectToolPermissionModes);
+    }
 }

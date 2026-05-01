@@ -14,4 +14,7 @@ public sealed class ProjectWorkspace
     public List<Conversation> Conversations { get; set; } = [];
     public List<PinnedContextItem> PinnedContext { get; set; } = [];
     public List<ProjectVerificationCommand> VerificationCommands { get; set; } = [];
+    // Per-project tool permission overrides (tool ID -> mode name).
+    // Merged with global AppSettings.ToolPermissionModes; project values take precedence.
+    public Dictionary<string, string> ProjectToolPermissionModes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
