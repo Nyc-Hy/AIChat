@@ -23,6 +23,10 @@ public sealed class AgentRun
     public bool ToolBudgetExceeded { get; set; }
     public bool RequiresProjectMutation { get; set; }
     public bool MutationToolSucceeded { get; set; }
+    public int ToolApprovalRequiredCount { get; set; }
+    public int ToolApprovalRejectedCount { get; set; }
+    public int ToolSessionAllowedCount { get; set; }
+    public string FinalValidationSummary { get; set; } = "";
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }

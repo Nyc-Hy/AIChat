@@ -59,6 +59,11 @@ public sealed class AgentRunViewModel : ObservableObject
             ? "需要项目修改 · 已记录修改工具"
             : "需要项目修改 · 未记录修改工具"
         : "未识别为项目修改任务";
+    public string ApprovalSummary =>
+        $"需确认 {_run.ToolApprovalRequiredCount} 次 · 拒绝 {_run.ToolApprovalRejectedCount} 次 · 本会话允许 {_run.ToolSessionAllowedCount} 次";
+    public string FinalValidationSummary => string.IsNullOrWhiteSpace(_run.FinalValidationSummary)
+        ? "尚未生成结束校验。"
+        : _run.FinalValidationSummary;
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ShortGoal
     {
@@ -133,6 +138,7 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"工具：{EnabledToolCount}",
                 $"预算：{BudgetText}",
                 $"修改护栏：{MutationGuardrailText}",
+                $"审批：{ApprovalSummary}",
                 $"工作区：{WorkspaceSnapshotText}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",
@@ -143,6 +149,13 @@ public sealed class AgentRunViewModel : ObservableObject
             if (HasCompletionReason)
             {
                 lines.Add($"原因：{CompletionReasonText}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(_run.FinalValidationSummary))
+            {
+                lines.Add("");
+                lines.Add("结束校验：");
+                lines.Add(_run.FinalValidationSummary);
             }
 
             if (ChangedPaths.Count > 0)
@@ -194,6 +207,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(PhaseText));
+        OnPropertyChanged(nameof(FinalValidationSummary));
         OnPropertyChanged(nameof(CompletionReasonText));
         OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));

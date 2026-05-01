@@ -11,4 +11,5 @@ public sealed class AgentRunEvent
     public ChatToolCall? ToolCall { get; init; }
     public AgentToolPreview? ToolPreview { get; init; }
     public AgentToolResult? ToolResult { get; init; }
+    public string SessionAllowedToolId { get; init; } = "";
 }

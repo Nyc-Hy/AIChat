@@ -7,6 +7,7 @@ public enum AgentRunEventType
     ToolCall,
     ToolApprovalRequired,
     ToolApprovalRejected,
+    ToolSessionAllowed,
     ToolResult,
     BudgetExceeded,
     Completed

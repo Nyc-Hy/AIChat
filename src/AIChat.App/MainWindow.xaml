@@ -1570,6 +1570,10 @@
                                                    Margin="0,3,0,0"
                                                    Foreground="#596473"
                                                    TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding ApprovalSummary, StringFormat=审批：{0}}"
+                                                   Margin="0,3,0,0"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
                                         <TextBlock Text="{Binding WorkspaceSnapshotText, StringFormat=工作区：{0}}"
                                                    Margin="0,3,0,0"
                                                    Foreground="#596473"
@@ -1605,6 +1609,14 @@
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
                                         <TextBlock Text="{Binding RunSummary}"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="结束校验"
+                                                   Margin="0,14,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBlock Text="{Binding FinalValidationSummary}"
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473"
                                                    TextWrapping="Wrap" />

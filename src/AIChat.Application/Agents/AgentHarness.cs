@@ -116,6 +116,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.ToolApprovalRequired:
+                    run.ToolApprovalRequiredCount++;
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.ToolApprovalRequired,
@@ -125,6 +126,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.ToolApprovalRejected:
+                    run.ToolApprovalRejectedCount++;
                     CompleteToolStep(stepByToolCallId, agentEvent.ToolCall, "用户拒绝执行该工具。", isError: true);
                     yield return new AgentHarnessEvent
                     {
@@ -133,6 +135,9 @@ public sealed class AgentHarness
                         ToolCall = agentEvent.ToolCall,
                         ToolPreview = agentEvent.ToolPreview
                     };
+                    break;
+                case AgentRunEventType.ToolSessionAllowed:
+                    run.ToolSessionAllowedCount++;
                     break;
                 case AgentRunEventType.ToolResult:
                     if (agentEvent.ToolResult is not null)
@@ -183,6 +188,7 @@ public sealed class AgentHarness
                     break;
                 case AgentRunEventType.Completed:
                     CompleteMutationGuardrail(run);
+                    CompleteFinalValidation(run);
                     CompleteRun(run, AgentRunStatus.Completed);
                     var finalStep = AddCompletedStep(
                         run,
@@ -257,6 +263,34 @@ public sealed class AgentHarness
         {
             run.CompletionReason = "任务看起来需要修改项目，但本轮没有记录到成功的修改工具。";
         }
+    }
+
+    private static void CompleteFinalValidation(AgentRun run)
+    {
+        var checks = new List<string>
+        {
+            run.ToolBudgetExceeded ? "工具预算：已耗尽" : "工具预算：未耗尽",
+            run.ToolApprovalRejectedCount > 0
+                ? $"工具审批：{run.ToolApprovalRejectedCount} 次拒绝"
+                : "工具审批：无拒绝",
+            run.RequiresProjectMutation
+                ? run.MutationToolSucceeded
+                    ? "项目修改：已记录修改工具"
+                    : "项目修改：未记录修改工具"
+                : "项目修改：非修改类任务"
+        };
+
+        if (run.Verifications.Count > 0)
+        {
+            var successCount = run.Verifications.Count(verification => verification.IsSuccess);
+            checks.Add($"验证：{successCount}/{run.Verifications.Count} 通过");
+        }
+        else
+        {
+            checks.Add("验证：未运行");
+        }
+
+        run.FinalValidationSummary = string.Join(Environment.NewLine, checks);
     }
 
     private static bool IsMutationTool(string toolName)

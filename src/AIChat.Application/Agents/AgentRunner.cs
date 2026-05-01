@@ -171,6 +171,12 @@ public sealed class AgentRunner
                             if (!string.IsNullOrWhiteSpace(toolEvent.SessionAllowedToolId))
                             {
                                 sessionAllowedTools.Add(toolEvent.SessionAllowedToolId);
+                                yield return new AgentRunEvent
+                                {
+                                    Type = AgentRunEventType.ToolSessionAllowed,
+                                    ToolCall = toolEvent.ToolCall,
+                                    SessionAllowedToolId = toolEvent.SessionAllowedToolId
+                                };
                             }
                             break;
                         case ToolExecutionEventType.Result:

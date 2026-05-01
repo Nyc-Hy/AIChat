@@ -66,6 +66,10 @@ public sealed class AgentRunSerializationTests
                     ToolBudgetExceeded = true,
                     RequiresProjectMutation = true,
                     MutationToolSucceeded = true,
+                    ToolApprovalRequiredCount = 2,
+                    ToolApprovalRejectedCount = 1,
+                    ToolSessionAllowedCount = 1,
+                    FinalValidationSummary = "工具预算：未耗尽",
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -134,6 +138,10 @@ public sealed class AgentRunSerializationTests
         Assert.True(roundTripped.AgentRuns[0].ToolBudgetExceeded);
         Assert.True(roundTripped.AgentRuns[0].RequiresProjectMutation);
         Assert.True(roundTripped.AgentRuns[0].MutationToolSucceeded);
+        Assert.Equal(2, roundTripped.AgentRuns[0].ToolApprovalRequiredCount);
+        Assert.Equal(1, roundTripped.AgentRuns[0].ToolApprovalRejectedCount);
+        Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
+        Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);

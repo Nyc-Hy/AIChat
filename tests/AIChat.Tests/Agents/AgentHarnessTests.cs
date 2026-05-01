@@ -283,6 +283,57 @@ public sealed class AgentHarnessTests
         Assert.True(run.RequiresProjectMutation);
         Assert.False(run.MutationToolSucceeded);
         Assert.Equal("任务看起来需要修改项目，但本轮没有记录到成功的修改工具。", run.CompletionReason);
+        Assert.Contains("项目修改：未记录修改工具", run.FinalValidationSummary);
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsApprovalGuardrailsAndFinalValidation()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "run_test",
+            ArgumentsJson = "{}"
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new FakeVerificationTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "verify",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               ToolPermissionModes = new Dictionary<string, ToolPermissionMode>
+                               {
+                                   ["run_test"] = ToolPermissionMode.AllowForSession
+                               },
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve(allowForSession: true))
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(1, run.ToolApprovalRequiredCount);
+        Assert.Equal(0, run.ToolApprovalRejectedCount);
+        Assert.Equal(1, run.ToolSessionAllowedCount);
+        Assert.Contains("工具审批：无拒绝", run.FinalValidationSummary);
+        Assert.Contains("验证：1/1 通过", run.FinalValidationSummary);
     }
 
     private sealed class FakeChatCompletionService : IChatCompletionService
