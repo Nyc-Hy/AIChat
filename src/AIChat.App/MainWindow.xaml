@@ -1395,6 +1395,13 @@
                                         <TextBlock Text="{Binding StartedText}"
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473" />
+                                        <TextBlock Text="当前阶段"
+                                                   Margin="0,14,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBlock Text="{Binding PhaseText}"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="#596473" />
                                         <TextBlock Text="变更摘要"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

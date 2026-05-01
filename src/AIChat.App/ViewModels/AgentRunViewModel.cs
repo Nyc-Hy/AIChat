@@ -20,6 +20,18 @@ public sealed class AgentRunViewModel : ObservableObject
 
     public string Id => _run.Id;
     public string Goal => _run.Goal;
+    public string PhaseText => _run.Phase switch
+    {
+        "planning" => "规划中",
+        "reading" => "读取上下文",
+        "editing" => "修改文件",
+        "verifying" => "验证中",
+        "responding" => "生成回复",
+        "completed" => "已完成",
+        "cancelled" => "已停止",
+        "failed" => "失败",
+        _ => "执行中"
+    };
     public string StatusText => _run.Status switch
     {
         AgentRunStatus.Running => "运行中",
@@ -62,6 +74,7 @@ public sealed class AgentRunViewModel : ObservableObject
             var lines = new List<string>
             {
                 $"状态：{StatusText}",
+                $"阶段：{PhaseText}",
                 $"目标：{Goal}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",
@@ -105,6 +118,7 @@ public sealed class AgentRunViewModel : ObservableObject
         Steps.Add(viewModel);
         OnPropertyChanged(nameof(HasSteps));
         OnPropertyChanged(nameof(StepCount));
+        OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
         return viewModel;
@@ -115,6 +129,7 @@ public sealed class AgentRunViewModel : ObservableObject
         _run.Status = status;
         _run.CompletedAt = DateTimeOffset.Now;
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));

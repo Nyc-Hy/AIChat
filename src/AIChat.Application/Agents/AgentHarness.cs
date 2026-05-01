@@ -69,6 +69,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.ContentDelta:
+                    run.Phase = "responding";
                     assistantContent += agentEvent.Content;
                     yield return new AgentHarnessEvent
                     {
@@ -83,6 +84,7 @@ public sealed class AgentHarness
                         break;
                     }
 
+                    run.Phase = ClassifyToolPhase(agentEvent.ToolCall.Name);
                     var step = AddRunningStep(
                         run,
                         ++stepNumber,
@@ -152,6 +154,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.Completed:
+                    run.Phase = "completed";
                     CompleteRun(run, AgentRunStatus.Completed);
                     var finalStep = AddCompletedStep(
                         run,
@@ -171,6 +174,17 @@ public sealed class AgentHarness
         }
 
         CompleteRun(run, AgentRunStatus.Completed);
+    }
+
+    private static string ClassifyToolPhase(string toolName)
+    {
+        return toolName switch
+        {
+            "list_files" or "read_file" or "search_text" or "git_status" or "git_diff" => "reading",
+            "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit" => "editing",
+            "run_build" or "run_test" => "verifying",
+            _ => "working"
+        };
     }
 
     private static AgentStep AddRunningStep(
@@ -431,6 +445,12 @@ public sealed class AgentHarness
     private static void CompleteRun(AgentRun run, AgentRunStatus status)
     {
         run.Status = status;
+        run.Phase = status switch
+        {
+            AgentRunStatus.Cancelled => "cancelled",
+            AgentRunStatus.Failed => "failed",
+            _ => run.Phase
+        };
         run.CompletedAt = DateTimeOffset.Now;
     }
 

@@ -9,6 +9,7 @@ public sealed class AgentRun
     public string UserMessageId { get; set; } = "";
     public string AssistantMessageId { get; set; } = "";
     public string Goal { get; set; } = "";
+    public string Phase { get; set; } = "planning";
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }

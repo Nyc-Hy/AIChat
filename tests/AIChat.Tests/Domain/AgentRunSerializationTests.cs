@@ -28,6 +28,7 @@ public sealed class AgentRunSerializationTests
                     Id = "run-1",
                     ConversationId = "conversation-1",
                     AssistantMessageId = "assistant-1",
+                    Phase = "verifying",
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -82,6 +83,7 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns[0].Steps);
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
         Assert.Single(roundTripped.AgentRuns[0].Verifications);
+        Assert.Equal("verifying", roundTripped.AgentRuns[0].Phase);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);

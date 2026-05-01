@@ -144,7 +144,8 @@ public sealed class AgentHarnessTests
             ]),
             new AgentToolCatalog([new FakeVerificationTool()])));
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        var toolCallPhases = new List<string>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -163,9 +164,15 @@ public sealed class AgentHarnessTests
                            }
                        }))
         {
+            if (item.Type == AgentHarnessEventType.ToolCall && item.Run is not null)
+            {
+                toolCallPhases.Add(item.Run.Phase);
+            }
         }
 
         var run = Assert.Single(conversation.AgentRuns);
+        Assert.Contains("verifying", toolCallPhases);
+        Assert.Equal("completed", run.Phase);
         var verification = Assert.Single(run.Verifications);
         Assert.Equal("run_test", verification.ToolName);
         Assert.Equal("dotnet test", verification.Command);
