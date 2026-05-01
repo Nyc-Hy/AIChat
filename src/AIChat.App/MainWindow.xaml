@@ -1039,6 +1039,12 @@
                                            Foreground="#98A2B0"
                                            TextTrimming="CharacterEllipsis" />
                             </StackPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding OpenAgentRunHistoryCommand}"
+                                    Content="运行历史"
+                                    Width="82"
+                                    Height="32"
+                                    Style="{StaticResource SubtleButtonStyle}" />
                             <StackPanel DockPanel.Dock="Right"
                                         Orientation="Horizontal">
                                 <Button Command="{Binding OpenWorkspaceFileCommand}"
@@ -1307,6 +1313,144 @@
                                 <ItemsControl ItemsSource="{Binding WorkspaceDiffLines}"
                                               ItemTemplate="{StaticResource DiffLineTemplate}" />
                             </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Grid Grid.RowSpan="2" Background="#B8EEF1F4">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsAgentRunHistoryOpen}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+
+                <Border Width="760"
+                        Height="620"
+                        MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                        MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Margin="24"
+                        Padding="22"
+                        Background="#FFFFFF"
+                        CornerRadius="10"
+                        BorderBrush="#DCE3EC"
+                        BorderThickness="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Margin="0,0,0,18">
+                            <StackPanel>
+                                <TextBlock Text="{Binding AgentRunHistoryTitle}"
+                                           FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Foreground="#1E252E" />
+                                <TextBlock Text="{Binding AgentRunHistorySummary}"
+                                           Margin="0,6,0,0"
+                                           Foreground="#748092" />
+                            </StackPanel>
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding CloseAgentRunHistoryCommand}"
+                                    Content="×"
+                                    Style="{StaticResource IconButtonStyle}"
+                                    HorizontalAlignment="Right" />
+                        </DockPanel>
+
+                        <Border Grid.Row="1"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Background="#F8FAFC">
+                            <Grid>
+                                <ListBox ItemsSource="{Binding AgentRunHistory}"
+                                         BorderThickness="0"
+                                         Background="Transparent"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="8,8,8,0"
+                                                    Padding="12"
+                                                    CornerRadius="8"
+                                                    Background="#FFFFFF"
+                                                    BorderBrush="#E1E8EF"
+                                                    BorderThickness="1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <DockPanel>
+                                                            <TextBlock Text="{Binding ConversationTitle}"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="#1E252E"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock DockPanel.Dock="Right"
+                                                                       Text="{Binding StatusText}"
+                                                                       Margin="12,0,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="#3E6F68" />
+                                                        </DockPanel>
+                                                        <TextBlock Text="{Binding ShortGoal}"
+                                                                   Margin="0,5,0,0"
+                                                                   Foreground="#596473"
+                                                                   TextWrapping="Wrap" />
+                                                        <TextBlock Text="{Binding Summary}"
+                                                                   Margin="0,5,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#98A2B0"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1"
+                                                            Command="{Binding DataContext.SelectAgentRunHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="详情"
+                                                            Width="54"
+                                                            Height="30"
+                                                            Margin="14,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource SubtleButtonStyle}" />
+                                                    <Button Grid.Column="2"
+                                                            Command="{Binding DataContext.RetryAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="重试"
+                                                            Width="54"
+                                                            Height="30"
+                                                            Margin="8,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource PrimaryButtonStyle}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock Text="暂无 Agent 运行记录"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="#98A2B0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasAgentRunHistory}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </Border>
                     </Grid>
                 </Border>

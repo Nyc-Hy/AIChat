@@ -52,6 +52,7 @@ public sealed class MainViewModel : ObservableObject
     private CancellationTokenSource? _sendCts;
     private bool _isSettingsOpen;
     private bool _isCallDetailsOpen;
+    private bool _isAgentRunHistoryOpen;
     private bool _isAgentRunDetailsOpen;
     private bool _isNewProviderApiKeyVisible;
     private bool _isTestingProviderConnection;
@@ -60,6 +61,7 @@ public sealed class MainViewModel : ObservableObject
     private string _conversationSearchText = "";
     private ConversationViewModel? _callDetailsConversation;
     private LlmCallDetailViewModel? _selectedCallDetail;
+    private AgentRunHistoryItemViewModel? _selectedAgentRunHistoryItem;
     private AgentRunViewModel? _selectedAgentRunDetails;
     private string _selectedCallRequestJson = "请选择左侧调用记录。";
     private string _selectedCallResponseJson = "请选择左侧调用记录。";
@@ -105,6 +107,10 @@ public sealed class MainViewModel : ObservableObject
         DeleteConversationCommand = new RelayCommand(async parameter => await DeleteConversationAsync((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
         OpenCallDetailsCommand = new RelayCommand(parameter => OpenCallDetails((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
         CloseCallDetailsCommand = new RelayCommand(_ => IsCallDetailsOpen = false);
+        OpenAgentRunHistoryCommand = new RelayCommand(_ => OpenAgentRunHistory(), _ => SelectedProject is not null);
+        CloseAgentRunHistoryCommand = new RelayCommand(_ => IsAgentRunHistoryOpen = false);
+        SelectAgentRunHistoryItemCommand = new RelayCommand(parameter => SelectAgentRunHistoryItem((AgentRunHistoryItemViewModel)parameter!), parameter => parameter is AgentRunHistoryItemViewModel);
+        RetryAgentRunCommand = new RelayCommand(parameter => RetryAgentRun((AgentRunHistoryItemViewModel)parameter!), parameter => parameter is AgentRunHistoryItemViewModel { CanRetry: true } && !IsSending);
         OpenAgentRunDetailsCommand = new RelayCommand(parameter => OpenAgentRunDetails((ChatMessageViewModel)parameter!), parameter => parameter is ChatMessageViewModel { AgentRun: not null });
         CloseAgentRunDetailsCommand = new RelayCommand(_ => IsAgentRunDetailsOpen = false);
         AddConfiguredProviderCommand = new RelayCommand(async _ => await AddConfiguredProviderAsync(), _ => !string.IsNullOrWhiteSpace(NewProviderApiKey));
@@ -141,6 +147,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<WorkspaceChangeViewModel> StagedWorkspaceChanges { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> UnstagedWorkspaceChanges { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> UntrackedWorkspaceChanges { get; } = [];
+    public ObservableCollection<AgentRunHistoryItemViewModel> AgentRunHistory { get; } = [];
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
         new() { Id = nameof(ToolPermissionMode.AutoReadOnly), Name = "只读自动" },
@@ -163,6 +170,10 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand DeleteConversationCommand { get; }
     public RelayCommand OpenCallDetailsCommand { get; }
     public RelayCommand CloseCallDetailsCommand { get; }
+    public RelayCommand OpenAgentRunHistoryCommand { get; }
+    public RelayCommand CloseAgentRunHistoryCommand { get; }
+    public RelayCommand SelectAgentRunHistoryItemCommand { get; }
+    public RelayCommand RetryAgentRunCommand { get; }
     public RelayCommand OpenAgentRunDetailsCommand { get; }
     public RelayCommand CloseAgentRunDetailsCommand { get; }
     public RelayCommand AddConfiguredProviderCommand { get; }
@@ -235,7 +246,9 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _selectedProject, value))
             {
                 OnPropertyChanged(nameof(CurrentProjectName));
+                OnPropertyChanged(nameof(AgentRunHistoryTitle));
                 NewChatCommand.RaiseCanExecuteChanged();
+                OpenAgentRunHistoryCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
             }
         }
@@ -252,6 +265,7 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(Messages));
                 OnPropertyChanged(nameof(HasMessages));
                 UpdateContextUsage();
+                RebuildAgentRunHistory();
             }
         }
     }
@@ -487,11 +501,31 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _isCallDetailsOpen, value);
     }
 
+    public bool IsAgentRunHistoryOpen
+    {
+        get => _isAgentRunHistoryOpen;
+        set => SetProperty(ref _isAgentRunHistoryOpen, value);
+    }
+
     public bool IsAgentRunDetailsOpen
     {
         get => _isAgentRunDetailsOpen;
         set => SetProperty(ref _isAgentRunDetailsOpen, value);
     }
+
+    public AgentRunHistoryItemViewModel? SelectedAgentRunHistoryItem
+    {
+        get => _selectedAgentRunHistoryItem;
+        private set => SetProperty(ref _selectedAgentRunHistoryItem, value);
+    }
+
+    public bool HasAgentRunHistory => AgentRunHistory.Count > 0;
+    public string AgentRunHistoryTitle => SelectedProject is null
+        ? "运行历史"
+        : $"{SelectedProject.Name} · 运行历史";
+    public string AgentRunHistorySummary => AgentRunHistory.Count == 0
+        ? "暂无 Agent 运行记录"
+        : $"{AgentRunHistory.Count} 次运行 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
 
     public AgentRunViewModel? SelectedAgentRunDetails
     {
@@ -572,6 +606,7 @@ public sealed class MainViewModel : ObservableObject
                 SendCommand.RaiseCanExecuteChanged();
                 NewChatCommand.RaiseCanExecuteChanged();
                 StopCommand.RaiseCanExecuteChanged();
+                RetryAgentRunCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -742,6 +777,41 @@ public sealed class MainViewModel : ObservableObject
         SelectedConversation = conversation;
     }
 
+    private void RebuildAgentRunHistory()
+    {
+        AgentRunHistory.Clear();
+        if (SelectedProject is null)
+        {
+            RaiseAgentRunHistoryProperties();
+            return;
+        }
+
+        var items = SelectedProject.Conversations
+            .SelectMany(conversation => conversation.Messages
+                .Where(message => message.AgentRun is not null)
+                .Select(message => new AgentRunHistoryItemViewModel
+                {
+                    Conversation = conversation,
+                    Run = message.AgentRun!
+                }))
+            .OrderByDescending(item => item.Run.Run.StartedAt)
+            .ToList();
+
+        foreach (var item in items)
+        {
+            AgentRunHistory.Add(item);
+        }
+
+        RaiseAgentRunHistoryProperties();
+    }
+
+    private void RaiseAgentRunHistoryProperties()
+    {
+        OnPropertyChanged(nameof(HasAgentRunHistory));
+        OnPropertyChanged(nameof(AgentRunHistorySummary));
+        RetryAgentRunCommand.RaiseCanExecuteChanged();
+    }
+
     private async void NewChat()
     {
         if (SelectedProject is null)
@@ -818,6 +888,33 @@ public sealed class MainViewModel : ObservableObject
 
         SelectedAgentRunDetails = message.AgentRun;
         IsAgentRunDetailsOpen = true;
+    }
+
+    private void OpenAgentRunHistory()
+    {
+        RebuildAgentRunHistory();
+        IsAgentRunHistoryOpen = true;
+    }
+
+    private void SelectAgentRunHistoryItem(AgentRunHistoryItemViewModel item)
+    {
+        SelectedAgentRunHistoryItem = item;
+        SelectedAgentRunDetails = item.Run;
+        IsAgentRunDetailsOpen = true;
+    }
+
+    private void RetryAgentRun(AgentRunHistoryItemViewModel item)
+    {
+        if (!item.CanRetry || IsSending)
+        {
+            return;
+        }
+
+        SelectConversation(item.Conversation);
+        DraftMessage = item.Run.Goal;
+        IsAgentRunHistoryOpen = false;
+        IsAgentRunDetailsOpen = false;
+        StatusText = "已把失败任务放回输入框，可检查后重新发送";
     }
 
     private async Task DeleteConversationAsync(ConversationViewModel conversation)
@@ -1621,6 +1718,7 @@ public sealed class MainViewModel : ObservableObject
                                 if (agentEvent.Run is not null)
                                 {
                                     assistantViewModel.AttachAgentRun(agentEvent.Run);
+                                    RebuildAgentRunHistory();
                                 }
                             });
                             break;
@@ -1737,6 +1835,7 @@ public sealed class MainViewModel : ObservableObject
                                     assistantViewModel.SyncAgentFileChanges();
                                     assistantViewModel.SyncAgentVerifications();
                                     assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
+                                    RebuildAgentRunHistory();
                                 }
                             });
                             break;
@@ -1785,6 +1884,7 @@ public sealed class MainViewModel : ObservableObject
 
             StatusText = "已停止生成";
             assistantViewModel.AgentRun?.Complete(AgentRunStatus.Cancelled, cancellationReason);
+            RebuildAgentRunHistory();
             await CompleteCallDetailAsync(callDetail, "已停止", new
             {
                 status = "cancelled",
@@ -1803,6 +1903,7 @@ public sealed class MainViewModel : ObservableObject
             assistantViewModel.IsError = true;
             StatusText = "请求失败";
             assistantViewModel.AgentRun?.Complete(AgentRunStatus.Failed, ex.Message);
+            RebuildAgentRunHistory();
             await CompleteCallDetailAsync(callDetail, "失败", new
             {
                 status = "failed",

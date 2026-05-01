@@ -18,8 +18,19 @@ public sealed class AgentRunViewModel : ObservableObject
             run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
     }
 
+    public AgentRun Run => _run;
     public string Id => _run.Id;
     public string Goal => _run.Goal;
+    public AgentRunStatus Status => _run.Status;
+    public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
+    public string ShortGoal
+    {
+        get
+        {
+            var normalized = Goal.ReplaceLineEndings(" ").Trim();
+            return normalized.Length <= 72 ? normalized : $"{normalized[..72]}...";
+        }
+    }
     public string CompletionReasonText => string.IsNullOrWhiteSpace(_run.CompletionReason)
         ? "无"
         : _run.CompletionReason;
@@ -137,6 +148,8 @@ public sealed class AgentRunViewModel : ObservableObject
     {
         _run.Complete(status, completionReason: completionReason);
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(CompletionReasonText));
         OnPropertyChanged(nameof(HasCompletionReason));
