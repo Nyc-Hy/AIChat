@@ -51,6 +51,7 @@ public sealed class MainViewModel : ObservableObject
     private CancellationTokenSource? _sendCts;
     private bool _isSettingsOpen;
     private bool _isCallDetailsOpen;
+    private bool _isAgentRunDetailsOpen;
     private bool _isNewProviderApiKeyVisible;
     private bool _isTestingProviderConnection;
     private PendingToolApprovalViewModel? _pendingToolApproval;
@@ -58,6 +59,7 @@ public sealed class MainViewModel : ObservableObject
     private string _conversationSearchText = "";
     private ConversationViewModel? _callDetailsConversation;
     private LlmCallDetailViewModel? _selectedCallDetail;
+    private AgentRunViewModel? _selectedAgentRunDetails;
     private string _selectedCallRequestJson = "请选择左侧调用记录。";
     private string _selectedCallResponseJson = "请选择左侧调用记录。";
     private bool _showSelectedCallRawEvents;
@@ -102,6 +104,8 @@ public sealed class MainViewModel : ObservableObject
         DeleteConversationCommand = new RelayCommand(async parameter => await DeleteConversationAsync((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
         OpenCallDetailsCommand = new RelayCommand(parameter => OpenCallDetails((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
         CloseCallDetailsCommand = new RelayCommand(_ => IsCallDetailsOpen = false);
+        OpenAgentRunDetailsCommand = new RelayCommand(parameter => OpenAgentRunDetails((ChatMessageViewModel)parameter!), parameter => parameter is ChatMessageViewModel { AgentRun: not null });
+        CloseAgentRunDetailsCommand = new RelayCommand(_ => IsAgentRunDetailsOpen = false);
         AddConfiguredProviderCommand = new RelayCommand(async _ => await AddConfiguredProviderAsync(), _ => !string.IsNullOrWhiteSpace(NewProviderApiKey));
         RemoveConfiguredProviderCommand = new RelayCommand(async _ => await RemoveConfiguredProviderAsync(), _ => SelectedConfiguredProvider is not null);
         ToggleNewProviderApiKeyVisibilityCommand = new RelayCommand(_ => IsNewProviderApiKeyVisible = !IsNewProviderApiKeyVisible);
@@ -157,6 +161,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand DeleteConversationCommand { get; }
     public RelayCommand OpenCallDetailsCommand { get; }
     public RelayCommand CloseCallDetailsCommand { get; }
+    public RelayCommand OpenAgentRunDetailsCommand { get; }
+    public RelayCommand CloseAgentRunDetailsCommand { get; }
     public RelayCommand AddConfiguredProviderCommand { get; }
     public RelayCommand RemoveConfiguredProviderCommand { get; }
     public RelayCommand ToggleNewProviderApiKeyVisibilityCommand { get; }
@@ -478,6 +484,28 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _isCallDetailsOpen, value);
     }
 
+    public bool IsAgentRunDetailsOpen
+    {
+        get => _isAgentRunDetailsOpen;
+        set => SetProperty(ref _isAgentRunDetailsOpen, value);
+    }
+
+    public AgentRunViewModel? SelectedAgentRunDetails
+    {
+        get => _selectedAgentRunDetails;
+        private set
+        {
+            if (SetProperty(ref _selectedAgentRunDetails, value))
+            {
+                OnPropertyChanged(nameof(AgentRunDetailsTitle));
+            }
+        }
+    }
+
+    public string AgentRunDetailsTitle => SelectedAgentRunDetails is null
+        ? "Agent Run"
+        : $"Agent Run · {SelectedAgentRunDetails.StatusText}";
+
     public ObservableCollection<LlmCallDetailViewModel>? CurrentCallDetails => _callDetailsConversation?.CallDetails;
     public string CallDetailsTitle => _callDetailsConversation is null
         ? "调用详情"
@@ -748,6 +776,17 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CurrentCallDetails));
         OnPropertyChanged(nameof(CallDetailsTitle));
         IsCallDetailsOpen = true;
+    }
+
+    private void OpenAgentRunDetails(ChatMessageViewModel message)
+    {
+        if (message.AgentRun is null)
+        {
+            return;
+        }
+
+        SelectedAgentRunDetails = message.AgentRun;
+        IsAgentRunDetailsOpen = true;
     }
 
     private async Task DeleteConversationAsync(ConversationViewModel conversation)

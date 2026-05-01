@@ -17,6 +17,27 @@ public sealed class AgentRunViewModel : ObservableObject
     }
 
     public string Id => _run.Id;
+    public string Goal => _run.Goal;
+    public string StatusText => _run.Status switch
+    {
+        AgentRunStatus.Running => "运行中",
+        AgentRunStatus.Cancelled => "已停止",
+        AgentRunStatus.Failed => "失败",
+        _ => "完成"
+    };
+    public string StartedText => _run.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    public string DurationText
+    {
+        get
+        {
+            var end = _run.CompletedAt ?? DateTimeOffset.Now;
+            var elapsed = end - _run.StartedAt;
+            return elapsed.TotalSeconds < 1 ? "<1s" : $"{elapsed.TotalSeconds:0.0}s";
+        }
+    }
+    public int StepCount => Steps.Count;
+    public int FileChangeCount => FileChanges.Count;
+    public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {DurationText}";
     public ObservableCollection<AgentStepViewModel> Steps { get; }
     public ObservableCollection<AgentFileChangeViewModel> FileChanges { get; }
     public bool HasSteps => Steps.Count > 0;
@@ -47,6 +68,8 @@ public sealed class AgentRunViewModel : ObservableObject
         var viewModel = new AgentStepViewModel(step);
         Steps.Add(viewModel);
         OnPropertyChanged(nameof(HasSteps));
+        OnPropertyChanged(nameof(StepCount));
+        OnPropertyChanged(nameof(Summary));
         return viewModel;
     }
 
@@ -54,6 +77,9 @@ public sealed class AgentRunViewModel : ObservableObject
     {
         _run.Status = status;
         _run.CompletedAt = DateTimeOffset.Now;
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(DurationText));
+        OnPropertyChanged(nameof(Summary));
     }
 
     public void SyncFileChanges()
@@ -69,7 +95,9 @@ public sealed class AgentRunViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(HasFileChanges));
+        OnPropertyChanged(nameof(FileChangeCount));
         OnPropertyChanged(nameof(ChangedPaths));
         OnPropertyChanged(nameof(ChangeSummary));
+        OnPropertyChanged(nameof(Summary));
     }
 }

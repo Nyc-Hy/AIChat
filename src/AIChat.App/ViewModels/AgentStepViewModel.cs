@@ -14,6 +14,13 @@ public sealed class AgentStepViewModel : ObservableObject
     public string Id => _step.Id;
     public string ToolCallId => _step.ToolCallId;
     public string Title => _step.Title;
+    public string Input => _step.Input;
+    public string Output => _step.Output;
+    public bool HasInput => !string.IsNullOrWhiteSpace(_step.Input);
+    public bool HasOutput => !string.IsNullOrWhiteSpace(_step.Output);
+    public string OutputPreview => string.IsNullOrWhiteSpace(_step.Output)
+        ? ""
+        : _step.Output.Length > 1_200 ? _step.Output[..1_200] + "\n..." : _step.Output;
     public string Subtitle => _step.Type switch
     {
         AgentStepType.ToolCall => string.IsNullOrWhiteSpace(_step.ToolName) ? "工具调用" : _step.ToolName,
@@ -69,5 +76,8 @@ public sealed class AgentStepViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(IsError));
+        OnPropertyChanged(nameof(Output));
+        OnPropertyChanged(nameof(HasOutput));
+        OnPropertyChanged(nameof(OutputPreview));
     }
 }
