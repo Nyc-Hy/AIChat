@@ -789,7 +789,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.AgentMaxToolRounds;
         set
         {
-            var normalized = Math.Clamp(value, 1, 20);
+            var normalized = Math.Clamp(value, 1, 100);
             if (Settings.AgentMaxToolRounds == normalized)
             {
                 return;
@@ -2793,7 +2793,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void NormalizeHarnessSettings()
     {
-        Settings.AgentMaxToolRounds = Math.Clamp(Settings.AgentMaxToolRounds, 1, 20);
+        Settings.AgentMaxToolRounds = Math.Clamp(Settings.AgentMaxToolRounds, 1, 100);
         Settings.RetryMaxAttempts = Math.Clamp(Settings.RetryMaxAttempts, 0, 10);
         Settings.MaxOutputTokens = Math.Clamp(Settings.MaxOutputTokens, 256, 32768);
         Settings.ConversationContextRatio = Math.Clamp(Settings.ConversationContextRatio, 0.3, 1.0);

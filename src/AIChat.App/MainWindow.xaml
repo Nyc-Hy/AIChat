@@ -2459,7 +2459,7 @@
                                                     <TextBlock Text="工具轮数预算"
                                                                FontWeight="SemiBold"
                                                                Foreground="#1E252E" />
-                                                    <TextBlock Text="限制单次 Agent Run 最多允许几轮工具调用。范围 1-20。"
+                                                    <TextBlock Text="Agent 工具调用的硬性上限。达到 80% 时会提醒 Agent 尽快完成。范围 1-100。"
                                                                Margin="0,4,12,0"
                                                                Foreground="#667386"
                                                                TextWrapping="Wrap" />

@@ -20,7 +20,7 @@ public sealed class AppSettings
     // Tool IDs selected in Settings. Only these schemas are sent to the model.
     public List<string> EnabledToolIds { get; set; } = [];
     public Dictionary<string, ToolPermissionMode> ToolPermissionModes { get; set; } = [];
-    public int AgentMaxToolRounds { get; set; } = 4;
+    public int AgentMaxToolRounds { get; set; } = 50;
     // Maximum output tokens for LLM responses. Providers that support this
     // parameter will use it; others ignore it.
     public int MaxOutputTokens { get; set; } = 4096;

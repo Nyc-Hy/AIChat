@@ -35,6 +35,8 @@ public sealed class SystemPromptBuilder
         builder.AppendLine();
         builder.AppendLine("对于多步骤任务，先调用 update_plan 创建计划，再逐步执行。每完成一个步骤，调用 update_plan 更新状态。");
         builder.AppendLine();
+        builder.AppendLine("自我评估：每轮工具调用后，评估任务是否已完成。如果目标已达成，直接总结结果，不再调用工具。不要做超出用户要求范围的事情。");
+        builder.AppendLine();
         builder.AppendLine("当前项目：");
         builder.AppendLine($"- 名称：{Normalize(context.ProjectName, "AIChat")}");
         builder.AppendLine($"- 路径：{Normalize(context.ProjectPath, "(未设置)")}");
