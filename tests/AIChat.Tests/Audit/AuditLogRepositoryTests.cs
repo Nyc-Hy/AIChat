@@ -127,4 +127,80 @@ public sealed class AuditLogRepositoryTests : IDisposable
 
         Assert.Equal(5, events.Count);
     }
+
+    [Fact]
+    public async Task AppendAsync_RotatesWhenFileExceedsSizeLimit()
+    {
+        var repo = new AuditLogRepository(_tempDir, maxFileSizeBytes: 500, maxArchiveCount: 3);
+
+        for (var i = 0; i < 20; i++)
+        {
+            await repo.AppendAsync(new AuditEvent
+            {
+                ProjectId = "p1",
+                Type = AuditEventType.ToolCallRequested,
+                Summary = $"Event {i} with some padding text to exceed size limit"
+            });
+        }
+
+        var logDir = Path.Combine(_tempDir, "audit");
+        var files = Directory.GetFiles(logDir, "p1.jsonl*");
+
+        // Should have current file + at least one archive
+        Assert.True(files.Length >= 2, $"Expected at least 2 files, got {files.Length}: {string.Join(", ", files)}");
+    }
+
+    [Fact]
+    public async Task QueryAsync_ReturnsDataFromArchives()
+    {
+        // Use 500 bytes and 5 archives to keep enough events across files
+        var repo = new AuditLogRepository(_tempDir, maxFileSizeBytes: 500, maxArchiveCount: 5);
+
+        for (var i = 0; i < 20; i++)
+        {
+            await repo.AppendAsync(new AuditEvent
+            {
+                ProjectId = "p1",
+                Type = AuditEventType.ToolCallRequested,
+                Summary = $"Event number {i}"
+            });
+        }
+
+        var logDir = Path.Combine(_tempDir, "audit");
+        var allFiles = Directory.GetFiles(logDir, "p1*");
+        Assert.True(allFiles.Length >= 2, $"Expected at least 2 files (current + archive), got {allFiles.Length}");
+
+        // Query should return events from current + archives
+        var events = await repo.QueryAsync("p1", maxCount: 100);
+        Assert.True(events.Count >= 5, $"Expected >= 5 events from {allFiles.Length} files, got {events.Count}");
+    }
+
+    [Fact]
+    public async Task CleanupAsync_DeletesOldArchives()
+    {
+        var repo = new AuditLogRepository(_tempDir, maxFileSizeBytes: 500, maxArchiveCount: 3);
+
+        // Generate some archived data
+        for (var i = 0; i < 15; i++)
+        {
+            await repo.AppendAsync(new AuditEvent
+            {
+                ProjectId = "p1",
+                Type = AuditEventType.ToolCallRequested,
+                Summary = $"Event {i}"
+            });
+        }
+
+        var logDir = Path.Combine(_tempDir, "audit");
+        var allFilesBefore = Directory.GetFiles(logDir, "p1*");
+
+        // Cleanup archives older than now (should delete all archives, keep current)
+        await repo.CleanupAsync("p1", DateTimeOffset.Now.AddSeconds(5));
+
+        var allFilesAfter = Directory.GetFiles(logDir, "p1*");
+
+        // Only the base file should remain
+        Assert.Single(allFilesAfter);
+        Assert.True(allFilesAfter[0].EndsWith("p1.jsonl"), $"Expected p1.jsonl, got {allFilesAfter[0]}");
+    }
 }

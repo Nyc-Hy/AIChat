@@ -38,7 +38,7 @@ public partial class MainWindow : Window
             new AnthropicChatProvider()
         ]);
         var toolRegistry = AgentToolRegistry.CreateDefault();
-        var contextEstimator = new SimpleContextEstimator();
+        var contextEstimator = new TokenizerContextEstimator();
         var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat");
         var auditLogRepository = new AuditLogRepository(appDataPath);
         _viewModel = new MainViewModel(

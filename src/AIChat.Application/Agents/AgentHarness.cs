@@ -180,6 +180,15 @@ public sealed class AgentHarness
                         ToolResult = agentEvent.ToolResult
                     };
                     break;
+                case AgentRunEventType.Error:
+                    run.CompletionReason = agentEvent.Content;
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ContentDelta,
+                        Run = run,
+                        Content = agentEvent.Content
+                    };
+                    break;
                 case AgentRunEventType.BudgetExceeded:
                     run.ToolBudgetExceeded = true;
                     run.CompletionReason = "已达到工具调用轮数上限。";

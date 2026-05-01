@@ -67,7 +67,7 @@ public sealed class AnthropicChatProvider : IChatProvider
         var payload = new
         {
             model = request.Model,
-            max_tokens = 4096,
+            max_tokens = settings.MaxOutputTokens,
             temperature = request.Temperature,
             stream = true,
             system = string.IsNullOrWhiteSpace(systemPrompt) ? null : systemPrompt,
@@ -94,7 +94,12 @@ public sealed class AnthropicChatProvider : IChatProvider
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(cancellationToken);
-            yield return new ChatDelta { Content = $"Anthropic 请求失败：{(int)response.StatusCode} {response.ReasonPhrase}\n\n{error}", RawJson = error };
+            yield return new ChatDelta
+            {
+                Content = $"Anthropic 请求失败：{(int)response.StatusCode} {response.ReasonPhrase}\n\n{error}",
+                RawJson = error,
+                HttpStatusCode = (int)response.StatusCode
+            };
             yield break;
         }
 

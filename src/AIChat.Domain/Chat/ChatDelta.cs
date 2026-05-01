@@ -13,4 +13,7 @@ public sealed class ChatDelta
     // Tool calls are surfaced once the provider has reconstructed name + JSON
     // arguments from the streaming response.
     public IReadOnlyList<ChatToolCall> ToolCalls { get; init; } = [];
+    // HTTP status code when the provider encounters an HTTP error. Null for
+    // successful responses. Used by the retry policy to detect transient errors.
+    public int? HttpStatusCode { get; init; }
 }

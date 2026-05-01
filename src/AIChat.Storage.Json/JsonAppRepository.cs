@@ -6,8 +6,9 @@ using AIChat.Domain.Projects;
 
 namespace AIChat.Storage.Json;
 
-// Local JSON implementation of IAppRepository. It keeps the MVP transparent:
-// settings and conversations can be inspected under %APPDATA%\AIChat.
+// Local JSON implementation of IAppRepository. Settings and conversations are
+// stored under %APPDATA%\AIChat with atomic-write semantics to prevent data
+// corruption on concurrent or interrupted saves.
 public sealed class JsonAppRepository : IAppRepository
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
@@ -18,6 +19,7 @@ public sealed class JsonAppRepository : IAppRepository
     private readonly string _dataDirectory;
     private readonly string _settingsPath;
     private readonly string _projectsPath;
+    private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     public JsonAppRepository()
     {
@@ -44,9 +46,7 @@ public sealed class JsonAppRepository : IAppRepository
 
     public async Task SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
-        Directory.CreateDirectory(_dataDirectory);
-        await using var stream = File.Create(_settingsPath);
-        await JsonSerializer.SerializeAsync(stream, settings, JsonOptions, cancellationToken);
+        await AtomicWriteJsonAsync(_settingsPath, settings, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProjectWorkspace>> LoadProjectsAsync(CancellationToken cancellationToken = default)
@@ -67,9 +67,28 @@ public sealed class JsonAppRepository : IAppRepository
 
     public async Task SaveProjectsAsync(IReadOnlyList<ProjectWorkspace> projects, CancellationToken cancellationToken = default)
     {
+        await AtomicWriteJsonAsync(_projectsPath, projects, cancellationToken);
+    }
+
+    private async Task AtomicWriteJsonAsync<T>(string filePath, T value, CancellationToken cancellationToken)
+    {
         Directory.CreateDirectory(_dataDirectory);
-        await using var stream = File.Create(_projectsPath);
-        await JsonSerializer.SerializeAsync(stream, projects, JsonOptions, cancellationToken);
+        var tempPath = filePath + ".tmp";
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var stream = File.Create(tempPath);
+            await JsonSerializer.SerializeAsync(stream, value, JsonOptions, cancellationToken);
+            await stream.FlushAsync(cancellationToken);
+            stream.Close();
+            File.Move(tempPath, filePath, overwrite: true);
+        }
+        finally
+        {
+            _writeLock.Release();
+            // Clean up temp file if rename failed
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best effort */ }
+        }
     }
 
     private static AppSettings CreateInitialSettings()

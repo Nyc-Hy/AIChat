@@ -21,9 +21,26 @@ public sealed class AppSettings
     public List<string> EnabledToolIds { get; set; } = [];
     public Dictionary<string, ToolPermissionMode> ToolPermissionModes { get; set; } = [];
     public int AgentMaxToolRounds { get; set; } = 4;
+    // Maximum output tokens for LLM responses. Providers that support this
+    // parameter will use it; others ignore it.
+    public int MaxOutputTokens { get; set; } = 4096;
     public bool AutoVerifyAgentRuns { get; set; }
     public int MaxAutoFixRounds { get; set; } = 3;
     // Multiple configured providers lets the user keep more than one API key or
     // model setup while the rest of the app only reads the active one.
     public List<ConfiguredLlmProvider> ConfiguredProviders { get; set; } = [];
+
+    // --- Enterprise settings ---
+
+    // Number of retry attempts for transient LLM errors (429, 500, etc.)
+    public int RetryMaxAttempts { get; set; } = 3;
+    // Fraction of model context limit reserved for conversation (0.0-1.0).
+    // The remainder is left for agent tools and system prompt.
+    public double ConversationContextRatio { get; set; } = 0.7;
+    // Use tokenizer-based context estimation (SharpToken) vs character heuristic.
+    public bool UseTokenizerEstimation { get; set; } = true;
+    // Maximum audit log file size in bytes before rotation (default 5MB).
+    public long AuditLogMaxFileSizeBytes { get; set; } = 5 * 1024 * 1024;
+    // Number of days to retain rotated audit log archives.
+    public int AuditLogRetentionDays { get; set; } = 30;
 }

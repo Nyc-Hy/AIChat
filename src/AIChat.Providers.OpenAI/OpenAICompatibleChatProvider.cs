@@ -99,7 +99,12 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(cancellationToken);
-            yield return new ChatDelta { Content = $"LLM 请求失败：{(int)response.StatusCode} {response.ReasonPhrase}\n\n{error}", RawJson = error };
+            yield return new ChatDelta
+            {
+                Content = $"LLM 请求失败：{(int)response.StatusCode} {response.ReasonPhrase}\n\n{error}",
+                RawJson = error,
+                HttpStatusCode = (int)response.StatusCode
+            };
             yield break;
         }
 

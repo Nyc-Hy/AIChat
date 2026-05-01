@@ -268,6 +268,12 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedConfiguredProvider));
                 OnPropertyChanged(nameof(ActiveModelOptions));
                 OnPropertyChanged(nameof(AgentMaxToolRounds));
+                OnPropertyChanged(nameof(RetryMaxAttempts));
+                OnPropertyChanged(nameof(MaxOutputTokens));
+                OnPropertyChanged(nameof(ConversationContextRatio));
+                OnPropertyChanged(nameof(UseTokenizerEstimation));
+                OnPropertyChanged(nameof(AuditLogMaxFileSizeMB));
+                OnPropertyChanged(nameof(AuditLogRetentionDays));
             }
         }
     }
@@ -782,6 +788,77 @@ public sealed class MainViewModel : ObservableObject
             }
 
             Settings.AgentMaxToolRounds = normalized;
+            OnPropertyChanged();
+        }
+    }
+
+    public int RetryMaxAttempts
+    {
+        get => Settings.RetryMaxAttempts;
+        set
+        {
+            var normalized = Math.Clamp(value, 0, 10);
+            if (Settings.RetryMaxAttempts == normalized) return;
+            Settings.RetryMaxAttempts = normalized;
+            OnPropertyChanged();
+        }
+    }
+
+    public int MaxOutputTokens
+    {
+        get => Settings.MaxOutputTokens;
+        set
+        {
+            var normalized = Math.Clamp(value, 256, 32768);
+            if (Settings.MaxOutputTokens == normalized) return;
+            Settings.MaxOutputTokens = normalized;
+            OnPropertyChanged();
+        }
+    }
+
+    public double ConversationContextRatio
+    {
+        get => Settings.ConversationContextRatio;
+        set
+        {
+            var normalized = Math.Clamp(value, 0.3, 1.0);
+            if (Math.Abs(Settings.ConversationContextRatio - normalized) < 0.01) return;
+            Settings.ConversationContextRatio = normalized;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool UseTokenizerEstimation
+    {
+        get => Settings.UseTokenizerEstimation;
+        set
+        {
+            if (Settings.UseTokenizerEstimation == value) return;
+            Settings.UseTokenizerEstimation = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public long AuditLogMaxFileSizeMB
+    {
+        get => Settings.AuditLogMaxFileSizeBytes / (1024 * 1024);
+        set
+        {
+            var bytes = Math.Max(1, value) * 1024 * 1024;
+            if (Settings.AuditLogMaxFileSizeBytes == bytes) return;
+            Settings.AuditLogMaxFileSizeBytes = bytes;
+            OnPropertyChanged();
+        }
+    }
+
+    public int AuditLogRetentionDays
+    {
+        get => Settings.AuditLogRetentionDays;
+        set
+        {
+            var normalized = Math.Clamp(value, 1, 365);
+            if (Settings.AuditLogRetentionDays == normalized) return;
+            Settings.AuditLogRetentionDays = normalized;
             OnPropertyChanged();
         }
     }
@@ -2627,7 +2704,19 @@ public sealed class MainViewModel : ObservableObject
     private void NormalizeHarnessSettings()
     {
         Settings.AgentMaxToolRounds = Math.Clamp(Settings.AgentMaxToolRounds, 1, 20);
+        Settings.RetryMaxAttempts = Math.Clamp(Settings.RetryMaxAttempts, 0, 10);
+        Settings.MaxOutputTokens = Math.Clamp(Settings.MaxOutputTokens, 256, 32768);
+        Settings.ConversationContextRatio = Math.Clamp(Settings.ConversationContextRatio, 0.3, 1.0);
+        Settings.AuditLogRetentionDays = Math.Clamp(Settings.AuditLogRetentionDays, 1, 365);
+        if (Settings.AuditLogMaxFileSizeBytes < 1024 * 1024)
+            Settings.AuditLogMaxFileSizeBytes = 5 * 1024 * 1024;
         OnPropertyChanged(nameof(AgentMaxToolRounds));
+        OnPropertyChanged(nameof(RetryMaxAttempts));
+        OnPropertyChanged(nameof(MaxOutputTokens));
+        OnPropertyChanged(nameof(ConversationContextRatio));
+        OnPropertyChanged(nameof(UseTokenizerEstimation));
+        OnPropertyChanged(nameof(AuditLogMaxFileSizeMB));
+        OnPropertyChanged(nameof(AuditLogRetentionDays));
     }
 
     private void NormalizeModelParameters()

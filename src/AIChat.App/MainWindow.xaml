@@ -2569,6 +2569,103 @@
                                     </StackPanel>
                                 </ScrollViewer>
                             </TabItem>
+
+                            <!-- Advanced settings tab -->
+                            <TabItem Header="高级">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="2,8">
+                                    <StackPanel>
+                                        <!-- Retry count -->
+                                        <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="120" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="LLM 重试次数" FontWeight="SemiBold" Foreground="#1E252E" />
+                                                    <TextBlock Text="遇到 429/500 等瞬态错误时的重试次数。范围 0-10。" Margin="0,4,12,0" Foreground="#667386" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBox Grid.Column="1" Text="{Binding RetryMaxAttempts, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Style="{StaticResource SettingsTextBoxStyle}" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Max output tokens -->
+                                        <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="120" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="最大输出 Token" FontWeight="SemiBold" Foreground="#1E252E" />
+                                                    <TextBlock Text="LLM 单次响应最大 token 数。Anthropic 等 provider 使用此值。" Margin="0,4,12,0" Foreground="#667386" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBox Grid.Column="1" Text="{Binding MaxOutputTokens, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Style="{StaticResource SettingsTextBoxStyle}" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Conversation context ratio -->
+                                        <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="120" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="上下文保留比例" FontWeight="SemiBold" Foreground="#1E252E" />
+                                                    <TextBlock Text="为对话保留的模型上下文比例，剩余留给 Agent 工具和系统提示。0.3-1.0。" Margin="0,4,12,0" Foreground="#667386" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBox Grid.Column="1" Text="{Binding ConversationContextRatio, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Style="{StaticResource SettingsTextBoxStyle}" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Tokenizer estimation toggle -->
+                                        <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="精确 Token 估算" FontWeight="SemiBold" Foreground="#1E252E" />
+                                                    <TextBlock Text="使用 SharpToken (Tiktoken) 精确计算 token 数。关闭后使用字符数/3.6 粗估。" Margin="0,4,12,0" Foreground="#667386" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <CheckBox Grid.Column="1" IsChecked="{Binding UseTokenizerEstimation, Mode=TwoWay}" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Audit log max file size -->
+                                        <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="120" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="审计日志轮转大小 (MB)" FontWeight="SemiBold" Foreground="#1E252E" />
+                                                    <TextBlock Text="单个审计日志文件超过此大小后自动轮转归档。" Margin="0,4,12,0" Foreground="#667386" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBox Grid.Column="1" Text="{Binding AuditLogMaxFileSizeMB, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Style="{StaticResource SettingsTextBoxStyle}" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Audit log retention days -->
+                                        <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="120" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="审计日志保留天数" FontWeight="SemiBold" Foreground="#1E252E" />
+                                                    <TextBlock Text="归档的审计日志超过此天数后自动清理。" Margin="0,4,12,0" Foreground="#667386" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBox Grid.Column="1" Text="{Binding AuditLogRetentionDays, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Style="{StaticResource SettingsTextBoxStyle}" />
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
                         </TabControl>
 
                         <DockPanel Grid.Row="2">

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Llm;
+using AIChat.Application.Llm.Resilience;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
 
@@ -13,6 +14,7 @@ public sealed class AgentRunner
     private readonly IChatCompletionService _chatService;
     private readonly AgentToolCatalog _toolCatalog;
     private readonly ToolExecutionService _toolExecutionService;
+    private readonly RetryPolicy _retryPolicy;
 
     public AgentRunner(IChatCompletionService chatService, AgentToolCatalog toolCatalog)
         : this(chatService, toolCatalog, new ToolExecutionService(toolCatalog))
@@ -22,11 +24,13 @@ public sealed class AgentRunner
     public AgentRunner(
         IChatCompletionService chatService,
         AgentToolCatalog toolCatalog,
-        ToolExecutionService toolExecutionService)
+        ToolExecutionService toolExecutionService,
+        RetryPolicy? retryPolicy = null)
     {
         _chatService = chatService;
         _toolCatalog = toolCatalog;
         _toolExecutionService = toolExecutionService;
+        _retryPolicy = retryPolicy ?? new RetryPolicy();
     }
 
     public async IAsyncEnumerable<AgentRunEvent> RunAsync(
@@ -57,28 +61,76 @@ public sealed class AgentRunner
             var assistantContent = "";
             var rawEvents = new List<string>();
             var requestedToolCalls = new List<ChatToolCall>();
+            var pendingEvents = new List<AgentRunEvent>();
+            var chatSucceeded = false;
 
-            await foreach (var delta in _chatService.SendAsync(request, settings, cancellationToken))
+            for (var retryAttempt = 0; retryAttempt <= _retryPolicy.MaxRetries && !chatSucceeded; retryAttempt++)
             {
-                if (!string.IsNullOrWhiteSpace(delta.RawJson))
+                assistantContent = "";
+                rawEvents.Clear();
+                requestedToolCalls.Clear();
+                pendingEvents.Clear();
+                var hadTransientError = false;
+
+                try
                 {
-                    rawEvents.Add(delta.RawJson);
+                    await foreach (var delta in _chatService.SendAsync(request, settings, cancellationToken))
+                    {
+                        if (!string.IsNullOrWhiteSpace(delta.RawJson))
+                        {
+                            rawEvents.Add(delta.RawJson);
+                            pendingEvents.Add(new AgentRunEvent
+                            {
+                                Type = AgentRunEventType.RawProviderEvent,
+                                RawJson = delta.RawJson
+                            });
+                        }
+
+                        if (delta.HttpStatusCode is > 0 && RetryPolicy.IsTransientHttpError(delta.HttpStatusCode.Value))
+                        {
+                            hadTransientError = true;
+                            break;
+                        }
+
+                        if (!string.IsNullOrEmpty(delta.Content))
+                        {
+                            assistantContent += delta.Content;
+                        }
+
+                        if (delta.ToolCalls.Count > 0)
+                        {
+                            requestedToolCalls.AddRange(delta.ToolCalls);
+                        }
+                    }
+
+                    chatSucceeded = !hadTransientError;
+                }
+                catch (HttpRequestException)
+                {
+                    hadTransientError = true;
+                }
+
+                if (hadTransientError && retryAttempt < _retryPolicy.MaxRetries)
+                {
+                    await Task.Delay(_retryPolicy.GetDelay(retryAttempt), cancellationToken);
+                }
+                else if (hadTransientError)
+                {
+                    // Exhausted retries — yield error and stop
                     yield return new AgentRunEvent
                     {
-                        Type = AgentRunEventType.RawProviderEvent,
-                        RawJson = delta.RawJson
+                        Type = AgentRunEventType.Error,
+                        Content = "LLM 请求失败（网络或服务端错误），已重试多次仍无法连接。"
                     };
+                    yield return new AgentRunEvent { Type = AgentRunEventType.Completed };
+                    yield break;
                 }
+            }
 
-                if (!string.IsNullOrEmpty(delta.Content))
-                {
-                    assistantContent += delta.Content;
-                }
-
-                if (delta.ToolCalls.Count > 0)
-                {
-                    requestedToolCalls.AddRange(delta.ToolCalls);
-                }
+            // Yield buffered raw events
+            foreach (var pending in pendingEvents)
+            {
+                yield return pending;
             }
 
             if (requestedToolCalls.Count == 0)
