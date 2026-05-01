@@ -114,7 +114,9 @@ public sealed class ApplyPatchTool : IAgentTool
                 {
                     path = plan.Path.Replace('\\', '/'),
                     oldChars = plan.OldContent.Length,
-                    newChars = plan.NewContent.Length
+                    newChars = plan.NewContent.Length,
+                    contentSnapshot = plan.OldContent,
+                    postChangeHash = ToolJson.ComputeSha256(plan.NewContent)
                 }).ToList()
             }));
         }

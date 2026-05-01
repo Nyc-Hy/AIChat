@@ -105,7 +105,9 @@ public sealed class EditFileTool : IAgentTool
                 path = path.Replace('\\', '/'),
                 replacements = replaceAll ? occurrences : 1,
                 oldChars = text.Length,
-                newChars = updated.Length
+                newChars = updated.Length,
+                contentSnapshot = text,
+                postChangeHash = ToolJson.ComputeSha256(updated)
             }));
         }
         catch (Exception ex)

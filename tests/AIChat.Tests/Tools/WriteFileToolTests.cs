@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AIChat.Application.Tools;
 
 namespace AIChat.Tests.Tools;
@@ -49,5 +50,38 @@ public sealed class WriteFileToolTests
             new AgentToolContext { ProjectPath = workspace.Path });
 
         Assert.True(result.IsError);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_IncludesContentSnapshotAndHash()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var target = Path.Combine(workspace.Path, "file.txt");
+        await File.WriteAllTextAsync(target, "old content");
+        var tool = new WriteFileTool();
+
+        var result = await tool.ExecuteAsync(
+            """{"path":"file.txt","content":"new content","overwrite":true}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.False(result.IsError);
+        var json = JsonDocument.Parse(result.Content).RootElement;
+        Assert.Equal("old content", json.GetProperty("contentSnapshot").GetString());
+        Assert.False(string.IsNullOrEmpty(json.GetProperty("postChangeHash").GetString()));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SnapshotIsEmptyForNewFile()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var tool = new WriteFileTool();
+
+        var result = await tool.ExecuteAsync(
+            """{"path":"new.txt","content":"brand new"}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.False(result.IsError);
+        var json = JsonDocument.Parse(result.Content).RootElement;
+        Assert.Equal("", json.GetProperty("contentSnapshot").GetString());
     }
 }

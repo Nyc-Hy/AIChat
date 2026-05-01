@@ -11,5 +11,7 @@ public sealed class AgentFileChange
     public string DiffText { get; set; } = "";
     public int OldChars { get; set; }
     public int NewChars { get; set; }
+    public string ContentSnapshot { get; set; } = "";
+    public string PostChangeHash { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 }

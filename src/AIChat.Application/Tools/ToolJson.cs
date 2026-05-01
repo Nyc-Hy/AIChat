@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace AIChat.Application.Tools;
@@ -57,5 +59,12 @@ internal static class ToolJson
             JsonValueKind.String when bool.TryParse(property.GetString(), out var value) => value,
             _ => defaultValue
         };
+    }
+
+    internal static string ComputeSha256(string content)
+    {
+        var bytes = Encoding.UTF8.GetBytes(content);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

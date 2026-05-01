@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AIChat.Application.Tools;
 
 namespace AIChat.Tests.Tools;
@@ -97,6 +98,31 @@ public sealed class ApplyPatchToolTests
             new AgentToolContext { ProjectPath = workspace.Path });
 
         Assert.True(result.IsError);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_IncludesContentSnapshotAndHash()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var target = Path.Combine(workspace.Path, "file.txt");
+        await File.WriteAllTextAsync(target, "alpha\nbeta\ngamma\n");
+        var tool = new ApplyPatchTool();
+
+        var result = await tool.ExecuteAsync(
+            """
+            {
+              "changes": [
+                { "path": "file.txt", "old_text": "beta", "new_text": "BETA" }
+              ]
+            }
+            """,
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.False(result.IsError);
+        var json = JsonDocument.Parse(result.Content).RootElement;
+        var changedFile = json.GetProperty("changedFiles")[0];
+        Assert.Equal("alpha\nbeta\ngamma\n", changedFile.GetProperty("contentSnapshot").GetString());
+        Assert.False(string.IsNullOrEmpty(changedFile.GetProperty("postChangeHash").GetString()));
     }
 
     [Fact]

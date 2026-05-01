@@ -204,6 +204,64 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public async Task RunAsync_RecordsSnapshotAndHashForFileChanges()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var targetPath = Path.Combine(workspace.Path, "config.txt");
+        await File.WriteAllTextAsync(targetPath, "original content");
+
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "apply_patch",
+            ArgumentsJson = """
+            {
+              "changes": [
+                {
+                  "path": "config.txt",
+                  "old_text": "original content",
+                  "new_text": "updated content"
+                }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new ApplyPatchTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "update config",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update config" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = workspace.Path,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        var change = Assert.Single(run.FileChanges);
+        Assert.Equal("original content", change.ContentSnapshot);
+        Assert.False(string.IsNullOrEmpty(change.PostChangeHash));
+    }
+
+    [Fact]
     public async Task RunAsync_RecordsBudgetExhaustionWhenToolRoundsAreExceeded()
     {
         var conversation = new Conversation { Id = "conversation-1" };

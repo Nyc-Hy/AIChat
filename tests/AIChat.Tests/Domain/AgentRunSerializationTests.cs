@@ -258,6 +258,45 @@ public sealed class AgentRunSerializationTests
     }
 
     [Fact]
+    public void Conversation_RoundTripsFileChangeSnapshotAndHash()
+    {
+        var conversation = new Conversation
+        {
+            Id = "conversation-1",
+            Messages = [],
+            AgentRuns =
+            [
+                new AgentRun
+                {
+                    Id = "run-1",
+                    Status = AgentRunStatus.Completed,
+                    FileChanges =
+                    [
+                        new AgentFileChange
+                        {
+                            RunId = "run-1",
+                            Path = "src/App.cs",
+                            DiffText = "--- a/src/App.cs\n+++ b/src/App.cs",
+                            OldChars = 100,
+                            NewChars = 120,
+                            ContentSnapshot = "original file content here",
+                            PostChangeHash = "abc123def456"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(conversation, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<Conversation>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        var change = roundTripped.AgentRuns[0].FileChanges[0];
+        Assert.Equal("original file content here", change.ContentSnapshot);
+        Assert.Equal("abc123def456", change.PostChangeHash);
+    }
+
+    [Fact]
     public void Conversation_HandlesMissingPlanGracefully()
     {
         var conversation = new Conversation

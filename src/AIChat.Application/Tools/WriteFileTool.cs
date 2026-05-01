@@ -85,12 +85,17 @@ public sealed class WriteFileTool : IAgentTool
                 Directory.CreateDirectory(directory);
             }
 
+            var existing = File.Exists(fullPath)
+                ? await File.ReadAllTextAsync(fullPath, cancellationToken)
+                : "";
             await File.WriteAllTextAsync(fullPath, content, cancellationToken);
             return Success(JsonSerializer.Serialize(new
             {
                 path = path.Replace('\\', '/'),
                 chars = content.Length,
-                overwritten = overwrite
+                overwritten = overwrite,
+                contentSnapshot = existing,
+                postChangeHash = ToolJson.ComputeSha256(content)
             }));
         }
         catch (Exception ex)

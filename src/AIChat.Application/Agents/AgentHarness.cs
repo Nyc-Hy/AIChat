@@ -459,6 +459,8 @@ public sealed class AgentHarness
                 DiffText = ExtractDiffForPath(preview.DiffText, changedFile.Path),
                 OldChars = changedFile.OldChars,
                 NewChars = changedFile.NewChars,
+                ContentSnapshot = changedFile.ContentSnapshot,
+                PostChangeHash = changedFile.PostChangeHash,
                 CreatedAt = DateTimeOffset.Now
             });
         }
@@ -703,7 +705,9 @@ public sealed class AgentHarness
         return new ChangedFileInfo(
             GetString(element, "path"),
             GetInt(element, "oldChars"),
-            GetInt(element, "newChars", GetInt(element, "chars")));
+            GetInt(element, "newChars", GetInt(element, "chars")),
+            GetString(element, "contentSnapshot"),
+            GetString(element, "postChangeHash"));
     }
 
     private static string GetString(JsonElement element, string propertyName)
@@ -738,6 +742,6 @@ public sealed class AgentHarness
         run.Complete(status);
     }
 
-    private sealed record ChangedFileInfo(string Path, int OldChars, int NewChars);
+    private sealed record ChangedFileInfo(string Path, int OldChars, int NewChars, string ContentSnapshot, string PostChangeHash);
     private sealed record VerificationInfo(string Command, int ExitCode, bool TimedOut, string Output);
 }

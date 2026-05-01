@@ -1558,15 +1558,49 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var paths = message.AgentRun.ChangedPaths;
-        if (paths.Count == 0)
+        var fileChanges = message.AgentRun.FileChanges.ToList();
+        if (fileChanges.Count == 0)
         {
             return;
         }
 
+        // Detect conflicts: files that were manually edited after the Agent run
+        var conflicts = new List<string>();
+        foreach (var change in fileChanges)
+        {
+            if (string.IsNullOrEmpty(change.PostChangeHash))
+            {
+                continue;
+            }
+
+            var fullPath = System.IO.Path.Combine(SelectedProject.Path, change.Path);
+            if (!System.IO.File.Exists(fullPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                var currentContent = await System.IO.File.ReadAllTextAsync(fullPath);
+                var currentHash = ComputeContentHash(currentContent);
+                if (currentHash != change.PostChangeHash)
+                {
+                    conflicts.Add(change.Path);
+                }
+            }
+            catch
+            {
+                // Can't read file, skip conflict check for this file
+            }
+        }
+
+        var confirmMessage = conflicts.Count > 0
+            ? $"以下 {conflicts.Count} 个文件在 Agent 修改后又被手动编辑过：\n\n{string.Join("\n", conflicts.Select(p => "  - " + p))}\n\n仍要撤销这些文件的变更吗？手动编辑的内容将丢失。"
+            : $"撤销本轮记录的 {fileChanges.Count} 个文件变更？\n\n这会恢复已跟踪文件，并删除本轮创建后仍未跟踪的文件。";
+
         var decision = System.Windows.MessageBox.Show(
             System.Windows.Application.Current.MainWindow,
-            $"撤销本轮记录的 {paths.Count} 个文件变更？\n\n这会恢复已跟踪文件，并删除本轮创建后仍未跟踪的文件。",
+            confirmMessage,
             "确认撤销本轮变更",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
@@ -1577,19 +1611,42 @@ public sealed class MainViewModel : ObservableObject
 
         var restored = 0;
         var errors = new List<string>();
-        foreach (var path in paths)
+        foreach (var change in fileChanges)
         {
             try
             {
-                _ = await _workspaceChangeService.RestoreFileAsync(
+                var result = await _workspaceChangeService.RestoreFileAsync(
                     SelectedProject.Path,
-                    path,
+                    change.Path,
                     deleteUntracked: true);
                 restored++;
             }
-            catch (Exception ex)
+            catch
             {
-                errors.Add($"{path}: {ex.Message}");
+                // git restore failed — try snapshot-based fallback for untracked files
+                if (!string.IsNullOrEmpty(change.ContentSnapshot))
+                {
+                    try
+                    {
+                        var fullPath = System.IO.Path.Combine(SelectedProject.Path, change.Path);
+                        var directory = System.IO.Path.GetDirectoryName(fullPath);
+                        if (!string.IsNullOrWhiteSpace(directory) && !System.IO.Directory.Exists(directory))
+                        {
+                            System.IO.Directory.CreateDirectory(directory);
+                        }
+
+                        await System.IO.File.WriteAllTextAsync(fullPath, change.ContentSnapshot);
+                        restored++;
+                    }
+                    catch (Exception ex2)
+                    {
+                        errors.Add($"{change.Path}: {ex2.Message}");
+                    }
+                }
+                else
+                {
+                    errors.Add($"{change.Path}: 无法恢复");
+                }
             }
         }
 
@@ -1602,6 +1659,13 @@ public sealed class MainViewModel : ObservableObject
         }
 
         await RefreshWorkspaceChangesAsync();
+    }
+
+    private static string ComputeContentHash(string content)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var hash = System.Security.Cryptography.SHA256.HashData(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     private void CopyAgentRunChangeSummary(ChatMessageViewModel message)
