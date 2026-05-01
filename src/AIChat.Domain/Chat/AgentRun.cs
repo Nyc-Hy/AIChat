@@ -11,6 +11,10 @@ public sealed class AgentRun
     public string Goal { get; set; } = "";
     public string Phase { get; set; } = "planning";
     public string CompletionReason { get; set; } = "";
+    public string ProjectPath { get; set; } = "";
+    public string Model { get; set; } = "";
+    public List<string> EnabledTools { get; set; } = [];
+    public Dictionary<string, string> ToolPermissionModes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }

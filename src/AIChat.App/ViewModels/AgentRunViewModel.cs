@@ -22,6 +22,17 @@ public sealed class AgentRunViewModel : ObservableObject
     public string Id => _run.Id;
     public string Goal => _run.Goal;
     public AgentRunStatus Status => _run.Status;
+    public string ProjectPath => string.IsNullOrWhiteSpace(_run.ProjectPath) ? "未记录" : _run.ProjectPath;
+    public string Model => string.IsNullOrWhiteSpace(_run.Model) ? "未记录" : _run.Model;
+    public int EnabledToolCount => _run.EnabledTools.Count;
+    public string EnabledToolsText => _run.EnabledTools.Count == 0
+        ? "无"
+        : string.Join(", ", _run.EnabledTools);
+    public string PermissionSummary => _run.ToolPermissionModes.Count == 0
+        ? "无"
+        : string.Join(Environment.NewLine, _run.ToolPermissionModes
+            .OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(entry => $"- {entry.Key}: {entry.Value}"));
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ShortGoal
     {
@@ -91,6 +102,9 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"状态：{StatusText}",
                 $"阶段：{PhaseText}",
                 $"目标：{Goal}",
+                $"项目：{ProjectPath}",
+                $"模型：{Model}",
+                $"工具：{EnabledToolCount}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",
                 $"验证：{VerificationCount}",

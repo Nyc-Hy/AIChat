@@ -50,6 +50,14 @@ public sealed class AgentRunSerializationTests
                     AssistantMessageId = "assistant-1",
                     Phase = "verifying",
                     CompletionReason = "all tests passed",
+                    ProjectPath = "D:/Code/AIChat",
+                    Model = "test-model",
+                    EnabledTools = ["read_file", "run_test"],
+                    ToolPermissionModes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["read_file"] = "AutoReadOnly",
+                        ["run_test"] = "ConfirmEachTime"
+                    },
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -106,6 +114,10 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns[0].Verifications);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].Phase);
         Assert.Equal("all tests passed", roundTripped.AgentRuns[0].CompletionReason);
+        Assert.Equal("D:/Code/AIChat", roundTripped.AgentRuns[0].ProjectPath);
+        Assert.Equal("test-model", roundTripped.AgentRuns[0].Model);
+        Assert.Equal(["read_file", "run_test"], roundTripped.AgentRuns[0].EnabledTools);
+        Assert.Equal("ConfirmEachTime", roundTripped.AgentRuns[0].ToolPermissionModes["run_test"]);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);

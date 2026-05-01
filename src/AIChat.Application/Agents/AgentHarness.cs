@@ -26,6 +26,13 @@ public sealed class AgentHarness
             UserMessageId = request.UserMessageId,
             AssistantMessageId = request.AssistantMessageId,
             Goal = request.Goal,
+            ProjectPath = request.Context.ProjectPath,
+            Model = request.Settings.Model,
+            EnabledTools = request.Context.EnabledToolIds.ToList(),
+            ToolPermissionModes = request.Context.ToolPermissionModes.ToDictionary(
+                entry => entry.Key,
+                entry => entry.Value.ToString(),
+                StringComparer.OrdinalIgnoreCase),
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);

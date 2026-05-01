@@ -1546,6 +1546,22 @@
                                         <TextBlock Text="{Binding StartedText}"
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473" />
+                                        <TextBlock Text="运行环境"
+                                                   Margin="0,14,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBlock Text="{Binding Model, StringFormat=模型：{0}}"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="#596473"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding ProjectPath, StringFormat=项目：{0}}"
+                                                   Margin="0,3,0,0"
+                                                   Foreground="#596473"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding EnabledToolsText, StringFormat=工具：{0}}"
+                                                   Margin="0,3,0,0"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
                                         <TextBlock Text="当前阶段"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
@@ -1604,6 +1620,25 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="0,14,0,0"
+                                        Padding="14"
+                                        CornerRadius="8"
+                                        Background="#FBFCFD"
+                                        BorderBrush="#E2E8F0"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="工具权限"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBlock Text="{Binding PermissionSummary}"
+                                                   Margin="0,8,0,0"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 

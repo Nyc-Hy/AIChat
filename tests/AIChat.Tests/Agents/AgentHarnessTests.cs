@@ -31,7 +31,15 @@ public sealed class AgentHarnessTests
                                Messages = [new ChatMessage { Role = ChatRole.User, Content = "do work" }]
                            },
                            Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               ToolPermissionModes = new Dictionary<string, ToolPermissionMode>
+                               {
+                                   ["read_file"] = ToolPermissionMode.AutoReadOnly
+                               }
+                           }
                        }))
         {
             events.Add(item);
@@ -40,6 +48,10 @@ public sealed class AgentHarnessTests
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Completed, run.Status);
         Assert.Equal("user-1", run.UserMessageId);
+        Assert.Equal(Environment.CurrentDirectory, run.ProjectPath);
+        Assert.Equal("test", run.Model);
+        Assert.Equal(["read_file"], run.EnabledTools);
+        Assert.Equal("AutoReadOnly", run.ToolPermissionModes["read_file"]);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunStarted);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta && item.Content == "done");
         Assert.Equal(2, run.Steps.Count);
