@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\AIChat.Application\AIChat.Application.csproj" />
     <ProjectReference Include="..\..\src\AIChat.Abstractions\AIChat.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\AIChat.Domain\AIChat.Domain.csproj" />
+    <ProjectReference Include="..\..\src\AIChat.Providers.OpenAI\AIChat.Providers.OpenAI.csproj" />
   </ItemGroup>
 
 </Project>

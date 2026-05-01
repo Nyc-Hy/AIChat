@@ -81,7 +81,41 @@ git diff --check
 - Agent Run 详情可复制摘要和复盘包。
 - 历史运行支持按全部、可重试、失败/停止、已完成、运行中筛选。
 
-## 第 7 阶段：任务计划与检查清单
+### 第 7 阶段：任务计划与检查清单（已完成）
+
+- AgentPlan / AgentPlanItem 领域模型。
+- 从模型输出中提取计划文本。
+- UI 展示计划清单。
+
+### 第 8 阶段：可暂停、可恢复、可继续的运行队列（已完成）
+
+- AgentRun 持久化增强（ResumeTranscript、ContinuedFromRunId）。
+- "继续运行" 和 "重试" 入口。
+- 运行队列基础。
+
+### 第 9 阶段：上下文工程与项目索引（已完成）
+
+- ProjectFileIndex / ProjectFileIndexBuilder 扫描目录并分类文件。
+- ProjectContextPackBuilder 组装预算化上下文包。
+- PinnedContextItem 领域模型与 UI 绑定。
+
+### 第 10 阶段：Patch、Diff 与变更控制（已完成）
+
+- AgentFileChange 增加 ContentSnapshot 和 PostChangeHash。
+- WriteFileTool / EditFileTool / ApplyPatchTool 记录快照和哈希。
+- 回滚时检测冲突（当前文件哈希与 PostChangeHash 不一致）。
+
+### 第 11 阶段：验证系统与自动修复循环（已完成）
+
+- ProjectVerificationCommand 领域模型。
+- VerificationResultParser 提取错误/警告摘要。
+- AgentHarness.RunAutoVerifyLoopAsync 自动修复循环。
+
+### 第 12 阶段：Provider 能力矩阵与模型兼容性（已完成）
+
+- SendAsync 按 SupportsTools 能力门控，不支持时回退到普通聊天。
+- ActiveModelSupportsTools 属性与 UI 警告条。
+- OpenAICompatibleToolCallTests 覆盖多种 tool call 解析场景。
 
 目标：让 Agent 在开始动手前形成可见计划，并在执行过程中更新任务状态。这一阶段会让 AIChat 更接近 ClaudeCode Desktop 的“工作流感”，用户能看到它准备做什么、正在做什么、还剩什么。
 
@@ -644,6 +678,14 @@ Gate agent mode by model capabilities
 ```text
 Cover provider tool call parsing variants
 ```
+
+> ✅ 第 12 阶段已完成（commit `TBD`）。
+>
+> 已实现：
+> - `MainViewModel.SendAsync` 在进入 Harness 前解析 `SupportsTools`，不支持时回退到普通聊天并设置状态提示。
+> - 新增 `ActiveModelSupportsTools` 计算属性，供 UI 绑定。
+> - 工具设置页新增黄色警告条，当模型不支持工具时可见。
+> - 新增 `OpenAICompatibleToolCallTests` 覆盖单工具、多工具、空数组、流式拼接、缺省参数、ID 回退等场景。
 
 ## 第 13 阶段：安全、权限与审计日志
 

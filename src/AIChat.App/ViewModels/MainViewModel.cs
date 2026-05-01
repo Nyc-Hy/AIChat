@@ -321,6 +321,16 @@ public sealed class MainViewModel : ObservableObject
                 : model.CapabilityLabel;
         }
     }
+    public bool ActiveModelSupportsTools
+    {
+        get
+        {
+            var configured = SelectedConfiguredProvider;
+            if (configured is null) return false;
+            var model = ChatProviderCatalog.ResolveModel(configured.TemplateId, configured.SelectedModelId);
+            return model.Capabilities?.SupportsTools == true;
+        }
+    }
     public bool HasApiKey => SelectedConfiguredProvider is not null && !string.IsNullOrWhiteSpace(SelectedConfiguredProvider.ApiKey);
     public bool HasWorkspaceChanges => WorkspaceChanges.Count > 0;
     public bool HasSelectedWorkspaceChanges => WorkspaceChanges.Any(change => change.IsSelected);
@@ -1911,7 +1921,12 @@ public sealed class MainViewModel : ObservableObject
 
             await Task.Run(async () =>
             {
-                if (_agentHarness is null)
+                var modelInfo = ChatProviderCatalog.ResolveModel(
+                    effectiveSettings.ActiveConfiguredProviderId,
+                    effectiveSettings.Model);
+                var supportsTools = modelInfo?.Capabilities?.SupportsTools == true;
+
+                if (_agentHarness is null || !supportsTools)
                 {
                     await foreach (var delta in _chatService.SendAsync(request, effectiveSettings, _sendCts.Token))
                     {
@@ -1937,6 +1952,14 @@ public sealed class MainViewModel : ObservableObject
 
                             await AppendAssistantContentAsync(assistantViewModel, delta.Content, _sendCts.Token);
                         }
+                    }
+
+                    if (_agentHarness is not null && !supportsTools)
+                    {
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            StatusText = "当前模型不支持工具调用，已回退到普通聊天模式";
+                        });
                     }
 
                     return;
@@ -2672,6 +2695,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ModelParameterOptions));
         OnPropertyChanged(nameof(HasModelParameterOptions));
         OnPropertyChanged(nameof(ActiveModelCapabilitySummary));
+        OnPropertyChanged(nameof(ActiveModelSupportsTools));
     }
 
     private async Task AddConfiguredProviderAsync()
