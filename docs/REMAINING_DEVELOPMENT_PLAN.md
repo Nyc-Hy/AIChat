@@ -129,6 +129,12 @@ git diff --check
 - IExternalToolProvider 接口支持未来 MCP/A2A 工具注册。
 - A2A_ADAPTER_DESIGN.md 设计文档。
 
+### 第 15 阶段：桌面体验打磨（已完成）
+
+- 合作器区域新增 Agent 状态栏，显示当前阶段、当前工具、工具预算等信息。
+- Agent 运行详情面板重组为 Tab（总览、计划、文件变更、验证）。
+- 合作器底部新增警告徽章：缺少 API Key、模型不支持工具。
+
 目标：让 Agent 在开始动手前形成可见计划，并在执行过程中更新任务状态。这一阶段会让 AIChat 更接近 ClaudeCode Desktop 的“工作流感”，用户能看到它准备做什么、正在做什么、还剩什么。
 
 ### 7.1 新增领域模型
@@ -859,7 +865,7 @@ docs/A2A_ADAPTER_DESIGN.md
 Document future A2A adapter boundary
 ```
 
-> ✅ 第 14 阶段已完成（commit `TBD`）。
+> ✅ 第 14 阶段已完成（commit `4d8fe29`）。
 >
 > 已实现：
 > - `AgentToolRegistry` 替代 `AgentToolCatalog`，提供工具元数据（分类、默认权限、分组标签）。
@@ -934,6 +940,13 @@ Organize agent run details into tabs
 ```text
 Clarify agent unavailable states
 ```
+
+> ✅ 第 15 阶段已完成（commit `TBD`）。
+>
+> 已实现：
+> - 合作器区域新增 Agent 状态栏，显示当前阶段、当前工具、工具预算等信息。
+> - Agent 运行详情面板重组为 Tab（总览、计划、文件变更、验证）。
+> - 合作器底部新增警告徽章：缺少 API Key、模型不支持工具。
 
 ## 第 16 阶段：文档、示例与发布准备
 

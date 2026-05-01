@@ -52,6 +52,10 @@ public sealed class MainViewModel : ObservableObject
     private bool _isSending;
     private bool _isStopping;
     private string _statusText = "就绪";
+    private string _agentStatusPhase = "";
+    private string _agentStatusTool = "";
+    private string _agentStatusBudget = "";
+    private string _agentStatusPlan = "";
     private ContextUsage _contextUsage = new() { ModelLimit = 128_000, ConversationLimit = 64_000 };
     private CancellationTokenSource? _sendCts;
     private bool _isSettingsOpen;
@@ -691,6 +695,34 @@ public sealed class MainViewModel : ObservableObject
         get => _statusText;
         private set => SetProperty(ref _statusText, value);
     }
+
+    public string AgentStatusPhase
+    {
+        get => _agentStatusPhase;
+        private set => SetProperty(ref _agentStatusPhase, value);
+    }
+
+    public string AgentStatusTool
+    {
+        get => _agentStatusTool;
+        private set => SetProperty(ref _agentStatusTool, value);
+    }
+
+    public string AgentStatusBudget
+    {
+        get => _agentStatusBudget;
+        private set => SetProperty(ref _agentStatusBudget, value);
+    }
+
+    public string AgentStatusPlan
+    {
+        get => _agentStatusPlan;
+        private set => SetProperty(ref _agentStatusPlan, value);
+    }
+
+    public bool HasAgentStatus => IsSending && (!string.IsNullOrEmpty(AgentStatusPhase) ||
+                                                !string.IsNullOrEmpty(AgentStatusTool) ||
+                                                !string.IsNullOrEmpty(AgentStatusBudget));
 
     public ContextUsage ContextUsage
     {
@@ -2016,6 +2048,8 @@ public sealed class MainViewModel : ObservableObject
                                     assistantViewModel.AttachAgentRun(agentEvent.Run);
                                     RebuildAgentRunHistory();
                                 }
+                                AgentStatusPhase = "正在规划";
+                                OnPropertyChanged(nameof(HasAgentStatus));
                             });
                             await RecordAuditEventAsync(AuditEventType.AgentRunStarted,
                                 SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
@@ -2045,6 +2079,9 @@ public sealed class MainViewModel : ObservableObject
                                 {
                                     assistantViewModel.Content = "";
                                     StatusText = "模型正在回复...";
+                                    AgentStatusPhase = "正在回复";
+                                    AgentStatusTool = "";
+                                    OnPropertyChanged(nameof(HasAgentStatus));
                                 });
                             }
 
@@ -2054,6 +2091,9 @@ public sealed class MainViewModel : ObservableObject
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusText = $"调用工具：{agentEvent.ToolCall?.Name}";
+                                AgentStatusPhase = "正在执行";
+                                AgentStatusTool = agentEvent.ToolCall?.Name ?? "";
+                                OnPropertyChanged(nameof(HasAgentStatus));
                                 hasUsedTools = true;
                                 if (!hasReceivedContent && !hasShownToolProgress)
                                 {
@@ -2090,6 +2130,9 @@ public sealed class MainViewModel : ObservableObject
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
                                 StatusText = $"等待确认工具：{agentEvent.ToolCall?.Name}";
+                                AgentStatusPhase = "等待审批";
+                                AgentStatusTool = agentEvent.ToolCall?.Name ?? "";
+                                OnPropertyChanged(nameof(HasAgentStatus));
                             });
                             break;
                         case AgentHarnessEventType.ToolApprovalRejected:
@@ -2146,6 +2189,10 @@ public sealed class MainViewModel : ObservableObject
                                     assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
                                     RebuildAgentRunHistory();
                                 }
+
+                                AgentStatusPhase = agentEvent.Run?.Status == AgentRunStatus.Completed ? "已完成" : "已结束";
+                                AgentStatusTool = "";
+                                OnPropertyChanged(nameof(HasAgentStatus));
                             });
                             {
                                 var runStatus = agentEvent.Run?.Status;
@@ -2247,6 +2294,11 @@ public sealed class MainViewModel : ObservableObject
             _agentRunQueue.Complete(assistantMessage.Id);
             IsSending = false;
             IsStopping = false;
+            AgentStatusPhase = "";
+            AgentStatusTool = "";
+            AgentStatusBudget = "";
+            AgentStatusPlan = "";
+            OnPropertyChanged(nameof(HasAgentStatus));
             _sendCts.Dispose();
             _sendCts = null;
             await SaveProjectsAsync();
