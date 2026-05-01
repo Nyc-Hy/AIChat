@@ -186,6 +186,58 @@ public sealed class AgentRunViewModel : ObservableObject
             return string.Join(Environment.NewLine, lines);
         }
     }
+    public string ReviewPacket
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                "# Agent Run Review",
+                "",
+                $"Status: {StatusText}",
+                $"Goal: {Goal}",
+                $"Model: {Model}",
+                $"Project: {ProjectPath}",
+                $"Started: {StartedText}",
+                $"Duration: {DurationText}",
+                "",
+                "## Guardrails",
+                $"- Budget: {BudgetText}",
+                $"- Mutation: {MutationGuardrailText}",
+                $"- Approval: {ApprovalSummary}",
+                $"- Workspace: {WorkspaceSnapshotText}",
+                "",
+                "## Final Validation",
+                FinalValidationSummary,
+                "",
+                "## Recovery Suggestion",
+                RecoverySuggestion
+            };
+
+            if (HasCompletionReason)
+            {
+                lines.Add("");
+                lines.Add("## Completion Reason");
+                lines.Add(CompletionReasonText);
+            }
+
+            if (ChangedPaths.Count > 0)
+            {
+                lines.Add("");
+                lines.Add("## Changed Files");
+                lines.AddRange(ChangedPaths.Select(path => $"- {path}"));
+            }
+
+            if (Verifications.Count > 0)
+            {
+                lines.Add("");
+                lines.Add("## Verifications");
+                lines.AddRange(Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
 
     public AgentStepViewModel AddStep(AgentStep step)
     {
@@ -208,6 +260,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
         return viewModel;
     }
 
@@ -226,6 +279,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
     }
 
     public void SyncFileChanges()
@@ -246,6 +300,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
     }
 
     public void SyncVerifications()
@@ -264,5 +319,6 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(VerificationCount));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
     }
 }

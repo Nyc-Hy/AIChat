@@ -1510,6 +1510,13 @@
                                     Margin="0,0,10,0"
                                     Style="{StaticResource SubtleButtonStyle}" />
                             <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.CopySelectedAgentRunReviewPacketCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="复制复盘"
+                                    Width="88"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource SubtleButtonStyle}" />
+                            <Button DockPanel.Dock="Right"
                                     Command="{Binding DataContext.RetrySelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                     Content="重试"
                                     Width="64"
