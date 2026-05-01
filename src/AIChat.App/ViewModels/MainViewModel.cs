@@ -132,6 +132,7 @@ public sealed class MainViewModel : ObservableObject
         RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopySelectedAgentRunSummaryCommand = new RelayCommand(_ => CopySelectedAgentRunSummary(), _ => SelectedAgentRunDetails is not null);
+        RetrySelectedAgentRunCommand = new RelayCommand(_ => RetrySelectedAgentRun(), _ => SelectedAgentRunDetails?.CanRetry == true && !IsSending);
         OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFilePathCommand = new RelayCommand(parameter => CopyAgentFilePath((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFileDiffCommand = new RelayCommand(parameter => CopyAgentFileDiff((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel { HasDiff: true });
@@ -195,6 +196,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RestoreAgentRunChangesCommand { get; }
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
     public RelayCommand CopySelectedAgentRunSummaryCommand { get; }
+    public RelayCommand RetrySelectedAgentRunCommand { get; }
     public RelayCommand OpenAgentFileChangeCommand { get; }
     public RelayCommand CopyAgentFilePathCommand { get; }
     public RelayCommand CopyAgentFileDiffCommand { get; }
@@ -536,6 +538,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(AgentRunDetailsTitle));
                 CopySelectedAgentRunSummaryCommand.RaiseCanExecuteChanged();
+                RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -607,6 +610,7 @@ public sealed class MainViewModel : ObservableObject
                 NewChatCommand.RaiseCanExecuteChanged();
                 StopCommand.RaiseCanExecuteChanged();
                 RetryAgentRunCommand.RaiseCanExecuteChanged();
+                RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -913,6 +917,26 @@ public sealed class MainViewModel : ObservableObject
         SelectConversation(item.Conversation);
         DraftMessage = item.Run.Goal;
         IsAgentRunHistoryOpen = false;
+        IsAgentRunDetailsOpen = false;
+        StatusText = "已把失败任务放回输入框，可检查后重新发送";
+    }
+
+    private void RetrySelectedAgentRun()
+    {
+        var selected = SelectedAgentRunDetails;
+        if (selected is null || !selected.CanRetry || IsSending)
+        {
+            return;
+        }
+
+        var historyItem = AgentRunHistory.FirstOrDefault(item => item.Run.Id == selected.Id);
+        if (historyItem is not null)
+        {
+            RetryAgentRun(historyItem);
+            return;
+        }
+
+        DraftMessage = selected.Goal;
         IsAgentRunDetailsOpen = false;
         StatusText = "已把失败任务放回输入框，可检查后重新发送";
     }

@@ -1509,6 +1509,13 @@
                                     Height="34"
                                     Margin="0,0,10,0"
                                     Style="{StaticResource SubtleButtonStyle}" />
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.RetrySelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="重试"
+                                    Width="64"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
                         </DockPanel>
 
                         <Grid Grid.Row="1">
