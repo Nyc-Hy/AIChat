@@ -1015,7 +1015,7 @@ dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-con
 Document desktop publish workflow
 ```
 
-> ✅ 第 16 阶段已完成（commit `TBD`）。
+> ✅ 第 16 阶段已完成（commit `709fd54`）。
 >
 > 已实现：
 > - README 重写，包含 Agent 模式、工具权限、运行历史、架构概览和发布说明。
