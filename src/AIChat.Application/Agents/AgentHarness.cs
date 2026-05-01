@@ -37,6 +37,7 @@ public sealed class AgentHarness
             WorkspaceChangeCountAtStart = request.WorkspaceChangeCountAtStart,
             WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
             MaxToolRounds = request.Context.MaxToolRounds,
+            RequiresProjectMutation = RequiresProjectMutation(request.Goal),
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);
@@ -152,6 +153,11 @@ public sealed class AgentHarness
                             stepByToolCallId,
                             agentEvent.ToolCall,
                             agentEvent.ToolResult);
+                        RecordMutationGuardrail(
+                            run,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolPreview,
+                            agentEvent.ToolResult);
                     }
 
                     yield return new AgentHarnessEvent
@@ -176,6 +182,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.Completed:
+                    CompleteMutationGuardrail(run);
                     CompleteRun(run, AgentRunStatus.Completed);
                     var finalStep = AddCompletedStep(
                         run,
@@ -206,6 +213,55 @@ public sealed class AgentHarness
             "run_build" or "run_test" => "verifying",
             _ => "working"
         };
+    }
+
+    private static bool RequiresProjectMutation(string goal)
+    {
+        if (string.IsNullOrWhiteSpace(goal))
+        {
+            return false;
+        }
+
+        var mutationWords = new[]
+        {
+            "创建", "新建", "生成", "实现", "写一个", "做一个", "加一个", "新增",
+            "修改", "改成", "改为", "替换", "删除", "修复", "优化", "重构",
+            "create", "implement", "write", "modify", "change", "replace", "fix", "update", "add"
+        };
+        return mutationWords.Any(word => goal.Contains(word, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void RecordMutationGuardrail(
+        AgentRun run,
+        ChatToolCall? toolCall,
+        AgentToolPreview? preview,
+        AgentToolResult toolResult)
+    {
+        if (toolCall is null ||
+            toolResult.IsError ||
+            preview?.Risk == AgentToolRisk.ReadOnly ||
+            !IsMutationTool(toolResult.ToolName))
+        {
+            return;
+        }
+
+        run.MutationToolSucceeded = true;
+    }
+
+    private static void CompleteMutationGuardrail(AgentRun run)
+    {
+        if (run.RequiresProjectMutation &&
+            !run.MutationToolSucceeded &&
+            !run.ToolBudgetExceeded &&
+            string.IsNullOrWhiteSpace(run.CompletionReason))
+        {
+            run.CompletionReason = "任务看起来需要修改项目，但本轮没有记录到成功的修改工具。";
+        }
+    }
+
+    private static bool IsMutationTool(string toolName)
+    {
+        return toolName is "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit";
     }
 
     private static string CreateContextStepOutput(AgentRun run)

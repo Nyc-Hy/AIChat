@@ -54,6 +54,11 @@ public sealed class AgentRunViewModel : ObservableObject
             return $"最多 {rounds} 轮工具调用 · 已调用 {_run.ToolCallCount} 次{exhausted}";
         }
     }
+    public string MutationGuardrailText => _run.RequiresProjectMutation
+        ? _run.MutationToolSucceeded
+            ? "需要项目修改 · 已记录修改工具"
+            : "需要项目修改 · 未记录修改工具"
+        : "未识别为项目修改任务";
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ShortGoal
     {
@@ -127,6 +132,7 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"模型：{Model}",
                 $"工具：{EnabledToolCount}",
                 $"预算：{BudgetText}",
+                $"修改护栏：{MutationGuardrailText}",
                 $"工作区：{WorkspaceSnapshotText}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",

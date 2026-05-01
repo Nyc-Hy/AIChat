@@ -254,6 +254,37 @@ public sealed class AgentHarnessTests
         Assert.Contains("已达到工具调用轮数上限", content);
     }
 
+    [Fact]
+    public async Task RunAsync_FlagsMutationGoalWithoutSuccessfulMutationTool()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
+            new AgentToolCatalog([])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "修改项目里的说明文档",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "修改项目里的说明文档" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.True(run.RequiresProjectMutation);
+        Assert.False(run.MutationToolSucceeded);
+        Assert.Equal("任务看起来需要修改项目，但本轮没有记录到成功的修改工具。", run.CompletionReason);
+    }
+
     private sealed class FakeChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;
