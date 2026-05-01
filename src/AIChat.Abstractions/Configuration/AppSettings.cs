@@ -20,6 +20,7 @@ public sealed class AppSettings
     // Tool IDs selected in Settings. Only these schemas are sent to the model.
     public List<string> EnabledToolIds { get; set; } = [];
     public Dictionary<string, ToolPermissionMode> ToolPermissionModes { get; set; } = [];
+    public int AgentMaxToolRounds { get; set; } = 4;
     // Multiple configured providers lets the user keep more than one API key or
     // model setup while the rest of the app only reads the active one.
     public List<ConfiguredLlmProvider> ConfiguredProviders { get; set; } = [];

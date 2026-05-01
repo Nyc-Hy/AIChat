@@ -236,6 +236,7 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(ConfiguredProviders));
                 OnPropertyChanged(nameof(SelectedConfiguredProvider));
                 OnPropertyChanged(nameof(ActiveModelOptions));
+                OnPropertyChanged(nameof(AgentMaxToolRounds));
             }
         }
     }
@@ -672,6 +673,21 @@ public sealed class MainViewModel : ObservableObject
         $"背景信息窗口：{ConversationUsagePercent:0.#}% 已用（剩余 {ConversationRemainingPercent:0.#}%）\n" +
         $"已用 {ContextUsage.CurrentTokens:N0} tokens，共 {ContextUsage.ConversationLimit:N0}\n" +
         ContextCompressionHint;
+    public int AgentMaxToolRounds
+    {
+        get => Settings.AgentMaxToolRounds;
+        set
+        {
+            var normalized = Math.Clamp(value, 1, 20);
+            if (Settings.AgentMaxToolRounds == normalized)
+            {
+                return;
+            }
+
+            Settings.AgentMaxToolRounds = normalized;
+            OnPropertyChanged();
+        }
+    }
 
     private bool CanSend => !IsSending && !string.IsNullOrWhiteSpace(DraftMessage) && SelectedProject is not null;
 
@@ -701,6 +717,7 @@ public sealed class MainViewModel : ObservableObject
         Settings = await _repository.LoadSettingsAsync();
         NormalizeProviderSettings();
         NormalizeToolSettings();
+        NormalizeHarnessSettings();
         NormalizeModelParameters();
         RebuildToolOptions();
         RebuildModelParameterOptions();
@@ -726,6 +743,7 @@ public sealed class MainViewModel : ObservableObject
         SyncModelParameterOptionsToSettings();
         NormalizeProviderSettings();
         NormalizeToolSettings();
+        NormalizeHarnessSettings();
         NormalizeModelParameters();
         RebuildToolOptions();
         RebuildModelParameterOptions();
@@ -1598,6 +1616,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         NormalizeProviderSettings();
+        NormalizeHarnessSettings();
         var effectiveSettings = CreateEffectiveSettings();
         if (effectiveSettings is null)
         {
@@ -1757,6 +1776,7 @@ public sealed class MainViewModel : ObservableObject
                                            ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
                                            EnabledToolIds = Settings.EnabledToolIds,
                                            ToolPermissionModes = Settings.ToolPermissionModes,
+                                           MaxToolRounds = Settings.AgentMaxToolRounds,
                                            RequestToolApprovalAsync = RequestToolApprovalAsync
                                        }
                                    },
@@ -2291,6 +2311,12 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private void NormalizeHarnessSettings()
+    {
+        Settings.AgentMaxToolRounds = Math.Clamp(Settings.AgentMaxToolRounds, 1, 20);
+        OnPropertyChanged(nameof(AgentMaxToolRounds));
+    }
+
     private void NormalizeModelParameters()
     {
         var configured = SelectedConfiguredProvider;
@@ -2581,6 +2607,7 @@ public sealed class MainViewModel : ObservableObject
             ModelContextLimit = model.ContextLimit,
             ModelParameters = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters),
             ActiveConfiguredProviderId = configured.Id,
+            AgentMaxToolRounds = Settings.AgentMaxToolRounds,
             ConfiguredProviders = Settings.ConfiguredProviders
         };
     }

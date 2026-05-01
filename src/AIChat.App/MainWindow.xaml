@@ -2149,6 +2149,34 @@
                                             </StackPanel>
                                         </Border>
 
+                                        <Border Padding="14"
+                                                CornerRadius="8"
+                                                Background="#FFFFFF"
+                                                BorderBrush="#E2E8F0"
+                                                BorderThickness="1"
+                                                Margin="0,0,0,14">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="120" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="工具轮数预算"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#1E252E" />
+                                                    <TextBlock Text="限制单次 Agent Run 最多允许几轮工具调用。范围 1-20。"
+                                                               Margin="0,4,12,0"
+                                                               Foreground="#667386"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <TextBox Grid.Column="1"
+                                                         Text="{Binding AgentMaxToolRounds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         HorizontalContentAlignment="Center"
+                                                         VerticalContentAlignment="Center"
+                                                         Style="{StaticResource SettingsTextBoxStyle}" />
+                                            </Grid>
+                                        </Border>
+
                                         <ItemsControl ItemsSource="{Binding ToolOptions}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
