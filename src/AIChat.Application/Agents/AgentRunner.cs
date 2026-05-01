@@ -221,7 +221,7 @@ public sealed class AgentRunner
 
         yield return new AgentRunEvent
         {
-            Type = AgentRunEventType.ContentDelta,
+            Type = AgentRunEventType.BudgetExceeded,
             Content = lastToolResult is null
                 ? "\n\n已达到工具调用轮数上限，请缩小问题范围后再试。"
                 : $"\n\n已达到工具调用轮数上限。最后一次工具结果如下，供你判断问题：\n\n```json\n{lastToolResult.Content}\n```"

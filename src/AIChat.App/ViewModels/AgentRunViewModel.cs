@@ -45,6 +45,15 @@ public sealed class AgentRunViewModel : ObservableObject
             return $"{branch} · {dirty}{truncated}";
         }
     }
+    public string BudgetText
+    {
+        get
+        {
+            var rounds = _run.MaxToolRounds <= 0 ? "未记录" : _run.MaxToolRounds.ToString();
+            var exhausted = _run.ToolBudgetExceeded ? " · 已耗尽" : "";
+            return $"最多 {rounds} 轮工具调用 · 已调用 {_run.ToolCallCount} 次{exhausted}";
+        }
+    }
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ShortGoal
     {
@@ -117,6 +126,7 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"项目：{ProjectPath}",
                 $"模型：{Model}",
                 $"工具：{EnabledToolCount}",
+                $"预算：{BudgetText}",
                 $"工作区：{WorkspaceSnapshotText}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",

@@ -18,6 +18,9 @@ public sealed class AgentRun
     public string WorkspaceBranch { get; set; } = "";
     public int WorkspaceChangeCountAtStart { get; set; }
     public bool WorkspaceChangesWereTruncated { get; set; }
+    public int MaxToolRounds { get; set; }
+    public int ToolCallCount { get; set; }
+    public bool ToolBudgetExceeded { get; set; }
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }
@@ -35,7 +38,10 @@ public sealed class AgentRun
             AgentRunStatus.Failed => "failed",
             _ => Phase
         };
-        CompletionReason = completionReason;
+        if (!string.IsNullOrWhiteSpace(completionReason))
+        {
+            CompletionReason = completionReason;
+        }
         CompletedAt = completedAt ?? DateTimeOffset.Now;
     }
 }

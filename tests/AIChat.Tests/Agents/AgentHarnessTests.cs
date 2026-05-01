@@ -58,11 +58,13 @@ public sealed class AgentHarnessTests
         Assert.Equal("## main", run.WorkspaceBranch);
         Assert.Equal(2, run.WorkspaceChangeCountAtStart);
         Assert.True(run.WorkspaceChangesWereTruncated);
+        Assert.Equal(4, run.MaxToolRounds);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunStarted);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta && item.Content == "done");
         Assert.Equal(2, run.Steps.Count);
         Assert.Equal(AgentStepType.Model, run.Steps[0].Type);
         Assert.Contains("模型：test", run.Steps[0].Output);
+        Assert.Contains("预算：最多 4 轮工具调用", run.Steps[0].Output);
         Assert.Contains("工作区：## main · 2 个启动变更", run.Steps[0].Output);
         Assert.Equal(AgentStepType.Final, run.Steps[1].Type);
         Assert.Equal("done", run.Steps[1].Output);
@@ -199,6 +201,57 @@ public sealed class AgentHarnessTests
         Assert.Equal(0, verification.ExitCode);
         Assert.True(verification.IsSuccess);
         Assert.Contains("Passed", verification.Output);
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsBudgetExhaustionWhenToolRoundsAreExceeded()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "run_test",
+            ArgumentsJson = "{}"
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }]
+            ]),
+            new AgentToolCatalog([new FakeVerificationTool()])));
+
+        var content = "";
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "verify",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               MaxToolRounds = 1,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+            if (item.Type == AgentHarnessEventType.ContentDelta)
+            {
+                content += item.Content;
+            }
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(1, run.MaxToolRounds);
+        Assert.Equal(1, run.ToolCallCount);
+        Assert.True(run.ToolBudgetExceeded);
+        Assert.Equal("已达到工具调用轮数上限。", run.CompletionReason);
+        Assert.Contains("已达到工具调用轮数上限", content);
     }
 
     private sealed class FakeChatCompletionService : IChatCompletionService

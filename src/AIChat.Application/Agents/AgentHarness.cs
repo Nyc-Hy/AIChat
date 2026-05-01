@@ -36,6 +36,7 @@ public sealed class AgentHarness
             WorkspaceBranch = request.WorkspaceBranch,
             WorkspaceChangeCountAtStart = request.WorkspaceChangeCountAtStart,
             WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
+            MaxToolRounds = request.Context.MaxToolRounds,
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);
@@ -95,6 +96,7 @@ public sealed class AgentHarness
                     }
 
                     run.Phase = ClassifyToolPhase(agentEvent.ToolCall.Name);
+                    run.ToolCallCount++;
                     var step = AddRunningStep(
                         run,
                         ++stepNumber,
@@ -163,6 +165,16 @@ public sealed class AgentHarness
                         ToolResult = agentEvent.ToolResult
                     };
                     break;
+                case AgentRunEventType.BudgetExceeded:
+                    run.ToolBudgetExceeded = true;
+                    run.CompletionReason = "已达到工具调用轮数上限。";
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ContentDelta,
+                        Run = run,
+                        Content = agentEvent.Content
+                    };
+                    break;
                 case AgentRunEventType.Completed:
                     CompleteRun(run, AgentRunStatus.Completed);
                     var finalStep = AddCompletedStep(
@@ -204,6 +216,7 @@ public sealed class AgentHarness
             $"项目：{(string.IsNullOrWhiteSpace(run.ProjectPath) ? "未记录" : run.ProjectPath)}",
             $"模型：{(string.IsNullOrWhiteSpace(run.Model) ? "未记录" : run.Model)}",
             $"工具：{(run.EnabledTools.Count == 0 ? "无" : string.Join(", ", run.EnabledTools))}",
+            $"预算：最多 {run.MaxToolRounds} 轮工具调用",
             $"工作区：{(string.IsNullOrWhiteSpace(run.WorkspaceBranch) ? "未记录分支" : run.WorkspaceBranch)} · {run.WorkspaceChangeCountAtStart} 个启动变更"
         };
 

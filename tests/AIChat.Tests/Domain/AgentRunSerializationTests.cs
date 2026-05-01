@@ -61,6 +61,9 @@ public sealed class AgentRunSerializationTests
                     WorkspaceBranch = "## main",
                     WorkspaceChangeCountAtStart = 3,
                     WorkspaceChangesWereTruncated = true,
+                    MaxToolRounds = 4,
+                    ToolCallCount = 2,
+                    ToolBudgetExceeded = true,
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -124,6 +127,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("## main", roundTripped.AgentRuns[0].WorkspaceBranch);
         Assert.Equal(3, roundTripped.AgentRuns[0].WorkspaceChangeCountAtStart);
         Assert.True(roundTripped.AgentRuns[0].WorkspaceChangesWereTruncated);
+        Assert.Equal(4, roundTripped.AgentRuns[0].MaxToolRounds);
+        Assert.Equal(2, roundTripped.AgentRuns[0].ToolCallCount);
+        Assert.True(roundTripped.AgentRuns[0].ToolBudgetExceeded);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
