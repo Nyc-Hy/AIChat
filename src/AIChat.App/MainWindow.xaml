@@ -1562,6 +1562,10 @@
                                                    Margin="0,3,0,0"
                                                    Foreground="#596473"
                                                    TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding WorkspaceSnapshotText, StringFormat=工作区：{0}}"
+                                                   Margin="0,3,0,0"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
                                         <TextBlock Text="当前阶段"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

@@ -12,4 +12,7 @@ public sealed class AgentHarnessRunRequest
     public required ChatRequest ChatRequest { get; init; }
     public required AppSettings Settings { get; init; }
     public required AgentRunContext Context { get; init; }
+    public string WorkspaceBranch { get; init; } = "";
+    public int WorkspaceChangeCountAtStart { get; init; }
+    public bool WorkspaceChangesWereTruncated { get; init; }
 }

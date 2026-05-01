@@ -33,6 +33,18 @@ public sealed class AgentRunViewModel : ObservableObject
         : string.Join(Environment.NewLine, _run.ToolPermissionModes
             .OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
             .Select(entry => $"- {entry.Key}: {entry.Value}"));
+    public string WorkspaceSnapshotText
+    {
+        get
+        {
+            var branch = string.IsNullOrWhiteSpace(_run.WorkspaceBranch) ? "未记录分支" : _run.WorkspaceBranch;
+            var dirty = _run.WorkspaceChangeCountAtStart == 0
+                ? "启动时工作区干净"
+                : $"启动时有 {_run.WorkspaceChangeCountAtStart} 个未提交变更";
+            var truncated = _run.WorkspaceChangesWereTruncated ? "（列表被截断）" : "";
+            return $"{branch} · {dirty}{truncated}";
+        }
+    }
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ShortGoal
     {
@@ -105,6 +117,7 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"项目：{ProjectPath}",
                 $"模型：{Model}",
                 $"工具：{EnabledToolCount}",
+                $"工作区：{WorkspaceSnapshotText}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",
                 $"验证：{VerificationCount}",

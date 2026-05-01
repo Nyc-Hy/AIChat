@@ -33,6 +33,9 @@ public sealed class AgentHarness
                 entry => entry.Key,
                 entry => entry.Value.ToString(),
                 StringComparer.OrdinalIgnoreCase),
+            WorkspaceBranch = request.WorkspaceBranch,
+            WorkspaceChangeCountAtStart = request.WorkspaceChangeCountAtStart,
+            WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);

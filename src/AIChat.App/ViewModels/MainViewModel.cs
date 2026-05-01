@@ -1030,6 +1030,30 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private async Task<WorkspaceRunSnapshot> CaptureWorkspaceSnapshotAsync(CancellationToken cancellationToken)
+    {
+        if (SelectedProject is null)
+        {
+            return new WorkspaceRunSnapshot("", 0, false);
+        }
+
+        try
+        {
+            var changeSet = await _workspaceChangeService.GetChangesAsync(
+                SelectedProject.Path,
+                maxFiles: 1_000,
+                cancellationToken);
+            return new WorkspaceRunSnapshot(
+                changeSet.Branch,
+                changeSet.Changes.Count,
+                changeSet.IsTruncated);
+        }
+        catch
+        {
+            return new WorkspaceRunSnapshot(WorkspaceBranch, WorkspaceChanges.Count, false);
+        }
+    }
+
     private async Task LoadSelectedWorkspaceDiffAsync()
     {
         var version = ++_workspaceDiffLoadVersion;
@@ -1651,6 +1675,7 @@ public sealed class MainViewModel : ObservableObject
         IsStopping = false;
         StatusText = "正在连接模型...";
         _sendCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var workspaceSnapshot = await CaptureWorkspaceSnapshotAsync(_sendCts.Token);
         var rawResponseEvents = new List<string>();
         var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
         var stepByToolCallId = new Dictionary<string, AgentStepViewModel>(StringComparer.Ordinal);
@@ -1724,6 +1749,9 @@ public sealed class MainViewModel : ObservableObject
                                        Goal = text,
                                        ChatRequest = request,
                                        Settings = effectiveSettings,
+                                       WorkspaceBranch = workspaceSnapshot.Branch,
+                                       WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
+                                       WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,
                                        Context = new AgentRunContext
                                        {
                                            ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
@@ -2369,6 +2397,8 @@ public sealed class MainViewModel : ObservableObject
             ? ToolPermissionMode.AutoReadOnly
             : ToolPermissionMode.ConfirmEachTime;
     }
+
+    private sealed record WorkspaceRunSnapshot(string Branch, int ChangeCount, bool IsTruncated);
 
     private void RebuildModelParameterOptions()
     {

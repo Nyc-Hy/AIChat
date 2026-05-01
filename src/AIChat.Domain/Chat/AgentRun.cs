@@ -15,6 +15,9 @@ public sealed class AgentRun
     public string Model { get; set; } = "";
     public List<string> EnabledTools { get; set; } = [];
     public Dictionary<string, string> ToolPermissionModes { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public string WorkspaceBranch { get; set; } = "";
+    public int WorkspaceChangeCountAtStart { get; set; }
+    public bool WorkspaceChangesWereTruncated { get; set; }
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }

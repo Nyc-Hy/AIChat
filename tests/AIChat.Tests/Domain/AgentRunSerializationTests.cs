@@ -58,6 +58,9 @@ public sealed class AgentRunSerializationTests
                         ["read_file"] = "AutoReadOnly",
                         ["run_test"] = "ConfirmEachTime"
                     },
+                    WorkspaceBranch = "## main",
+                    WorkspaceChangeCountAtStart = 3,
+                    WorkspaceChangesWereTruncated = true,
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -118,6 +121,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("test-model", roundTripped.AgentRuns[0].Model);
         Assert.Equal(["read_file", "run_test"], roundTripped.AgentRuns[0].EnabledTools);
         Assert.Equal("ConfirmEachTime", roundTripped.AgentRuns[0].ToolPermissionModes["run_test"]);
+        Assert.Equal("## main", roundTripped.AgentRuns[0].WorkspaceBranch);
+        Assert.Equal(3, roundTripped.AgentRuns[0].WorkspaceChangeCountAtStart);
+        Assert.True(roundTripped.AgentRuns[0].WorkspaceChangesWereTruncated);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);

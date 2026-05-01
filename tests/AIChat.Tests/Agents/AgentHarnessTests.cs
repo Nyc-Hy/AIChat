@@ -31,6 +31,9 @@ public sealed class AgentHarnessTests
                                Messages = [new ChatMessage { Role = ChatRole.User, Content = "do work" }]
                            },
                            Settings = new AppSettings { Model = "test" },
+                           WorkspaceBranch = "## main",
+                           WorkspaceChangeCountAtStart = 2,
+                           WorkspaceChangesWereTruncated = true,
                            Context = new AgentRunContext
                            {
                                ProjectPath = Environment.CurrentDirectory,
@@ -52,6 +55,9 @@ public sealed class AgentHarnessTests
         Assert.Equal("test", run.Model);
         Assert.Equal(["read_file"], run.EnabledTools);
         Assert.Equal("AutoReadOnly", run.ToolPermissionModes["read_file"]);
+        Assert.Equal("## main", run.WorkspaceBranch);
+        Assert.Equal(2, run.WorkspaceChangeCountAtStart);
+        Assert.True(run.WorkspaceChangesWereTruncated);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunStarted);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta && item.Content == "done");
         Assert.Equal(2, run.Steps.Count);
