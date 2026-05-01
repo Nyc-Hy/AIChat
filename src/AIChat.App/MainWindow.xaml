@@ -1398,6 +1398,7 @@
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel>
                                                         <DockPanel>
@@ -1431,6 +1432,15 @@
                                                             VerticalAlignment="Center"
                                                             Style="{StaticResource SubtleButtonStyle}" />
                                                     <Button Grid.Column="2"
+                                                            Command="{Binding DataContext.ContinueAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="继续"
+                                                            Width="54"
+                                                            Height="30"
+                                                            Margin="8,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource SubtleButtonStyle}" />
+                                                    <Button Grid.Column="3"
                                                             Command="{Binding DataContext.RetryAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                             CommandParameter="{Binding}"
                                                             Content="重试"
@@ -1526,6 +1536,13 @@
                                     Margin="0,0,10,0"
                                     Style="{StaticResource SubtleButtonStyle}" />
                             <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.ContinueSelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="继续"
+                                    Width="64"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource SubtleButtonStyle}" />
+                            <Button DockPanel.Dock="Right"
                                     Command="{Binding DataContext.RetrySelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                     Content="重试"
                                     Width="64"
@@ -1601,6 +1618,24 @@
                                         <TextBlock Text="{Binding PhaseText}"
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473" />
+                                        <StackPanel Margin="0,14,0,0">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasContinuation}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <TextBlock Text="继续运行"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#303A47" />
+                                            <TextBlock Text="{Binding ContinuedFromRunText}"
+                                                       Margin="0,5,0,0"
+                                                       Foreground="#596473" />
+                                        </StackPanel>
                                         <StackPanel Margin="0,14,0,0">
                                             <StackPanel.Style>
                                                 <Style TargetType="StackPanel">

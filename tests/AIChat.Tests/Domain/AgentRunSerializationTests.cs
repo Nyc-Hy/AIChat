@@ -151,6 +151,31 @@ public sealed class AgentRunSerializationTests
     }
 
     [Fact]
+    public void Conversation_RoundTripsContinuedFromRunId()
+    {
+        var conversation = new Conversation
+        {
+            Id = "conversation-1",
+            Messages = [],
+            AgentRuns =
+            [
+                new AgentRun
+                {
+                    Id = "run-2",
+                    Status = AgentRunStatus.Completed,
+                    ContinuedFromRunId = "run-1"
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(conversation, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<Conversation>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal("run-1", roundTripped.AgentRuns[0].ContinuedFromRunId);
+    }
+
+    [Fact]
     public void Conversation_RoundTripsAgentPlan()
     {
         var conversation = new Conversation

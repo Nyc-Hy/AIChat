@@ -41,6 +41,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly WorkspaceChangeService _workspaceChangeService;
     private AgentHarness? _agentHarness;
     private AgentToolCatalog? _toolCatalog;
+    private readonly AgentRunQueue _agentRunQueue = new();
     private ProjectViewModel? _selectedProject;
     private ConversationViewModel? _selectedConversation;
     private AppSettings _settings = new();
@@ -136,6 +137,8 @@ public sealed class MainViewModel : ObservableObject
         CopySelectedAgentRunSummaryCommand = new RelayCommand(_ => CopySelectedAgentRunSummary(), _ => SelectedAgentRunDetails is not null);
         CopySelectedAgentRunReviewPacketCommand = new RelayCommand(_ => CopySelectedAgentRunReviewPacket(), _ => SelectedAgentRunDetails is not null);
         RetrySelectedAgentRunCommand = new RelayCommand(_ => RetrySelectedAgentRun(), _ => SelectedAgentRunDetails?.CanRetry == true && !IsSending);
+        ContinueAgentRunCommand = new RelayCommand(async parameter => await ContinueAgentRunAsync((AgentRunHistoryItemViewModel)parameter!), parameter => parameter is AgentRunHistoryItemViewModel { CanContinue: true } && !IsSending);
+        ContinueSelectedAgentRunCommand = new RelayCommand(async _ => await ContinueSelectedAgentRunAsync(), _ => SelectedAgentRunDetails?.CanContinue == true && !IsSending);
         OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFilePathCommand = new RelayCommand(parameter => CopyAgentFilePath((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFileDiffCommand = new RelayCommand(parameter => CopyAgentFileDiff((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel { HasDiff: true });
@@ -209,6 +212,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CopySelectedAgentRunSummaryCommand { get; }
     public RelayCommand CopySelectedAgentRunReviewPacketCommand { get; }
     public RelayCommand RetrySelectedAgentRunCommand { get; }
+    public RelayCommand ContinueAgentRunCommand { get; }
+    public RelayCommand ContinueSelectedAgentRunCommand { get; }
     public RelayCommand OpenAgentFileChangeCommand { get; }
     public RelayCommand CopyAgentFilePathCommand { get; }
     public RelayCommand CopyAgentFileDiffCommand { get; }
@@ -566,6 +571,7 @@ public sealed class MainViewModel : ObservableObject
                 CopySelectedAgentRunSummaryCommand.RaiseCanExecuteChanged();
                 CopySelectedAgentRunReviewPacketCommand.RaiseCanExecuteChanged();
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
+                ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -638,6 +644,8 @@ public sealed class MainViewModel : ObservableObject
                 StopCommand.RaiseCanExecuteChanged();
                 RetryAgentRunCommand.RaiseCanExecuteChanged();
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
+                ContinueAgentRunCommand.RaiseCanExecuteChanged();
+                ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -862,6 +870,7 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasAgentRunHistory));
         OnPropertyChanged(nameof(AgentRunHistorySummary));
         RetryAgentRunCommand.RaiseCanExecuteChanged();
+        ContinueAgentRunCommand.RaiseCanExecuteChanged();
     }
 
     private IEnumerable<AgentRunHistoryItemViewModel> FilterAgentRunHistory(IEnumerable<AgentRunHistoryItemViewModel> items)
@@ -1000,6 +1009,44 @@ public sealed class MainViewModel : ObservableObject
         IsAgentRunDetailsOpen = false;
         StatusText = "已把恢复建议放回输入框，可检查后重新发送";
     }
+
+    private async Task ContinueAgentRunAsync(AgentRunHistoryItemViewModel item)
+    {
+        if (!item.CanContinue || IsSending)
+        {
+            return;
+        }
+
+        SelectConversation(item.Conversation);
+        IsAgentRunHistoryOpen = false;
+        IsAgentRunDetailsOpen = false;
+        DraftMessage = item.Run.RecoverySuggestion;
+        _pendingContinuedFromRunId = item.Run.Id;
+        await SendAsync();
+    }
+
+    private async Task ContinueSelectedAgentRunAsync()
+    {
+        var selected = SelectedAgentRunDetails;
+        if (selected is null || !selected.CanContinue || IsSending)
+        {
+            return;
+        }
+
+        var historyItem = AgentRunHistory.FirstOrDefault(item => item.Run.Id == selected.Id);
+        if (historyItem is not null)
+        {
+            await ContinueAgentRunAsync(historyItem);
+            return;
+        }
+
+        IsAgentRunDetailsOpen = false;
+        DraftMessage = selected.RecoverySuggestion;
+        _pendingContinuedFromRunId = selected.Id;
+        await SendAsync();
+    }
+
+    private string _pendingContinuedFromRunId = "";
 
     private async Task DeleteConversationAsync(ConversationViewModel conversation)
     {
@@ -1679,6 +1726,8 @@ public sealed class MainViewModel : ObservableObject
 
         var text = DraftMessage.Trim();
         DraftMessage = "";
+        var continuedFromRunId = _pendingContinuedFromRunId;
+        _pendingContinuedFromRunId = "";
         // Add the user message before building the provider request so the latest
         // turn is included in context.
         var userMessage = new ChatMessage
@@ -1742,6 +1791,12 @@ public sealed class MainViewModel : ObservableObject
             })
         };
         SelectedConversation.AddCallDetail(callDetail);
+
+        if (!_agentRunQueue.TryStart(assistantMessage.Id))
+        {
+            StatusText = "已有任务运行中，请等待完成后再试";
+            return;
+        }
 
         IsSending = true;
         IsStopping = false;
@@ -1824,6 +1879,7 @@ public sealed class MainViewModel : ObservableObject
                                        WorkspaceBranch = workspaceSnapshot.Branch,
                                        WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
                                        WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,
+                                       ContinuedFromRunId = continuedFromRunId,
                                        Context = new AgentRunContext
                                        {
                                            ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
@@ -2048,6 +2104,7 @@ public sealed class MainViewModel : ObservableObject
             // Always leave the app in a stable state: stop animation, release the
             // cancellation token, persist messages, and refresh context usage.
             assistantViewModel.IsStreaming = false;
+            _agentRunQueue.Complete(assistantMessage.Id);
             IsSending = false;
             IsStopping = false;
             _sendCts.Dispose();

@@ -15,4 +15,5 @@ public sealed class AgentHarnessRunRequest
     public string WorkspaceBranch { get; init; } = "";
     public int WorkspaceChangeCountAtStart { get; init; }
     public bool WorkspaceChangesWereTruncated { get; init; }
+    public string ContinuedFromRunId { get; init; } = "";
 }

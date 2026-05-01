@@ -70,6 +70,13 @@ public sealed class AgentRunViewModel : ObservableObject
         : _run.RecoverySuggestion;
     public bool HasRecoverySuggestion => !string.IsNullOrWhiteSpace(_run.RecoverySuggestion);
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
+    public bool CanContinue => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
+    public string ContinuedFromRunId => _run.ContinuedFromRunId;
+    public bool HasContinuation => !string.IsNullOrWhiteSpace(_run.ContinuedFromRunId);
+    public string ContinuedFromRunText => HasContinuation ? $"从 {ContinuedFromRunId[..Math.Min(8, ContinuedFromRunId.Length)]} 继续" : "";
+    public bool CanResume => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed &&
+                             Plan is not null &&
+                             Plan.Items.Any(item => item.Status is AgentPlanItemStatus.Pending or AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Blocked);
     public string ShortGoal
     {
         get
@@ -157,6 +164,11 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"耗时：{DurationText}"
             };
 
+            if (HasContinuation)
+            {
+                lines.Add($"继续自：{ContinuedFromRunId}");
+            }
+
             if (HasCompletionReason)
             {
                 lines.Add($"原因：{CompletionReasonText}");
@@ -207,6 +219,14 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"Project: {ProjectPath}",
                 $"Started: {StartedText}",
                 $"Duration: {DurationText}",
+            };
+
+            if (HasContinuation)
+            {
+                lines.Add($"ContinuedFrom: {ContinuedFromRunId}");
+            }
+
+            lines.AddRange([
                 "",
                 "## Guardrails",
                 $"- Budget: {BudgetText}",
@@ -219,7 +239,7 @@ public sealed class AgentRunViewModel : ObservableObject
                 "",
                 "## Recovery Suggestion",
                 RecoverySuggestion
-            };
+            ]);
 
             if (Plan is not null)
             {
@@ -289,6 +309,8 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(Status));
         OnPropertyChanged(nameof(CanRetry));
+        OnPropertyChanged(nameof(CanContinue));
+        OnPropertyChanged(nameof(CanResume));
         OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(FinalValidationSummary));
         OnPropertyChanged(nameof(RecoverySuggestion));

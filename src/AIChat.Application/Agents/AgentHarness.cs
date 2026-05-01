@@ -38,6 +38,7 @@ public sealed class AgentHarness
             WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
             MaxToolRounds = request.Context.MaxToolRounds,
             RequiresProjectMutation = RequiresProjectMutation(request.Goal),
+            ContinuedFromRunId = request.ContinuedFromRunId,
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);
@@ -350,6 +351,11 @@ public sealed class AgentHarness
         if (run.WorkspaceChangesWereTruncated)
         {
             lines[^1] += "（列表被截断）";
+        }
+
+        if (!string.IsNullOrWhiteSpace(run.ContinuedFromRunId))
+        {
+            lines.Add($"继续运行：{run.ContinuedFromRunId}");
         }
 
         return string.Join(Environment.NewLine, lines);

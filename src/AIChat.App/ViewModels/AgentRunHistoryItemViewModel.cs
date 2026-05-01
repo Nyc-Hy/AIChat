@@ -14,4 +14,8 @@ public sealed class AgentRunHistoryItemViewModel : ObservableObject
     public string StartedText => Run.StartedText;
     public string Summary => Run.Summary;
     public bool CanRetry => Run.CanRetry;
+    public bool CanContinue => Run.CanContinue;
+    public bool CanResume => Run.CanResume;
+    public bool HasContinuation => Run.HasContinuation;
+    public string ContinuedFromRunText => Run.ContinuedFromRunText;
 }
