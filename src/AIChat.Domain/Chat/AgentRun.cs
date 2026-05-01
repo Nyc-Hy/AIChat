@@ -16,4 +16,17 @@ public sealed class AgentRun
     public List<AgentStep> Steps { get; set; } = [];
     public List<AgentFileChange> FileChanges { get; set; } = [];
     public List<AgentVerification> Verifications { get; set; } = [];
+
+    public void Complete(AgentRunStatus status, DateTimeOffset? completedAt = null)
+    {
+        Status = status;
+        Phase = status switch
+        {
+            AgentRunStatus.Completed => "completed",
+            AgentRunStatus.Cancelled => "cancelled",
+            AgentRunStatus.Failed => "failed",
+            _ => Phase
+        };
+        CompletedAt = completedAt ?? DateTimeOffset.Now;
+    }
 }

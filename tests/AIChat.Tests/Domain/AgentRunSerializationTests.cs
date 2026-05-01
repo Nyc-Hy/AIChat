@@ -5,6 +5,25 @@ namespace AIChat.Tests.Domain;
 
 public sealed class AgentRunSerializationTests
 {
+    [Theory]
+    [InlineData(AgentRunStatus.Completed, "completed")]
+    [InlineData(AgentRunStatus.Cancelled, "cancelled")]
+    [InlineData(AgentRunStatus.Failed, "failed")]
+    public void Complete_UpdatesStatusPhaseAndCompletionTime(AgentRunStatus status, string expectedPhase)
+    {
+        var completedAt = new DateTimeOffset(2026, 5, 1, 9, 0, 0, TimeSpan.Zero);
+        var run = new AgentRun
+        {
+            Phase = "verifying"
+        };
+
+        run.Complete(status, completedAt);
+
+        Assert.Equal(status, run.Status);
+        Assert.Equal(expectedPhase, run.Phase);
+        Assert.Equal(completedAt, run.CompletedAt);
+    }
+
     [Fact]
     public void Conversation_RoundTripsAgentRunAndMessageLink()
     {

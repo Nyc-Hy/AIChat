@@ -998,7 +998,7 @@
                                         <controls:ContextRing Progress="{Binding ContextPercent}" IsHitTestVisible="False" />
                                         <TextBlock Text="{Binding ContextLabel}" FontSize="10" FontWeight="SemiBold" Foreground="#256D67" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
                                     </Grid>
-                                    <Button Command="{Binding StopCommand}" Content="停止" Margin="0,0,8,0" Style="{StaticResource SubtleButtonStyle}" />
+                                    <Button Command="{Binding StopCommand}" Content="{Binding StopButtonText}" Margin="0,0,8,0" Style="{StaticResource SubtleButtonStyle}" />
                                     <Button Command="{Binding SendCommand}" Width="42" Height="38" Padding="0" Style="{StaticResource PrimaryButtonStyle}">
                                         <TextBlock Text="↑" FontSize="18" />
                                     </Button>

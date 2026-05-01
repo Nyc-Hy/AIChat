@@ -154,7 +154,6 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.Completed:
-                    run.Phase = "completed";
                     CompleteRun(run, AgentRunStatus.Completed);
                     var finalStep = AddCompletedStep(
                         run,
@@ -444,14 +443,7 @@ public sealed class AgentHarness
 
     private static void CompleteRun(AgentRun run, AgentRunStatus status)
     {
-        run.Status = status;
-        run.Phase = status switch
-        {
-            AgentRunStatus.Cancelled => "cancelled",
-            AgentRunStatus.Failed => "failed",
-            _ => run.Phase
-        };
-        run.CompletedAt = DateTimeOffset.Now;
+        run.Complete(status);
     }
 
     private sealed record ChangedFileInfo(string Path, int OldChars, int NewChars);

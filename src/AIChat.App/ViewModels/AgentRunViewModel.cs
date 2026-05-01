@@ -126,8 +126,7 @@ public sealed class AgentRunViewModel : ObservableObject
 
     public void Complete(AgentRunStatus status)
     {
-        _run.Status = status;
-        _run.CompletedAt = DateTimeOffset.Now;
+        _run.Complete(status);
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(DurationText));

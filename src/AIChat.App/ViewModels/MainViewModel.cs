@@ -46,6 +46,7 @@ public sealed class MainViewModel : ObservableObject
     private AppSettings _settings = new();
     private string _draftMessage = "";
     private bool _isSending;
+    private bool _isStopping;
     private string _statusText = "就绪";
     private ContextUsage _contextUsage = new() { ModelLimit = 128_000, ConversationLimit = 64_000 };
     private CancellationTokenSource? _sendCts;
@@ -97,7 +98,7 @@ public sealed class MainViewModel : ObservableObject
             await SaveSettingsAsync(Settings);
             IsSettingsOpen = false;
         });
-        StopCommand = new RelayCommand(_ => _sendCts?.Cancel(), _ => IsSending);
+        StopCommand = new RelayCommand(_ => StopCurrentRun(), _ => IsSending && !IsStopping);
         CopyMessageCommand = new RelayCommand(parameter => CopyMessage((ChatMessageViewModel)parameter!));
         CopyConversationTitleCommand = new RelayCommand(parameter => CopyConversationTitle((ConversationViewModel)parameter!));
         RenameConversationCommand = new RelayCommand(async parameter => await RenameConversationAsync((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
@@ -575,6 +576,21 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public bool IsStopping
+    {
+        get => _isStopping;
+        private set
+        {
+            if (SetProperty(ref _isStopping, value))
+            {
+                StopCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(StopButtonText));
+            }
+        }
+    }
+
+    public string StopButtonText => IsStopping ? "停止中" : "停止";
+
     public string StatusText
     {
         get => _statusText;
@@ -625,6 +641,18 @@ public sealed class MainViewModel : ObservableObject
         _agentHarness = agentHarness;
         _toolCatalog = toolCatalog;
         RebuildToolOptions();
+    }
+
+    private void StopCurrentRun()
+    {
+        if (_sendCts is null || IsStopping)
+        {
+            return;
+        }
+
+        IsStopping = true;
+        StatusText = "正在停止生成...";
+        _sendCts.Cancel();
     }
 
     public async Task InitializeAsync()
@@ -1499,6 +1527,7 @@ public sealed class MainViewModel : ObservableObject
         SelectedConversation.AddCallDetail(callDetail);
 
         IsSending = true;
+        IsStopping = false;
         StatusText = "正在连接模型...";
         _sendCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         var rawResponseEvents = new List<string>();
@@ -1789,6 +1818,7 @@ public sealed class MainViewModel : ObservableObject
             // cancellation token, persist messages, and refresh context usage.
             assistantViewModel.IsStreaming = false;
             IsSending = false;
+            IsStopping = false;
             _sendCts.Dispose();
             _sendCts = null;
             await SaveProjectsAsync();
