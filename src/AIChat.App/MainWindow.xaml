@@ -1358,6 +1358,13 @@
                                     Content="×"
                                     Style="{StaticResource IconButtonStyle}"
                                     HorizontalAlignment="Right" />
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.CopySelectedAgentRunSummaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="复制摘要"
+                                    Width="88"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource SubtleButtonStyle}" />
                         </DockPanel>
 
                         <Grid Grid.Row="1">
@@ -1392,7 +1399,7 @@
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding ChangeSummary}"
+                                        <TextBlock Text="{Binding RunSummary}"
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473"
                                                    TextWrapping="Wrap" />

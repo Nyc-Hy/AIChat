@@ -55,6 +55,37 @@ public sealed class AgentRunViewModel : ObservableObject
     public string ChangeSummary => ChangedPaths.Count == 0
         ? "本轮没有记录文件变更。"
         : string.Join(Environment.NewLine, ChangedPaths.Select(path => $"- {path}"));
+    public string RunSummary
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                $"状态：{StatusText}",
+                $"目标：{Goal}",
+                $"步骤：{StepCount}",
+                $"文件变更：{FileChangeCount}",
+                $"验证：{VerificationCount}",
+                $"耗时：{DurationText}"
+            };
+
+            if (ChangedPaths.Count > 0)
+            {
+                lines.Add("");
+                lines.Add("变更文件：");
+                lines.AddRange(ChangedPaths.Select(path => $"- {path}"));
+            }
+
+            if (Verifications.Count > 0)
+            {
+                lines.Add("");
+                lines.Add("验证结果：");
+                lines.AddRange(Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+    }
 
     public AgentStepViewModel AddStep(AgentStep step)
     {
@@ -75,6 +106,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSteps));
         OnPropertyChanged(nameof(StepCount));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
         return viewModel;
     }
 
@@ -85,6 +117,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
     }
 
     public void SyncFileChanges()
@@ -104,6 +137,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(ChangedPaths));
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
     }
 
     public void SyncVerifications()
@@ -121,5 +155,6 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasVerifications));
         OnPropertyChanged(nameof(VerificationCount));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
     }
 }

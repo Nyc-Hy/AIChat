@@ -124,6 +124,7 @@ public sealed class MainViewModel : ObservableObject
         CommitAgentRunChangesCommand = new RelayCommand(async parameter => await CommitAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
+        CopySelectedAgentRunSummaryCommand = new RelayCommand(_ => CopySelectedAgentRunSummary(), _ => SelectedAgentRunDetails is not null);
         OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFilePathCommand = new RelayCommand(parameter => CopyAgentFilePath((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFileDiffCommand = new RelayCommand(parameter => CopyAgentFileDiff((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel { HasDiff: true });
@@ -181,6 +182,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CommitAgentRunChangesCommand { get; }
     public RelayCommand RestoreAgentRunChangesCommand { get; }
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
+    public RelayCommand CopySelectedAgentRunSummaryCommand { get; }
     public RelayCommand OpenAgentFileChangeCommand { get; }
     public RelayCommand CopyAgentFilePathCommand { get; }
     public RelayCommand CopyAgentFileDiffCommand { get; }
@@ -498,6 +500,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _selectedAgentRunDetails, value))
             {
                 OnPropertyChanged(nameof(AgentRunDetailsTitle));
+                CopySelectedAgentRunSummaryCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -1330,6 +1333,17 @@ public sealed class MainViewModel : ObservableObject
 
         System.Windows.Clipboard.SetText(message.AgentRun.ChangeSummary);
         StatusText = "本轮变更摘要已复制";
+    }
+
+    private void CopySelectedAgentRunSummary()
+    {
+        if (SelectedAgentRunDetails is null)
+        {
+            return;
+        }
+
+        System.Windows.Clipboard.SetText(SelectedAgentRunDetails.RunSummary);
+        StatusText = "Agent Run 摘要已复制";
     }
 
     private static bool CanOperateAgentRunChanges(object? parameter)
