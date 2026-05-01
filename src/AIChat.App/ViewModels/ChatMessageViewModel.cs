@@ -123,4 +123,9 @@ public sealed class ChatMessageViewModel : ObservableObject
     {
         AgentRun?.SyncFileChanges();
     }
+
+    public void SyncAgentVerifications()
+    {
+        AgentRun?.SyncVerifications();
+    }
 }

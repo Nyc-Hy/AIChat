@@ -54,6 +54,20 @@ public sealed class AgentRunSerializationTests
                             OldChars = 12,
                             NewChars = 18
                         }
+                    ],
+                    Verifications =
+                    [
+                        new AgentVerification
+                        {
+                            RunId = "run-1",
+                            StepId = "step-2",
+                            ToolCallId = "tool-call-2",
+                            ToolName = "run_test",
+                            Command = "dotnet test AIChat.sln",
+                            ExitCode = 0,
+                            IsSuccess = true,
+                            Output = "Passed"
+                        }
                     ]
                 }
             ]
@@ -67,8 +81,10 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns);
         Assert.Single(roundTripped.AgentRuns[0].Steps);
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
+        Assert.Single(roundTripped.AgentRuns[0].Verifications);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
+        Assert.True(roundTripped.AgentRuns[0].Verifications[0].IsSuccess);
     }
 }

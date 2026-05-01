@@ -127,6 +127,53 @@ public sealed class AgentHarnessTests
         Assert.DoesNotContain("old value", secondFileChange.DiffText);
     }
 
+    [Fact]
+    public async Task RunAsync_RecordsVerificationResultsForBuildAndTestTools()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "run_test",
+            ArgumentsJson = "{}"
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new FakeVerificationTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "verify",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        var verification = Assert.Single(run.Verifications);
+        Assert.Equal("run_test", verification.ToolName);
+        Assert.Equal("dotnet test", verification.Command);
+        Assert.Equal(0, verification.ExitCode);
+        Assert.True(verification.IsSuccess);
+        Assert.Contains("Passed", verification.Output);
+    }
+
     private sealed class FakeChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;
@@ -153,6 +200,51 @@ public sealed class AgentHarnessTests
                 yield return delta;
                 await Task.Yield();
             }
+        }
+    }
+
+    private sealed class FakeVerificationTool : IAgentTool
+    {
+        public string Id => "run_test";
+        public AgentToolRisk Risk => AgentToolRisk.Shell;
+        public ChatToolDefinition Definition { get; } = new()
+        {
+            Name = "run_test",
+            Description = "fake test",
+            ParametersJson = "{}"
+        };
+
+        public Task<AgentToolPreview> PreviewAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "run fake tests",
+                PreviewText = "dotnet test"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolResult
+            {
+                ToolName = Id,
+                Content = """
+                {
+                  "command": "dotnet test",
+                  "exitCode": 0,
+                  "timedOut": false,
+                  "output": "Passed"
+                }
+                """
+            });
         }
     }
 }

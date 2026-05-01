@@ -14,6 +14,8 @@ public sealed class AgentRunViewModel : ObservableObject
             run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
         FileChanges = new ObservableCollection<AgentFileChangeViewModel>(
             run.FileChanges.Select(change => new AgentFileChangeViewModel(change)));
+        Verifications = new ObservableCollection<AgentVerificationViewModel>(
+            run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
     }
 
     public string Id => _run.Id;
@@ -37,11 +39,14 @@ public sealed class AgentRunViewModel : ObservableObject
     }
     public int StepCount => Steps.Count;
     public int FileChangeCount => FileChanges.Count;
-    public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {DurationText}";
+    public int VerificationCount => Verifications.Count;
+    public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {DurationText}";
     public ObservableCollection<AgentStepViewModel> Steps { get; }
     public ObservableCollection<AgentFileChangeViewModel> FileChanges { get; }
+    public ObservableCollection<AgentVerificationViewModel> Verifications { get; }
     public bool HasSteps => Steps.Count > 0;
     public bool HasFileChanges => FileChanges.Count > 0;
+    public bool HasVerifications => Verifications.Count > 0;
     public IReadOnlyList<string> ChangedPaths => FileChanges
         .Select(change => change.Path)
         .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -98,6 +103,23 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(FileChangeCount));
         OnPropertyChanged(nameof(ChangedPaths));
         OnPropertyChanged(nameof(ChangeSummary));
+        OnPropertyChanged(nameof(Summary));
+    }
+
+    public void SyncVerifications()
+    {
+        foreach (var verification in _run.Verifications)
+        {
+            if (Verifications.Any(item => item.Id == verification.Id))
+            {
+                continue;
+            }
+
+            Verifications.Add(new AgentVerificationViewModel(verification));
+        }
+
+        OnPropertyChanged(nameof(HasVerifications));
+        OnPropertyChanged(nameof(VerificationCount));
         OnPropertyChanged(nameof(Summary));
     }
 }

@@ -133,6 +133,11 @@ public sealed class AgentHarness
                             agentEvent.ToolCall,
                             agentEvent.ToolPreview,
                             agentEvent.ToolResult);
+                        RecordVerification(
+                            run,
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolResult);
                     }
 
                     yield return new AgentHarnessEvent
@@ -271,6 +276,61 @@ public sealed class AgentHarness
         }
     }
 
+    private static void RecordVerification(
+        AgentRun run,
+        Dictionary<string, AgentStep> stepByToolCallId,
+        ChatToolCall? toolCall,
+        AgentToolResult toolResult)
+    {
+        if (toolCall is null ||
+            !IsVerificationTool(toolResult.ToolName))
+        {
+            return;
+        }
+
+        var stepId = stepByToolCallId.TryGetValue(toolCall.Id, out var step)
+            ? step.Id
+            : "";
+        var parsed = ParseVerification(toolResult);
+        run.Verifications.Add(new AgentVerification
+        {
+            RunId = run.Id,
+            StepId = stepId,
+            ToolCallId = toolCall.Id,
+            ToolName = toolResult.ToolName,
+            Command = parsed.Command,
+            ExitCode = parsed.ExitCode,
+            TimedOut = parsed.TimedOut,
+            IsSuccess = !toolResult.IsError && parsed.ExitCode == 0 && !parsed.TimedOut,
+            Output = parsed.Output,
+            CreatedAt = DateTimeOffset.Now
+        });
+    }
+
+    private static bool IsVerificationTool(string toolName)
+    {
+        return string.Equals(toolName, "run_build", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(toolName, "run_test", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static VerificationInfo ParseVerification(AgentToolResult toolResult)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(toolResult.Content);
+            var root = document.RootElement;
+            return new VerificationInfo(
+                GetString(root, "command"),
+                GetInt(root, "exitCode", toolResult.IsError ? 1 : 0),
+                GetBool(root, "timedOut"),
+                GetString(root, "output"));
+        }
+        catch (JsonException)
+        {
+            return new VerificationInfo(toolResult.ToolName, toolResult.IsError ? 1 : 0, false, toolResult.Content);
+        }
+    }
+
     private static string ExtractDiffForPath(string diffText, string path)
     {
         var normalizedPath = path.Replace('\\', '/');
@@ -360,6 +420,14 @@ public sealed class AgentHarness
             : defaultValue;
     }
 
+    private static bool GetBool(JsonElement element, string propertyName)
+    {
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var value) &&
+               value.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+               value.GetBoolean();
+    }
+
     private static void CompleteRun(AgentRun run, AgentRunStatus status)
     {
         run.Status = status;
@@ -367,4 +435,5 @@ public sealed class AgentHarness
     }
 
     private sealed record ChangedFileInfo(string Path, int OldChars, int NewChars);
+    private sealed record VerificationInfo(string Command, int ExitCode, bool TimedOut, string Output);
 }

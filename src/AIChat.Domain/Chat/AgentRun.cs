@@ -14,4 +14,5 @@ public sealed class AgentRun
     public DateTimeOffset? CompletedAt { get; set; }
     public List<AgentStep> Steps { get; set; } = [];
     public List<AgentFileChange> FileChanges { get; set; } = [];
+    public List<AgentVerification> Verifications { get; set; } = [];
 }
