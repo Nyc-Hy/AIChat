@@ -238,6 +238,29 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <DataTemplate x:Key="DiffLineTemplate">
+            <Border x:Name="DiffLine"
+                    Padding="4,1"
+                    Background="Transparent">
+                <TextBlock Text="{Binding Text}"
+                           FontFamily="Consolas"
+                           FontSize="11"
+                           Foreground="#2A3340"
+                           TextWrapping="NoWrap" />
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Added">
+                    <Setter TargetName="DiffLine" Property="Background" Value="#EAF7EF" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Removed">
+                    <Setter TargetName="DiffLine" Property="Background" Value="#FFF0EF" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Header">
+                    <Setter TargetName="DiffLine" Property="Background" Value="#EEF3F8" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <DataTemplate x:Key="AgentFileChangeTemplate">
             <Border Margin="0,0,0,6"
                     Padding="9,7"
@@ -249,6 +272,7 @@
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
@@ -278,6 +302,14 @@
                                 Height="26"
                                 Margin="10,0,0,0"
                                 Style="{StaticResource SubtleButtonStyle}" />
+                        <Button Grid.Column="3"
+                                Command="{Binding DataContext.CopyAgentFilePathCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}"
+                                Content="路径"
+                                Width="48"
+                                Height="26"
+                                Margin="6,0,0,0"
+                                Style="{StaticResource SubtleButtonStyle}" />
                     </Grid>
                     <Expander x:Name="DiffExpander"
                               Header="查看 diff"
@@ -303,11 +335,8 @@
                                             HorizontalAlignment="Left"
                                             Margin="0,0,0,7"
                                             Style="{StaticResource SubtleButtonStyle}" />
-                                    <TextBlock Text="{Binding DiffText}"
-                                               FontFamily="Consolas"
-                                               FontSize="11"
-                                               Foreground="#2A3340"
-                                               TextWrapping="NoWrap" />
+                                    <ItemsControl ItemsSource="{Binding DiffLines}"
+                                                  ItemTemplate="{StaticResource DiffLineTemplate}" />
                                 </StackPanel>
                             </ScrollViewer>
                         </Border>
@@ -1242,6 +1271,12 @@
                                         Height="28"
                                         Margin="0,0,8,0"
                                         Style="{StaticResource SubtleButtonStyle}" />
+                                <Button Command="{Binding CopyWorkspacePathCommand}"
+                                        Content="复制路径"
+                                        Width="76"
+                                        Height="28"
+                                        Margin="0,0,8,0"
+                                        Style="{StaticResource SubtleButtonStyle}" />
                             </WrapPanel>
                         </StackPanel>
 
@@ -1254,11 +1289,8 @@
                             <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding WorkspaceDiffText}"
-                                           FontFamily="Consolas"
-                                           FontSize="11"
-                                           Foreground="#2A3340"
-                                           TextWrapping="NoWrap" />
+                                <ItemsControl ItemsSource="{Binding WorkspaceDiffLines}"
+                                              ItemTemplate="{StaticResource DiffLineTemplate}" />
                             </ScrollViewer>
                         </Border>
                     </Grid>

@@ -65,6 +65,7 @@ public sealed class MainViewModel : ObservableObject
     private string _workspaceBranch = "";
     private string _workspaceStatusText = "尚未刷新";
     private string _workspaceDiffText = "选择一个变更文件查看 diff。";
+    private IReadOnlyList<DiffLineViewModel> _workspaceDiffLines = [];
     private bool _isRefreshingWorkspaceChanges;
     // Guards against older async JSON loads overwriting a newer selection.
     private int _callDetailLoadVersion;
@@ -108,8 +109,9 @@ public sealed class MainViewModel : ObservableObject
         RefreshWorkspaceChangesCommand = new RelayCommand(async _ => await RefreshWorkspaceChangesAsync(), _ => SelectedProject is not null && !IsRefreshingWorkspaceChanges);
         RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceChangesAsync(), _ => (SelectedWorkspaceChange is not null || HasSelectedWorkspaceChanges) && !IsRefreshingWorkspaceChanges);
         CommitWorkspaceFileCommand = new RelayCommand(async _ => await CommitSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
-        CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasWorkspaceChanges && !IsRefreshingWorkspaceChanges);
+        CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasSelectedWorkspaceChanges && !IsRefreshingWorkspaceChanges);
         OpenWorkspaceFileCommand = new RelayCommand(_ => OpenWorkspaceFile(), _ => SelectedWorkspaceChange is not null && SelectedProject is not null);
+        CopyWorkspacePathCommand = new RelayCommand(_ => CopyWorkspacePath(), _ => SelectedWorkspaceChange is not null);
         CopyWorkspaceDiffCommand = new RelayCommand(_ => CopyWorkspaceDiff(), _ => !string.IsNullOrWhiteSpace(WorkspaceDiffText));
         StageSelectedWorkspaceChangesCommand = new RelayCommand(async _ => await StageSelectedWorkspaceChangesAsync(), _ => HasSelectedWorkspaceChanges && !IsRefreshingWorkspaceChanges);
         UnstageSelectedWorkspaceChangesCommand = new RelayCommand(async _ => await UnstageSelectedWorkspaceChangesAsync(), _ => HasSelectedWorkspaceChanges && !IsRefreshingWorkspaceChanges);
@@ -119,6 +121,7 @@ public sealed class MainViewModel : ObservableObject
         RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
+        CopyAgentFilePathCommand = new RelayCommand(parameter => CopyAgentFilePath((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFileDiffCommand = new RelayCommand(parameter => CopyAgentFileDiff((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel { HasDiff: true });
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
@@ -163,6 +166,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CommitWorkspaceFileCommand { get; }
     public RelayCommand CommitAllWorkspaceChangesCommand { get; }
     public RelayCommand OpenWorkspaceFileCommand { get; }
+    public RelayCommand CopyWorkspacePathCommand { get; }
     public RelayCommand CopyWorkspaceDiffCommand { get; }
     public RelayCommand StageSelectedWorkspaceChangesCommand { get; }
     public RelayCommand UnstageSelectedWorkspaceChangesCommand { get; }
@@ -172,6 +176,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RestoreAgentRunChangesCommand { get; }
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
     public RelayCommand OpenAgentFileChangeCommand { get; }
+    public RelayCommand CopyAgentFilePathCommand { get; }
     public RelayCommand CopyAgentFileDiffCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
@@ -301,9 +306,15 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _workspaceDiffText, value))
             {
+                WorkspaceDiffLines = DiffLineViewModel.FromDiff(value);
                 CopyWorkspaceDiffCommand.RaiseCanExecuteChanged();
             }
         }
+    }
+    public IReadOnlyList<DiffLineViewModel> WorkspaceDiffLines
+    {
+        get => _workspaceDiffLines;
+        private set => SetProperty(ref _workspaceDiffLines, value);
     }
     public bool IsRefreshingWorkspaceChanges
     {
@@ -326,6 +337,7 @@ public sealed class MainViewModel : ObservableObject
                 RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
                 CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
                 OpenWorkspaceFileCommand.RaiseCanExecuteChanged();
+                CopyWorkspacePathCommand.RaiseCanExecuteChanged();
                 _ = LoadSelectedWorkspaceDiffAsync();
             }
         }
@@ -992,19 +1004,19 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task CommitAllWorkspaceChangesAsync()
     {
-        if (SelectedProject is null || WorkspaceChanges.Count == 0)
+        if (SelectedProject is null || !HasSelectedWorkspaceChanges)
         {
             return;
         }
 
         var changes = GetCheckedWorkspaceChanges();
-        var paths = (changes.Count > 0 ? changes : WorkspaceChanges)
+        var paths = changes
             .Select(change => change.Path)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var message = TextPromptDialog.Show(
             System.Windows.Application.Current.MainWindow,
-            changes.Count > 0 ? "提交已选工作区变更" : "提交当前工作区变更",
+            "提交已选工作区变更",
             $"Update {paths.Count} files");
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -1110,6 +1122,17 @@ public sealed class MainViewModel : ObservableObject
         StatusText = "当前 diff 已复制";
     }
 
+    private void CopyWorkspacePath()
+    {
+        if (SelectedWorkspaceChange is null)
+        {
+            return;
+        }
+
+        System.Windows.Clipboard.SetText(SelectedWorkspaceChange.Path);
+        StatusText = $"路径已复制：{SelectedWorkspaceChange.Path}";
+    }
+
     private IReadOnlyList<WorkspaceChangeViewModel> GetCheckedWorkspaceChanges()
     {
         return WorkspaceChanges
@@ -1136,6 +1159,7 @@ public sealed class MainViewModel : ObservableObject
         CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
         CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
         OpenWorkspaceFileCommand.RaiseCanExecuteChanged();
+        CopyWorkspacePathCommand.RaiseCanExecuteChanged();
         StageSelectedWorkspaceChangesCommand.RaiseCanExecuteChanged();
         UnstageSelectedWorkspaceChangesCommand.RaiseCanExecuteChanged();
         SelectAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
@@ -1156,6 +1180,12 @@ public sealed class MainViewModel : ObservableObject
 
         System.Windows.Clipboard.SetText(change.DiffText);
         StatusText = $"已复制 diff：{change.Path}";
+    }
+
+    private void CopyAgentFilePath(AgentFileChangeViewModel change)
+    {
+        System.Windows.Clipboard.SetText(change.Path);
+        StatusText = $"路径已复制：{change.Path}";
     }
 
     private async Task CommitAgentRunChangesAsync(ChatMessageViewModel message)

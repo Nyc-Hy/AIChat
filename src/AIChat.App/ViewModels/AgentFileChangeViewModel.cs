@@ -15,6 +15,7 @@ public sealed class AgentFileChangeViewModel : ObservableObject
     public string Path => _fileChange.Path;
     public string ToolName => _fileChange.ToolName;
     public string DiffText => _fileChange.DiffText;
+    public IReadOnlyList<DiffLineViewModel> DiffLines => DiffLineViewModel.FromDiff(_fileChange.DiffText);
     public string SizeText => $"{_fileChange.OldChars} -> {_fileChange.NewChars} chars";
     public bool HasDiff => !string.IsNullOrWhiteSpace(_fileChange.DiffText);
 }
