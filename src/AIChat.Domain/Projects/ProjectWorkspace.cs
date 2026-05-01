@@ -1,4 +1,5 @@
 using AIChat.Domain.Chat;
+using AIChat.Domain.Context;
 
 namespace AIChat.Domain.Projects;
 
@@ -11,4 +12,5 @@ public sealed class ProjectWorkspace
     public string Path { get; set; } = "";
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
     public List<Conversation> Conversations { get; set; } = [];
+    public List<PinnedContextItem> PinnedContext { get; set; } = [];
 }

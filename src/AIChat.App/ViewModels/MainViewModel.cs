@@ -1806,6 +1806,14 @@ public sealed class MainViewModel : ObservableObject
         var rawResponseEvents = new List<string>();
         var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
         var stepByToolCallId = new Dictionary<string, AgentStepViewModel>(StringComparer.Ordinal);
+
+        var projectPath = SelectedProject?.Path ?? Environment.CurrentDirectory;
+        var fileIndex = new ProjectFileIndexBuilder().Build(projectPath);
+        var workspaceSummary = workspaceSnapshot is { Branch: { Length: > 0 } branch }
+            ? $"分支：{branch}，未提交变更：{workspaceSnapshot.ChangeCount} 个文件"
+            : "";
+        var pinnedItems = SelectedProject?.Project.PinnedContext ?? [];
+
         var contextMessages = _contextBuilder.Build(new ConversationContextBuildRequest
         {
             Messages = SelectedConversation.Conversation.Messages
@@ -1815,9 +1823,12 @@ public sealed class MainViewModel : ObservableObject
             PromptContext = new SystemPromptContext
             {
                 ProjectName = SelectedProject?.Name ?? "AIChat",
-                ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
+                ProjectPath = projectPath,
                 EnabledToolIds = Settings.EnabledToolIds,
-                ToolPermissionModes = Settings.ToolPermissionModes
+                ToolPermissionModes = Settings.ToolPermissionModes,
+                FileIndex = fileIndex,
+                WorkspaceSummary = workspaceSummary,
+                PinnedContextItems = pinnedItems
             }
         });
 

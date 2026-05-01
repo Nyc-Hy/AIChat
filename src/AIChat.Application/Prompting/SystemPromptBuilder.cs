@@ -1,10 +1,13 @@
 using System.Text;
 using AIChat.Abstractions.Configuration;
+using AIChat.Application.Context;
 
 namespace AIChat.Application.Prompting;
 
 public sealed class SystemPromptBuilder
 {
+    private readonly ProjectContextPackBuilder _contextPackBuilder = new();
+
     public string Build(SystemPromptContext context)
     {
         var builder = new StringBuilder();
@@ -50,6 +53,16 @@ public sealed class SystemPromptBuilder
                 ? configuredMode
                 : ToolPermissionMode.ConfirmEachTime;
             builder.AppendLine($"- {toolId}：{DescribePermission(mode)}");
+        }
+
+        var contextPack = _contextPackBuilder.Build(
+            context.FileIndex,
+            context.WorkspaceSummary,
+            context.PinnedContextItems);
+        if (!string.IsNullOrWhiteSpace(contextPack))
+        {
+            builder.AppendLine();
+            builder.AppendLine(contextPack);
         }
 
         return builder.ToString().Trim();
