@@ -308,6 +308,16 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<ChatMessageViewModel>? Messages => SelectedConversation?.Messages;
     public bool HasMessages => Messages?.Count > 0;
     public string CurrentProjectName => SelectedProject?.Name ?? "未选择项目";
+    public string WindowTitle
+    {
+        get
+        {
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            var versionStr = version is not null ? $" v{version.Major}.{version.Minor}.{version.Build}" : "";
+            var project = SelectedProject?.Name;
+            return string.IsNullOrEmpty(project) ? $"AIChat{versionStr}" : $"AIChat{versionStr} — {project}";
+        }
+    }
     public string CurrentConversationTitle => SelectedConversation?.Title ?? "新对话";
     public string ModelName => SelectedConfiguredProvider is null
         ? "未配置模型"

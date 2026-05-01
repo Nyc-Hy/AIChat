@@ -941,7 +941,7 @@ Organize agent run details into tabs
 Clarify agent unavailable states
 ```
 
-> ✅ 第 15 阶段已完成（commit `TBD`）。
+> ✅ 第 15 阶段已完成（commit `32bb81a`）。
 >
 > 已实现：
 > - 合作器区域新增 Agent 状态栏，显示当前阶段、当前工具、工具预算等信息。
@@ -1014,6 +1014,14 @@ dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-con
 ```text
 Document desktop publish workflow
 ```
+
+> ✅ 第 16 阶段已完成（commit `TBD`）。
+>
+> 已实现：
+> - README 重写，包含 Agent 模式、工具权限、运行历史、架构概览和发布说明。
+> - 新增 `docs/ARCHITECTURE.md`、`docs/AGENT_HARNESS.md`、`docs/TOOL_SECURITY.md`。
+> - `AIChat.App.csproj` 添加 Version、AssemblyVersion、FileVersion、Product、Description 属性。
+> - 窗口标题绑定 `WindowTitle` 属性，显示版本号和项目名称。
 
 ## 推荐执行顺序
 
