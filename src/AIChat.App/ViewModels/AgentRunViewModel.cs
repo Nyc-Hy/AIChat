@@ -64,6 +64,10 @@ public sealed class AgentRunViewModel : ObservableObject
     public string FinalValidationSummary => string.IsNullOrWhiteSpace(_run.FinalValidationSummary)
         ? "尚未生成结束校验。"
         : _run.FinalValidationSummary;
+    public string RecoverySuggestion => string.IsNullOrWhiteSpace(_run.RecoverySuggestion)
+        ? $"继续处理：{Goal}"
+        : _run.RecoverySuggestion;
+    public bool HasRecoverySuggestion => !string.IsNullOrWhiteSpace(_run.RecoverySuggestion);
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ShortGoal
     {
@@ -158,6 +162,13 @@ public sealed class AgentRunViewModel : ObservableObject
                 lines.Add(_run.FinalValidationSummary);
             }
 
+            if (!string.IsNullOrWhiteSpace(_run.RecoverySuggestion))
+            {
+                lines.Add("");
+                lines.Add("恢复建议：");
+                lines.Add(_run.RecoverySuggestion);
+            }
+
             if (ChangedPaths.Count > 0)
             {
                 lines.Add("");
@@ -208,6 +219,8 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(FinalValidationSummary));
+        OnPropertyChanged(nameof(RecoverySuggestion));
+        OnPropertyChanged(nameof(HasRecoverySuggestion));
         OnPropertyChanged(nameof(CompletionReasonText));
         OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));

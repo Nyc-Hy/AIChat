@@ -933,10 +933,10 @@ public sealed class MainViewModel : ObservableObject
         }
 
         SelectConversation(item.Conversation);
-        DraftMessage = item.Run.Goal;
+        DraftMessage = item.Run.RecoverySuggestion;
         IsAgentRunHistoryOpen = false;
         IsAgentRunDetailsOpen = false;
-        StatusText = "已把失败任务放回输入框，可检查后重新发送";
+        StatusText = "已把恢复建议放回输入框，可检查后重新发送";
     }
 
     private void RetrySelectedAgentRun()
@@ -954,9 +954,9 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        DraftMessage = selected.Goal;
+        DraftMessage = selected.RecoverySuggestion;
         IsAgentRunDetailsOpen = false;
-        StatusText = "已把失败任务放回输入框，可检查后重新发送";
+        StatusText = "已把恢复建议放回输入框，可检查后重新发送";
     }
 
     private async Task DeleteConversationAsync(ConversationViewModel conversation)

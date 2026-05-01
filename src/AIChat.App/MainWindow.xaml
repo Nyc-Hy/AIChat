@@ -1620,6 +1620,14 @@
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473"
                                                    TextWrapping="Wrap" />
+                                        <TextBlock Text="恢复建议"
+                                                   Margin="0,14,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBlock Text="{Binding RecoverySuggestion}"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 

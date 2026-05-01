@@ -27,6 +27,7 @@ public sealed class AgentRun
     public int ToolApprovalRejectedCount { get; set; }
     public int ToolSessionAllowedCount { get; set; }
     public string FinalValidationSummary { get; set; } = "";
+    public string RecoverySuggestion { get; set; } = "";
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }

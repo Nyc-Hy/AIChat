@@ -189,6 +189,7 @@ public sealed class AgentHarness
                 case AgentRunEventType.Completed:
                     CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
+                    CompleteRecoverySuggestion(run);
                     CompleteRun(run, AgentRunStatus.Completed);
                     var finalStep = AddCompletedStep(
                         run,
@@ -291,6 +292,40 @@ public sealed class AgentHarness
         }
 
         run.FinalValidationSummary = string.Join(Environment.NewLine, checks);
+    }
+
+    private static void CompleteRecoverySuggestion(AgentRun run)
+    {
+        if (run.ToolBudgetExceeded)
+        {
+            run.RecoverySuggestion =
+                $"继续完成：{run.Goal}\n请先读取上一轮最后的工具结果和当前工作区状态，缩小范围后继续。必要时把工具轮数预算提高到 {Math.Min(Math.Max(run.MaxToolRounds + 2, 2), 20)}。";
+            return;
+        }
+
+        if (run.ToolApprovalRejectedCount > 0)
+        {
+            run.RecoverySuggestion =
+                $"继续完成：{run.Goal}\n上一轮有工具被拒绝。请先说明需要哪些工具、为什么需要，再等待确认后继续。";
+            return;
+        }
+
+        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
+        {
+            run.RecoverySuggestion =
+                $"继续完成：{run.Goal}\n上一轮没有记录到成功的修改工具。请先检查相关文件，再实际调用写入或编辑工具完成修改。";
+            return;
+        }
+
+        if (run.Verifications.Any(verification => !verification.IsSuccess))
+        {
+            run.RecoverySuggestion =
+                $"继续修复：{run.Goal}\n上一轮验证未全部通过。请优先查看失败验证输出，修复后重新运行验证。";
+            return;
+        }
+
+        run.RecoverySuggestion =
+            $"复查并继续：{run.Goal}\n请先查看上一轮运行摘要、工作区 diff 和验证结果，再决定是否需要继续修改。";
     }
 
     private static bool IsMutationTool(string toolName)

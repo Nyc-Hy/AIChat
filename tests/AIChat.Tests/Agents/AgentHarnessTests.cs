@@ -251,6 +251,7 @@ public sealed class AgentHarnessTests
         Assert.Equal(1, run.ToolCallCount);
         Assert.True(run.ToolBudgetExceeded);
         Assert.Equal("已达到工具调用轮数上限。", run.CompletionReason);
+        Assert.Contains("必要时把工具轮数预算提高到 3", run.RecoverySuggestion);
         Assert.Contains("已达到工具调用轮数上限", content);
     }
 
@@ -284,6 +285,7 @@ public sealed class AgentHarnessTests
         Assert.False(run.MutationToolSucceeded);
         Assert.Equal("任务看起来需要修改项目，但本轮没有记录到成功的修改工具。", run.CompletionReason);
         Assert.Contains("项目修改：未记录修改工具", run.FinalValidationSummary);
+        Assert.Contains("实际调用写入或编辑工具", run.RecoverySuggestion);
     }
 
     [Fact]
@@ -334,6 +336,7 @@ public sealed class AgentHarnessTests
         Assert.Equal(1, run.ToolSessionAllowedCount);
         Assert.Contains("工具审批：无拒绝", run.FinalValidationSummary);
         Assert.Contains("验证：1/1 通过", run.FinalValidationSummary);
+        Assert.Contains("复查并继续", run.RecoverySuggestion);
     }
 
     private sealed class FakeChatCompletionService : IChatCompletionService

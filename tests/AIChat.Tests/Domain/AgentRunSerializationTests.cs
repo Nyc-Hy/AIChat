@@ -70,6 +70,7 @@ public sealed class AgentRunSerializationTests
                     ToolApprovalRejectedCount = 1,
                     ToolSessionAllowedCount = 1,
                     FinalValidationSummary = "工具预算：未耗尽",
+                    RecoverySuggestion = "继续处理：test",
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -142,6 +143,7 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolApprovalRejectedCount);
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
+        Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
