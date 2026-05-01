@@ -63,10 +63,12 @@ public sealed class MainViewModel : ObservableObject
     private LlmCallDetailViewModel? _selectedCallDetail;
     private AgentRunHistoryItemViewModel? _selectedAgentRunHistoryItem;
     private AgentRunViewModel? _selectedAgentRunDetails;
+    private int _agentRunHistoryTotalCount;
     private string _selectedCallRequestJson = "请选择左侧调用记录。";
     private string _selectedCallResponseJson = "请选择左侧调用记录。";
     private bool _showSelectedCallRawEvents;
     private WorkspaceChangeViewModel? _selectedWorkspaceChange;
+    private string _agentRunHistoryFilterId = "all";
     private string _workspaceBranch = "";
     private string _workspaceStatusText = "尚未刷新";
     private string _workspaceDiffText = "选择一个变更文件查看 diff。";
@@ -150,6 +152,14 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<WorkspaceChangeViewModel> UnstagedWorkspaceChanges { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> UntrackedWorkspaceChanges { get; } = [];
     public ObservableCollection<AgentRunHistoryItemViewModel> AgentRunHistory { get; } = [];
+    public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions { get; } =
+    [
+        new() { Id = "all", Name = "全部" },
+        new() { Id = "retryable", Name = "可重试" },
+        new() { Id = "failed", Name = "失败/停止" },
+        new() { Id = "completed", Name = "已完成" },
+        new() { Id = "running", Name = "运行中" }
+    ];
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
         new() { Id = nameof(ToolPermissionMode.AutoReadOnly), Name = "只读自动" },
@@ -525,12 +535,25 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool HasAgentRunHistory => AgentRunHistory.Count > 0;
+    public string AgentRunHistoryFilterId
+    {
+        get => _agentRunHistoryFilterId;
+        set
+        {
+            if (SetProperty(ref _agentRunHistoryFilterId, string.IsNullOrWhiteSpace(value) ? "all" : value))
+            {
+                RebuildAgentRunHistory();
+            }
+        }
+    }
     public string AgentRunHistoryTitle => SelectedProject is null
         ? "运行历史"
         : $"{SelectedProject.Name} · 运行历史";
     public string AgentRunHistorySummary => AgentRunHistory.Count == 0
-        ? "暂无 Agent 运行记录"
-        : $"{AgentRunHistory.Count} 次运行 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
+        ? _agentRunHistoryTotalCount == 0
+            ? "暂无 Agent 运行记录"
+            : $"当前筛选无匹配 · 总计 {_agentRunHistoryTotalCount} 次运行"
+        : $"显示 {AgentRunHistory.Count} / {_agentRunHistoryTotalCount} 次运行 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
 
     public AgentRunViewModel? SelectedAgentRunDetails
     {
@@ -807,11 +830,12 @@ public sealed class MainViewModel : ObservableObject
         AgentRunHistory.Clear();
         if (SelectedProject is null)
         {
+            _agentRunHistoryTotalCount = 0;
             RaiseAgentRunHistoryProperties();
             return;
         }
 
-        var items = SelectedProject.Conversations
+        var allItems = SelectedProject.Conversations
             .SelectMany(conversation => conversation.Messages
                 .Where(message => message.AgentRun is not null)
                 .Select(message => new AgentRunHistoryItemViewModel
@@ -821,6 +845,9 @@ public sealed class MainViewModel : ObservableObject
                 }))
             .OrderByDescending(item => item.Run.Run.StartedAt)
             .ToList();
+
+        _agentRunHistoryTotalCount = allItems.Count;
+        var items = FilterAgentRunHistory(allItems).ToList();
 
         foreach (var item in items)
         {
@@ -835,6 +862,18 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasAgentRunHistory));
         OnPropertyChanged(nameof(AgentRunHistorySummary));
         RetryAgentRunCommand.RaiseCanExecuteChanged();
+    }
+
+    private IEnumerable<AgentRunHistoryItemViewModel> FilterAgentRunHistory(IEnumerable<AgentRunHistoryItemViewModel> items)
+    {
+        return AgentRunHistoryFilterId switch
+        {
+            "retryable" => items.Where(item => item.CanRetry),
+            "failed" => items.Where(item => item.Run.Status is AgentRunStatus.Failed or AgentRunStatus.Cancelled),
+            "completed" => items.Where(item => item.Run.Status is AgentRunStatus.Completed),
+            "running" => items.Where(item => item.Run.Status is AgentRunStatus.Running),
+            _ => items
+        };
     }
 
     private async void NewChat()

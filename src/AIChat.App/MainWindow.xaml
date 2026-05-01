@@ -1364,6 +1364,15 @@
                                     Content="×"
                                     Style="{StaticResource IconButtonStyle}"
                                     HorizontalAlignment="Right" />
+                            <ComboBox DockPanel.Dock="Right"
+                                      ItemsSource="{Binding AgentRunHistoryFilterOptions}"
+                                      SelectedValue="{Binding AgentRunHistoryFilterId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      DisplayMemberPath="Name"
+                                      SelectedValuePath="Id"
+                                      Width="116"
+                                      Height="32"
+                                      Margin="0,0,12,0"
+                                      VerticalAlignment="Top" />
                         </DockPanel>
 
                         <Border Grid.Row="1"
