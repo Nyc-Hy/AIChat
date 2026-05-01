@@ -106,11 +106,15 @@ public sealed class MainViewModel : ObservableObject
         ToggleNewProviderApiKeyVisibilityCommand = new RelayCommand(_ => IsNewProviderApiKeyVisible = !IsNewProviderApiKeyVisible);
         TestProviderConnectionCommand = new RelayCommand(async _ => await TestProviderConnectionAsync(), _ => !IsTestingProviderConnection && !string.IsNullOrWhiteSpace(NewProviderApiKey));
         RefreshWorkspaceChangesCommand = new RelayCommand(async _ => await RefreshWorkspaceChangesAsync(), _ => SelectedProject is not null && !IsRefreshingWorkspaceChanges);
-        RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
+        RestoreWorkspaceFileCommand = new RelayCommand(async _ => await RestoreSelectedWorkspaceChangesAsync(), _ => (SelectedWorkspaceChange is not null || HasSelectedWorkspaceChanges) && !IsRefreshingWorkspaceChanges);
         CommitWorkspaceFileCommand = new RelayCommand(async _ => await CommitSelectedWorkspaceFileAsync(), _ => SelectedWorkspaceChange is not null && !IsRefreshingWorkspaceChanges);
         CommitAllWorkspaceChangesCommand = new RelayCommand(async _ => await CommitAllWorkspaceChangesAsync(), _ => HasWorkspaceChanges && !IsRefreshingWorkspaceChanges);
         OpenWorkspaceFileCommand = new RelayCommand(_ => OpenWorkspaceFile(), _ => SelectedWorkspaceChange is not null && SelectedProject is not null);
         CopyWorkspaceDiffCommand = new RelayCommand(_ => CopyWorkspaceDiff(), _ => !string.IsNullOrWhiteSpace(WorkspaceDiffText));
+        StageSelectedWorkspaceChangesCommand = new RelayCommand(async _ => await StageSelectedWorkspaceChangesAsync(), _ => HasSelectedWorkspaceChanges && !IsRefreshingWorkspaceChanges);
+        UnstageSelectedWorkspaceChangesCommand = new RelayCommand(async _ => await UnstageSelectedWorkspaceChangesAsync(), _ => HasSelectedWorkspaceChanges && !IsRefreshingWorkspaceChanges);
+        SelectAllWorkspaceChangesCommand = new RelayCommand(_ => SetWorkspaceSelection(isSelected: true), _ => HasWorkspaceChanges);
+        ClearWorkspaceSelectionCommand = new RelayCommand(_ => SetWorkspaceSelection(isSelected: false), _ => HasSelectedWorkspaceChanges);
         CommitAgentRunChangesCommand = new RelayCommand(async parameter => await CommitAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         RestoreAgentRunChangesCommand = new RelayCommand(async parameter => await RestoreAgentRunChangesAsync((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
@@ -125,6 +129,9 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<ToolOptionViewModel> ToolOptions { get; } = [];
     public ObservableCollection<ModelParameterOptionViewModel> ModelParameterOptions { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> WorkspaceChanges { get; } = [];
+    public ObservableCollection<WorkspaceChangeViewModel> StagedWorkspaceChanges { get; } = [];
+    public ObservableCollection<WorkspaceChangeViewModel> UnstagedWorkspaceChanges { get; } = [];
+    public ObservableCollection<WorkspaceChangeViewModel> UntrackedWorkspaceChanges { get; } = [];
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
         new() { Id = nameof(ToolPermissionMode.AutoReadOnly), Name = "只读自动" },
@@ -157,6 +164,10 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand CommitAllWorkspaceChangesCommand { get; }
     public RelayCommand OpenWorkspaceFileCommand { get; }
     public RelayCommand CopyWorkspaceDiffCommand { get; }
+    public RelayCommand StageSelectedWorkspaceChangesCommand { get; }
+    public RelayCommand UnstageSelectedWorkspaceChangesCommand { get; }
+    public RelayCommand SelectAllWorkspaceChangesCommand { get; }
+    public RelayCommand ClearWorkspaceSelectionCommand { get; }
     public RelayCommand CommitAgentRunChangesCommand { get; }
     public RelayCommand RestoreAgentRunChangesCommand { get; }
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; }
@@ -264,6 +275,15 @@ public sealed class MainViewModel : ObservableObject
     }
     public bool HasApiKey => SelectedConfiguredProvider is not null && !string.IsNullOrWhiteSpace(SelectedConfiguredProvider.ApiKey);
     public bool HasWorkspaceChanges => WorkspaceChanges.Count > 0;
+    public bool HasSelectedWorkspaceChanges => WorkspaceChanges.Any(change => change.IsSelected);
+    public string WorkspaceSelectionText
+    {
+        get
+        {
+            var selectedCount = WorkspaceChanges.Count(change => change.IsSelected);
+            return selectedCount == 0 ? "未选择文件" : $"已选择 {selectedCount} 个文件";
+        }
+    }
     public string WorkspaceBranch
     {
         get => _workspaceBranch;
@@ -292,11 +312,7 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _isRefreshingWorkspaceChanges, value))
             {
-                RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
-                RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
-                CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
-                CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
-                OpenWorkspaceFileCommand.RaiseCanExecuteChanged();
+                RaiseWorkspaceCommandStates();
             }
         }
     }
@@ -755,9 +771,34 @@ public sealed class MainViewModel : ObservableObject
         {
             var changeSet = await _workspaceChangeService.GetChangesAsync(SelectedProject.Path);
             WorkspaceChanges.Clear();
+            StagedWorkspaceChanges.Clear();
+            UnstagedWorkspaceChanges.Clear();
+            UntrackedWorkspaceChanges.Clear();
             foreach (var change in changeSet.Changes)
             {
-                WorkspaceChanges.Add(new WorkspaceChangeViewModel(change));
+                var viewModel = new WorkspaceChangeViewModel(change);
+                viewModel.PropertyChanged += (_, args) =>
+                {
+                    if (args.PropertyName == nameof(WorkspaceChangeViewModel.IsSelected))
+                    {
+                        OnPropertyChanged(nameof(HasSelectedWorkspaceChanges));
+                        OnPropertyChanged(nameof(WorkspaceSelectionText));
+                        RaiseWorkspaceCommandStates();
+                    }
+                };
+                WorkspaceChanges.Add(viewModel);
+                if (viewModel.IsUntracked)
+                {
+                    UntrackedWorkspaceChanges.Add(viewModel);
+                }
+                else if (viewModel.IsStaged)
+                {
+                    StagedWorkspaceChanges.Add(viewModel);
+                }
+                else
+                {
+                    UnstagedWorkspaceChanges.Add(viewModel);
+                }
             }
 
             WorkspaceBranch = changeSet.Branch;
@@ -771,7 +812,9 @@ public sealed class MainViewModel : ObservableObject
             }
 
             OnPropertyChanged(nameof(HasWorkspaceChanges));
-            CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(HasSelectedWorkspaceChanges));
+            OnPropertyChanged(nameof(WorkspaceSelectionText));
+            RaiseWorkspaceCommandStates();
         }
         catch (Exception ex)
         {
@@ -796,7 +839,11 @@ public sealed class MainViewModel : ObservableObject
         WorkspaceDiffText = "正在读取 diff...";
         try
         {
-            var diff = await _workspaceChangeService.GetDiffAsync(SelectedProject.Path, SelectedWorkspaceChange.Path);
+            var showStagedDiff = SelectedWorkspaceChange.IsStaged && !SelectedWorkspaceChange.HasUnstagedChanges;
+            var diff = await _workspaceChangeService.GetDiffAsync(
+                SelectedProject.Path,
+                SelectedWorkspaceChange.Path,
+                staged: showStagedDiff);
             if (version != _workspaceDiffLoadVersion)
             {
                 return;
@@ -853,6 +900,60 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private async Task RestoreSelectedWorkspaceChangesAsync()
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        var changes = GetCheckedWorkspaceChanges();
+        if (changes.Count == 0)
+        {
+            await RestoreSelectedWorkspaceFileAsync();
+            return;
+        }
+
+        var decision = System.Windows.MessageBox.Show(
+            System.Windows.Application.Current.MainWindow,
+            $"恢复已选择的 {changes.Count} 个文件？\n\n未跟踪文件会被删除。",
+            "确认恢复已选文件",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+        if (decision != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        var restored = 0;
+        var errors = new List<string>();
+        foreach (var change in changes)
+        {
+            try
+            {
+                _ = await _workspaceChangeService.RestoreFileAsync(
+                    SelectedProject.Path,
+                    change.Path,
+                    deleteUntracked: change.IsUntracked);
+                restored++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{change.Path}: {ex.Message}");
+            }
+        }
+
+        StatusText = errors.Count == 0
+            ? $"已恢复 {restored} 个已选文件"
+            : $"已恢复 {restored} 个文件，{errors.Count} 个失败";
+        if (errors.Count > 0)
+        {
+            WorkspaceDiffText = string.Join(Environment.NewLine, errors);
+        }
+
+        await RefreshWorkspaceChangesAsync();
+    }
+
     private async Task CommitSelectedWorkspaceFileAsync()
     {
         if (SelectedProject is null || SelectedWorkspaceChange is null)
@@ -896,13 +997,14 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var paths = WorkspaceChanges
+        var changes = GetCheckedWorkspaceChanges();
+        var paths = (changes.Count > 0 ? changes : WorkspaceChanges)
             .Select(change => change.Path)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         var message = TextPromptDialog.Show(
             System.Windows.Application.Current.MainWindow,
-            "提交当前工作区变更",
+            changes.Count > 0 ? "提交已选工作区变更" : "提交当前工作区变更",
             $"Update {paths.Count} files");
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -927,6 +1029,66 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private async Task StageSelectedWorkspaceChangesAsync()
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        var paths = GetCheckedWorkspaceChanges()
+            .Select(change => change.Path)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (paths.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _workspaceChangeService.StageAsync(SelectedProject.Path, paths);
+            StatusText = $"已暂存 {paths.Count} 个文件";
+            await RefreshWorkspaceChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"暂存失败：{ex.Message}";
+            WorkspaceDiffText = $"暂存失败：{ex.Message}";
+        }
+    }
+
+    private async Task UnstageSelectedWorkspaceChangesAsync()
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        var paths = GetCheckedWorkspaceChanges()
+            .Where(change => change.IsStaged)
+            .Select(change => change.Path)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (paths.Count == 0)
+        {
+            StatusText = "请选择已暂存文件";
+            return;
+        }
+
+        try
+        {
+            await _workspaceChangeService.UnstageAsync(SelectedProject.Path, paths);
+            StatusText = $"已取消暂存 {paths.Count} 个文件";
+            await RefreshWorkspaceChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"取消暂存失败：{ex.Message}";
+            WorkspaceDiffText = $"取消暂存失败：{ex.Message}";
+        }
+    }
+
     private void OpenWorkspaceFile()
     {
         if (SelectedWorkspaceChange is null)
@@ -946,6 +1108,38 @@ public sealed class MainViewModel : ObservableObject
 
         System.Windows.Clipboard.SetText(WorkspaceDiffText);
         StatusText = "当前 diff 已复制";
+    }
+
+    private IReadOnlyList<WorkspaceChangeViewModel> GetCheckedWorkspaceChanges()
+    {
+        return WorkspaceChanges
+            .Where(change => change.IsSelected)
+            .ToList();
+    }
+
+    private void SetWorkspaceSelection(bool isSelected)
+    {
+        foreach (var change in WorkspaceChanges)
+        {
+            change.IsSelected = isSelected;
+        }
+
+        OnPropertyChanged(nameof(HasSelectedWorkspaceChanges));
+        OnPropertyChanged(nameof(WorkspaceSelectionText));
+        RaiseWorkspaceCommandStates();
+    }
+
+    private void RaiseWorkspaceCommandStates()
+    {
+        RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
+        RestoreWorkspaceFileCommand.RaiseCanExecuteChanged();
+        CommitWorkspaceFileCommand.RaiseCanExecuteChanged();
+        CommitAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
+        OpenWorkspaceFileCommand.RaiseCanExecuteChanged();
+        StageSelectedWorkspaceChangesCommand.RaiseCanExecuteChanged();
+        UnstageSelectedWorkspaceChangesCommand.RaiseCanExecuteChanged();
+        SelectAllWorkspaceChangesCommand.RaiseCanExecuteChanged();
+        ClearWorkspaceSelectionCommand.RaiseCanExecuteChanged();
     }
 
     private void OpenAgentFileChange(AgentFileChangeViewModel change)

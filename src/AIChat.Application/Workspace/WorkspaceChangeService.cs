@@ -209,6 +209,50 @@ public sealed class WorkspaceChangeService
         };
     }
 
+    public async Task StageAsync(
+        string projectPath,
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedPaths = NormalizePaths(projectPath, paths);
+        if (normalizedPaths.Count == 0)
+        {
+            throw new InvalidOperationException("至少需要一个明确文件路径。");
+        }
+
+        var result = await GitCommand.RunAsync(
+            projectPath,
+            ["add", "--", .. normalizedPaths],
+            timeoutSeconds: 20,
+            cancellationToken);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(CreateErrorMessage(result));
+        }
+    }
+
+    public async Task UnstageAsync(
+        string projectPath,
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedPaths = NormalizePaths(projectPath, paths);
+        if (normalizedPaths.Count == 0)
+        {
+            throw new InvalidOperationException("至少需要一个明确文件路径。");
+        }
+
+        var result = await GitCommand.RunAsync(
+            projectPath,
+            ["restore", "--staged", "--", .. normalizedPaths],
+            timeoutSeconds: 20,
+            cancellationToken);
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(CreateErrorMessage(result));
+        }
+    }
+
     private static WorkspaceChange ParseStatusLine(string line)
     {
         var status = line.Length >= 2 ? line[..2] : line;

@@ -132,6 +132,36 @@ public sealed class WorkspaceChangeServiceTests
         Assert.Contains("提交信息", ex.Message);
     }
 
+    [Fact]
+    public async Task StageAsync_StagesExplicitPaths()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "tracked.txt"), "changed\n");
+        var service = new WorkspaceChangeService();
+
+        await service.StageAsync(workspace.Path, ["tracked.txt"]);
+
+        var changes = await service.GetChangesAsync(workspace.Path);
+        var change = Assert.Single(changes.Changes);
+        Assert.True(change.IsStaged);
+    }
+
+    [Fact]
+    public async Task UnstageAsync_UnstagesExplicitPaths()
+    {
+        using var workspace = await GitWorkspace.CreateAsync();
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "tracked.txt"), "changed\n");
+        var service = new WorkspaceChangeService();
+        await service.StageAsync(workspace.Path, ["tracked.txt"]);
+
+        await service.UnstageAsync(workspace.Path, ["tracked.txt"]);
+
+        var changes = await service.GetChangesAsync(workspace.Path);
+        var change = Assert.Single(changes.Changes);
+        Assert.False(change.IsStaged);
+        Assert.True(change.IsUnstaged);
+    }
+
     private sealed class GitWorkspace : IDisposable
     {
         private readonly TemporaryWorkspace _workspace;

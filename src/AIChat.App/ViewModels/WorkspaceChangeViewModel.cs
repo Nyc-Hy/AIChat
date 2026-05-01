@@ -5,6 +5,7 @@ namespace AIChat.App.ViewModels;
 public sealed class WorkspaceChangeViewModel : ObservableObject
 {
     private readonly WorkspaceChange _change;
+    private bool _isSelected;
 
     public WorkspaceChangeViewModel(WorkspaceChange change)
     {
@@ -16,4 +17,12 @@ public sealed class WorkspaceChangeViewModel : ObservableObject
     public string DisplayStatus => _change.DisplayStatus;
     public bool IsUntracked => _change.IsUntracked;
     public bool IsStaged => _change.IsStaged;
+    public bool IsUnstaged => _change.IsUnstaged;
+    public bool HasUnstagedChanges => _change.HasUnstagedChanges;
+    public string Section => IsUntracked ? "未跟踪" : IsStaged ? "已暂存" : "未暂存";
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
+    }
 }
