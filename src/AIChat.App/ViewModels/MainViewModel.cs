@@ -43,7 +43,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly WorkspaceChangeService _workspaceChangeService;
     private readonly AuditLogRepository? _auditLogRepository;
     private AgentHarness? _agentHarness;
-    private AgentToolCatalog? _toolCatalog;
+    private AgentToolRegistry? _toolRegistry;
     private readonly AgentRunQueue _agentRunQueue = new();
     private ProjectViewModel? _selectedProject;
     private ConversationViewModel? _selectedConversation;
@@ -746,10 +746,10 @@ public sealed class MainViewModel : ObservableObject
 
     private bool CanSend => !IsSending && !string.IsNullOrWhiteSpace(DraftMessage) && SelectedProject is not null;
 
-    public void ConfigureAgent(AgentHarness agentHarness, AgentToolCatalog toolCatalog)
+    public void ConfigureAgent(AgentHarness agentHarness, AgentToolRegistry toolRegistry)
     {
         _agentHarness = agentHarness;
-        _toolCatalog = toolCatalog;
+        _toolRegistry = toolRegistry;
         RebuildToolOptions();
     }
 
@@ -2519,19 +2519,19 @@ public sealed class MainViewModel : ObservableObject
 
     private void NormalizeToolSettings()
     {
-        if (_toolCatalog is null)
+        if (_toolRegistry is null)
         {
             return;
         }
 
-        var knownIds = _toolCatalog.All.Select(tool => tool.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var knownIds = _toolRegistry.All.Select(tool => tool.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Settings.EnabledToolIds = Settings.EnabledToolIds
             .Where(knownIds.Contains)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (Settings.EnabledToolIds.Count == 0)
         {
-            Settings.EnabledToolIds = _toolCatalog.All
+            Settings.EnabledToolIds = _toolRegistry.All
                 .Select(tool => tool.Id)
                 .ToList();
         }
@@ -2547,9 +2547,9 @@ public sealed class MainViewModel : ObservableObject
             .Where(entry => knownIds.Contains(entry.Key))
             .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var tool in _toolCatalog.All)
+        foreach (var tool in _toolRegistry.All)
         {
-            Settings.ToolPermissionModes.TryAdd(tool.Id, DefaultPermissionMode(tool));
+            Settings.ToolPermissionModes.TryAdd(tool.Id, _toolRegistry.GetMetadata(tool.Id).DefaultPermissionMode);
         }
 
         void AddEnabledToolIfKnown(string toolId)
@@ -2622,18 +2622,18 @@ public sealed class MainViewModel : ObservableObject
 
     private void RebuildToolOptions()
     {
-        if (_toolCatalog is null)
+        if (_toolRegistry is null)
         {
             return;
         }
 
         var enabled = Settings.EnabledToolIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         ToolOptions.Clear();
-        foreach (var tool in _toolCatalog.All)
+        foreach (var (tool, meta) in _toolRegistry.AllWithMetadata())
         {
             var mode = Settings.ToolPermissionModes.TryGetValue(tool.Id, out var configuredMode)
                 ? configuredMode
-                : DefaultPermissionMode(tool);
+                : meta.DefaultPermissionMode;
             ToolOptions.Add(new ToolOptionViewModel
             {
                 Id = tool.Id,
@@ -2666,13 +2666,6 @@ public sealed class MainViewModel : ObservableObject
             tool => tool.Id,
             tool => Enum.TryParse<ToolPermissionMode>(tool.PermissionMode, out var mode) ? mode : ToolPermissionMode.ConfirmEachTime,
             StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static ToolPermissionMode DefaultPermissionMode(IAgentTool tool)
-    {
-        return tool.Risk == AgentToolRisk.ReadOnly
-            ? ToolPermissionMode.AutoReadOnly
-            : ToolPermissionMode.ConfirmEachTime;
     }
 
     private async Task RecordAuditEventAsync(AuditEventType type, string projectId, string runId, string toolName = "", string summary = "", string detail = "")
@@ -2751,7 +2744,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void AddProjectToolOverride()
     {
-        var firstTool = _toolCatalog?.All.FirstOrDefault();
+        var firstTool = _toolRegistry?.All.FirstOrDefault();
         var vm = new ProjectToolPermissionOverrideViewModel
         {
             ToolId = firstTool?.Id ?? "",

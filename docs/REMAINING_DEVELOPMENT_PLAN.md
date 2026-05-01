@@ -117,6 +117,18 @@ git diff --check
 - ActiveModelSupportsTools 属性与 UI 警告条。
 - OpenAICompatibleToolCallTests 覆盖多种 tool call 解析场景。
 
+### 第 13 阶段：安全、权限与审计日志（已完成）
+
+- ProjectWorkspace.ProjectToolPermissionModes 存储项目级工具权限覆盖。
+- AuditLogRepository 以 JSONL 格式追加审计事件，支持按项目/类型/时间过滤。
+- ShellCommandTool 扩展阻断列表和命令白名单。
+
+### 第 14 阶段：插件化工具与 MCP/A2A 预留（已完成）
+
+- AgentToolRegistry 替代 AgentToolCatalog，提供工具元数据。
+- IExternalToolProvider 接口支持未来 MCP/A2A 工具注册。
+- A2A_ADAPTER_DESIGN.md 设计文档。
+
 目标：让 Agent 在开始动手前形成可见计划，并在执行过程中更新任务状态。这一阶段会让 AIChat 更接近 ClaudeCode Desktop 的“工作流感”，用户能看到它准备做什么、正在做什么、还剩什么。
 
 ### 7.1 新增领域模型
@@ -760,7 +772,7 @@ Record audit events for agent actions
 Harden shell command policy
 ```
 
-> ✅ 第 13 阶段已完成（commit `TBD`）。
+> ✅ 第 13 阶段已完成（commit `da89499`）。
 >
 > 已实现：
 > - `ProjectWorkspace.ProjectToolPermissionModes` 存储项目级工具权限覆盖，合并时项目值优先。
@@ -846,6 +858,13 @@ docs/A2A_ADAPTER_DESIGN.md
 ```text
 Document future A2A adapter boundary
 ```
+
+> ✅ 第 14 阶段已完成（commit `TBD`）。
+>
+> 已实现：
+> - `AgentToolRegistry` 替代 `AgentToolCatalog`，提供工具元数据（分类、默认权限、分组标签）。
+> - `IExternalToolProvider` 接口支持未来 MCP/A2A 工具注册。
+> - `docs/A2A_ADAPTER_DESIGN.md` 设计文档说明外部 Agent 如何通过 Harness 执行项目任务。
 
 ## 第 15 阶段：桌面体验打磨
 

@@ -37,7 +37,7 @@ public partial class MainWindow : Window
             new OpenAICompatibleChatProvider(),
             new AnthropicChatProvider()
         ]);
-        var toolCatalog = AgentToolCatalog.CreateDefault();
+        var toolRegistry = AgentToolRegistry.CreateDefault();
         var contextEstimator = new SimpleContextEstimator();
         var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat");
         var auditLogRepository = new AuditLogRepository(appDataPath);
@@ -50,10 +50,11 @@ public partial class MainWindow : Window
                 new SystemPromptBuilder()),
             new WorkspaceChangeService(),
             auditLogRepository);
+        var toolCatalog = new AgentToolCatalog(toolRegistry.All);
         var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(
             new AgentHarness(agentRunner),
-            toolCatalog);
+            toolRegistry);
         DataContext = _viewModel;
     }
 
