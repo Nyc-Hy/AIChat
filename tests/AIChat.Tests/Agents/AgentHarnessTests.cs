@@ -62,6 +62,8 @@ public sealed class AgentHarnessTests
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta && item.Content == "done");
         Assert.Equal(2, run.Steps.Count);
         Assert.Equal(AgentStepType.Model, run.Steps[0].Type);
+        Assert.Contains("模型：test", run.Steps[0].Output);
+        Assert.Contains("工作区：## main · 2 个启动变更", run.Steps[0].Output);
         Assert.Equal(AgentStepType.Final, run.Steps[1].Type);
         Assert.Equal("done", run.Steps[1].Output);
     }

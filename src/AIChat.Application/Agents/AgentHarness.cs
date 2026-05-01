@@ -52,7 +52,7 @@ public sealed class AgentHarness
             AgentStepType.Model,
             "准备上下文",
             request.Goal,
-            "已生成系统提示和会话上下文。");
+            CreateContextStepOutput(run));
         yield return new AgentHarnessEvent
         {
             Type = AgentHarnessEventType.StepAdded,
@@ -194,6 +194,25 @@ public sealed class AgentHarness
             "run_build" or "run_test" => "verifying",
             _ => "working"
         };
+    }
+
+    private static string CreateContextStepOutput(AgentRun run)
+    {
+        var lines = new List<string>
+        {
+            "已生成系统提示和会话上下文。",
+            $"项目：{(string.IsNullOrWhiteSpace(run.ProjectPath) ? "未记录" : run.ProjectPath)}",
+            $"模型：{(string.IsNullOrWhiteSpace(run.Model) ? "未记录" : run.Model)}",
+            $"工具：{(run.EnabledTools.Count == 0 ? "无" : string.Join(", ", run.EnabledTools))}",
+            $"工作区：{(string.IsNullOrWhiteSpace(run.WorkspaceBranch) ? "未记录分支" : run.WorkspaceBranch)} · {run.WorkspaceChangeCountAtStart} 个启动变更"
+        };
+
+        if (run.WorkspaceChangesWereTruncated)
+        {
+            lines[^1] += "（列表被截断）";
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private static AgentStep AddRunningStep(
