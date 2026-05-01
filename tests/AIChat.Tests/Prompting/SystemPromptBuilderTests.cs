@@ -53,4 +53,17 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("run_build 或 run_test", prompt);
         Assert.Contains("run_shell 只作为最后手段", prompt);
     }
+
+    [Fact]
+    public void Build_IncludesPlanGuidanceWhenUpdatePlanEnabled()
+    {
+        var prompt = new SystemPromptBuilder().Build(new SystemPromptContext
+        {
+            EnabledToolIds = ["update_plan", "read_file", "write_file"]
+        });
+
+        Assert.Contains("update_plan", prompt);
+        Assert.Contains("多步骤任务", prompt);
+        Assert.Contains("先调用 update_plan 创建计划", prompt);
+    }
 }

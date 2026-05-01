@@ -149,4 +149,111 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
         Assert.True(roundTripped.AgentRuns[0].Verifications[0].IsSuccess);
     }
+
+    [Fact]
+    public void Conversation_RoundTripsAgentPlan()
+    {
+        var conversation = new Conversation
+        {
+            Id = "conversation-1",
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Id = "assistant-1",
+                    Role = ChatRole.Assistant,
+                    AgentRunId = "run-1",
+                    Content = "done"
+                }
+            ],
+            AgentRuns =
+            [
+                new AgentRun
+                {
+                    Id = "run-1",
+                    ConversationId = "conversation-1",
+                    AssistantMessageId = "assistant-1",
+                    Status = AgentRunStatus.Completed,
+                    Plan = new AgentPlan
+                    {
+                        Id = "plan-1",
+                        RunId = "run-1",
+                        Summary = "Fix the login bug",
+                        CreatedAt = new DateTimeOffset(2026, 5, 1, 9, 0, 0, TimeSpan.Zero),
+                        UpdatedAt = new DateTimeOffset(2026, 5, 1, 9, 5, 0, TimeSpan.Zero),
+                        Items =
+                        [
+                            new AgentPlanItem
+                            {
+                                Id = "item-1",
+                                Title = "Read the auth code",
+                                Status = AgentPlanItemStatus.Completed,
+                                Notes = "Done reading",
+                                Order = 0
+                            },
+                            new AgentPlanItem
+                            {
+                                Id = "item-2",
+                                Title = "Fix the bug",
+                                Status = AgentPlanItemStatus.InProgress,
+                                Notes = "",
+                                Order = 1
+                            },
+                            new AgentPlanItem
+                            {
+                                Id = "item-3",
+                                Title = "Run tests",
+                                Status = AgentPlanItemStatus.Pending,
+                                Order = 2
+                            }
+                        ]
+                    }
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(conversation, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<Conversation>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        var run = roundTripped.AgentRuns[0];
+        Assert.NotNull(run.Plan);
+        Assert.Equal("plan-1", run.Plan!.Id);
+        Assert.Equal("run-1", run.Plan.RunId);
+        Assert.Equal("Fix the login bug", run.Plan.Summary);
+        Assert.Equal(3, run.Plan.Items.Count);
+        Assert.Equal("Read the auth code", run.Plan.Items[0].Title);
+        Assert.Equal(AgentPlanItemStatus.Completed, run.Plan.Items[0].Status);
+        Assert.Equal("Done reading", run.Plan.Items[0].Notes);
+        Assert.Equal(0, run.Plan.Items[0].Order);
+        Assert.Equal("Fix the bug", run.Plan.Items[1].Title);
+        Assert.Equal(AgentPlanItemStatus.InProgress, run.Plan.Items[1].Status);
+        Assert.Equal("Run tests", run.Plan.Items[2].Title);
+        Assert.Equal(AgentPlanItemStatus.Pending, run.Plan.Items[2].Status);
+    }
+
+    [Fact]
+    public void Conversation_HandlesMissingPlanGracefully()
+    {
+        var conversation = new Conversation
+        {
+            Id = "conversation-1",
+            Messages = [],
+            AgentRuns =
+            [
+                new AgentRun
+                {
+                    Id = "run-1",
+                    Status = AgentRunStatus.Completed
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(conversation, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<Conversation>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        Assert.Single(roundTripped.AgentRuns);
+        Assert.Null(roundTripped.AgentRuns[0].Plan);
+    }
 }

@@ -1938,6 +1938,7 @@ public sealed class MainViewModel : ObservableObject
 
                                 assistantViewModel.SyncAgentFileChanges();
                                 assistantViewModel.SyncAgentVerifications();
+                                assistantViewModel.SyncAgentPlan();
                             });
                             rawResponseEvents.Add(SerializeJson(new
                             {

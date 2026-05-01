@@ -1650,6 +1650,94 @@
                                 <Border Margin="0,14,0,0"
                                         Padding="14"
                                         CornerRadius="8"
+                                        Background="#FDFBFE"
+                                        BorderBrush="#E4D7E8"
+                                        BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasPlan}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock Text="任务计划"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#303A47" />
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="{Binding Plan.ProgressText}"
+                                                       FontSize="11"
+                                                       Foreground="#748092" />
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Plan.Summary}"
+                                                   Margin="0,5,0,0"
+                                                   Foreground="#596473"
+                                                   TextWrapping="Wrap" />
+                                        <ItemsControl ItemsSource="{Binding Plan.Items}"
+                                                      Margin="0,8,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <DockPanel Margin="0,0,0,6">
+                                                        <Ellipse DockPanel.Dock="Left"
+                                                                 Width="8"
+                                                                 Height="8"
+                                                                 Margin="0,0,8,0"
+                                                                 VerticalAlignment="Center">
+                                                            <Ellipse.Fill>
+                                                                <SolidColorBrush Color="{Binding StatusColor}" />
+                                                            </Ellipse.Fill>
+                                                        </Ellipse>
+                                                        <StackPanel VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Foreground="#2A3340"
+                                                                       FontSize="12">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsSkipped}" Value="True">
+                                                                                <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                                                <Setter Property="Foreground" Value="#98A2B0" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                            <TextBlock Text="{Binding Notes}"
+                                                                       Margin="0,2,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="#748092"
+                                                                       TextWrapping="Wrap">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasNotes}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                        <TextBlock DockPanel.Dock="Right"
+                                                                   Text="{Binding StatusText}"
+                                                                   FontSize="11"
+                                                                   Foreground="#748092"
+                                                                   VerticalAlignment="Center" />
+                                                    </DockPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Margin="0,14,0,0"
+                                        Padding="14"
+                                        CornerRadius="8"
                                         Background="#F7FBFA"
                                         BorderBrush="#D7E8E4"
                                         BorderThickness="1">

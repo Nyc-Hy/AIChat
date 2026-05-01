@@ -339,6 +339,137 @@ public sealed class AgentHarnessTests
         Assert.Contains("复查并继续", run.RecoverySuggestion);
     }
 
+    [Fact]
+    public async Task RunAsync_RecordsPlanFromUpdatePlanTool()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "update_plan",
+            ArgumentsJson = """
+            {
+              "summary": "Fix the login bug",
+              "items": [
+                { "title": "Read auth code", "status": "completed", "notes": "Done" },
+                { "title": "Fix the bug", "status": "in_progress" },
+                { "title": "Run tests", "status": "pending" }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new UpdatePlanTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix login",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix login" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.NotNull(run.Plan);
+        Assert.Equal("Fix the login bug", run.Plan!.Summary);
+        Assert.Equal(3, run.Plan.Items.Count);
+        Assert.Equal("Read auth code", run.Plan.Items[0].Title);
+        Assert.Equal(AgentPlanItemStatus.Completed, run.Plan.Items[0].Status);
+        Assert.Equal("Done", run.Plan.Items[0].Notes);
+        Assert.Equal("Fix the bug", run.Plan.Items[1].Title);
+        Assert.Equal(AgentPlanItemStatus.InProgress, run.Plan.Items[1].Status);
+        Assert.Equal("Run tests", run.Plan.Items[2].Title);
+        Assert.Equal(AgentPlanItemStatus.Pending, run.Plan.Items[2].Status);
+        Assert.Contains("调用工具：update_plan", run.Steps.Select(step => step.Title));
+    }
+
+    [Fact]
+    public async Task RunAsync_UpdatesExistingPlanOnSubsequentCalls()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var firstCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "update_plan",
+            ArgumentsJson = """
+            {
+              "summary": "Fix the bug",
+              "items": [
+                { "title": "Read code", "status": "pending" },
+                { "title": "Fix it", "status": "pending" }
+              ]
+            }
+            """
+        };
+        var secondCall = new ChatToolCall
+        {
+            Id = "tool-call-2",
+            Name = "update_plan",
+            ArgumentsJson = """
+            {
+              "summary": "Fix the bug",
+              "items": [
+                { "title": "Read code", "status": "completed", "notes": "Done reading" },
+                { "title": "Fix it", "status": "in_progress" }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [firstCall] }],
+                [new ChatDelta { ToolCalls = [secondCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new UpdatePlanTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix bug",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix bug" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.NotNull(run.Plan);
+        Assert.Equal("Fix the bug", run.Plan!.Summary);
+        Assert.Equal(2, run.Plan.Items.Count);
+        Assert.Equal(AgentPlanItemStatus.Completed, run.Plan.Items[0].Status);
+        Assert.Equal("Done reading", run.Plan.Items[0].Notes);
+        Assert.Equal(AgentPlanItemStatus.InProgress, run.Plan.Items[1].Status);
+    }
+
     private sealed class FakeChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;

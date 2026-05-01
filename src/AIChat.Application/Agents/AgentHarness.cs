@@ -163,6 +163,7 @@ public sealed class AgentHarness
                             agentEvent.ToolCall,
                             agentEvent.ToolPreview,
                             agentEvent.ToolResult);
+                        RecordPlan(run, agentEvent.ToolCall, agentEvent.ToolResult);
                     }
 
                     yield return new AgentHarnessEvent
@@ -218,6 +219,7 @@ public sealed class AgentHarness
             "list_files" or "read_file" or "search_text" or "git_status" or "git_diff" => "reading",
             "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit" => "editing",
             "run_build" or "run_test" => "verifying",
+            "update_plan" => "planning",
             _ => "working"
         };
     }
@@ -491,6 +493,123 @@ public sealed class AgentHarness
     {
         return string.Equals(toolName, "run_build", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(toolName, "run_test", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RecordPlan(AgentRun run, ChatToolCall? toolCall, AgentToolResult toolResult)
+    {
+        if (toolCall is null ||
+            !string.Equals(toolCall.Name, "update_plan", StringComparison.OrdinalIgnoreCase) ||
+            toolResult.IsError)
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(toolResult.Content);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return;
+            }
+
+            var summary = root.TryGetProperty("summary", out var summaryElement) &&
+                          summaryElement.ValueKind == JsonValueKind.String
+                ? summaryElement.GetString() ?? ""
+                : "";
+
+            if (string.IsNullOrWhiteSpace(summary) && !root.TryGetProperty("itemCount", out _))
+            {
+                return;
+            }
+
+            // Parse items from the original tool call arguments, not the result
+            var planItems = new List<AgentPlanItem>();
+            try
+            {
+                using var argsDoc = JsonDocument.Parse(toolCall.ArgumentsJson);
+                var argsRoot = argsDoc.RootElement;
+                if (argsRoot.TryGetProperty("items", out var itemsElement) &&
+                    itemsElement.ValueKind == JsonValueKind.Array)
+                {
+                    var order = 0;
+                    foreach (var itemElement in itemsElement.EnumerateArray())
+                    {
+                        var title = itemElement.TryGetProperty("title", out var titleElement) &&
+                                    titleElement.ValueKind == JsonValueKind.String
+                            ? titleElement.GetString() ?? ""
+                            : "";
+
+                        if (string.IsNullOrWhiteSpace(title))
+                        {
+                            continue;
+                        }
+
+                        var statusText = itemElement.TryGetProperty("status", out var statusElement) &&
+                                         statusElement.ValueKind == JsonValueKind.String
+                            ? statusElement.GetString() ?? ""
+                            : "";
+
+                        var notes = itemElement.TryGetProperty("notes", out var notesElement) &&
+                                    notesElement.ValueKind == JsonValueKind.String
+                            ? notesElement.GetString() ?? ""
+                            : "";
+
+                        planItems.Add(new AgentPlanItem
+                        {
+                            Title = title,
+                            Status = UpdatePlanTool.ParseStatus(statusText),
+                            Notes = notes,
+                            Order = order++
+                        });
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // If arguments can't be parsed, still update the summary
+            }
+
+            if (run.Plan is null)
+            {
+                run.Plan = new AgentPlan
+                {
+                    RunId = run.Id,
+                    Summary = summary,
+                    Items = planItems,
+                    CreatedAt = DateTimeOffset.Now,
+                    UpdatedAt = DateTimeOffset.Now
+                };
+            }
+            else
+            {
+                run.Plan.Summary = summary;
+                run.Plan.UpdatedAt = DateTimeOffset.Now;
+
+                // Match existing items by title, update status/notes; add new items
+                var existingByTitle = run.Plan.Items
+                    .Where(item => !string.IsNullOrWhiteSpace(item.Title))
+                    .ToDictionary(item => item.Title, item => item, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var newItem in planItems)
+                {
+                    if (existingByTitle.TryGetValue(newItem.Title, out var existing))
+                    {
+                        existing.Status = newItem.Status;
+                        existing.Notes = newItem.Notes;
+                    }
+                    else
+                    {
+                        newItem.Order = run.Plan.Items.Count;
+                        run.Plan.Items.Add(newItem);
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Ignore malformed plan update results
+        }
     }
 
     private static VerificationInfo ParseVerification(AgentToolResult toolResult)

@@ -34,6 +34,7 @@ public sealed class AgentToolCatalog
             new WriteFileTool(),
             new EditFileTool(),
             new ApplyPatchTool(),
+            new UpdatePlanTool(),
             new GitStatusTool(),
             new GitDiffTool(),
             new GitRestoreFileTool(),

@@ -28,6 +28,9 @@ public sealed class SystemPromptBuilder
         builder.AppendLine("- 提交代码：git_commit，提交前先检查 status/diff。");
         builder.AppendLine("- 验证：run_build、run_test。");
         builder.AppendLine("- 兜底：run_shell，仅当没有专用工具可用。");
+        builder.AppendLine("- 计划：update_plan，用于创建和更新任务执行计划。");
+        builder.AppendLine();
+        builder.AppendLine("对于多步骤任务，先调用 update_plan 创建计划，再逐步执行。每完成一个步骤，调用 update_plan 更新状态。");
         builder.AppendLine();
         builder.AppendLine("当前项目：");
         builder.AppendLine($"- 名称：{Normalize(context.ProjectName, "AIChat")}");

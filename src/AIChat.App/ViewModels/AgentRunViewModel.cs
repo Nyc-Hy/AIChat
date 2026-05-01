@@ -16,6 +16,7 @@ public sealed class AgentRunViewModel : ObservableObject
             run.FileChanges.Select(change => new AgentFileChangeViewModel(change)));
         Verifications = new ObservableCollection<AgentVerificationViewModel>(
             run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
+        Plan = run.Plan is not null ? new AgentPlanViewModel(run.Plan) : null;
     }
 
     public AgentRun Run => _run;
@@ -117,6 +118,11 @@ public sealed class AgentRunViewModel : ObservableObject
     public ObservableCollection<AgentStepViewModel> Steps { get; }
     public ObservableCollection<AgentFileChangeViewModel> FileChanges { get; }
     public ObservableCollection<AgentVerificationViewModel> Verifications { get; }
+    public AgentPlanViewModel? Plan { get; private set; }
+    public bool HasPlan => Plan is not null;
+    public string PlanSummary => Plan is null
+        ? "无计划"
+        : $"{Plan.Summary} ({Plan.ProgressText})";
     public bool HasSteps => Steps.Count > 0;
     public bool HasFileChanges => FileChanges.Count > 0;
     public bool HasVerifications => Verifications.Count > 0;
@@ -144,6 +150,7 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"修改护栏：{MutationGuardrailText}",
                 $"审批：{ApprovalSummary}",
                 $"工作区：{WorkspaceSnapshotText}",
+                $"计划：{PlanSummary}",
                 $"步骤：{StepCount}",
                 $"文件变更：{FileChangeCount}",
                 $"验证：{VerificationCount}",
@@ -214,6 +221,18 @@ public sealed class AgentRunViewModel : ObservableObject
                 RecoverySuggestion
             };
 
+            if (Plan is not null)
+            {
+                lines.Add("");
+                lines.Add("## Plan");
+                lines.Add(Plan.Summary);
+                lines.Add(Plan.ProgressText);
+                foreach (var item in Plan.Items)
+                {
+                    lines.Add($"- [{item.StatusText}] {item.Title}{(item.HasNotes ? $" — {item.Notes}" : "")}");
+                }
+            }
+
             if (HasCompletionReason)
             {
                 lines.Add("");
@@ -280,6 +299,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
+        OnPropertyChanged(nameof(PlanSummary));
     }
 
     public void SyncFileChanges()
@@ -317,6 +337,43 @@ public sealed class AgentRunViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasVerifications));
         OnPropertyChanged(nameof(VerificationCount));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
+    }
+
+    public void SyncPlan()
+    {
+        if (_run.Plan is null)
+        {
+            return;
+        }
+
+        if (Plan is null)
+        {
+            Plan = new AgentPlanViewModel(_run.Plan);
+        }
+        else
+        {
+            // Sync items: update existing, add new
+            foreach (var item in _run.Plan.Items)
+            {
+                var existing = Plan.Items.FirstOrDefault(vm => vm.Title == item.Title);
+                if (existing is not null)
+                {
+                    existing.Refresh();
+                }
+                else
+                {
+                    Plan.Items.Add(new AgentPlanItemViewModel(item));
+                }
+            }
+        }
+
+        Plan?.Refresh();
+        OnPropertyChanged(nameof(Plan));
+        OnPropertyChanged(nameof(HasPlan));
+        OnPropertyChanged(nameof(PlanSummary));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
