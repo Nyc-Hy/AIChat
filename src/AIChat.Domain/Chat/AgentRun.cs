@@ -10,6 +10,7 @@ public sealed class AgentRun
     public string AssistantMessageId { get; set; } = "";
     public string Goal { get; set; } = "";
     public string Phase { get; set; } = "planning";
+    public string CompletionReason { get; set; } = "";
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }
@@ -17,7 +18,7 @@ public sealed class AgentRun
     public List<AgentFileChange> FileChanges { get; set; } = [];
     public List<AgentVerification> Verifications { get; set; } = [];
 
-    public void Complete(AgentRunStatus status, DateTimeOffset? completedAt = null)
+    public void Complete(AgentRunStatus status, DateTimeOffset? completedAt = null, string completionReason = "")
     {
         Status = status;
         Phase = status switch
@@ -27,6 +28,7 @@ public sealed class AgentRun
             AgentRunStatus.Failed => "failed",
             _ => Phase
         };
+        CompletionReason = completionReason;
         CompletedAt = completedAt ?? DateTimeOffset.Now;
     }
 }

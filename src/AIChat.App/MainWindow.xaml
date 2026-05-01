@@ -1402,6 +1402,25 @@
                                         <TextBlock Text="{Binding PhaseText}"
                                                    Margin="0,5,0,0"
                                                    Foreground="#596473" />
+                                        <StackPanel Margin="0,14,0,0">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasCompletionReason}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <TextBlock Text="结束原因"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#303A47" />
+                                            <TextBlock Text="{Binding CompletionReasonText}"
+                                                       Margin="0,5,0,0"
+                                                       Foreground="#596473"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
                                         <TextBlock Text="变更摘要"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

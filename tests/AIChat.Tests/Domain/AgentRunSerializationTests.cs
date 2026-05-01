@@ -17,10 +17,11 @@ public sealed class AgentRunSerializationTests
             Phase = "verifying"
         };
 
-        run.Complete(status, completedAt);
+        run.Complete(status, completedAt, "done because test");
 
         Assert.Equal(status, run.Status);
         Assert.Equal(expectedPhase, run.Phase);
+        Assert.Equal("done because test", run.CompletionReason);
         Assert.Equal(completedAt, run.CompletedAt);
     }
 
@@ -48,6 +49,7 @@ public sealed class AgentRunSerializationTests
                     ConversationId = "conversation-1",
                     AssistantMessageId = "assistant-1",
                     Phase = "verifying",
+                    CompletionReason = "all tests passed",
                     Status = AgentRunStatus.Completed,
                     Steps =
                     [
@@ -103,6 +105,7 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
         Assert.Single(roundTripped.AgentRuns[0].Verifications);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].Phase);
+        Assert.Equal("all tests passed", roundTripped.AgentRuns[0].CompletionReason);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);

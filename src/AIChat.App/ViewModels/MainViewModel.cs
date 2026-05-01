@@ -1774,6 +1774,9 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (OperationCanceledException)
         {
+            var cancellationReason = IsStopping
+                ? "用户手动停止生成。"
+                : "请求超过 90 秒未完成。";
             if (!hasReceivedContent)
             {
                 assistantViewModel.Content = "请求已停止，或模型长时间没有返回内容。";
@@ -1781,10 +1784,11 @@ public sealed class MainViewModel : ObservableObject
             }
 
             StatusText = "已停止生成";
-            assistantViewModel.AgentRun?.Complete(AgentRunStatus.Cancelled);
+            assistantViewModel.AgentRun?.Complete(AgentRunStatus.Cancelled, cancellationReason);
             await CompleteCallDetailAsync(callDetail, "已停止", new
             {
                 status = "cancelled",
+                reason = cancellationReason,
                 provider = effectiveSettings.ProviderName,
                 model = effectiveSettings.Model,
                 assistantMessageId = assistantMessage.Id,
@@ -1798,7 +1802,7 @@ public sealed class MainViewModel : ObservableObject
             assistantViewModel.Content += $"\n\n请求出错：{ex.Message}";
             assistantViewModel.IsError = true;
             StatusText = "请求失败";
-            assistantViewModel.AgentRun?.Complete(AgentRunStatus.Failed);
+            assistantViewModel.AgentRun?.Complete(AgentRunStatus.Failed, ex.Message);
             await CompleteCallDetailAsync(callDetail, "失败", new
             {
                 status = "failed",

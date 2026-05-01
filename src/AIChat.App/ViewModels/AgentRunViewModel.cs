@@ -20,6 +20,10 @@ public sealed class AgentRunViewModel : ObservableObject
 
     public string Id => _run.Id;
     public string Goal => _run.Goal;
+    public string CompletionReasonText => string.IsNullOrWhiteSpace(_run.CompletionReason)
+        ? "无"
+        : _run.CompletionReason;
+    public bool HasCompletionReason => !string.IsNullOrWhiteSpace(_run.CompletionReason);
     public string PhaseText => _run.Phase switch
     {
         "planning" => "规划中",
@@ -82,6 +86,11 @@ public sealed class AgentRunViewModel : ObservableObject
                 $"耗时：{DurationText}"
             };
 
+            if (HasCompletionReason)
+            {
+                lines.Add($"原因：{CompletionReasonText}");
+            }
+
             if (ChangedPaths.Count > 0)
             {
                 lines.Add("");
@@ -124,11 +133,13 @@ public sealed class AgentRunViewModel : ObservableObject
         return viewModel;
     }
 
-    public void Complete(AgentRunStatus status)
+    public void Complete(AgentRunStatus status, string completionReason = "")
     {
-        _run.Complete(status);
+        _run.Complete(status, completionReason: completionReason);
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(PhaseText));
+        OnPropertyChanged(nameof(CompletionReasonText));
+        OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
