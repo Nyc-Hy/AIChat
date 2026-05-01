@@ -13,4 +13,5 @@ public sealed class ProjectWorkspace
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
     public List<Conversation> Conversations { get; set; } = [];
     public List<PinnedContextItem> PinnedContext { get; set; } = [];
+    public List<ProjectVerificationCommand> VerificationCommands { get; set; } = [];
 }

@@ -20,4 +20,6 @@ public sealed class AgentVerificationViewModel : ObservableObject
     public string OutputPreview => string.IsNullOrWhiteSpace(_verification.Output)
         ? ""
         : _verification.Output.Length > 1_600 ? _verification.Output[..1_600] + "\n..." : _verification.Output;
+    public string Summary => _verification.Summary;
+    public bool HasSummary => !string.IsNullOrWhiteSpace(_verification.Summary);
 }

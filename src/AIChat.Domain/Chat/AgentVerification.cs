@@ -12,5 +12,6 @@ public sealed class AgentVerification
     public bool TimedOut { get; set; }
     public bool IsSuccess { get; set; }
     public string Output { get; set; } = "";
+    public string Summary { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 }

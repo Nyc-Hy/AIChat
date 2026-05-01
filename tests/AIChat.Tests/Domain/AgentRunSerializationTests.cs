@@ -109,7 +109,8 @@ public sealed class AgentRunSerializationTests
                             Command = "dotnet test AIChat.sln",
                             ExitCode = 0,
                             IsSuccess = true,
-                            Output = "Passed"
+                            Output = "Passed",
+                            Summary = "All tests passed"
                         }
                     ]
                 }
@@ -148,6 +149,7 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
         Assert.True(roundTripped.AgentRuns[0].Verifications[0].IsSuccess);
+        Assert.Equal("All tests passed", roundTripped.AgentRuns[0].Verifications[0].Summary);
     }
 
     [Fact]

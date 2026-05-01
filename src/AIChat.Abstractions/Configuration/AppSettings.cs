@@ -21,6 +21,8 @@ public sealed class AppSettings
     public List<string> EnabledToolIds { get; set; } = [];
     public Dictionary<string, ToolPermissionMode> ToolPermissionModes { get; set; } = [];
     public int AgentMaxToolRounds { get; set; } = 4;
+    public bool AutoVerifyAgentRuns { get; set; }
+    public int MaxAutoFixRounds { get; set; } = 3;
     // Multiple configured providers lets the user keep more than one API key or
     // model setup while the rest of the app only reads the active one.
     public List<ConfiguredLlmProvider> ConfiguredProviders { get; set; } = [];

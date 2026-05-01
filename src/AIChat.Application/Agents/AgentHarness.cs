@@ -1,6 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using AIChat.Abstractions.Configuration;
 using AIChat.Application.Tools;
+using AIChat.Application.Verification;
 using AIChat.Domain.Chat;
 
 namespace AIChat.Application.Agents;
@@ -189,6 +191,20 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.Completed:
+                    // Auto-verify loop: after mutations, run verification commands
+                    // and feed failures back to the model for another fix round.
+                    if (request.Context.AutoVerifyAgentRuns &&
+                        request.Context.VerificationCommands.Count > 0 &&
+                        run.MutationToolSucceeded)
+                    {
+                        await foreach (var verifyEvent in RunAutoVerifyLoopAsync(
+                                           run, request, stepByToolCallId, stepNumber,
+                                           request.Settings, request.Context, cancellationToken))
+                        {
+                            yield return verifyEvent;
+                        }
+                    }
+
                     CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
@@ -482,6 +498,7 @@ public sealed class AgentHarness
             ? step.Id
             : "";
         var parsed = ParseVerification(toolResult);
+        var isSuccess = !toolResult.IsError && parsed.ExitCode == 0 && !parsed.TimedOut;
         run.Verifications.Add(new AgentVerification
         {
             RunId = run.Id,
@@ -491,8 +508,9 @@ public sealed class AgentHarness
             Command = parsed.Command,
             ExitCode = parsed.ExitCode,
             TimedOut = parsed.TimedOut,
-            IsSuccess = !toolResult.IsError && parsed.ExitCode == 0 && !parsed.TimedOut,
+            IsSuccess = isSuccess,
             Output = parsed.Output,
+            Summary = VerificationResultParser.Summarize(parsed.Output),
             CreatedAt = DateTimeOffset.Now
         });
     }
@@ -502,6 +520,243 @@ public sealed class AgentHarness
         return string.Equals(toolName, "run_build", StringComparison.OrdinalIgnoreCase) ||
                string.Equals(toolName, "run_test", StringComparison.OrdinalIgnoreCase);
     }
+
+    private async IAsyncEnumerable<AgentHarnessEvent> RunAutoVerifyLoopAsync(
+        AgentRun run,
+        AgentHarnessRunRequest request,
+        Dictionary<string, AgentStep> stepByToolCallId,
+        int stepNumber,
+        AppSettings settings,
+        AgentRunContext context,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var maxRounds = context.MaxAutoFixRounds;
+        for (var round = 0; round < maxRounds; round++)
+        {
+            var allPassed = true;
+            var failureMessages = new List<string>();
+
+            foreach (var cmd in context.VerificationCommands)
+            {
+                var toolName = GetVerificationToolName(cmd.Command);
+                var tool = CreateVerificationTool(toolName);
+                if (tool is null)
+                {
+                    continue;
+                }
+
+                var toolCallId = $"auto-verify-{run.Id}-{round}-{cmd.Id}";
+                var argsJson = BuildVerificationArgsJson(cmd);
+                var preview = await tool.PreviewAsync(argsJson, CreateToolContext(context), cancellationToken);
+
+                var step = AddRunningStep(
+                    run,
+                    ++stepNumber,
+                    AgentStepType.ToolCall,
+                    $"自动验证：{cmd.Name}",
+                    argsJson,
+                    toolCallId,
+                    toolName);
+                stepByToolCallId[toolCallId] = step;
+                yield return new AgentHarnessEvent
+                {
+                    Type = AgentHarnessEventType.ToolCall,
+                    Run = run,
+                    Step = step,
+                    ToolCall = new ChatToolCall { Id = toolCallId, Name = toolName, ArgumentsJson = argsJson }
+                };
+
+                var result = await tool.ExecuteAsync(argsJson, CreateToolContext(context), cancellationToken);
+                var verifyToolCall = new ChatToolCall { Id = toolCallId, Name = toolName, ArgumentsJson = argsJson };
+                CompleteToolStep(stepByToolCallId, verifyToolCall, result.Content, result.IsError);
+                RecordVerification(run, stepByToolCallId, verifyToolCall, result);
+                run.ToolCallCount++;
+
+                var verification = run.Verifications.LastOrDefault(v => v.ToolCallId == toolCallId);
+                if (verification is not null && !verification.IsSuccess)
+                {
+                    allPassed = false;
+                    var summary = string.IsNullOrWhiteSpace(verification.Summary)
+                        ? verification.Output.Length > 500 ? verification.Output[..500] + "..." : verification.Output
+                        : verification.Summary;
+                    failureMessages.Add($"[{cmd.Name}] exit {verification.ExitCode}:\n{summary}");
+                }
+
+                yield return new AgentHarnessEvent
+                {
+                    Type = AgentHarnessEventType.ToolResult,
+                    Run = run,
+                    Step = step,
+                    ToolCall = verifyToolCall,
+                    ToolResult = result
+                };
+            }
+
+            if (allPassed)
+            {
+                yield break;
+            }
+
+            // Feed failure summary back to the model for another fix round
+            var failureSummary = "自动验证失败，请修复后重试：\n\n" + string.Join("\n\n", failureMessages);
+            var updatedMessages = new List<ChatMessage>(request.ChatRequest.Messages)
+            {
+                new() { Role = ChatRole.User, Content = failureSummary }
+            };
+            var updatedRequest = new ChatRequest
+            {
+                Model = request.ChatRequest.Model,
+                Temperature = request.ChatRequest.Temperature,
+                Messages = updatedMessages
+            };
+            request = request with { ChatRequest = updatedRequest };
+
+            await foreach (var fixEvent in _agentRunner.RunAsync(
+                               updatedRequest,
+                               settings,
+                               context,
+                               cancellationToken))
+            {
+                switch (fixEvent.Type)
+                {
+                    case AgentRunEventType.RawProviderEvent:
+                        yield return new AgentHarnessEvent
+                        {
+                            Type = AgentHarnessEventType.RawProviderEvent,
+                            Run = run,
+                            RawJson = fixEvent.RawJson
+                        };
+                        break;
+                    case AgentRunEventType.ContentDelta:
+                        run.Phase = "responding";
+                        yield return new AgentHarnessEvent
+                        {
+                            Type = AgentHarnessEventType.ContentDelta,
+                            Run = run,
+                            Content = fixEvent.Content
+                        };
+                        break;
+                    case AgentRunEventType.ToolCall:
+                        if (fixEvent.ToolCall is not null)
+                        {
+                            run.Phase = ClassifyToolPhase(fixEvent.ToolCall.Name);
+                            run.ToolCallCount++;
+                            var fixStep = AddRunningStep(
+                                run,
+                                ++stepNumber,
+                                AgentStepType.ToolCall,
+                                $"调用工具：{fixEvent.ToolCall.Name}",
+                                fixEvent.ToolCall.ArgumentsJson,
+                                fixEvent.ToolCall.Id,
+                                fixEvent.ToolCall.Name);
+                            stepByToolCallId[fixEvent.ToolCall.Id] = fixStep;
+                            yield return new AgentHarnessEvent
+                            {
+                                Type = AgentHarnessEventType.ToolCall,
+                                Run = run,
+                                Step = fixStep,
+                                ToolCall = fixEvent.ToolCall
+                            };
+                        }
+
+                        break;
+                    case AgentRunEventType.ToolResult:
+                        if (fixEvent.ToolResult is not null)
+                        {
+                            CompleteToolStep(
+                                stepByToolCallId,
+                                fixEvent.ToolCall,
+                                fixEvent.ToolResult.Content,
+                                fixEvent.ToolResult.IsError);
+                            RecordFileChanges(
+                                run,
+                                stepByToolCallId,
+                                fixEvent.ToolCall,
+                                fixEvent.ToolPreview,
+                                fixEvent.ToolResult);
+                            RecordVerification(
+                                run,
+                                stepByToolCallId,
+                                fixEvent.ToolCall,
+                                fixEvent.ToolResult);
+                            RecordMutationGuardrail(
+                                run,
+                                fixEvent.ToolCall,
+                                fixEvent.ToolPreview,
+                                fixEvent.ToolResult);
+                        }
+
+                        yield return new AgentHarnessEvent
+                        {
+                            Type = AgentHarnessEventType.ToolResult,
+                            Run = run,
+                            Step = fixEvent.ToolCall is not null && stepByToolCallId.TryGetValue(fixEvent.ToolCall.Id, out var s) ? s : null,
+                            ToolCall = fixEvent.ToolCall,
+                            ToolResult = fixEvent.ToolResult
+                        };
+                        break;
+                    case AgentRunEventType.Completed:
+                        // Inner runner completed — break to continue auto-verify loop
+                        goto nextRound;
+                }
+            }
+
+            nextRound: ;
+        }
+    }
+
+    private static string GetVerificationToolName(string command)
+    {
+        var normalized = command.Trim().ToLowerInvariant();
+        if (normalized.Contains("test"))
+        {
+            return "run_test";
+        }
+
+        return "run_build";
+    }
+
+    private static IAgentTool? CreateVerificationTool(string toolName)
+    {
+        return toolName switch
+        {
+            "run_build" => new RunBuildTool(),
+            "run_test" => new RunTestTool(),
+            _ => null
+        };
+    }
+
+    private static string BuildVerificationArgsJson(Domain.Projects.ProjectVerificationCommand cmd)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append('{');
+        var first = true;
+        if (!string.IsNullOrWhiteSpace(cmd.WorkingDirectory))
+        {
+            sb.Append($"\"target\":\"{EscapeJson(cmd.WorkingDirectory)}\"");
+            first = false;
+        }
+
+        if (cmd.TimeoutSeconds > 0 && cmd.TimeoutSeconds != 120)
+        {
+            if (!first) sb.Append(',');
+            sb.Append($"\"timeout_seconds\":{cmd.TimeoutSeconds}");
+        }
+
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    private static string EscapeJson(string value)
+    {
+        return value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+    }
+
+    private static AgentToolContext CreateToolContext(AgentRunContext context)
+    {
+        return new AgentToolContext { ProjectPath = context.ProjectPath };
+    }
+
 
     private static void RecordPlan(AgentRun run, ChatToolCall? toolCall, AgentToolResult toolResult)
     {

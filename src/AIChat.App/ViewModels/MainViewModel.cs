@@ -1961,7 +1961,10 @@ public sealed class MainViewModel : ObservableObject
                                            EnabledToolIds = Settings.EnabledToolIds,
                                            ToolPermissionModes = Settings.ToolPermissionModes,
                                            MaxToolRounds = Settings.AgentMaxToolRounds,
-                                           RequestToolApprovalAsync = RequestToolApprovalAsync
+                                           RequestToolApprovalAsync = RequestToolApprovalAsync,
+                                           AutoVerifyAgentRuns = Settings.AutoVerifyAgentRuns,
+                                           MaxAutoFixRounds = Settings.MaxAutoFixRounds,
+                                           VerificationCommands = SelectedProject?.Project.VerificationCommands ?? []
                                        }
                                    },
                                    _sendCts.Token))

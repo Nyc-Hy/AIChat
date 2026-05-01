@@ -4,6 +4,7 @@ using AIChat.Abstractions.Llm;
 using AIChat.Application.Agents;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
+using AIChat.Domain.Projects;
 using AIChat.Tests.Tools;
 
 namespace AIChat.Tests.Agents;
@@ -526,6 +527,75 @@ public sealed class AgentHarnessTests
         Assert.Equal(AgentPlanItemStatus.Completed, run.Plan.Items[0].Status);
         Assert.Equal("Done reading", run.Plan.Items[0].Notes);
         Assert.Equal(AgentPlanItemStatus.InProgress, run.Plan.Items[1].Status);
+    }
+
+    [Fact]
+    public async Task RunAsync_AutoVerifiesAfterMutationWhenConfigured()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var targetPath = Path.Combine(workspace.Path, "file.txt");
+        await File.WriteAllTextAsync(targetPath, "old content");
+
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "apply_patch",
+            ArgumentsJson = """
+            {
+              "changes": [
+                { "path": "file.txt", "old_text": "old content", "new_text": "new content" }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new ApplyPatchTool(), new FakeVerificationTool()])));
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "update file",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update file" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = workspace.Path,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve()),
+                               AutoVerifyAgentRuns = true,
+                               MaxAutoFixRounds = 1,
+                               VerificationCommands =
+                               [
+                                   new ProjectVerificationCommand
+                                   {
+                                       Name = "build",
+                                       Command = "dotnet build",
+                                       IsDefault = true
+                                   }
+                               ]
+                           }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.True(run.MutationToolSucceeded);
+        // Auto-verify should have been triggered, producing at least one verification
+        Assert.True(run.Verifications.Count > 0, "Expected auto-verify to produce verification records");
+        // Should have tool call events for the verification
+        Assert.Contains(events, e => e.Type == AgentHarnessEventType.ToolCall);
     }
 
     private sealed class FakeChatCompletionService : IChatCompletionService

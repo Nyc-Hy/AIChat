@@ -3,7 +3,7 @@ using AIChat.Domain.Chat;
 
 namespace AIChat.Application.Agents;
 
-public sealed class AgentHarnessRunRequest
+public sealed record AgentHarnessRunRequest
 {
     public required Conversation Conversation { get; init; }
     public required string UserMessageId { get; init; }
