@@ -1996,6 +1996,63 @@
                                         </StackPanel>
                                     </ScrollViewer>
                                 </TabItem>
+                                <TabItem Header="审计">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                        <StackPanel>
+                                            <TextBlock Text="审计事件"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#303A47"
+                                                       Margin="0,4,0,0" />
+                                            <TextBlock Text="暂无审计事件"
+                                                       Foreground="#98A2B0"
+                                                       FontSize="12"
+                                                       Margin="0,8,0,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding DataContext.HasAuditEvents, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <ItemsControl ItemsSource="{Binding DataContext.AuditEvents, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          Margin="0,8,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Margin="0,0,0,6"
+                                                                Padding="8"
+                                                                CornerRadius="6"
+                                                                Background="#FFFFFF"
+                                                                BorderBrush="#E6EAF0"
+                                                                BorderThickness="1">
+                                                            <StackPanel>
+                                                                <DockPanel>
+                                                                    <TextBlock Text="{Binding TypeText}"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="#2A3340"
+                                                                               FontSize="12" />
+                                                                    <TextBlock DockPanel.Dock="Right"
+                                                                               Text="{Binding TimestampText}"
+                                                                               Foreground="#98A2B0"
+                                                                               FontSize="11" />
+                                                                </DockPanel>
+                                                                <TextBlock Margin="0,3,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="#596473"
+                                                                       TextWrapping="Wrap">
+                                                                    <Run Text="{Binding Summary}" />
+                                                                </TextBlock>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                </TabItem>
                             </TabControl>
 
                             <Border Grid.Column="2"

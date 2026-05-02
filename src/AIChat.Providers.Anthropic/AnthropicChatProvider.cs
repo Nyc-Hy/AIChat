@@ -106,6 +106,10 @@ public sealed class AnthropicChatProvider : IChatProvider
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var reader = new StreamReader(stream);
 
+        // Track in-flight tool_use blocks across streaming events.
+        var pendingToolCalls = new Dictionary<int, ChatToolCall>();
+        var pendingToolInputs = new Dictionary<int, StringBuilder>();
+
         while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
@@ -115,13 +119,102 @@ public sealed class AnthropicChatProvider : IChatProvider
             }
 
             var data = line["data:".Length..].Trim();
-            // We only surface text deltas. Other Anthropic event types are ignored
-            // for now, but RawJson is preserved when text is emitted.
+
+            // Try to handle tool_use lifecycle events.
+            if (TryHandleToolEvent(data, pendingToolCalls, pendingToolInputs, out var toolDelta))
+            {
+                if (toolDelta is not null)
+                {
+                    yield return toolDelta;
+                }
+
+                continue;
+            }
+
+            // Surface text deltas.
             var content = TryReadDeltaText(data);
             if (!string.IsNullOrEmpty(content))
             {
                 yield return new ChatDelta { Content = content, RawJson = data };
             }
+        }
+    }
+
+    internal static bool TryHandleToolEvent(
+        string json,
+        Dictionary<int, ChatToolCall> pendingToolCalls,
+        Dictionary<int, StringBuilder> pendingToolInputs,
+        out ChatDelta? delta)
+    {
+        delta = null;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("type", out var type))
+            {
+                return false;
+            }
+
+            var eventType = type.GetString();
+
+            // content_block_start with type "tool_use" begins a new tool call.
+            if (eventType == "content_block_start" &&
+                root.TryGetProperty("index", out var startIdx) &&
+                root.TryGetProperty("content_block", out var block) &&
+                block.TryGetProperty("type", out var blockType) &&
+                blockType.GetString() == "tool_use")
+            {
+                var index = startIdx.GetInt32();
+                var id = block.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? "" : $"tool-{index}";
+                var name = block.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" : "";
+                pendingToolCalls[index] = new ChatToolCall { Id = id, Name = name, Index = index };
+                pendingToolInputs[index] = new StringBuilder();
+                return true;
+            }
+
+            // content_block_delta with type "input_json_delta" carries partial JSON.
+            if (eventType == "content_block_delta" &&
+                root.TryGetProperty("index", out var deltaIdx) &&
+                root.TryGetProperty("delta", out var deltaObj) &&
+                deltaObj.TryGetProperty("type", out var deltaType) &&
+                deltaType.GetString() == "input_json_delta" &&
+                deltaObj.TryGetProperty("partial_json", out var partialJson))
+            {
+                var index = deltaIdx.GetInt32();
+                if (pendingToolInputs.TryGetValue(index, out var sb))
+                {
+                    sb.Append(partialJson.GetString() ?? "");
+                }
+
+                return true;
+            }
+
+            // content_block_stop finalizes a tool call.
+            if (eventType == "content_block_stop" &&
+                root.TryGetProperty("index", out var stopIdx))
+            {
+                var index = stopIdx.GetInt32();
+                if (pendingToolCalls.TryGetValue(index, out var toolCall))
+                {
+                    var inputJson = pendingToolInputs.TryGetValue(index, out var sb) ? sb.ToString() : "";
+                    toolCall.ArgumentsJson = string.IsNullOrWhiteSpace(inputJson) ? "{}" : inputJson;
+                    delta = new ChatDelta
+                    {
+                        ToolCalls = [toolCall],
+                        RawJson = json
+                    };
+                    pendingToolCalls.Remove(index);
+                    pendingToolInputs.Remove(index);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 

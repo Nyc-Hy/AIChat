@@ -95,6 +95,15 @@ tests/
 4. Providers (`AIChat.Providers.*`) adapt protocol-specific APIs to the common `IChatProvider` contract.
 5. Storage (`AIChat.Storage.Json`) persists domain objects to local JSON files.
 
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md) — layer diagram, project structure, and design rules
+- [Agent Harness](docs/AGENT_HARNESS.md) — agent loop lifecycle, tool budget, and recovery
+- [Tool Security](docs/TOOL_SECURITY.md) — permission model, path guard, and shell policy
+- [A2A Adapter Design](docs/A2A_ADAPTER_DESIGN.md) — future Agent-to-Agent boundary design
+- [Development Plan](docs/REMAINING_DEVELOPMENT_PLAN.md) — completed work, optimization priorities, and future roadmap
+- [Next Development Tasks](docs/NEXT_DEVELOPMENT_HANDOFF_PLAN.md) — step-by-step task breakdown for continuing development
+
 ## Publish
 
 ```powershell

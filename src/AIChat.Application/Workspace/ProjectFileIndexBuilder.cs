@@ -44,55 +44,38 @@ public sealed class ProjectFileIndexBuilder
         var entries = new List<ProjectFileIndexEntry>();
         var wasTruncated = false;
 
-        try
+        foreach (var filePath in EnumerateProjectFiles(rootPath))
         {
-            foreach (var filePath in Directory.EnumerateFiles(rootPath, "*", SearchOption.AllDirectories))
+            if (entries.Count >= maxFiles)
             {
-                if (entries.Count >= maxFiles)
-                {
-                    wasTruncated = true;
-                    break;
-                }
-
-                var relativePath = GetRelativePath(rootPath, filePath);
-                if (ShouldIgnore(relativePath))
-                {
-                    continue;
-                }
-
-                var extension = Path.GetExtension(filePath);
-                if (BinaryExtensions.Contains(extension))
-                {
-                    continue;
-                }
-
-                long size = 0;
-                try
-                {
-                    size = new FileInfo(filePath).Length;
-                }
-                catch
-                {
-                    // Skip files we can't stat
-                    continue;
-                }
-
-                entries.Add(new ProjectFileIndexEntry
-                {
-                    RelativePath = relativePath,
-                    SizeBytes = size,
-                    Extension = extension,
-                    TypeTag = ClassifyFile(relativePath, extension)
-                });
+                wasTruncated = true;
+                break;
             }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Skip directories we can't access
-        }
-        catch (IOException)
-        {
-            // Skip I/O errors
+
+            var relativePath = GetRelativePath(rootPath, filePath);
+            var extension = Path.GetExtension(filePath);
+            if (BinaryExtensions.Contains(extension))
+            {
+                continue;
+            }
+
+            long size;
+            try
+            {
+                size = new FileInfo(filePath).Length;
+            }
+            catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+            {
+                continue;
+            }
+
+            entries.Add(new ProjectFileIndexEntry
+            {
+                RelativePath = relativePath,
+                SizeBytes = size,
+                Extension = extension,
+                TypeTag = ClassifyFile(relativePath, extension)
+            });
         }
 
         return new ProjectFileIndex
@@ -103,6 +86,53 @@ public sealed class ProjectFileIndexBuilder
             WasTruncated = wasTruncated
         };
     }
+
+    private static IEnumerable<string> EnumerateProjectFiles(string rootPath)
+    {
+        var pending = new Stack<string>();
+        pending.Push(rootPath);
+
+        while (pending.Count > 0)
+        {
+            var directory = pending.Pop();
+
+            string[] files;
+            try
+            {
+                files = Directory.EnumerateFiles(directory).ToArray();
+            }
+            catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+            {
+                continue;
+            }
+
+            foreach (var file in files)
+            {
+                yield return file;
+            }
+
+            string[] subdirectories;
+            try
+            {
+                subdirectories = Directory.EnumerateDirectories(directory).ToArray();
+            }
+            catch (Exception ex) when (IsRecoverableFileSystemException(ex))
+            {
+                continue;
+            }
+
+            foreach (var subdirectory in subdirectories)
+            {
+                if (!IgnoredDirectories.Contains(Path.GetFileName(subdirectory)))
+                {
+                    pending.Push(subdirectory);
+                }
+            }
+        }
+    }
+
+    private static bool IsRecoverableFileSystemException(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or System.Security.SecurityException;
 
     public static bool ShouldIgnore(string relativePath)
     {

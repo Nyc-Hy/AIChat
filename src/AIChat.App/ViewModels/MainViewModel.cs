@@ -177,14 +177,8 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<WorkspaceChangeViewModel> UnstagedWorkspaceChanges { get; } = [];
     public ObservableCollection<WorkspaceChangeViewModel> UntrackedWorkspaceChanges { get; } = [];
     public ObservableCollection<AgentRunHistoryItemViewModel> AgentRunHistory { get; } = [];
-    public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions { get; } =
-    [
-        new() { Id = "all", Name = "全部" },
-        new() { Id = "retryable", Name = "可重试" },
-        new() { Id = "failed", Name = "失败/停止" },
-        new() { Id = "completed", Name = "已完成" },
-        new() { Id = "running", Name = "运行中" }
-    ];
+    public ObservableCollection<AuditEventViewModel> AuditEvents { get; } = [];
+    public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions => AgentRunHistoryFilter.Options;
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
         new() { Id = nameof(ToolPermissionMode.AutoReadOnly), Name = "只读自动" },
@@ -687,6 +681,7 @@ public sealed class MainViewModel : ObservableObject
                 CopySelectedAgentRunReviewPacketCommand.RaiseCanExecuteChanged();
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
                 ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
+                _ = LoadAuditEventsAsync(value);
             }
         }
     }
@@ -694,6 +689,42 @@ public sealed class MainViewModel : ObservableObject
     public string AgentRunDetailsTitle => SelectedAgentRunDetails is null
         ? "Agent Run"
         : $"Agent Run · {SelectedAgentRunDetails.StatusText}";
+
+    public bool HasAuditEvents => AuditEvents.Count > 0;
+
+    private async Task LoadAuditEventsAsync(AgentRunViewModel? run)
+    {
+        AuditEvents.Clear();
+        OnPropertyChanged(nameof(HasAuditEvents));
+
+        if (run is null || _auditLogRepository is null || SelectedProject is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var events = await _auditLogRepository.QueryAsync(
+                SelectedProject.Path,
+                after: run.Run.StartedAt.AddMinutes(-1),
+                maxCount: 200);
+
+            var runEvents = events
+                .Where(e => string.Equals(e.RunId, run.Id, StringComparison.Ordinal))
+                .OrderBy(e => e.Timestamp);
+
+            foreach (var e in runEvents)
+            {
+                AuditEvents.Add(new AuditEventViewModel(e));
+            }
+
+            OnPropertyChanged(nameof(HasAuditEvents));
+        }
+        catch
+        {
+            // Audit display is best-effort; don't break the UI.
+        }
+    }
 
     public ObservableCollection<LlmCallDetailViewModel>? CurrentCallDetails => _callDetailsConversation?.CallDetails;
     public string CallDetailsTitle => _callDetailsConversation is null
@@ -1225,14 +1256,7 @@ public sealed class MainViewModel : ObservableObject
 
     private IEnumerable<AgentRunHistoryItemViewModel> FilterAgentRunHistory(IEnumerable<AgentRunHistoryItemViewModel> items)
     {
-        return AgentRunHistoryFilterId switch
-        {
-            "retryable" => items.Where(item => item.CanRetry),
-            "failed" => items.Where(item => item.Run.Status is AgentRunStatus.Failed or AgentRunStatus.Cancelled),
-            "completed" => items.Where(item => item.Run.Status is AgentRunStatus.Completed),
-            "running" => items.Where(item => item.Run.Status is AgentRunStatus.Running),
-            _ => items
-        };
+        return AgentRunHistoryFilter.Apply(items, AgentRunHistoryFilterId);
     }
 
     private async void NewChat()

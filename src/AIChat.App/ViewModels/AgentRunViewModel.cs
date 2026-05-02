@@ -65,6 +65,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public string FinalValidationSummary => string.IsNullOrWhiteSpace(_run.FinalValidationSummary)
         ? "尚未生成结束校验。"
         : _run.FinalValidationSummary;
+    public bool HasFinalValidationSummary => !string.IsNullOrWhiteSpace(_run.FinalValidationSummary);
     public string RecoverySuggestion => string.IsNullOrWhiteSpace(_run.RecoverySuggestion)
         ? $"继续处理：{Goal}"
         : _run.RecoverySuggestion;
@@ -141,142 +142,8 @@ public sealed class AgentRunViewModel : ObservableObject
     public string ChangeSummary => ChangedPaths.Count == 0
         ? "本轮没有记录文件变更。"
         : string.Join(Environment.NewLine, ChangedPaths.Select(path => $"- {path}"));
-    public string RunSummary
-    {
-        get
-        {
-            var lines = new List<string>
-            {
-                $"状态：{StatusText}",
-                $"阶段：{PhaseText}",
-                $"目标：{Goal}",
-                $"项目：{ProjectPath}",
-                $"模型：{Model}",
-                $"工具：{EnabledToolCount}",
-                $"预算：{BudgetText}",
-                $"修改护栏：{MutationGuardrailText}",
-                $"审批：{ApprovalSummary}",
-                $"工作区：{WorkspaceSnapshotText}",
-                $"计划：{PlanSummary}",
-                $"步骤：{StepCount}",
-                $"文件变更：{FileChangeCount}",
-                $"验证：{VerificationCount}",
-                $"耗时：{DurationText}"
-            };
-
-            if (HasContinuation)
-            {
-                lines.Add($"继续自：{ContinuedFromRunId}");
-            }
-
-            if (HasCompletionReason)
-            {
-                lines.Add($"原因：{CompletionReasonText}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(_run.FinalValidationSummary))
-            {
-                lines.Add("");
-                lines.Add("结束校验：");
-                lines.Add(_run.FinalValidationSummary);
-            }
-
-            if (!string.IsNullOrWhiteSpace(_run.RecoverySuggestion))
-            {
-                lines.Add("");
-                lines.Add("恢复建议：");
-                lines.Add(_run.RecoverySuggestion);
-            }
-
-            if (ChangedPaths.Count > 0)
-            {
-                lines.Add("");
-                lines.Add("变更文件：");
-                lines.AddRange(ChangedPaths.Select(path => $"- {path}"));
-            }
-
-            if (Verifications.Count > 0)
-            {
-                lines.Add("");
-                lines.Add("验证结果：");
-                lines.AddRange(Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
-            }
-
-            return string.Join(Environment.NewLine, lines);
-        }
-    }
-    public string ReviewPacket
-    {
-        get
-        {
-            var lines = new List<string>
-            {
-                "# Agent Run Review",
-                "",
-                $"Status: {StatusText}",
-                $"Goal: {Goal}",
-                $"Model: {Model}",
-                $"Project: {ProjectPath}",
-                $"Started: {StartedText}",
-                $"Duration: {DurationText}",
-            };
-
-            if (HasContinuation)
-            {
-                lines.Add($"ContinuedFrom: {ContinuedFromRunId}");
-            }
-
-            lines.AddRange([
-                "",
-                "## Guardrails",
-                $"- Budget: {BudgetText}",
-                $"- Mutation: {MutationGuardrailText}",
-                $"- Approval: {ApprovalSummary}",
-                $"- Workspace: {WorkspaceSnapshotText}",
-                "",
-                "## Final Validation",
-                FinalValidationSummary,
-                "",
-                "## Recovery Suggestion",
-                RecoverySuggestion
-            ]);
-
-            if (Plan is not null)
-            {
-                lines.Add("");
-                lines.Add("## Plan");
-                lines.Add(Plan.Summary);
-                lines.Add(Plan.ProgressText);
-                foreach (var item in Plan.Items)
-                {
-                    lines.Add($"- [{item.StatusText}] {item.Title}{(item.HasNotes ? $" — {item.Notes}" : "")}");
-                }
-            }
-
-            if (HasCompletionReason)
-            {
-                lines.Add("");
-                lines.Add("## Completion Reason");
-                lines.Add(CompletionReasonText);
-            }
-
-            if (ChangedPaths.Count > 0)
-            {
-                lines.Add("");
-                lines.Add("## Changed Files");
-                lines.AddRange(ChangedPaths.Select(path => $"- {path}"));
-            }
-
-            if (Verifications.Count > 0)
-            {
-                lines.Add("");
-                lines.Add("## Verifications");
-                lines.AddRange(Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
-            }
-
-            return string.Join(Environment.NewLine, lines);
-        }
-    }
+    public string RunSummary => AgentRunReviewPacketBuilder.BuildRunSummary(this);
+    public string ReviewPacket => AgentRunReviewPacketBuilder.BuildReviewPacket(this);
 
     public AgentStepViewModel AddStep(AgentStep step)
     {

@@ -52,6 +52,8 @@ public sealed class ProjectContextPackBuilder
             builder.AppendLine("（文件列表被截断）");
         }
 
+        AppendExtensionStats(builder, index);
+
         var groups = index.Entries
             .GroupBy(e => e.TypeTag)
             .OrderBy(g => GetGroupPriority(g.Key));
@@ -64,6 +66,22 @@ public sealed class ProjectContextPackBuilder
             {
                 builder.AppendLine($"- {entry.RelativePath}");
             }
+        }
+    }
+
+    private static void AppendExtensionStats(StringBuilder builder, ProjectFileIndex index)
+    {
+        var stats = index.Entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Extension))
+            .GroupBy(e => e.Extension, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .Take(10)
+            .Select(g => $"{g.Key}: {g.Count()}")
+            .ToList();
+
+        if (stats.Count > 0)
+        {
+            builder.AppendLine($"类型分布：{string.Join(", ", stats)}");
         }
     }
 

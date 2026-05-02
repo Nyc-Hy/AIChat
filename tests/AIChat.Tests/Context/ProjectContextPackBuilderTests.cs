@@ -115,6 +115,51 @@ public sealed class ProjectContextPackBuilderTests
     }
 
     [Fact]
+    public void Build_IncludesExtensionStatistics()
+    {
+        var index = new ProjectFileIndex
+        {
+            RootPath = "/project",
+            Entries =
+            [
+                new ProjectFileIndexEntry { RelativePath = "App.cs", TypeTag = "source", Extension = ".cs" },
+                new ProjectFileIndexEntry { RelativePath = "Lib.cs", TypeTag = "source", Extension = ".cs" },
+                new ProjectFileIndexEntry { RelativePath = "Helper.cs", TypeTag = "source", Extension = ".cs" },
+                new ProjectFileIndexEntry { RelativePath = "app.json", TypeTag = "config", Extension = ".json" },
+                new ProjectFileIndexEntry { RelativePath = "README.md", TypeTag = "doc", Extension = ".md" }
+            ]
+        };
+
+        var result = _builder.Build(index, "", []);
+
+        Assert.Contains("类型分布：.cs: 3, .json: 1, .md: 1", result);
+    }
+
+    [Fact]
+    public void Build_ExtensionStatsSortedByCountDescending()
+    {
+        var index = new ProjectFileIndex
+        {
+            RootPath = "/project",
+            Entries =
+            [
+                new ProjectFileIndexEntry { RelativePath = "a.md", TypeTag = "doc", Extension = ".md" },
+                new ProjectFileIndexEntry { RelativePath = "b.md", TypeTag = "doc", Extension = ".md" },
+                new ProjectFileIndexEntry { RelativePath = "App.cs", TypeTag = "source", Extension = ".cs" },
+                new ProjectFileIndexEntry { RelativePath = "App.json", TypeTag = "config", Extension = ".json" },
+                new ProjectFileIndexEntry { RelativePath = "Lib.json", TypeTag = "config", Extension = ".json" },
+                new ProjectFileIndexEntry { RelativePath = "Helper.json", TypeTag = "config", Extension = ".json" }
+            ]
+        };
+
+        var result = _builder.Build(index, "", []);
+
+        // .json (3) should come before .md (2) which should come before .cs (1)
+        var statsLine = result.Split('\n').First(l => l.StartsWith("类型分布"));
+        Assert.Contains(".json: 3, .md: 2, .cs: 1", statsLine);
+    }
+
+    [Fact]
     public void Build_TruncatesWhenStillOverBudget()
     {
         // Create a massive index that exceeds even after group trimming
