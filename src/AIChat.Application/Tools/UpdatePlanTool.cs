@@ -60,17 +60,29 @@ public sealed class UpdatePlanTool : IAgentTool
                 return Task.FromResult(new AgentToolResult
                 {
                     ToolName = Id,
-                    Content = "缺少必填参数：summary",
+                    Content = "缺少必填参数：summary。请传入本轮任务计划摘要，例如：summary=\"修复登录模块\"",
                     IsError = true
                 });
             }
 
-            if (!args.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            // 兼容模型可能发送 "item" 或 "items" 的情况
+            if (!args.TryGetProperty("items", out var items) &&
+                !args.TryGetProperty("item", out items))
             {
                 return Task.FromResult(new AgentToolResult
                 {
                     ToolName = Id,
-                    Content = "缺少必填参数：items（数组）",
+                    Content = "缺少必填参数：items。请以 JSON 数组格式传入计划项列表，例如：items=[{\"title\":\"步骤一\",\"status\":\"pending\"}]",
+                    IsError = true
+                });
+            }
+
+            if (items.ValueKind != JsonValueKind.Array)
+            {
+                return Task.FromResult(new AgentToolResult
+                {
+                    ToolName = Id,
+                    Content = "参数 items 必须是 JSON 数组。正确格式：items=[{\"title\":\"步骤一\",\"status\":\"pending\"}]",
                     IsError = true
                 });
             }

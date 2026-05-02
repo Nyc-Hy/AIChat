@@ -108,6 +108,39 @@ public sealed class ToolExecutionServiceTests
         Assert.True(tool.WasExecuted);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_SessionAllowFromConfirmEachTimeSkipsApprovalOnNextCall()
+    {
+        var tool = new FakeTool("write_file", AgentToolRisk.Write);
+        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+
+        // 第一次调用：ConfirmEachTime（默认），用户点"本会话允许"
+        var firstEvents = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "write_file", ArgumentsJson = "{}" },
+            ProjectPath = Environment.CurrentDirectory,
+            RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve(allowForSession: true))
+        }));
+
+        Assert.Equal(
+            [ToolExecutionEventType.ApprovalRequired, ToolExecutionEventType.SessionAllowed, ToolExecutionEventType.Result],
+            firstEvents.Select(item => item.Type));
+
+        var sessionAllowedTools = new HashSet<string> { "write_file" };
+
+        // 第二次调用：同样的 ConfirmEachTime 模式，但已 session allow，应自动执行
+        var secondEvents = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "write_file", ArgumentsJson = "{}" },
+            ProjectPath = Environment.CurrentDirectory,
+            SessionAllowedToolIds = sessionAllowedTools
+        }));
+
+        var secondResult = Assert.Single(secondEvents);
+        Assert.Equal(ToolExecutionEventType.Result, secondResult.Type);
+        Assert.True(tool.WasExecuted);
+    }
+
     private static async Task<List<ToolExecutionEvent>> CollectAsync(IAsyncEnumerable<ToolExecutionEvent> events)
     {
         var result = new List<ToolExecutionEvent>();

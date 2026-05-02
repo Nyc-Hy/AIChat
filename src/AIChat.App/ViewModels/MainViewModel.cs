@@ -86,6 +86,9 @@ public sealed class MainViewModel : ObservableObject
     private string _workspaceDiffText = "选择一个变更文件查看 diff。";
     private IReadOnlyList<DiffLineViewModel> _workspaceDiffLines = [];
     private bool _isRefreshingWorkspaceChanges;
+    // Tracks the provider template selected in the Settings "add provider" dropdown.
+    // Separate from Settings.ProviderId to avoid async normalization races.
+    private string _newProviderTemplateId = "tokenplan-mimo";
     // Guards against older async JSON loads overwriting a newer selection.
     private int _callDetailLoadVersion;
     private int _workspaceDiffLoadVersion;
@@ -155,6 +158,7 @@ public sealed class MainViewModel : ObservableObject
         OpenAgentFileChangeCommand = new RelayCommand(parameter => OpenAgentFileChange((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFilePathCommand = new RelayCommand(parameter => CopyAgentFilePath((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel);
         CopyAgentFileDiffCommand = new RelayCommand(parameter => CopyAgentFileDiff((AgentFileChangeViewModel)parameter!), parameter => parameter is AgentFileChangeViewModel { HasDiff: true });
+        CopyTraceCommand = new RelayCommand(parameter => CopyTrace((ToolTraceViewModel)parameter!), parameter => parameter is ToolTraceViewModel);
         ApproveToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: false), _ => PendingToolApproval is not null);
         ApproveToolForSessionCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: true, allowForSession: true), _ => PendingToolApproval is not null);
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
@@ -235,6 +239,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand OpenAgentFileChangeCommand { get; }
     public RelayCommand CopyAgentFilePathCommand { get; }
     public RelayCommand CopyAgentFileDiffCommand { get; }
+    public RelayCommand CopyTraceCommand { get; }
     public RelayCommand ApproveToolCommand { get; }
     public RelayCommand ApproveToolForSessionCommand { get; }
     public RelayCommand RejectToolCommand { get; }
@@ -340,9 +345,30 @@ public sealed class MainViewModel : ObservableObject
     public ConfiguredLlmProvider? SelectedConfiguredProvider =>
         Settings.ConfiguredProviders.FirstOrDefault(provider => provider.Id == Settings.ActiveConfiguredProviderId) ??
         Settings.ConfiguredProviders.FirstOrDefault();
-    public IReadOnlyList<LlmModelInfo> ActiveModelOptions => SelectedConfiguredProvider is null
-        ? []
-        : ChatProviderCatalog.Resolve(SelectedConfiguredProvider.TemplateId).Models;
+    public IReadOnlyList<ModelOptionItem> ActiveModelOptions
+    {
+        get
+        {
+            var items = new List<ModelOptionItem>();
+            foreach (var configured in Settings.ConfiguredProviders)
+            {
+                if (string.IsNullOrWhiteSpace(configured.ApiKey))
+                {
+                    continue;
+                }
+
+                var template = ChatProviderCatalog.Resolve(configured.TemplateId);
+                foreach (var model in template.Models)
+                {
+                    items.Add(new ModelOptionItem(
+                        $"{configured.TemplateId}|{model.Id}",
+                        $"[{template.Name}] {model.DisplayName}"));
+                }
+            }
+
+            return items;
+        }
+    }
     public bool HasModelParameterOptions => ModelParameterOptions.Count > 0;
     public string ActiveModelCapabilitySummary
     {
@@ -486,29 +512,56 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(ActiveModelOptions));
             RebuildModelParameterOptions();
             UpdateContextUsage();
+            RemoveConfiguredProviderCommand.RaiseCanExecuteChanged();
             _ = PersistSettingsQuietlyAsync();
         }
     }
 
     public string SelectedActiveModelId
     {
-        get => SelectedConfiguredProvider?.SelectedModelId ?? "";
-        set
+        get
         {
             var configured = SelectedConfiguredProvider;
-            if (configured is null || configured.SelectedModelId == value)
+            return configured is null ? "" : $"{configured.TemplateId}|{configured.SelectedModelId}";
+        }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
             {
                 return;
             }
 
-            var model = ChatProviderCatalog.ResolveModel(configured.TemplateId, value);
-            // Model selection also changes the context limit.
+            var parts = value.Split('|', 2);
+            if (parts.Length != 2)
+            {
+                return;
+            }
+
+            var templateId = parts[0];
+            var modelId = parts[1];
+
+            // If the model belongs to a different provider, switch to it.
+            var configured = Settings.ConfiguredProviders.FirstOrDefault(
+                p => string.Equals(p.TemplateId, templateId, StringComparison.OrdinalIgnoreCase) &&
+                     !string.IsNullOrWhiteSpace(p.ApiKey));
+            if (configured is null)
+            {
+                return;
+            }
+
+            if (!string.Equals(Settings.ActiveConfiguredProviderId, configured.Id, StringComparison.Ordinal))
+            {
+                Settings.ActiveConfiguredProviderId = configured.Id;
+            }
+
+            var model = ChatProviderCatalog.ResolveModel(templateId, modelId);
             configured.SelectedModelId = model.Id;
-            configured.ModelParameters = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters);
+            configured.ModelParameters = NormalizeModelParameterValues(templateId, model.Id, configured.ModelParameters);
             ApplySelectedConfiguredProvider();
             OnPropertyChanged();
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(ModelName));
+            OnPropertyChanged(nameof(SelectedConfiguredProvider));
             RebuildModelParameterOptions();
             UpdateContextUsage();
             _ = PersistSettingsQuietlyAsync();
@@ -524,6 +577,19 @@ public sealed class MainViewModel : ObservableObject
             {
                 AddConfiguredProviderCommand.RaiseCanExecuteChanged();
                 TestProviderConnectionCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string NewProviderTemplateId
+    {
+        get => _newProviderTemplateId;
+        set
+        {
+            if (SetProperty(ref _newProviderTemplateId, value))
+            {
+                // Also sync to SelectedProviderId for backward compatibility.
+                SelectedProviderId = value;
             }
         }
     }
@@ -889,6 +955,11 @@ public sealed class MainViewModel : ObservableObject
 
         IsStopping = true;
         StatusText = "正在停止生成...";
+        // Reject any pending tool approval before cancelling the run
+        if (PendingToolApproval is not null)
+        {
+            PendingToolApproval.Reject();
+        }
         _sendCts.Cancel();
     }
 
@@ -898,6 +969,7 @@ public sealed class MainViewModel : ObservableObject
         // then select the default project/conversation for the UI.
         Settings = await _repository.LoadSettingsAsync();
         NormalizeProviderSettings();
+        _newProviderTemplateId = Settings.ProviderId;
         NormalizeToolSettings();
         NormalizeHarnessSettings();
         NormalizeModelParameters();
@@ -911,7 +983,29 @@ public sealed class MainViewModel : ObservableObject
             Projects.Add(new ProjectViewModel(project));
         }
 
-        SelectProject(Projects.FirstOrDefault(project => project.Name == "AIChat") ?? Projects.FirstOrDefault());
+        // Restore last active project, or fall back to the first one.
+        var targetProject = Projects.FirstOrDefault(
+                                p => string.Equals(p.Project.Id, Settings.LastActiveProjectId, StringComparison.Ordinal)) ??
+                            Projects.FirstOrDefault();
+        SelectProject(targetProject);
+
+        // Restore last active conversation within the selected project.
+        if (SelectedProject is not null && !string.IsNullOrWhiteSpace(Settings.LastActiveConversationId))
+        {
+            var lastConversation = SelectedProject.Conversations.FirstOrDefault(
+                c => string.Equals(c.Conversation.Id, Settings.LastActiveConversationId, StringComparison.Ordinal));
+            if (lastConversation is not null)
+            {
+                SelectConversation(lastConversation);
+            }
+        }
+
+        // If the selected project has no path configured, prompt the user.
+        if (SelectedProject is not null && string.IsNullOrWhiteSpace(SelectedProject.Path))
+        {
+            PromptForProjectPath();
+        }
+
         await RefreshWorkspaceChangesAsync();
         StatusText = HasApiKey ? "可直接对话" : "请先在设置中添加模型提供商";
     }
@@ -951,6 +1045,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         SelectedProject = project;
+        Settings.LastActiveProjectId = project.Project.Id;
         var conversation = project.Conversations.FirstOrDefault();
         if (conversation is not null)
         {
@@ -962,6 +1057,28 @@ public sealed class MainViewModel : ObservableObject
         }
 
         _ = RefreshWorkspaceChangesAsync();
+    }
+
+    private void PromptForProjectPath()
+    {
+        var dialog = new VistaFolderBrowserDialog
+        {
+            Description = $"请选择 \"{SelectedProject!.Name}\" 的项目文件夹",
+            ShowNewFolderButton = false,
+            RootFolder = Environment.SpecialFolder.MyComputer
+        };
+
+        if (dialog.ShowDialog() == true && Directory.Exists(dialog.SelectedPath))
+        {
+            SelectedProject.Project.Path = dialog.SelectedPath;
+            _ = _repository.SaveProjectsAsync(Projects.Select(p => p.Project).ToList());
+            OnPropertyChanged(nameof(SelectedProject));
+            StatusText = $"项目路径已设置为：{dialog.SelectedPath}";
+        }
+        else
+        {
+            StatusText = "未设置项目路径，工具将以应用目录为根路径运行。请稍后通过「添加项目」配置正确路径。";
+        }
     }
 
     private async Task AddProjectAsync()
@@ -1062,6 +1179,8 @@ public sealed class MainViewModel : ObservableObject
         }
 
         SelectedConversation = conversation;
+        Settings.LastActiveConversationId = conversation.Conversation.Id;
+        _ = PersistSettingsQuietlyAsync();
     }
 
     private void RebuildAgentRunHistory()
@@ -1741,6 +1860,12 @@ public sealed class MainViewModel : ObservableObject
         StatusText = $"路径已复制：{change.Path}";
     }
 
+    private void CopyTrace(ToolTraceViewModel trace)
+    {
+        System.Windows.Clipboard.SetText(trace.GetFullText());
+        StatusText = $"工具调用详情已复制：{trace.ToolName}";
+    }
+
     private async Task CommitAgentRunChangesAsync(ChatMessageViewModel message)
     {
         if (SelectedProject is null || message.AgentRun is null)
@@ -2019,6 +2144,16 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        // Ensure project path is configured before sending.
+        if (SelectedProject is not null && string.IsNullOrWhiteSpace(SelectedProject.Path))
+        {
+            PromptForProjectPath();
+            if (string.IsNullOrWhiteSpace(SelectedProject.Path))
+            {
+                return;
+            }
+        }
+
         var text = DraftMessage.Trim();
         DraftMessage = "";
         var continuedFromRunId = _pendingContinuedFromRunId;
@@ -2050,6 +2185,7 @@ public sealed class MainViewModel : ObservableObject
         assistantViewModel.IsStreaming = true;
         var hasReceivedContent = false;
         var hasShownToolProgress = false;
+        var reasoningContentBuilder = new System.Text.StringBuilder();
         var hasUsedTools = false;
         var callDetail = new LlmCallDetail
         {
@@ -2096,13 +2232,13 @@ public sealed class MainViewModel : ObservableObject
         IsSending = true;
         IsStopping = false;
         StatusText = "正在连接模型...";
-        _sendCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        _sendCts = new CancellationTokenSource();
         var workspaceSnapshot = await CaptureWorkspaceSnapshotAsync(_sendCts.Token);
         var rawResponseEvents = new List<string>();
         var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
         var stepByToolCallId = new Dictionary<string, AgentStepViewModel>(StringComparer.Ordinal);
 
-        var projectPath = SelectedProject?.Path ?? Environment.CurrentDirectory;
+        var projectPath = string.IsNullOrWhiteSpace(SelectedProject?.Path) ? Environment.CurrentDirectory : SelectedProject!.Path;
         var fileIndex = new ProjectFileIndexBuilder().Build(projectPath);
         var workspaceSummary = workspaceSnapshot is { Branch: { Length: > 0 } branch }
             ? $"分支：{branch}，未提交变更：{workspaceSnapshot.ChangeCount} 个文件"
@@ -2117,6 +2253,7 @@ public sealed class MainViewModel : ObservableObject
             Settings = effectiveSettings,
             PromptContext = new SystemPromptContext
             {
+                ProviderId = effectiveSettings.ProviderId,
                 ProjectName = SelectedProject?.Name ?? "AIChat",
                 ProjectPath = projectPath,
                 EnabledToolIds = Settings.EnabledToolIds,
@@ -2155,6 +2292,11 @@ public sealed class MainViewModel : ObservableObject
                         if (!string.IsNullOrWhiteSpace(delta.RawJson))
                         {
                             rawResponseEvents.Add(delta.RawJson);
+                        }
+
+                        if (!string.IsNullOrEmpty(delta.ReasoningContent))
+                        {
+                            reasoningContentBuilder.Append(delta.ReasoningContent);
                         }
 
                         if (!string.IsNullOrEmpty(delta.Content))
@@ -2201,7 +2343,7 @@ public sealed class MainViewModel : ObservableObject
                                        ContinuedFromRunId = continuedFromRunId,
                                        Context = new AgentRunContext
                                        {
-                                           ProjectPath = SelectedProject?.Path ?? Environment.CurrentDirectory,
+                                           ProjectPath = string.IsNullOrWhiteSpace(SelectedProject?.Path) ? Environment.CurrentDirectory : SelectedProject!.Path,
                                            EnabledToolIds = Settings.EnabledToolIds,
                                            ToolPermissionModes = MergeToolPermissionModes(
                                                Settings.ToolPermissionModes,
@@ -2389,6 +2531,12 @@ public sealed class MainViewModel : ObservableObject
                 }
             }, _sendCts.Token);
 
+            // Store reasoning content for DeepSeek thinking mode replay.
+            if (reasoningContentBuilder.Length > 0)
+            {
+                assistantMessage.ReasoningContent = reasoningContentBuilder.ToString();
+            }
+
             if (!hasReceivedContent)
             {
                 assistantViewModel.Content = hasUsedTools
@@ -2546,7 +2694,8 @@ public sealed class MainViewModel : ObservableObject
         await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => PendingToolApproval = pending);
         try
         {
-            await using var registration = cancellationToken.Register(() => pending.Reject());
+            // Wait indefinitely for user decision - no timeout, no auto-reject.
+            // Only manual "Stop" or "Reject" buttons resolve this.
             return await pending.Completion;
         }
         finally
@@ -3011,6 +3160,8 @@ public sealed class MainViewModel : ObservableObject
 
     private sealed record WorkspaceRunSnapshot(string Branch, int ChangeCount, bool IsTruncated);
 
+    public sealed record ModelOptionItem(string Id, string DisplayName);
+
     private void RebuildModelParameterOptions()
     {
         var configured = SelectedConfiguredProvider;
@@ -3073,7 +3224,7 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task AddConfiguredProviderAsync()
     {
-        var template = ChatProviderCatalog.Resolve(SelectedProviderId);
+        var template = ChatProviderCatalog.Resolve(_newProviderTemplateId);
         var model = ChatProviderCatalog.ResolveModel(template.Id, template.DefaultModel);
         var apiKey = NewProviderApiKey.Trim();
         var existing = Settings.ConfiguredProviders.FirstOrDefault(provider =>
@@ -3124,7 +3275,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var template = ChatProviderCatalog.Resolve(SelectedProviderId);
+        var template = ChatProviderCatalog.Resolve(_newProviderTemplateId);
         IsTestingProviderConnection = true;
         StatusText = "正在测试模型连接...";
         try

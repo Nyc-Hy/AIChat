@@ -6,6 +6,8 @@ public sealed class ChatDelta
 {
     // Text that can be appended to the assistant message in the UI.
     public string Content { get; init; } = "";
+    // DeepSeek thinking mode streams reasoning_content separately from content.
+    public string ReasoningContent { get; init; } = "";
     // Original provider event, kept for the call-detail inspector and debugging.
     public string RawJson { get; init; } = "";
     // Some streaming protocols send an explicit terminal event such as [DONE].

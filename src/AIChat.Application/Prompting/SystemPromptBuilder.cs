@@ -91,6 +91,8 @@ public sealed class SystemPromptBuilder
             builder.AppendLine(contextPack);
         }
 
+        AppendProviderSpecificInstructions(builder, context.ProviderId);
+
         return builder.ToString().Trim();
     }
 
@@ -108,5 +110,18 @@ public sealed class SystemPromptBuilder
             ToolPermissionMode.Disabled => "已关闭，不要调用",
             _ => "每次执行前需要确认"
         };
+    }
+
+    private static void AppendProviderSpecificInstructions(StringBuilder builder, string providerId)
+    {
+        if (string.Equals(providerId, "deepseek", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.AppendLine();
+            builder.AppendLine("DeepSeek 模型提示：");
+            builder.AppendLine("- 复杂推理、多步代码重构、算法设计等任务，建议启用思考模式（thinking）以获得更准确的结果。");
+            builder.AppendLine("- 简单问答、文件读取、状态查询等轻量任务，关闭思考模式可显著提速。");
+            builder.AppendLine("- 代码修改任务建议推理强度设为 high，确保逻辑严谨。");
+            builder.AppendLine("- 工具调用时，JSON 参数尽量一次传完整，DeepSeek 对复杂嵌套 JSON 有良好支持。");
+        }
     }
 }

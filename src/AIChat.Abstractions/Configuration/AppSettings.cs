@@ -17,6 +17,9 @@ public sealed class AppSettings
     public int ModelContextLimit { get; set; } = 1_000_000;
     public Dictionary<string, string> ModelParameters { get; set; } = [];
     public string ActiveConfiguredProviderId { get; set; } = "";
+    // Restore last active project and conversation on next launch.
+    public string LastActiveProjectId { get; set; } = "";
+    public string LastActiveConversationId { get; set; } = "";
     // Tool IDs selected in Settings. Only these schemas are sent to the model.
     public List<string> EnabledToolIds { get; set; } = [];
     public Dictionary<string, ToolPermissionMode> ToolPermissionModes { get; set; } = [];

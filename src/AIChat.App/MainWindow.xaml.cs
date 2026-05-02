@@ -186,4 +186,14 @@ public partial class MainWindow : Window
     {
         Close();
     }
+
+    private void ScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        // Ensure the ScrollViewer scrolls even when it doesn't have keyboard focus.
+        if (sender is ScrollViewer sv)
+        {
+            sv.ScrollToVerticalOffset(sv.VerticalOffset - e.Delta);
+            e.Handled = true;
+        }
+    }
 }

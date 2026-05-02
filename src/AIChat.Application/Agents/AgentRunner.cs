@@ -48,19 +48,8 @@ public sealed class AgentRunner
             .ToList();
         AgentToolResult? lastToolResult = null;
 
-        var softLimit = (int)(context.MaxToolRounds * 0.8);
-        for (var round = 0; round < context.MaxToolRounds; round++)
+        for (var round = 0; ; round++)
         {
-            // Soft warning: when approaching the limit, nudge the agent to wrap up
-            if (round == softLimit && round > 0)
-            {
-                transcript.Add(new ChatMessage
-                {
-                    Role = ChatRole.User,
-                    Content = $"你已经进行了 {round} 轮工具调用，接近本轮预算上限（{context.MaxToolRounds} 轮）。请尽快完成当前任务并总结已完成的工作。如果还需要更多操作，请说明原因。",
-                    CreatedAt = DateTimeOffset.Now
-                });
-            }
             var request = new ChatRequest
             {
                 Model = initialRequest.Model,
@@ -70,6 +59,7 @@ public sealed class AgentRunner
             };
 
             var assistantContent = "";
+            var assistantReasoningContent = "";
             var rawEvents = new List<string>();
             var requestedToolCalls = new List<ChatToolCall>();
             var pendingEvents = new List<AgentRunEvent>();
@@ -78,6 +68,7 @@ public sealed class AgentRunner
             for (var retryAttempt = 0; retryAttempt <= _retryPolicy.MaxRetries && !chatSucceeded; retryAttempt++)
             {
                 assistantContent = "";
+                assistantReasoningContent = "";
                 rawEvents.Clear();
                 requestedToolCalls.Clear();
                 pendingEvents.Clear();
@@ -101,6 +92,11 @@ public sealed class AgentRunner
                         {
                             hadTransientError = true;
                             break;
+                        }
+
+                        if (!string.IsNullOrEmpty(delta.ReasoningContent))
+                        {
+                            assistantReasoningContent += delta.ReasoningContent;
                         }
 
                         if (!string.IsNullOrEmpty(delta.Content))
@@ -152,6 +148,7 @@ public sealed class AgentRunner
                     {
                         Role = ChatRole.Assistant,
                         Content = assistantContent,
+                        ReasoningContent = assistantReasoningContent,
                         CreatedAt = DateTimeOffset.Now
                     });
                     transcript.Add(new ChatMessage
@@ -180,6 +177,7 @@ public sealed class AgentRunner
             {
                 Role = ChatRole.Assistant,
                 Content = assistantContent,
+                ReasoningContent = assistantReasoningContent,
                 ToolCalls = requestedToolCalls
                     .Select(call => new ChatToolCall
                     {
@@ -287,15 +285,6 @@ public sealed class AgentRunner
                 });
             }
         }
-
-        yield return new AgentRunEvent
-        {
-            Type = AgentRunEventType.BudgetExceeded,
-            Content = lastToolResult is null
-                ? $"\n\n已达到工具调用轮数上限（{context.MaxToolRounds} 轮），请缩小问题范围后再试。"
-                : $"\n\n已达到工具调用轮数上限（{context.MaxToolRounds} 轮）。最后一次工具结果如下：\n\n```json\n{lastToolResult.Content}\n```"
-        };
-        yield return new AgentRunEvent { Type = AgentRunEventType.Completed };
     }
 
     private static bool RequiresProjectMutation(IReadOnlyList<ChatMessage> messages)
@@ -323,6 +312,7 @@ public sealed class AgentRunner
             ConversationId = message.ConversationId,
             Role = message.Role,
             Content = message.Content,
+            ReasoningContent = message.ReasoningContent,
             ToolCallId = message.ToolCallId,
             ToolName = message.ToolName,
             ToolCalls = message.ToolCalls

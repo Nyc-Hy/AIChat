@@ -56,6 +56,25 @@ public sealed class UpdatePlanToolTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ReturnsSuccess_WhenUsingItemSingular()
+    {
+        var args = JsonSerializer.Serialize(new
+        {
+            summary = "Fix the bug",
+            item = new[]
+            {
+                new { title = "Read code", status = "completed", notes = "" }
+            }
+        });
+
+        var result = await _tool.ExecuteAsync(args, _context);
+
+        Assert.False(result.IsError);
+        using var doc = JsonDocument.Parse(result.Content);
+        Assert.Equal(1, doc.RootElement.GetProperty("itemCount").GetInt32());
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ReturnsError_WhenItemsMissing()
     {
         var args = JsonSerializer.Serialize(new

@@ -263,58 +263,6 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
-    public async Task RunAsync_RecordsBudgetExhaustionWhenToolRoundsAreExceeded()
-    {
-        var conversation = new Conversation { Id = "conversation-1" };
-        var toolCall = new ChatToolCall
-        {
-            Id = "tool-call-1",
-            Name = "run_test",
-            ArgumentsJson = "{}"
-        };
-        var harness = new AgentHarness(new AgentRunner(
-            new FakeChatCompletionService([
-                [new ChatDelta { ToolCalls = [toolCall] }]
-            ]),
-            new AgentToolCatalog([new FakeVerificationTool()])));
-
-        var content = "";
-        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
-                       {
-                           Conversation = conversation,
-                           UserMessageId = "user-1",
-                           AssistantMessageId = "assistant-1",
-                           Goal = "verify",
-                           ChatRequest = new ChatRequest
-                           {
-                               Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
-                           },
-                           Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext
-                           {
-                               ProjectPath = Environment.CurrentDirectory,
-                               MaxToolRounds = 1,
-                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
-                           }
-                       }))
-        {
-            if (item.Type == AgentHarnessEventType.ContentDelta)
-            {
-                content += item.Content;
-            }
-        }
-
-        var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(1, run.MaxToolRounds);
-        Assert.Equal(1, run.ToolCallCount);
-        Assert.True(run.ToolBudgetExceeded);
-        Assert.Equal("已达到工具调用轮数上限。", run.CompletionReason);
-        Assert.Contains("必要时把工具轮数预算提高到 3", run.RecoverySuggestion);
-        Assert.Contains("已达到工具调用轮数上限", content);
-    }
-
-    [Fact]
     public async Task RunAsync_FlagsMutationGoalWithoutSuccessfulMutationTool()
     {
         var conversation = new Conversation { Id = "conversation-1" };

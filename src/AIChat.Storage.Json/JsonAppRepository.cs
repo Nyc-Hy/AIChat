@@ -110,7 +110,7 @@ public sealed class JsonAppRepository : IAppRepository
         var project = new ProjectWorkspace
         {
             Name = "AIChat",
-            Path = Environment.CurrentDirectory,
+            Path = "",
             UpdatedAt = DateTimeOffset.Now
         };
 

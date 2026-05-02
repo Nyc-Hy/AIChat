@@ -49,6 +49,34 @@ public sealed class ToolTraceViewModel : ObservableObject
     public bool IsCompleted => _trace.IsCompleted;
     public bool IsError => _trace.IsError;
 
+    public string GetFullText()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"工具：{ToolName}");
+        sb.AppendLine($"状态：{StatusText}");
+        sb.AppendLine($"耗时：{DurationText}");
+        sb.AppendLine();
+        sb.AppendLine("参数：");
+        sb.AppendLine(ArgumentsPreview);
+        if (HasResult)
+        {
+            sb.AppendLine();
+            sb.AppendLine("结果：");
+            if (HasShell)
+            {
+                sb.AppendLine($"Shell: {ShellText}  Exit: {ExitCodeText}");
+                if (HasCommand) sb.AppendLine($"命令：{CommandText}");
+                if (HasStdout) sb.AppendLine($"stdout：\n{StdoutPreview}");
+                if (HasStderr) sb.AppendLine($"stderr：\n{StderrPreview}");
+            }
+            else
+            {
+                sb.AppendLine(ResultPreview);
+            }
+        }
+        return sb.ToString();
+    }
+
     public void Complete(string resultContent, bool isError)
     {
         _trace.ResultContent = resultContent;

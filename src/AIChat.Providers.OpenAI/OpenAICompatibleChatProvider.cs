@@ -161,6 +161,64 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         }
     }
 
+    private static object BuildAssistantMessage(
+        ChatMessage message,
+        string? content,
+        string? reasoningContent,
+        IReadOnlyList<ChatToolCall>? toolCalls)
+    {
+        // DeepSeek thinking mode requires reasoning_content to be passed back.
+        if (!string.IsNullOrWhiteSpace(reasoningContent))
+        {
+            var result = new Dictionary<string, object?>
+            {
+                ["role"] = "assistant",
+                ["content"] = string.IsNullOrWhiteSpace(content) ? null : content,
+                ["reasoning_content"] = reasoningContent
+            };
+            if (toolCalls is { Count: > 0 })
+            {
+                result["tool_calls"] = toolCalls.Select(call => new
+                {
+                    id = call.Id,
+                    type = "function",
+                    function = new
+                    {
+                        name = call.Name,
+                        arguments = call.ArgumentsJson
+                    }
+                }).ToList();
+            }
+
+            return result;
+        }
+
+        if (toolCalls is { Count: > 0 })
+        {
+            return new
+            {
+                role = "assistant",
+                content = string.IsNullOrWhiteSpace(content) ? null : content,
+                tool_calls = toolCalls.Select(call => new
+                {
+                    id = call.Id,
+                    type = "function",
+                    function = new
+                    {
+                        name = call.Name,
+                        arguments = call.ArgumentsJson
+                    }
+                }).ToList()
+            };
+        }
+
+        return new
+        {
+            role = "assistant",
+            content = string.IsNullOrWhiteSpace(content) ? null : content
+        };
+    }
+
     private static string ToApiRole(ChatRole role) => role switch
     {
         ChatRole.System => "system",
@@ -210,21 +268,13 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
         if (message.Role == ChatRole.Assistant && message.ToolCalls.Count > 0)
         {
-            return new
-            {
-                role = "assistant",
-                content = string.IsNullOrWhiteSpace(message.Content) ? null : message.Content,
-                tool_calls = message.ToolCalls.Select(call => new
-                {
-                    id = call.Id,
-                    type = "function",
-                    function = new
-                    {
-                        name = call.Name,
-                        arguments = call.ArgumentsJson
-                    }
-                }).ToList()
-            };
+            return BuildAssistantMessage(message, message.Content, message.ReasoningContent,
+                message.ToolCalls);
+        }
+
+        if (message.Role == ChatRole.Assistant)
+        {
+            return BuildAssistantMessage(message, message.Content, message.ReasoningContent, null);
         }
 
         return new
@@ -256,10 +306,17 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         }
 
         var content = TryReadDeltaContent(payload);
+        var reasoningContent = TryReadReasoningContent(payload);
         var toolCalls = TryReadToolCallDeltas(payload);
-        if (!string.IsNullOrEmpty(content))
+        if (!string.IsNullOrEmpty(content) || !string.IsNullOrEmpty(reasoningContent))
         {
-            yield return new ChatDelta { Content = content, RawJson = payload, ToolCalls = toolCalls };
+            yield return new ChatDelta
+            {
+                Content = content,
+                ReasoningContent = reasoningContent,
+                RawJson = payload,
+                ToolCalls = toolCalls
+            };
         }
         else if (toolCalls.Count > 0)
         {
@@ -272,8 +329,6 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         try
         {
             using var document = JsonDocument.Parse(json);
-            // OpenAI-compatible providers usually stream choices[].delta.content;
-            // some reasoning models use reasoning_content instead.
             if (!document.RootElement.TryGetProperty("choices", out var choices) ||
                 choices.ValueKind != JsonValueKind.Array)
             {
@@ -282,23 +337,48 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
             foreach (var choice in choices.EnumerateArray())
             {
-                if (choice.TryGetProperty("delta", out var delta))
+                if (choice.TryGetProperty("delta", out var delta) &&
+                    delta.TryGetProperty("content", out var content))
                 {
-                    if (delta.TryGetProperty("content", out var content))
-                    {
-                        return content.GetString() ?? "";
-                    }
-
-                    if (delta.TryGetProperty("reasoning_content", out var reasoningContent))
-                    {
-                        return reasoningContent.GetString() ?? "";
-                    }
+                    return content.GetString() ?? "";
                 }
 
                 if (choice.TryGetProperty("message", out var message) &&
                     message.TryGetProperty("content", out var messageContent))
                 {
                     return messageContent.GetString() ?? "";
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            return "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+
+        return "";
+    }
+
+    private static string TryReadReasoningContent(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("choices", out var choices) ||
+                choices.ValueKind != JsonValueKind.Array)
+            {
+                return "";
+            }
+
+            foreach (var choice in choices.EnumerateArray())
+            {
+                if (choice.TryGetProperty("delta", out var delta) &&
+                    delta.TryGetProperty("reasoning_content", out var reasoningContent))
+                {
+                    return reasoningContent.GetString() ?? "";
                 }
             }
         }

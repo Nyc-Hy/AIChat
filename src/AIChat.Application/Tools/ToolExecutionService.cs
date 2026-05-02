@@ -135,11 +135,15 @@ public sealed class ToolExecutionService
         ToolPermissionMode mode,
         IReadOnlySet<string> sessionAllowedToolIds)
     {
+        if (sessionAllowedToolIds.Contains(tool.Id))
+        {
+            return true;
+        }
+
         return mode switch
         {
             ToolPermissionMode.Disabled => false,
             ToolPermissionMode.AutoReadOnly => tool.Risk == AgentToolRisk.ReadOnly,
-            ToolPermissionMode.AllowForSession => sessionAllowedToolIds.Contains(tool.Id),
             _ => false
         };
     }

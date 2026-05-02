@@ -52,7 +52,7 @@ public sealed class ReadFileTool : IAgentTool
             var fullPath = ProjectPathGuard.ResolveInsideProject(context.ProjectPath, path);
             if (!File.Exists(fullPath))
             {
-                return Error($"文件不存在：{path}");
+                return Error($"文件不存在：{path}\n实际查找路径：{fullPath}\n项目根目录：{context.ProjectPath}");
             }
 
             var text = await File.ReadAllTextAsync(fullPath, cancellationToken);

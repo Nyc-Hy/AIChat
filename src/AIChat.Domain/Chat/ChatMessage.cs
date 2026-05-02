@@ -9,6 +9,9 @@ public sealed class ChatMessage
     // System/User/Assistant is the minimal role set used by most chat APIs.
     public ChatRole Role { get; set; }
     public string Content { get; set; } = "";
+    // DeepSeek thinking mode requires reasoning_content to be passed back in
+    // subsequent requests. Stored separately from Content.
+    public string ReasoningContent { get; set; } = "";
     // Tool result messages use these fields so providers can match a result to
     // the assistant tool call that requested it.
     public string ToolCallId { get; set; } = "";
