@@ -43,6 +43,7 @@ public sealed class AuditLogRepository
         string projectId,
         DateTimeOffset? after = null,
         AuditEventType? type = null,
+        string? runId = null,
         int maxCount = 200,
         CancellationToken cancellationToken = default)
     {
@@ -62,6 +63,8 @@ public sealed class AuditLogRepository
                 if (entry is null) continue;
                 if (after.HasValue && entry.Timestamp < after.Value) continue;
                 if (type.HasValue && entry.Type != type.Value) continue;
+                if (!string.IsNullOrWhiteSpace(runId) &&
+                    !string.Equals(entry.RunId, runId, StringComparison.Ordinal)) continue;
                 events.Add(entry);
             }
         }

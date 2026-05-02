@@ -130,6 +130,99 @@ public sealed class AnthropicToolCallTests
     }
 
     [Fact]
+    public async Task SendAsync_WithTools_IncludesToolsInRequestPayload()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
+            Tools =
+            [
+                new ChatToolDefinition
+                {
+                    Name = "read_file",
+                    Description = "Read a file from disk",
+                    ParametersJson = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}"
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var root = captured.RootElement;
+
+        Assert.True(root.TryGetProperty("tools", out var tools));
+        Assert.Equal(1, tools.GetArrayLength());
+
+        var tool = tools[0];
+        Assert.Equal("read_file", tool.GetProperty("name").GetString());
+        Assert.Equal("Read a file from disk", tool.GetProperty("description").GetString());
+        Assert.Equal("object", tool.GetProperty("input_schema").GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task SendAsync_WithoutTools_OmitsToolsFromRequestPayload()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
+            Tools = []
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var root = captured.RootElement;
+
+        Assert.False(root.TryGetProperty("tools", out _));
+    }
+
+    [Fact]
+    public async Task SendAsync_MultipleTools_IncludesAllInRequest()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
+            Tools =
+            [
+                new ChatToolDefinition
+                {
+                    Name = "read_file",
+                    Description = "Read a file",
+                    ParametersJson = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}}"
+                },
+                new ChatToolDefinition
+                {
+                    Name = "write_file",
+                    Description = "Write a file",
+                    ParametersJson = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"content\":{\"type\":\"string\"}}}"
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var tools = captured.RootElement.GetProperty("tools");
+
+        Assert.Equal(2, tools.GetArrayLength());
+        Assert.Equal("read_file", tools[0].GetProperty("name").GetString());
+        Assert.Equal("write_file", tools[1].GetProperty("name").GetString());
+    }
+
+    [Fact]
     public async Task SendAsync_ToolUseIdFallback_UsesIndexWhenIdMissing()
     {
         var sse = BuildSseStream(
@@ -177,10 +270,10 @@ public sealed class AnthropicToolCallTests
         };
     }
 
-    private static async Task<List<ChatDelta>> CollectDeltasAsync(AnthropicChatProvider provider)
+    private static async Task<List<ChatDelta>> CollectDeltasAsync(AnthropicChatProvider provider, ChatRequest? request = null)
     {
         var deltas = new List<ChatDelta>();
-        await foreach (var delta in provider.SendAsync(CreateRequest(), CreateSettings(), CancellationToken.None))
+        await foreach (var delta in provider.SendAsync(request ?? CreateRequest(), CreateSettings(), CancellationToken.None))
         {
             deltas.Add(delta);
         }
@@ -289,6 +382,31 @@ public sealed class AnthropicToolCallTests
             };
             response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class CapturingHandler : HttpMessageHandler
+    {
+        private readonly string _responseBody;
+        public string? CapturedBody { get; private set; }
+
+        public CapturingHandler(string responseBody) => _responseBody = responseBody;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Content is not null)
+            {
+                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(_responseBody);
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new MemoryStream(bytes))
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+            return response;
         }
     }
 }

@@ -90,6 +90,37 @@ public sealed class AuditLogRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task QueryAsync_FiltersByRunId()
+    {
+        var repo = new AuditLogRepository(_tempDir);
+
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "run-1", Type = AuditEventType.ToolCallRequested });
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "run-2", Type = AuditEventType.ToolCallRequested });
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "run-1", Type = AuditEventType.FileWritten });
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "", Type = AuditEventType.AgentRunStarted });
+
+        var events = await repo.QueryAsync("p1", runId: "run-1");
+
+        Assert.Equal(2, events.Count);
+        Assert.All(events, e => Assert.Equal("run-1", e.RunId));
+    }
+
+    [Fact]
+    public async Task QueryAsync_RunIdFilterCombinedWithTypeFilter()
+    {
+        var repo = new AuditLogRepository(_tempDir);
+
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "run-1", Type = AuditEventType.ToolCallRequested });
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "run-1", Type = AuditEventType.FileWritten });
+        await repo.AppendAsync(new AuditEvent { ProjectId = "p1", RunId = "run-1", Type = AuditEventType.ToolCallApproved });
+
+        var events = await repo.QueryAsync("p1", runId: "run-1", type: AuditEventType.ToolCallRequested);
+
+        Assert.Single(events);
+        Assert.Equal(AuditEventType.ToolCallRequested, events[0].Type);
+    }
+
+    [Fact]
     public async Task QueryAsync_ReturnsEmptyForMissingProject()
     {
         var repo = new AuditLogRepository(_tempDir);

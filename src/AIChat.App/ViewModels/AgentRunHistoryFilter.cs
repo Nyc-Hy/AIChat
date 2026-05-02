@@ -13,6 +13,20 @@ public static class AgentRunHistoryFilter
         new() { Id = "running", Name = "运行中" }
     ];
 
+    public static List<AgentRunHistoryItemViewModel> GatherFromProject(ProjectViewModel project)
+    {
+        return project.Conversations
+            .SelectMany(conversation => conversation.Messages
+                .Where(message => message.AgentRun is not null)
+                .Select(message => new AgentRunHistoryItemViewModel
+                {
+                    Conversation = conversation,
+                    Run = message.AgentRun!
+                }))
+            .OrderByDescending(item => item.Run.Run.StartedAt)
+            .ToList();
+    }
+
     public static IEnumerable<AgentRunHistoryItemViewModel> Apply(
         IEnumerable<AgentRunHistoryItemViewModel> items,
         string filterId)

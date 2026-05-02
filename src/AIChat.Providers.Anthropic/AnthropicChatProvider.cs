@@ -64,22 +64,32 @@ public sealed class AnthropicChatProvider : IChatProvider
                 .Select(message => message.Content)
                 .Where(content => !string.IsNullOrWhiteSpace(content)));
 
-        var payload = new
+        var payload = new Dictionary<string, object?>
         {
-            model = request.Model,
-            max_tokens = settings.MaxOutputTokens,
-            temperature = request.Temperature,
-            stream = true,
-            system = string.IsNullOrWhiteSpace(systemPrompt) ? null : systemPrompt,
-            messages = request.Messages
-                // System messages have already been folded into the system field.
+            ["model"] = request.Model,
+            ["max_tokens"] = settings.MaxOutputTokens,
+            ["temperature"] = request.Temperature,
+            ["stream"] = true,
+            ["system"] = string.IsNullOrWhiteSpace(systemPrompt) ? null : systemPrompt,
+            ["messages"] = request.Messages
                 .Where(message => message.Role != ChatRole.System)
                 .Select(message => new
                 {
                     role = message.Role == ChatRole.Assistant ? "assistant" : "user",
                     content = message.Content
                 })
+                .ToList()
         };
+
+        if (request.Tools.Count > 0)
+        {
+            payload["tools"] = request.Tools.Select(tool => new
+            {
+                name = tool.Name,
+                description = tool.Description,
+                input_schema = JsonSerializer.Deserialize<JsonElement>(tool.ParametersJson)
+            }).ToList();
+        }
 
         httpRequest.Content = new StringContent(
             JsonSerializer.Serialize(payload, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull }),

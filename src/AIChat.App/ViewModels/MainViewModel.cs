@@ -697,7 +697,9 @@ public sealed class MainViewModel : ObservableObject
         AuditEvents.Clear();
         OnPropertyChanged(nameof(HasAuditEvents));
 
-        if (run is null || _auditLogRepository is null || SelectedProject is null)
+        var projectId = SelectedProject?.Project.Id ?? "";
+        var runId = run?.Id ?? "";
+        if (run is null || _auditLogRepository is null || string.IsNullOrWhiteSpace(projectId))
         {
             return;
         }
@@ -705,13 +707,17 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var events = await _auditLogRepository.QueryAsync(
-                SelectedProject.Path,
+                projectId,
                 after: run.Run.StartedAt.AddMinutes(-1),
+                runId: runId,
                 maxCount: 200);
 
-            var runEvents = events
-                .Where(e => string.Equals(e.RunId, run.Id, StringComparison.Ordinal))
-                .OrderBy(e => e.Timestamp);
+            if (SelectedAgentRunDetails?.Id != runId)
+            {
+                return;
+            }
+
+            var runEvents = events.OrderBy(e => e.Timestamp);
 
             foreach (var e in runEvents)
             {
@@ -1224,16 +1230,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var allItems = SelectedProject.Conversations
-            .SelectMany(conversation => conversation.Messages
-                .Where(message => message.AgentRun is not null)
-                .Select(message => new AgentRunHistoryItemViewModel
-                {
-                    Conversation = conversation,
-                    Run = message.AgentRun!
-                }))
-            .OrderByDescending(item => item.Run.Run.StartedAt)
-            .ToList();
+        var allItems = AgentRunHistoryFilter.GatherFromProject(SelectedProject);
 
         _agentRunHistoryTotalCount = allItems.Count;
         var items = FilterAgentRunHistory(allItems).ToList();
