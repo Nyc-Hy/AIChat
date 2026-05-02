@@ -81,7 +81,7 @@ public sealed class AnthropicChatProvider : IChatProvider
             {
                 name = tool.Name,
                 description = tool.Description,
-                input_schema = JsonSerializer.Deserialize<JsonElement>(tool.ParametersJson)
+                input_schema = ParseJsonSafe(tool.ParametersJson)
             }).ToList();
         }
 

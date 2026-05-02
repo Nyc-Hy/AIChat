@@ -78,7 +78,7 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
                 {
                     name = tool.Name,
                     description = tool.Description,
-                    parameters = JsonSerializer.Deserialize<JsonElement>(tool.ParametersJson)
+                    parameters = ParseJsonSafe(tool.ParametersJson)
                 }
             }).ToList();
             payload["tool_choice"] = "auto";
@@ -217,6 +217,23 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
             role = "assistant",
             content = string.IsNullOrWhiteSpace(content) ? null : content
         };
+    }
+
+    private static JsonElement ParseJsonSafe(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return JsonSerializer.Deserialize<JsonElement>("{}");
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<JsonElement>(json);
+        }
+        catch (JsonException)
+        {
+            return JsonSerializer.Deserialize<JsonElement>("{}");
+        }
     }
 
     private static string ToApiRole(ChatRole role) => role switch
