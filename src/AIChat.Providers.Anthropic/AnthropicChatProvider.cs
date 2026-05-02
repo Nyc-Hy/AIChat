@@ -73,11 +73,7 @@ public sealed class AnthropicChatProvider : IChatProvider
             ["system"] = string.IsNullOrWhiteSpace(systemPrompt) ? null : systemPrompt,
             ["messages"] = request.Messages
                 .Where(message => message.Role != ChatRole.System)
-                .Select(message => new
-                {
-                    role = message.Role == ChatRole.Assistant ? "assistant" : "user",
-                    content = message.Content
-                })
+                .Select(ToAnthropicMessage)
                 .ToList()
         };
 
@@ -148,6 +144,59 @@ public sealed class AnthropicChatProvider : IChatProvider
                 yield return new ChatDelta { Content = content, RawJson = data };
             }
         }
+    }
+
+    internal static object ToAnthropicMessage(ChatMessage message)
+    {
+        // Tool result messages become user messages with tool_result content blocks.
+        if (message.Role == ChatRole.Tool)
+        {
+            return new
+            {
+                role = "user",
+                content = new object[]
+                {
+                    new
+                    {
+                        type = "tool_result",
+                        tool_use_id = message.ToolCallId,
+                        content = message.Content
+                    }
+                }
+            };
+        }
+
+        // Assistant messages with tool calls use content blocks.
+        if (message.Role == ChatRole.Assistant && message.ToolCalls.Count > 0)
+        {
+            var blocks = new List<object>();
+
+            if (!string.IsNullOrWhiteSpace(message.Content))
+            {
+                blocks.Add(new { type = "text", text = message.Content });
+            }
+
+            foreach (var call in message.ToolCalls)
+            {
+                blocks.Add(new
+                {
+                    type = "tool_use",
+                    id = call.Id,
+                    name = call.Name,
+                    input = JsonSerializer.Deserialize<JsonElement>(
+                        string.IsNullOrWhiteSpace(call.ArgumentsJson) ? "{}" : call.ArgumentsJson)
+                });
+            }
+
+            return new { role = "assistant", content = blocks };
+        }
+
+        // Plain user/assistant messages.
+        return new
+        {
+            role = message.Role == ChatRole.Assistant ? "assistant" : "user",
+            content = message.Content
+        };
     }
 
     internal static bool TryHandleToolEvent(

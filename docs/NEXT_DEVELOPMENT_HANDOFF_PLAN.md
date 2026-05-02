@@ -26,7 +26,7 @@ AIChat 是一个 .NET 8 WPF 桌面应用，用于项目级 LLM 聊天和本地�
 dotnet test AIChat.sln --no-restore
 ```
 
-应通过 200 个测试。
+应通过 218 个测试。
 
 ## 开发原则
 
@@ -49,7 +49,7 @@ dotnet test AIChat.sln --no-restore
 5. 优化上下文索引和上下文包表现，提升 Agent 任务命中率。
 6. 发布准备和版本体验打磨。
 
-## 任务 1：整理旧开发计划文档
+## 任务 1：整理旧开发计划文档（✅ 已完成）
 
 优先级：高。
 
@@ -90,7 +90,7 @@ git diff --check
 Clarify next development plan
 ```
 
-## 任务 2：拆分 MainViewModel 的运行历史逻辑
+## 任务 2：拆分 MainViewModel 的运行历史逻辑（✅ 已完成）
 
 优先级：高。
 
@@ -143,7 +143,7 @@ Extract agent run history filtering
 - 不要修改 `AgentRun` 领域模型，只做 UI 层整理。
 - 不要顺手改 XAML 样式。
 
-## 任务 3：拆分 MainViewModel 的复盘包生成逻辑
+## 任务 3：拆分 MainViewModel 的复盘包生成逻辑（✅ 已完成）
 
 优先级：高。
 
@@ -185,7 +185,7 @@ dotnet test AIChat.sln --no-restore
 Extract agent review packet builder
 ```
 
-## 任务 4：新增 Agent Run 审计 Tab
+## 任务 4：新增 Agent Run 审计 Tab（✅ 已完成）
 
 优先级：中高。
 
@@ -240,7 +240,7 @@ Show audit events in agent run details
 - 不要把审计事件全部一次性塞进复盘包。
 - 不要为了 UI 改坏 JSONL 兼容性。
 
-## 任务 5：补 Anthropic tool use 解析测试
+## 任务 5：补 Anthropic tool use 解析测试（✅ 已完成）
 
 优先级：中高。
 
@@ -288,7 +288,7 @@ dotnet test AIChat.sln --no-restore
 Cover Anthropic tool call parsing
 ```
 
-## 任务 6：优化上下文包摘要
+## 任务 6：优化上下文包摘要（✅ 已完成）
 
 优先级：中。
 
@@ -332,7 +332,7 @@ dotnet test AIChat.sln --no-restore
 Summarize project context file types
 ```
 
-## 任务 7：补工具审批和审计的一致性测试
+## 任务 7：补工具审批和审计的一致性测试（✅ 已完成）
 
 优先级：中。
 
@@ -374,7 +374,7 @@ dotnet test AIChat.sln --no-restore
 Cover approval audit consistency
 ```
 
-## 任务 8：版本和发布体验打磨
+## 任务 8：版本和发布体验打磨（✅ 已完成）
 
 优先级：中低。
 
@@ -412,6 +412,15 @@ dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-con
 ```text
 Polish desktop version and publish docs
 ```
+
+## 额外完成的工作
+
+以下工作在原始 8 个任务之外完成：
+
+- **Anthropic 工具调用完整闭环**：provider 请求中携带 `tools` 字段（name/description/input_schema），响应解析 `tool_use` content blocks，多轮消息正确映射 `tool_use` 和 `tool_result` content blocks。
+- **审计 RunId 过滤**：`AuditLogRepository.QueryAsync` 新增 `runId` 参数，支持服务端过滤，避免客户端 project id/path 不一致。
+- **MainViewModel 进一步拆分**：`AgentRunHistoryFilter.GatherFromProject` 抽取数据采集逻辑。
+- **上下文包文件类型统计**：`ProjectContextPackBuilder` 输出扩展名分布摘要（如 `.cs: 42, .json: 15`）。
 
 ## 暂时不要做的事
 

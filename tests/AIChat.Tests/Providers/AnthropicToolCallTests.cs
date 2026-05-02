@@ -239,6 +239,171 @@ public sealed class AnthropicToolCallTests
         Assert.Equal("tool-0", toolCalls[0].Id);
     }
 
+    [Fact]
+    public async Task SendAsync_AssistantToolCalls_SerializedAsToolUseBlocks()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages =
+            [
+                new ChatMessage { Role = ChatRole.User, Content = "read the file" },
+                new ChatMessage
+                {
+                    Role = ChatRole.Assistant,
+                    Content = "I'll read it.",
+                    ToolCalls =
+                    [
+                        new ChatToolCall { Id = "toolu_01", Name = "read_file", ArgumentsJson = "{\"path\":\"a.cs\"}" }
+                    ]
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var messages = captured.RootElement.GetProperty("messages");
+
+        // First message: plain user
+        Assert.Equal("user", messages[0].GetProperty("role").GetString());
+        Assert.Equal("read the file", messages[0].GetProperty("content").GetString());
+
+        // Second message: assistant with content blocks
+        var assistantMsg = messages[1];
+        Assert.Equal("assistant", assistantMsg.GetProperty("role").GetString());
+        var content = assistantMsg.GetProperty("content");
+        Assert.Equal(2, content.GetArrayLength());
+        Assert.Equal("text", content[0].GetProperty("type").GetString());
+        Assert.Equal("I'll read it.", content[0].GetProperty("text").GetString());
+        Assert.Equal("tool_use", content[1].GetProperty("type").GetString());
+        Assert.Equal("toolu_01", content[1].GetProperty("id").GetString());
+        Assert.Equal("read_file", content[1].GetProperty("name").GetString());
+        Assert.Equal("a.cs", content[1].GetProperty("input").GetProperty("path").GetString());
+    }
+
+    [Fact]
+    public async Task SendAsync_ToolResult_SerializedAsToolResultBlock()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages =
+            [
+                new ChatMessage { Role = ChatRole.User, Content = "read the file" },
+                new ChatMessage
+                {
+                    Role = ChatRole.Assistant,
+                    Content = "",
+                    ToolCalls = [new ChatToolCall { Id = "toolu_01", Name = "read_file", ArgumentsJson = "{\"path\":\"a.cs\"}" }]
+                },
+                new ChatMessage
+                {
+                    Role = ChatRole.Tool,
+                    Content = "file contents here",
+                    ToolCallId = "toolu_01",
+                    ToolName = "read_file"
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var messages = captured.RootElement.GetProperty("messages");
+
+        // Third message: user with tool_result block
+        var toolResultMsg = messages[2];
+        Assert.Equal("user", toolResultMsg.GetProperty("role").GetString());
+        var content = toolResultMsg.GetProperty("content");
+        Assert.Equal(1, content.GetArrayLength());
+        Assert.Equal("tool_result", content[0].GetProperty("type").GetString());
+        Assert.Equal("toolu_01", content[0].GetProperty("tool_use_id").GetString());
+        Assert.Equal("file contents here", content[0].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task SendAsync_MultipleToolResults_MaintainsOrder()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages =
+            [
+                new ChatMessage { Role = ChatRole.User, Content = "read two files" },
+                new ChatMessage
+                {
+                    Role = ChatRole.Assistant,
+                    Content = "",
+                    ToolCalls =
+                    [
+                        new ChatToolCall { Id = "toolu_01", Name = "read_file", ArgumentsJson = "{\"path\":\"a.cs\"}" },
+                        new ChatToolCall { Id = "toolu_02", Name = "read_file", ArgumentsJson = "{\"path\":\"b.cs\"}" }
+                    ]
+                },
+                new ChatMessage { Role = ChatRole.Tool, Content = "contents of a", ToolCallId = "toolu_01" },
+                new ChatMessage { Role = ChatRole.Tool, Content = "contents of b", ToolCallId = "toolu_02" }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var messages = captured.RootElement.GetProperty("messages");
+
+        // Assistant message: text + 2 tool_use blocks
+        var assistantContent = messages[1].GetProperty("content");
+        Assert.Equal(2, assistantContent.GetArrayLength());
+        Assert.Equal("tool_use", assistantContent[0].GetProperty("type").GetString());
+        Assert.Equal("toolu_01", assistantContent[0].GetProperty("id").GetString());
+        Assert.Equal("tool_use", assistantContent[1].GetProperty("type").GetString());
+        Assert.Equal("toolu_02", assistantContent[1].GetProperty("id").GetString());
+
+        // Tool results: each in its own user message
+        var result1 = messages[2].GetProperty("content")[0];
+        Assert.Equal("toolu_01", result1.GetProperty("tool_use_id").GetString());
+        Assert.Equal("contents of a", result1.GetProperty("content").GetString());
+
+        var result2 = messages[3].GetProperty("content")[0];
+        Assert.Equal("toolu_02", result2.GetProperty("tool_use_id").GetString());
+        Assert.Equal("contents of b", result2.GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task SendAsync_PlainChat_NoToolBlocks()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages =
+            [
+                new ChatMessage { Role = ChatRole.User, Content = "hello" },
+                new ChatMessage { Role = ChatRole.Assistant, Content = "hi there" }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var messages = captured.RootElement.GetProperty("messages");
+
+        // Both messages should be plain strings, not content block arrays
+        Assert.Equal("hello", messages[0].GetProperty("content").GetString());
+        Assert.Equal("hi there", messages[1].GetProperty("content").GetString());
+    }
+
     // --- helpers ---
 
     private static AnthropicChatProvider CreateProvider(HttpMessageHandler handler)
