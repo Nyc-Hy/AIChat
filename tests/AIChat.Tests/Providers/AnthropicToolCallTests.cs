@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using AIChat.Abstractions.Configuration;
 using AIChat.Domain.Chat;
 using AIChat.Providers.Anthropic;
@@ -329,7 +330,7 @@ public sealed class AnthropicToolCallTests
     }
 
     [Fact]
-    public async Task SendAsync_MultipleToolResults_MaintainsOrder()
+    public async Task SendAsync_MultipleToolResults_MergedIntoOneMessage()
     {
         var handler = new CapturingHandler(MessageStopEvent("end_turn"));
         var provider = new AnthropicChatProvider(new HttpClient(handler));
@@ -360,7 +361,10 @@ public sealed class AnthropicToolCallTests
         var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
         var messages = captured.RootElement.GetProperty("messages");
 
-        // Assistant message: text + 2 tool_use blocks
+        // 3 messages total: user, assistant, user (merged tool results)
+        Assert.Equal(3, messages.GetArrayLength());
+
+        // Assistant message: 2 tool_use blocks
         var assistantContent = messages[1].GetProperty("content");
         Assert.Equal(2, assistantContent.GetArrayLength());
         Assert.Equal("tool_use", assistantContent[0].GetProperty("type").GetString());
@@ -368,14 +372,17 @@ public sealed class AnthropicToolCallTests
         Assert.Equal("tool_use", assistantContent[1].GetProperty("type").GetString());
         Assert.Equal("toolu_02", assistantContent[1].GetProperty("id").GetString());
 
-        // Tool results: each in its own user message
-        var result1 = messages[2].GetProperty("content")[0];
-        Assert.Equal("toolu_01", result1.GetProperty("tool_use_id").GetString());
-        Assert.Equal("contents of a", result1.GetProperty("content").GetString());
-
-        var result2 = messages[3].GetProperty("content")[0];
-        Assert.Equal("toolu_02", result2.GetProperty("tool_use_id").GetString());
-        Assert.Equal("contents of b", result2.GetProperty("content").GetString());
+        // Tool results: merged into single user message with 2 tool_result blocks
+        var toolResultMsg = messages[2];
+        Assert.Equal("user", toolResultMsg.GetProperty("role").GetString());
+        var toolContent = toolResultMsg.GetProperty("content");
+        Assert.Equal(2, toolContent.GetArrayLength());
+        Assert.Equal("tool_result", toolContent[0].GetProperty("type").GetString());
+        Assert.Equal("toolu_01", toolContent[0].GetProperty("tool_use_id").GetString());
+        Assert.Equal("contents of a", toolContent[0].GetProperty("content").GetString());
+        Assert.Equal("tool_result", toolContent[1].GetProperty("type").GetString());
+        Assert.Equal("toolu_02", toolContent[1].GetProperty("tool_use_id").GetString());
+        Assert.Equal("contents of b", toolContent[1].GetProperty("content").GetString());
     }
 
     [Fact]
@@ -402,6 +409,60 @@ public sealed class AnthropicToolCallTests
         // Both messages should be plain strings, not content block arrays
         Assert.Equal("hello", messages[0].GetProperty("content").GetString());
         Assert.Equal("hi there", messages[1].GetProperty("content").GetString());
+    }
+
+    [Fact]
+    public async Task SendAsync_BadToolArguments_FallsBackToEmptyObject()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages =
+            [
+                new ChatMessage { Role = ChatRole.User, Content = "do something" },
+                new ChatMessage
+                {
+                    Role = ChatRole.Assistant,
+                    Content = "",
+                    ToolCalls = [new ChatToolCall { Id = "toolu_01", Name = "read_file", ArgumentsJson = "{not valid json" }]
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var assistantContent = captured.RootElement.GetProperty("messages")[1].GetProperty("content");
+
+        // Should not crash; tool_use block should have empty object input
+        Assert.Equal(1, assistantContent.GetArrayLength());
+        Assert.Equal("tool_use", assistantContent[0].GetProperty("type").GetString());
+        Assert.Equal(JsonValueKind.Object, assistantContent[0].GetProperty("input").ValueKind);
+    }
+
+    [Fact]
+    public void ParseJsonSafe_EmptyString_ReturnsEmptyObject()
+    {
+        var result = AnthropicChatProvider.ParseJsonSafe("");
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+        Assert.Empty(result.EnumerateObject());
+    }
+
+    [Fact]
+    public void ParseJsonSafe_InvalidJson_ReturnsEmptyObject()
+    {
+        var result = AnthropicChatProvider.ParseJsonSafe("{broken");
+        Assert.Equal(JsonValueKind.Object, result.ValueKind);
+    }
+
+    [Fact]
+    public void ParseJsonSafe_ValidJson_ParsesCorrectly()
+    {
+        var result = AnthropicChatProvider.ParseJsonSafe("{\"path\":\"a.cs\"}");
+        Assert.Equal("a.cs", result.GetProperty("path").GetString());
     }
 
     // --- helpers ---

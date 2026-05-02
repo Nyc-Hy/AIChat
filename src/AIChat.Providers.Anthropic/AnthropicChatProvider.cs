@@ -71,10 +71,8 @@ public sealed class AnthropicChatProvider : IChatProvider
             ["temperature"] = request.Temperature,
             ["stream"] = true,
             ["system"] = string.IsNullOrWhiteSpace(systemPrompt) ? null : systemPrompt,
-            ["messages"] = request.Messages
-                .Where(message => message.Role != ChatRole.System)
-                .Select(ToAnthropicMessage)
-                .ToList()
+            ["messages"] = ToAnthropicMessages(
+                request.Messages.Where(m => m.Role != ChatRole.System).ToList())
         };
 
         if (request.Tools.Count > 0)
@@ -146,57 +144,92 @@ public sealed class AnthropicChatProvider : IChatProvider
         }
     }
 
-    internal static object ToAnthropicMessage(ChatMessage message)
+    internal static List<object> ToAnthropicMessages(IReadOnlyList<ChatMessage> messages)
     {
-        // Tool result messages become user messages with tool_result content blocks.
-        if (message.Role == ChatRole.Tool)
+        var result = new List<object>();
+
+        for (var i = 0; i < messages.Count; i++)
         {
-            return new
+            var message = messages[i];
+
+            // Consecutive tool results are merged into a single user message
+            // with multiple tool_result content blocks.
+            if (message.Role == ChatRole.Tool)
             {
-                role = "user",
-                content = new object[]
+                var toolBlocks = new List<object>();
+                toolBlocks.Add(MakeToolResultBlock(message));
+
+                while (i + 1 < messages.Count && messages[i + 1].Role == ChatRole.Tool)
                 {
-                    new
-                    {
-                        type = "tool_result",
-                        tool_use_id = message.ToolCallId,
-                        content = message.Content
-                    }
+                    i++;
+                    toolBlocks.Add(MakeToolResultBlock(messages[i]));
                 }
-            };
-        }
 
-        // Assistant messages with tool calls use content blocks.
-        if (message.Role == ChatRole.Assistant && message.ToolCalls.Count > 0)
-        {
-            var blocks = new List<object>();
-
-            if (!string.IsNullOrWhiteSpace(message.Content))
-            {
-                blocks.Add(new { type = "text", text = message.Content });
+                result.Add(new { role = "user", content = toolBlocks });
+                continue;
             }
 
-            foreach (var call in message.ToolCalls)
+            // Assistant messages with tool calls use content blocks.
+            if (message.Role == ChatRole.Assistant && message.ToolCalls.Count > 0)
             {
-                blocks.Add(new
+                var blocks = new List<object>();
+
+                if (!string.IsNullOrWhiteSpace(message.Content))
                 {
-                    type = "tool_use",
-                    id = call.Id,
-                    name = call.Name,
-                    input = JsonSerializer.Deserialize<JsonElement>(
-                        string.IsNullOrWhiteSpace(call.ArgumentsJson) ? "{}" : call.ArgumentsJson)
-                });
+                    blocks.Add(new { type = "text", text = message.Content });
+                }
+
+                foreach (var call in message.ToolCalls)
+                {
+                    blocks.Add(new
+                    {
+                        type = "tool_use",
+                        id = call.Id,
+                        name = call.Name,
+                        input = ParseJsonSafe(call.ArgumentsJson)
+                    });
+                }
+
+                result.Add(new { role = "assistant", content = blocks });
+                continue;
             }
 
-            return new { role = "assistant", content = blocks };
+            // Plain user/assistant messages.
+            result.Add(new
+            {
+                role = message.Role == ChatRole.Assistant ? "assistant" : "user",
+                content = message.Content
+            });
         }
 
-        // Plain user/assistant messages.
+        return result;
+    }
+
+    private static object MakeToolResultBlock(ChatMessage message)
+    {
         return new
         {
-            role = message.Role == ChatRole.Assistant ? "assistant" : "user",
+            type = "tool_result",
+            tool_use_id = message.ToolCallId,
             content = message.Content
         };
+    }
+
+    public static JsonElement ParseJsonSafe(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return JsonSerializer.Deserialize<JsonElement>("{}");
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<JsonElement>(json);
+        }
+        catch (JsonException)
+        {
+            return JsonSerializer.Deserialize<JsonElement>("{}");
+        }
     }
 
     internal static bool TryHandleToolEvent(
