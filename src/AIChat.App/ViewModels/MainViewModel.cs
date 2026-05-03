@@ -14,6 +14,7 @@ using AIChat.Abstractions.Context;
 using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.Application.Agents;
+using AIChat.Application.Audit;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Projects;
@@ -716,7 +717,7 @@ public sealed class MainViewModel : ObservableObject
 
             foreach (var e in items)
             {
-                AuditEvents.Add(e);
+                AuditEvents.Add(new AuditEventViewModel(e));
             }
 
             OnPropertyChanged(nameof(HasAuditEvents));

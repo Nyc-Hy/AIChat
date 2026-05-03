@@ -1,11 +1,11 @@
 using AIChat.Domain.Audit;
 using AIChat.Storage.Json;
 
-namespace AIChat.App.ViewModels;
+namespace AIChat.Application.Audit;
 
 public static class AgentRunAuditLoader
 {
-    public static async Task<List<AuditEventViewModel>> LoadAsync(
+    public static async Task<IReadOnlyList<AuditEvent>> LoadAsync(
         AuditLogRepository repository,
         string projectId,
         string runId,
@@ -20,9 +20,6 @@ public static class AgentRunAuditLoader
             maxCount: maxCount,
             cancellationToken: cancellationToken);
 
-        return events
-            .OrderBy(e => e.Timestamp)
-            .Select(e => new AuditEventViewModel(e))
-            .ToList();
+        return events.OrderBy(e => e.Timestamp).ToList();
     }
 }
