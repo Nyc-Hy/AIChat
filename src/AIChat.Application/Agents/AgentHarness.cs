@@ -207,7 +207,7 @@ public sealed class AgentHarness
                         run.MutationToolSucceeded)
                     {
                         await foreach (var verifyEvent in RunAutoVerifyLoopAsync(
-                                           run, request, stepByToolCallId, stepNumber,
+                                           run, request, stepByToolCallId,
                                            request.Settings, request.Context, cancellationToken))
                         {
                             yield return verifyEvent;
@@ -218,9 +218,11 @@ public sealed class AgentHarness
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
                     CompleteRun(run, AgentRunStatus.Completed);
+                    // Use steps count to derive the final step number; the auto-verify
+                    // loop may have added intermediate steps that overflow stepNumber.
                     var finalStep = AddCompletedStep(
                         run,
-                        ++stepNumber,
+                        run.Steps.Count + 1,
                         AgentStepType.Final,
                         "生成最终回复",
                         "",
@@ -534,7 +536,6 @@ public sealed class AgentHarness
         AgentRun run,
         AgentHarnessRunRequest request,
         Dictionary<string, AgentStep> stepByToolCallId,
-        int stepNumber,
         AppSettings settings,
         AgentRunContext context,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -560,7 +561,7 @@ public sealed class AgentHarness
 
                 var step = AddRunningStep(
                     run,
-                    ++stepNumber,
+                    run.Steps.Count + 1,
                     AgentStepType.ToolCall,
                     $"自动验证：{cmd.Name}",
                     argsJson,
@@ -652,7 +653,7 @@ public sealed class AgentHarness
                             run.ToolCallCount++;
                             var fixStep = AddRunningStep(
                                 run,
-                                ++stepNumber,
+                                run.Steps.Count + 1,
                                 AgentStepType.ToolCall,
                                 $"调用工具：{fixEvent.ToolCall.Name}",
                                 fixEvent.ToolCall.ArgumentsJson,

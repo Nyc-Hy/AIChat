@@ -53,7 +53,9 @@ public sealed class ConversationContextBuilder
 
     private static bool IsUsableConversationMessage(ChatMessage message)
     {
-        return message.Role is ChatRole.User or ChatRole.Assistant or ChatRole.System &&
+        // Tool messages carry tool call results and must be kept so the model
+        // sees a complete message sequence (Assistant tool calls + Tool results).
+        return message.Role is ChatRole.User or ChatRole.Assistant or ChatRole.System or ChatRole.Tool &&
                !message.IsError &&
                !string.IsNullOrWhiteSpace(message.Content);
     }

@@ -50,7 +50,9 @@ public sealed class ConversationContextBuilderTests
             PromptContext = new SystemPromptContext()
         });
 
-        Assert.Equal(2, result.Count);
+        Assert.Equal(3, result.Count);
         Assert.Contains("keep me", result[1].Content);
+        Assert.Equal(ChatRole.Tool, result[2].Role);
+        Assert.Contains("tool result", result[2].Content);
     }
 }
