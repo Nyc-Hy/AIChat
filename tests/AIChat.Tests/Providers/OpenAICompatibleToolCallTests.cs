@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using AIChat.Abstractions.Configuration;
 using AIChat.Domain.Chat;
 using AIChat.Providers.OpenAI;
@@ -105,6 +106,38 @@ public sealed class OpenAICompatibleToolCallTests
         Assert.Single(toolCalls);
         Assert.Equal("read_file", toolCalls[0].Name);
         Assert.Equal("{\"path\":\"src/Program.cs\"}", toolCalls[0].ArgumentsJson);
+    }
+
+    [Fact]
+    public async Task SendAsync_BrokenToolParametersJson_FallsBackToEmptyObjectSchema()
+    {
+        var handler = new CapturingHandler(ContentDeltaChunk("hi") + DoneChunk());
+        var provider = new OpenAICompatibleChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "gpt-4",
+            Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
+            Tools =
+            [
+                new ChatToolDefinition
+                {
+                    Name = "broken_tool",
+                    Description = "has bad parameters",
+                    ParametersJson = "{broken"
+                }
+            ]
+        };
+        var settings = CreateSettings();
+
+        await CollectDeltasAsync(provider, request, settings);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var tool = captured.RootElement.GetProperty("tools")[0].GetProperty("function").GetProperty("parameters");
+
+        Assert.Equal("object", tool.GetProperty("type").GetString());
+        Assert.True(tool.TryGetProperty("properties", out var props));
+        Assert.Equal(JsonValueKind.Object, props.ValueKind);
     }
 
     [Fact]
@@ -297,6 +330,31 @@ public sealed class OpenAICompatibleToolCallTests
             };
             response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class CapturingHandler : HttpMessageHandler
+    {
+        private readonly string _responseBody;
+        public string? CapturedBody { get; private set; }
+
+        public CapturingHandler(string responseBody) => _responseBody = responseBody;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Content is not null)
+            {
+                CapturedBody = await request.Content.ReadAsStringAsync(cancellationToken);
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(_responseBody);
+            var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new MemoryStream(bytes))
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/event-stream");
+            return response;
         }
     }
 }

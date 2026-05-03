@@ -166,6 +166,38 @@ public sealed class AnthropicToolCallTests
     }
 
     [Fact]
+    public async Task SendAsync_BrokenToolParametersJson_FallsBackToEmptyObjectSchema()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
+            Tools =
+            [
+                new ChatToolDefinition
+                {
+                    Name = "broken_tool",
+                    Description = "has bad parameters",
+                    ParametersJson = "{broken"
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var tool = captured.RootElement.GetProperty("tools")[0];
+
+        Assert.Equal("broken_tool", tool.GetProperty("name").GetString());
+        Assert.Equal("object", tool.GetProperty("input_schema").GetProperty("type").GetString());
+        Assert.True(tool.GetProperty("input_schema").TryGetProperty("properties", out var props));
+        Assert.Equal(JsonValueKind.Object, props.ValueKind);
+    }
+
+    [Fact]
     public async Task SendAsync_WithoutTools_OmitsToolsFromRequestPayload()
     {
         var handler = new CapturingHandler(MessageStopEvent("end_turn"));

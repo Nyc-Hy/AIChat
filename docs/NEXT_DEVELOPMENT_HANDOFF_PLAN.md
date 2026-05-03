@@ -26,7 +26,7 @@ AIChat 是一个 .NET 8 WPF 桌面应用，用于项目级 LLM 聊天和本地�
 dotnet test AIChat.sln --no-restore
 ```
 
-应通过 222 个测试。
+应通过 224 个测试。
 
 ## 开发原则
 
@@ -422,7 +422,7 @@ Polish desktop version and publish docs
 - **MainViewModel 进一步拆分**：`AgentRunHistoryFilter.GatherFromProject` 抽取数据采集逻辑。
 - **上下文包文件类型统计**：`ProjectContextPackBuilder` 输出扩展名分布摘要（如 `.cs: 42, .json: 15`）。
 - **Anthropic 消息归一化**：连续 `ChatRole.Tool` 合并为单个 user message 的多个 `tool_result` blocks，符合 Anthropic API 要求。
-- **Provider JSON 容错**：`ParseJsonSafe` 对坏 `ArgumentsJson` 回退 `{}` 而非抛异常。
+- **Provider JSON 容错**：`ParseJsonSafe` 对坏 `ArgumentsJson` 回退 `{}` 而非抛异常；tool 定义的 `parameters`/`input_schema` 在坏 JSON 时回退到 `{"type":"object","properties":{}}`，并有 payload 级测试锁定。
 
 ## 暂时不要做的事
 

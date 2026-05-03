@@ -81,7 +81,7 @@ public sealed class AnthropicChatProvider : IChatProvider
             {
                 name = tool.Name,
                 description = tool.Description,
-                input_schema = ParseJsonSafe(tool.ParametersJson)
+                input_schema = ParseToolSchema(tool.ParametersJson)
             }).ToList();
         }
 
@@ -213,6 +213,17 @@ public sealed class AnthropicChatProvider : IChatProvider
             tool_use_id = message.ToolCallId,
             content = message.Content
         };
+    }
+
+    private static readonly JsonElement EmptyObjectSchema =
+        JsonSerializer.Deserialize<JsonElement>("{\"type\":\"object\",\"properties\":{}}");
+
+    private static JsonElement ParseToolSchema(string? json)
+    {
+        var element = ParseJsonSafe(json);
+        return element.ValueKind == JsonValueKind.Object && element.EnumerateObject().Any()
+            ? element
+            : EmptyObjectSchema;
     }
 
     public static JsonElement ParseJsonSafe(string? json)
