@@ -1647,10 +1647,9 @@ public sealed class MainViewModel : ObservableObject
 
         try
         {
-            var result = await _workspaceChangeService.CommitAsync(
-                SelectedProject.Path,
-                message,
-                [change.Path]);
+            var result = await WorkspaceCommitBatchRunner.CommitAsync(
+                _workspaceChangeService, SelectedProject.Path,
+                message, change.Path);
             StatusText = WorkspaceOperationTextFormatter.CommitSingleFileSuccess(result);
             await RefreshWorkspaceChangesAsync();
         }
@@ -1684,10 +1683,9 @@ public sealed class MainViewModel : ObservableObject
 
         try
         {
-            var result = await _workspaceChangeService.CommitAsync(
-                SelectedProject.Path,
-                message,
-                paths);
+            var result = await WorkspaceCommitBatchRunner.CommitAsync(
+                _workspaceChangeService, SelectedProject.Path,
+                message, changes.Select(c => c.Change).ToList());
             StatusText = WorkspaceOperationTextFormatter.CommitMultipleSuccess(result);
             await RefreshWorkspaceChangesAsync();
         }
@@ -1705,19 +1703,18 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var paths = GetCheckedWorkspaceChanges()
-            .Select(change => change.Path)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (paths.Count == 0)
+        var changes = GetCheckedWorkspaceChanges();
+        if (changes.Count == 0)
         {
             return;
         }
 
         try
         {
-            await _workspaceChangeService.StageAsync(SelectedProject.Path, paths);
-            StatusText = $"已暂存 {paths.Count} 个文件";
+            var result = await WorkspaceStageBatchRunner.StageAsync(
+                _workspaceChangeService, SelectedProject.Path,
+                changes.Select(c => c.Change).ToList());
+            StatusText = $"已暂存 {result.Count} 个文件";
             await RefreshWorkspaceChangesAsync();
         }
         catch (Exception ex)
@@ -1734,12 +1731,10 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var paths = GetCheckedWorkspaceChanges()
-            .Where(change => change.IsStaged)
-            .Select(change => change.Path)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        var changes = GetCheckedWorkspaceChanges()
+            .Where(c => c.IsStaged)
             .ToList();
-        if (paths.Count == 0)
+        if (changes.Count == 0)
         {
             StatusText = "请选择已暂存文件";
             return;
@@ -1747,8 +1742,10 @@ public sealed class MainViewModel : ObservableObject
 
         try
         {
-            await _workspaceChangeService.UnstageAsync(SelectedProject.Path, paths);
-            StatusText = $"已取消暂存 {paths.Count} 个文件";
+            var result = await WorkspaceStageBatchRunner.UnstageAsync(
+                _workspaceChangeService, SelectedProject.Path,
+                changes.Select(c => c.Change).ToList());
+            StatusText = $"已取消暂存 {result.Count} 个文件";
             await RefreshWorkspaceChangesAsync();
         }
         catch (Exception ex)

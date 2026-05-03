@@ -9,6 +9,22 @@ public interface IWorkspaceChangeService
         string path,
         bool deleteUntracked = false,
         CancellationToken cancellationToken = default);
+
+    Task<WorkspaceCommitResult> CommitAsync(
+        string projectPath,
+        string message,
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default);
+
+    Task StageAsync(
+        string projectPath,
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default);
+
+    Task UnstageAsync(
+        string projectPath,
+        IReadOnlyList<string> paths,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class WorkspaceChangeService : IWorkspaceChangeService
