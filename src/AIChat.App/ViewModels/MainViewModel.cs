@@ -1561,9 +1561,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var change = SelectedWorkspaceChange;
-        var message = change.IsUntracked
-            ? $"删除未跟踪文件？\n\n{change.Path}"
-            : $"恢复该文件的未提交改动？\n\n{change.Path}";
+        var message = WorkspaceOperationTextFormatter.RestoreSingleFileConfirm(change.IsUntracked, change.Path);
         var decision = System.Windows.MessageBox.Show(
             System.Windows.Application.Current.MainWindow,
             message,
@@ -1581,15 +1579,13 @@ public sealed class MainViewModel : ObservableObject
                 SelectedProject.Path,
                 change.Path,
                 deleteUntracked: change.IsUntracked);
-            StatusText = result.DeletedUntracked
-                ? $"已删除未跟踪文件：{result.Path}"
-                : $"已恢复文件：{result.Path}";
+            StatusText = WorkspaceOperationTextFormatter.RestoreSingleFileSuccess(result.DeletedUntracked, result.Path);
             await RefreshWorkspaceChangesAsync();
         }
         catch (Exception ex)
         {
-            StatusText = $"恢复失败：{ex.Message}";
-            WorkspaceDiffText = $"恢复失败：{ex.Message}";
+            StatusText = WorkspaceOperationTextFormatter.RestoreError(ex.Message);
+            WorkspaceDiffText = WorkspaceOperationTextFormatter.RestoreError(ex.Message);
         }
     }
 
@@ -1609,7 +1605,7 @@ public sealed class MainViewModel : ObservableObject
 
         var decision = System.Windows.MessageBox.Show(
             System.Windows.Application.Current.MainWindow,
-            $"恢复已选择的 {changes.Count} 个文件？\n\n未跟踪文件会被删除。",
+            WorkspaceOperationTextFormatter.RestoreSelectedConfirm(changes.Count),
             "确认恢复已选文件",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
@@ -1636,9 +1632,7 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        StatusText = errors.Count == 0
-            ? $"已恢复 {restored} 个已选文件"
-            : $"已恢复 {restored} 个文件，{errors.Count} 个失败";
+        StatusText = WorkspaceOperationTextFormatter.RestoreMultipleSuccess(restored, errors.Count);
         if (errors.Count > 0)
         {
             WorkspaceDiffText = string.Join(Environment.NewLine, errors);
@@ -1655,7 +1649,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var change = SelectedWorkspaceChange;
-        var defaultMessage = $"Update {System.IO.Path.GetFileName(change.Path)}";
+        var defaultMessage = WorkspaceOperationTextFormatter.CommitSingleFileDefaultMessage(change.Path);
         var message = TextPromptDialog.Show(
             System.Windows.Application.Current.MainWindow,
             "提交选中文件",
@@ -1671,15 +1665,13 @@ public sealed class MainViewModel : ObservableObject
                 SelectedProject.Path,
                 message,
                 [change.Path]);
-            StatusText = string.IsNullOrWhiteSpace(result.Commit)
-                ? $"已提交：{result.Message}"
-                : $"已提交 {result.Commit}：{result.Message}";
+            StatusText = WorkspaceOperationTextFormatter.CommitSingleFileSuccess(result);
             await RefreshWorkspaceChangesAsync();
         }
         catch (Exception ex)
         {
-            StatusText = $"提交失败：{ex.Message}";
-            WorkspaceDiffText = $"提交失败：{ex.Message}";
+            StatusText = WorkspaceOperationTextFormatter.CommitError(ex.Message);
+            WorkspaceDiffText = WorkspaceOperationTextFormatter.CommitError(ex.Message);
         }
     }
 
@@ -1698,7 +1690,7 @@ public sealed class MainViewModel : ObservableObject
         var message = TextPromptDialog.Show(
             System.Windows.Application.Current.MainWindow,
             "提交已选工作区变更",
-            $"Update {paths.Count} files");
+            WorkspaceOperationTextFormatter.CommitMultipleDefaultMessage(paths.Count));
         if (string.IsNullOrWhiteSpace(message))
         {
             return;
@@ -1710,15 +1702,13 @@ public sealed class MainViewModel : ObservableObject
                 SelectedProject.Path,
                 message,
                 paths);
-            StatusText = string.IsNullOrWhiteSpace(result.Commit)
-                ? $"已提交 {result.Paths.Count} 个文件：{result.Message}"
-                : $"已提交 {result.Commit}：{result.Message}";
+            StatusText = WorkspaceOperationTextFormatter.CommitMultipleSuccess(result);
             await RefreshWorkspaceChangesAsync();
         }
         catch (Exception ex)
         {
-            StatusText = $"提交失败：{ex.Message}";
-            WorkspaceDiffText = $"提交失败：{ex.Message}";
+            StatusText = WorkspaceOperationTextFormatter.CommitError(ex.Message);
+            WorkspaceDiffText = WorkspaceOperationTextFormatter.CommitError(ex.Message);
         }
     }
 
