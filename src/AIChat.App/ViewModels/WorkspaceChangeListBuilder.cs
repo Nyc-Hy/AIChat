@@ -8,14 +8,23 @@ public static class WorkspaceChangeListBuilder
     {
         var grouped = WorkspaceChangeGrouper.Group(changeSet);
 
+        // Create VMs once; reuse the same instances across all lists so that
+        // PropertyChanged handlers and selection state are shared.
+        var all = grouped.All.Select(c => new WorkspaceChangeViewModel(c)).ToList();
+        var lookup = new Dictionary<WorkspaceChange, WorkspaceChangeViewModel>(grouped.All.Count);
+        for (var i = 0; i < grouped.All.Count; i++)
+        {
+            lookup[grouped.All[i]] = all[i];
+        }
+
         return new WorkspaceChangeListResult
         {
             Branch = grouped.Branch,
             StatusText = grouped.StatusText,
-            All = grouped.All.Select(c => new WorkspaceChangeViewModel(c)).ToList(),
-            Staged = grouped.Staged.Select(c => new WorkspaceChangeViewModel(c)).ToList(),
-            Unstaged = grouped.Unstaged.Select(c => new WorkspaceChangeViewModel(c)).ToList(),
-            Untracked = grouped.Untracked.Select(c => new WorkspaceChangeViewModel(c)).ToList()
+            All = all,
+            Staged = grouped.Staged.Select(c => lookup[c]).ToList(),
+            Unstaged = grouped.Unstaged.Select(c => lookup[c]).ToList(),
+            Untracked = grouped.Untracked.Select(c => lookup[c]).ToList()
         };
     }
 }
