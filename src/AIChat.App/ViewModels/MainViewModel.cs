@@ -1530,7 +1530,9 @@ public sealed class MainViewModel : ObservableObject
         WorkspaceDiffText = "正在读取 diff...";
         try
         {
-            var showStagedDiff = SelectedWorkspaceChange.IsStaged && !SelectedWorkspaceChange.HasUnstagedChanges;
+            var showStagedDiff = WorkspaceDiffFormatter.ShouldShowStagedDiff(
+                SelectedWorkspaceChange.IsStaged,
+                SelectedWorkspaceChange.HasUnstagedChanges);
             var diff = await _workspaceChangeService.GetDiffAsync(
                 SelectedProject.Path,
                 SelectedWorkspaceChange.Path,
@@ -1540,7 +1542,7 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            WorkspaceDiffText = diff.HasDiff ? diff.DiffText : "该文件没有未暂存 diff，可能只有暂存区变更或未跟踪状态。";
+            WorkspaceDiffText = WorkspaceDiffFormatter.FormatDiffText(diff);
         }
         catch (Exception ex)
         {
