@@ -26,7 +26,7 @@ AIChat 是一个 .NET 8 WPF 桌面应用，用于项目级 LLM 聊天和本地�
 dotnet test AIChat.sln --no-restore
 ```
 
-应通过 244 个测试。
+应通过 248 个测试。
 
 ## 开发原则
 
@@ -419,7 +419,7 @@ Polish desktop version and publish docs
 
 - **Anthropic 工具调用完整闭环**：provider 请求中携带 `tools` 字段（name/description/input_schema），响应解析 `tool_use` content blocks，多轮消息正确映射 `tool_use` 和 `tool_result` content blocks。
 - **审计 RunId 过滤**：`AuditLogRepository.QueryAsync` 新增 `runId` 参数，支持服务端过滤，避免客户端 project id/path 不一致。
-- **MainViewModel 进一步拆分**：`AgentRunHistoryFilter.GatherFromProject` 抽取数据采集逻辑；`AgentRunAuditLoader.LoadAsync` 抽取审计查询-排序管线（放在 `AIChat.Application.Audit`，有独立单测）；`WorkspaceChangeGrouper.Group` 抽取工作区变更分组逻辑到 Application 层（有独立单测），App 层 `WorkspaceChangeListBuilder` 只做 ViewModel 映射；`WorkspaceDiffFormatter` 抽取 diff 显示决策和格式化逻辑到 Application 层（有独立单测）。
+- **MainViewModel 进一步拆分**：`AgentRunHistoryFilter.GatherFromProject` 抽取数据采集逻辑；`AgentRunAuditLoader.LoadAsync` 抽取审计查询-排序管线（放在 `AIChat.Application.Audit`，有独立单测）；`WorkspaceChangeGrouper.Group` 抽取工作区变更分组逻辑到 Application 层（有独立单测），App 层 `WorkspaceChangeListBuilder` 只做 ViewModel 映射；`WorkspaceDiffFormatter` 抽取 diff 显示决策和格式化逻辑到 Application 层（有独立单测）；`AuditEventRecorder.RecordAsync` 抽取审计写入逻辑到 Application 层（有独立单测）。
 - **上下文包文件类型统计**：`ProjectContextPackBuilder` 输出扩展名分布摘要（如 `.cs: 42, .json: 15`）。
 - **Anthropic 消息归一化**：连续 `ChatRole.Tool` 合并为单个 user message 的多个 `tool_result` blocks，符合 Anthropic API 要求。
 - **Provider JSON 容错**：`ParseJsonSafe` 对坏 `ArgumentsJson` 回退 `{}` 而非抛异常；tool 定义的 `parameters`/`input_schema` 在坏 JSON 时回退到 `{"type":"object","properties":{}}`，并有 payload 级测试锁定。

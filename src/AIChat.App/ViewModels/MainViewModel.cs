@@ -3067,25 +3067,9 @@ public sealed class MainViewModel : ObservableObject
             StringComparer.OrdinalIgnoreCase);
     }
 
-    private async Task RecordAuditEventAsync(AuditEventType type, string projectId, string runId, string toolName = "", string summary = "", string detail = "")
+    private Task RecordAuditEventAsync(AuditEventType type, string projectId, string runId, string toolName = "", string summary = "", string detail = "")
     {
-        if (_auditLogRepository is null) return;
-        try
-        {
-            await _auditLogRepository.AppendAsync(new AuditEvent
-            {
-                ProjectId = projectId,
-                RunId = runId,
-                Type = type,
-                ToolName = toolName,
-                Summary = summary,
-                Detail = detail
-            });
-        }
-        catch
-        {
-            // Audit logging is best-effort; don't break the agent run.
-        }
+        return AuditEventRecorder.RecordAsync(_auditLogRepository, type, projectId, runId, toolName, summary, detail);
     }
 
     private static Dictionary<string, ToolPermissionMode> MergeToolPermissionModes(
