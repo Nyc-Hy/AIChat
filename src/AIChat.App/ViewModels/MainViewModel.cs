@@ -1614,28 +1614,14 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var restored = 0;
-        var errors = new List<string>();
-        foreach (var change in changes)
-        {
-            try
-            {
-                _ = await _workspaceChangeService.RestoreFileAsync(
-                    SelectedProject.Path,
-                    change.Path,
-                    deleteUntracked: change.IsUntracked);
-                restored++;
-            }
-            catch (Exception ex)
-            {
-                errors.Add($"{change.Path}: {ex.Message}");
-            }
-        }
+        var result = await WorkspaceRestoreBatchRunner.RestoreAsync(
+            _workspaceChangeService, SelectedProject.Path,
+            changes.Select(c => c.Change).ToList());
 
-        StatusText = WorkspaceOperationTextFormatter.RestoreMultipleSuccess(restored, errors.Count);
-        if (errors.Count > 0)
+        StatusText = WorkspaceOperationTextFormatter.RestoreMultipleSuccess(result.Restored, result.Errors.Count);
+        if (result.Errors.Count > 0)
         {
-            WorkspaceDiffText = string.Join(Environment.NewLine, errors);
+            WorkspaceDiffText = string.Join(Environment.NewLine, result.Errors);
         }
 
         await RefreshWorkspaceChangesAsync();

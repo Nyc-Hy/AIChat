@@ -20,6 +20,7 @@ public sealed class WorkspaceChangeViewModel : ObservableObject
     public bool IsUnstaged => _change.IsUnstaged;
     public bool HasUnstagedChanges => _change.HasUnstagedChanges;
     public string Section => IsUntracked ? "未跟踪" : IsStaged ? "已暂存" : "未暂存";
+    public WorkspaceChange Change => _change;
     public bool IsSelected
     {
         get => _isSelected;

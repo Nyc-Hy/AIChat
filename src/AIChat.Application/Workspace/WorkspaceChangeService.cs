@@ -2,7 +2,16 @@ using AIChat.Application.Tools;
 
 namespace AIChat.Application.Workspace;
 
-public sealed class WorkspaceChangeService
+public interface IWorkspaceChangeService
+{
+    Task<WorkspaceRestoreResult> RestoreFileAsync(
+        string projectPath,
+        string path,
+        bool deleteUntracked = false,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed class WorkspaceChangeService : IWorkspaceChangeService
 {
     public async Task<WorkspaceChangeSet> GetChangesAsync(
         string projectPath,
