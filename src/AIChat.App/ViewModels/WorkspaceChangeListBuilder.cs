@@ -6,36 +6,16 @@ public static class WorkspaceChangeListBuilder
 {
     public static WorkspaceChangeListResult Build(WorkspaceChangeSet changeSet)
     {
-        var all = new List<WorkspaceChangeViewModel>();
-        var staged = new List<WorkspaceChangeViewModel>();
-        var unstaged = new List<WorkspaceChangeViewModel>();
-        var untracked = new List<WorkspaceChangeViewModel>();
-
-        foreach (var change in changeSet.Changes)
-        {
-            var vm = new WorkspaceChangeViewModel(change);
-            all.Add(vm);
-
-            if (vm.IsUntracked)
-                untracked.Add(vm);
-            else if (vm.IsStaged)
-                staged.Add(vm);
-            else
-                unstaged.Add(vm);
-        }
-
-        var statusText = changeSet.HasChanges
-            ? $"{changeSet.Changes.Count} 个变更{(changeSet.IsTruncated ? "，列表已截断" : "")}"
-            : "工作区干净";
+        var grouped = WorkspaceChangeGrouper.Group(changeSet);
 
         return new WorkspaceChangeListResult
         {
-            Branch = changeSet.Branch,
-            StatusText = statusText,
-            All = all,
-            Staged = staged,
-            Unstaged = unstaged,
-            Untracked = untracked
+            Branch = grouped.Branch,
+            StatusText = grouped.StatusText,
+            All = grouped.All.Select(c => new WorkspaceChangeViewModel(c)).ToList(),
+            Staged = grouped.Staged.Select(c => new WorkspaceChangeViewModel(c)).ToList(),
+            Unstaged = grouped.Unstaged.Select(c => new WorkspaceChangeViewModel(c)).ToList(),
+            Untracked = grouped.Untracked.Select(c => new WorkspaceChangeViewModel(c)).ToList()
         };
     }
 }
