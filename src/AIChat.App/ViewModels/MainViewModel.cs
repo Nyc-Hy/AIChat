@@ -706,22 +706,17 @@ public sealed class MainViewModel : ObservableObject
 
         try
         {
-            var events = await _auditLogRepository.QueryAsync(
-                projectId,
-                after: run.Run.StartedAt.AddMinutes(-1),
-                runId: runId,
-                maxCount: 200);
+            var items = await AgentRunAuditLoader.LoadAsync(
+                _auditLogRepository, projectId, runId, run.Run.StartedAt);
 
             if (SelectedAgentRunDetails?.Id != runId)
             {
                 return;
             }
 
-            var runEvents = events.OrderBy(e => e.Timestamp);
-
-            foreach (var e in runEvents)
+            foreach (var e in items)
             {
-                AuditEvents.Add(new AuditEventViewModel(e));
+                AuditEvents.Add(e);
             }
 
             OnPropertyChanged(nameof(HasAuditEvents));
