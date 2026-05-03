@@ -1447,13 +1447,14 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var changeSet = await _workspaceChangeService.GetChangesAsync(SelectedProject.Path);
+            var result = WorkspaceChangeListBuilder.Build(changeSet);
+
             WorkspaceChanges.Clear();
             StagedWorkspaceChanges.Clear();
             UnstagedWorkspaceChanges.Clear();
             UntrackedWorkspaceChanges.Clear();
-            foreach (var change in changeSet.Changes)
+            foreach (var viewModel in result.All)
             {
-                var viewModel = new WorkspaceChangeViewModel(change);
                 viewModel.PropertyChanged += (_, args) =>
                 {
                     if (args.PropertyName == nameof(WorkspaceChangeViewModel.IsSelected))
@@ -1464,24 +1465,13 @@ public sealed class MainViewModel : ObservableObject
                     }
                 };
                 WorkspaceChanges.Add(viewModel);
-                if (viewModel.IsUntracked)
-                {
-                    UntrackedWorkspaceChanges.Add(viewModel);
-                }
-                else if (viewModel.IsStaged)
-                {
-                    StagedWorkspaceChanges.Add(viewModel);
-                }
-                else
-                {
-                    UnstagedWorkspaceChanges.Add(viewModel);
-                }
             }
+            foreach (var vm in result.Staged) StagedWorkspaceChanges.Add(vm);
+            foreach (var vm in result.Unstaged) UnstagedWorkspaceChanges.Add(vm);
+            foreach (var vm in result.Untracked) UntrackedWorkspaceChanges.Add(vm);
 
-            WorkspaceBranch = changeSet.Branch;
-            WorkspaceStatusText = changeSet.HasChanges
-                ? $"{changeSet.Changes.Count} 个变更{(changeSet.IsTruncated ? "，列表已截断" : "")}"
-                : "工作区干净";
+            WorkspaceBranch = result.Branch;
+            WorkspaceStatusText = result.StatusText;
             SelectedWorkspaceChange = WorkspaceChanges.FirstOrDefault();
             if (SelectedWorkspaceChange is null)
             {
