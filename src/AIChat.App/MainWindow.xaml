@@ -340,7 +340,8 @@
                                 BorderThickness="1">
                             <ScrollViewer MaxHeight="180"
                                           HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollBarVisibility="Auto">
+                                          VerticalScrollBarVisibility="Auto"
+                                          PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                 <StackPanel>
                                     <Button Command="{Binding DataContext.CopyAgentFileDiffCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                             CommandParameter="{Binding}"
@@ -383,6 +384,15 @@
                         BorderThickness="1"
                         HorizontalAlignment="Left"
                         Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="BorderBrush" Value="#B8C8D8" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Border.ContextMenu>
                         <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                             <MenuItem Header="复制消息"
@@ -558,9 +568,8 @@
 
             <Grid Grid.Row="0" Background="Transparent">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="292" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="138" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
@@ -571,30 +580,6 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Center"
-                            HorizontalAlignment="Center">
-                    <TextBlock Text="{Binding CurrentConversationTitle}"
-                               Foreground="#1E252E"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                    <Border Margin="12,0,0,0"
-                            Padding="8,3"
-                            CornerRadius="8"
-                            Background="#EDF4F2"
-                            BorderBrush="#D6E7E3"
-                            BorderThickness="1">
-                        <TextBlock Text="{Binding StatusText}"
-                                   Foreground="#3E6F68"
-                                   FontSize="11"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxWidth="260" />
-                    </Border>
-                </StackPanel>
-
-                <StackPanel Grid.Column="2"
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Center"
@@ -610,7 +595,6 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="292" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="350" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Left sidebar: project-scoped conversation list and settings entry. -->
@@ -699,9 +683,9 @@
                                     <DataTemplate>
                                         <StackPanel Margin="0,0,0,14">
                                             <StackPanel.ContextMenu>
-                                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                                     <MenuItem Header="移除项目"
-                                                              Command="{Binding PlacementTarget.Tag.RemoveProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              Command="{Binding DataContext.RemoveProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                               CommandParameter="{Binding}" />
                                                 </ContextMenu>
                                             </StackPanel.ContextMenu>
@@ -815,18 +799,51 @@
 
                 <Grid Grid.Column="1" Margin="14,0,10,12">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="158" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" Margin="0,0,0,12" Background="#FFFFFF" CornerRadius="10" BorderBrush="#CFD9E4" BorderThickness="1.5">
+                    <!-- 模型选择器和运行历史 -->
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <ComboBox ItemsSource="{Binding ConfiguredProviders}"
+                                      SelectedValue="{Binding SelectedConfiguredProviderId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="Id"
+                                      ItemTemplate="{StaticResource ConfiguredProviderTemplate}"
+                                      Width="150"
+                                      Padding="8,0"
+                                      Margin="0,0,6,0"
+                                      ToolTip="选择模型提供商" />
+                            <ComboBox ItemsSource="{Binding ActiveModelOptions}"
+                                      SelectedValue="{Binding SelectedActiveModelId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="Id"
+                                      ItemTemplate="{StaticResource ModelOptionTemplate}"
+                                      Width="130"
+                                      Padding="8,0"
+                                      ToolTip="选择模型" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Command="{Binding OpenAgentRunHistoryCommand}"
+                                Content="运行历史"
+                                Width="100"
+                                Height="34"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+                    </Grid>
+
+                    <Border Grid.Row="1" Margin="0,0,0,8" Background="#FFFFFF" CornerRadius="10" BorderBrush="#CFD9E4" BorderThickness="1.5">
                         <Grid>
                             <!-- Main transcript. Code-behind auto-scrolls this when messages stream. -->
                             <ScrollViewer x:Name="MessagesScrollViewer"
                                           Style="{StaticResource ModernScrollViewerStyle}"
                                           Padding="30,20"
                                           VerticalScrollBarVisibility="Auto"
-                                          Background="Transparent">
+                                          Background="Transparent"
+                                          PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                 <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" />
                             </ScrollViewer>
                             <StackPanel Width="380"
@@ -893,7 +910,7 @@
                                             <TextBlock Text="{Binding ToolName}" Foreground="#285F5A" FontWeight="SemiBold" FontSize="12" />
                                         </Border>
                                     </DockPanel>
-                                    <ScrollViewer Grid.Row="1" Style="{StaticResource ModernScrollViewerStyle}" VerticalScrollBarVisibility="Auto">
+                                    <ScrollViewer Grid.Row="1" Style="{StaticResource ModernScrollViewerStyle}" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                         <StackPanel>
                                             <TextBlock Text="参数" FontSize="12" FontWeight="SemiBold" Foreground="#596473" />
                                             <Border Margin="0,5,0,10" Padding="10" CornerRadius="6" Background="#F8FAFC" BorderBrush="#E4EAF0" BorderThickness="1">
@@ -931,7 +948,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="1"
+                    <Border Grid.Row="2"
                             Background="#FFFFFF"
                             BorderBrush="#C8D5E0"
                             BorderThickness="1.5"
@@ -1086,22 +1103,6 @@
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                    <ComboBox ItemsSource="{Binding ConfiguredProviders}"
-                                              SelectedValue="{Binding SelectedConfiguredProviderId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              SelectedValuePath="Id"
-                                              ItemTemplate="{StaticResource ConfiguredProviderTemplate}"
-                                              Width="142"
-                                              Padding="10,0"
-                                              Margin="0,0,8,0"
-                                              ToolTip="选择模型提供商" />
-                                    <ComboBox ItemsSource="{Binding ActiveModelOptions}"
-                                              SelectedValue="{Binding SelectedActiveModelId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                              SelectedValuePath="Id"
-                                              ItemTemplate="{StaticResource ModelOptionTemplate}"
-                                              Width="124"
-                                              Padding="10,0"
-                                              Margin="0,0,8,0"
-                                              ToolTip="选择模型" />
                                     <Grid Width="40"
                                           Height="40"
                                           Margin="0,0,10,0"
@@ -1129,312 +1130,6 @@
                         </Grid>
                     </Border>
                 </Grid>
-
-                <Border Grid.Column="2"
-                        Margin="0,0,12,12"
-                        Background="#FFFFFF"
-                        CornerRadius="10"
-                        BorderBrush="#CFD9E4"
-                        BorderThickness="1.5">
-                    <Grid Margin="14">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" MinHeight="120" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" MinHeight="100" />
-                        </Grid.RowDefinitions>
-
-                        <DockPanel Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="Workspace Changes"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"
-                                           Foreground="#1E252E" />
-                                <TextBlock Text="{Binding WorkspaceStatusText}"
-                                           Margin="0,4,0,0"
-                                           FontSize="12"
-                                           Foreground="#748092"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding WorkspaceSelectionText}"
-                                           Margin="0,2,0,0"
-                                           FontSize="11"
-                                           Foreground="#98A2B0"
-                                           TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                            <Button DockPanel.Dock="Right"
-                                    Command="{Binding OpenAgentRunHistoryCommand}"
-                                    Content="运行历史"
-                                    Width="82"
-                                    Height="32"
-                                    Style="{StaticResource SubtleButtonStyle}" />
-                            <StackPanel DockPanel.Dock="Right"
-                                        Orientation="Horizontal">
-                                <Button Command="{Binding OpenWorkspaceFileCommand}"
-                                        Content="打开"
-                                        Width="62"
-                                        Height="32"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <!-- Removed duplicate commit button; use "提交已选" in file operations row -->
-                                <Button Command="{Binding RestoreWorkspaceFileCommand}"
-                                        Content="恢复"
-                                        Width="62"
-                                        Height="32"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding RefreshWorkspaceChangesCommand}"
-                                        Content="刷新"
-                                        Width="62"
-                                        Height="32"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                            </StackPanel>
-                        </DockPanel>
-
-                        <Border Grid.Row="1"
-                                Padding="10"
-                                CornerRadius="8"
-                                Background="#F8FAFC"
-                                BorderBrush="#E2E8F0"
-                                BorderThickness="1">
-                            <Grid>
-                                <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
-                                              VerticalScrollBarVisibility="Auto">
-                                    <StackPanel>
-                                        <TextBlock Text="未暂存"
-                                                   Margin="0,0,0,5"
-                                                   FontSize="11"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#667386" />
-                                        <ListBox ItemsSource="{Binding UnstagedWorkspaceChanges}"
-                                                 SelectedItem="{Binding SelectedWorkspaceChange, Mode=TwoWay}"
-                                                 BorderThickness="0"
-                                                 Background="Transparent"
-                                                 ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Margin="0,2" MinHeight="28">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="48" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  VerticalAlignment="Center"
-                                                                  Margin="0,0,7,0" />
-                                                        <Border Grid.Column="1"
-                                                                Padding="5,2"
-                                                                CornerRadius="5"
-                                                                Background="#EEF5F3"
-                                                                BorderBrush="#D9E9E5"
-                                                                BorderThickness="1"
-                                                                VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DisplayStatus}"
-                                                                       FontSize="10"
-                                                                       Foreground="#3E6F68"
-                                                                       TextAlignment="Center"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                        </Border>
-                                                        <TextBlock Grid.Column="2"
-                                                                   Text="{Binding Path}"
-                                                                   Margin="8,0,0,0"
-                                                                   VerticalAlignment="Center"
-                                                                   FontSize="12"
-                                                                   Foreground="#2A3340"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-
-                                        <Border Height="1" Background="#E2E8F0" Margin="0,10,0,0" />
-                                        <TextBlock Text="已暂存"
-                                                   Margin="0,8,0,5"
-                                                   FontSize="11"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#667386" />
-                                        <ListBox ItemsSource="{Binding StagedWorkspaceChanges}"
-                                                 SelectedItem="{Binding SelectedWorkspaceChange, Mode=TwoWay}"
-                                                 BorderThickness="0"
-                                                 Background="Transparent"
-                                                 ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Margin="0,2" MinHeight="28">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="48" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  VerticalAlignment="Center"
-                                                                  Margin="0,0,7,0" />
-                                                        <Border Grid.Column="1"
-                                                                Padding="5,2"
-                                                                CornerRadius="5"
-                                                                Background="#EEF5F3"
-                                                                BorderBrush="#D9E9E5"
-                                                                BorderThickness="1"
-                                                                VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DisplayStatus}"
-                                                                       FontSize="10"
-                                                                       Foreground="#3E6F68"
-                                                                       TextAlignment="Center"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                        </Border>
-                                                        <TextBlock Grid.Column="2"
-                                                                   Text="{Binding Path}"
-                                                                   Margin="8,0,0,0"
-                                                                   VerticalAlignment="Center"
-                                                                   FontSize="12"
-                                                                   Foreground="#2A3340"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-
-                                        <Border Height="1" Background="#E2E8F0" Margin="0,10,0,0" />
-                                        <TextBlock Text="未跟踪"
-                                                   Margin="0,8,0,5"
-                                                   FontSize="11"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#667386" />
-                                        <ListBox ItemsSource="{Binding UntrackedWorkspaceChanges}"
-                                                 SelectedItem="{Binding SelectedWorkspaceChange, Mode=TwoWay}"
-                                                 BorderThickness="0"
-                                                 Background="Transparent"
-                                                 ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Grid Margin="0,2" MinHeight="28">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="48" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  VerticalAlignment="Center"
-                                                                  Margin="0,0,7,0" />
-                                                        <Border Grid.Column="1"
-                                                                Padding="5,2"
-                                                                CornerRadius="5"
-                                                                Background="#EEF5F3"
-                                                                BorderBrush="#D9E9E5"
-                                                                BorderThickness="1"
-                                                                VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DisplayStatus}"
-                                                                       FontSize="10"
-                                                                       Foreground="#3E6F68"
-                                                                       TextAlignment="Center"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                        </Border>
-                                                        <TextBlock Grid.Column="2"
-                                                                   Text="{Binding Path}"
-                                                                   Margin="8,0,0,0"
-                                                                   VerticalAlignment="Center"
-                                                                   FontSize="12"
-                                                                   Foreground="#2A3340"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-                                    </StackPanel>
-                                </ScrollViewer>
-                                <TextBlock Text="当前没有工作区变更"
-                                           Foreground="#98A2B0"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center"
-                                           IsHitTestVisible="False">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasWorkspaceChanges}" Value="False">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Grid>
-                        </Border>
-
-                        <StackPanel Grid.Row="2" Margin="0,13,0,8">
-                            <DockPanel>
-                                <TextBlock Text="文件操作"
-                                           FontSize="12"
-                                           FontWeight="SemiBold"
-                                           Foreground="#667386" />
-                                <TextBlock DockPanel.Dock="Right"
-                                           Text="{Binding WorkspaceBranch}"
-                                           FontSize="11"
-                                           Foreground="#98A2B0"
-                                           VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           MaxWidth="190" />
-                            </DockPanel>
-                            <WrapPanel Margin="0,8,0,0">
-                                <Button Command="{Binding SelectAllWorkspaceChangesCommand}"
-                                        Content="全选"
-                                        Width="54"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding ClearWorkspaceSelectionCommand}"
-                                        Content="清空"
-                                        Width="54"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding StageSelectedWorkspaceChangesCommand}"
-                                        Content="暂存"
-                                        Width="54"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding UnstageSelectedWorkspaceChangesCommand}"
-                                        Content="取消暂存"
-                                        Width="76"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding CommitAllWorkspaceChangesCommand}"
-                                        Content="提交已选"
-                                        Width="76"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding CopyWorkspaceDiffCommand}"
-                                        Content="复制 diff"
-                                        Width="76"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                                <Button Command="{Binding CopyWorkspacePathCommand}"
-                                        Content="复制路径"
-                                        Width="76"
-                                        Height="28"
-                                        Margin="0,0,8,0"
-                                        Style="{StaticResource SubtleButtonStyle}" />
-                            </WrapPanel>
-                        </StackPanel>
-
-                        <Border Grid.Row="3"
-                                Padding="10"
-                                CornerRadius="8"
-                                Background="#FBFCFD"
-                                BorderBrush="#E2E8F0"
-                                BorderThickness="1">
-                            <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
-                                          HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding WorkspaceDiffLines}"
-                                              ItemTemplate="{StaticResource DiffLineTemplate}" />
-                            </ScrollViewer>
-                        </Border>
-                    </Grid>
-                </Border>
             </Grid>
 
             <Grid Grid.RowSpan="2" Background="#B8EEF1F4">
@@ -1449,8 +1144,8 @@
                     </Style>
                 </Grid.Style>
 
-                <Border Width="760"
-                        Height="620"
+                <Border Width="960"
+                        Height="660"
                         MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                         MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
                         Margin="24"
@@ -1469,29 +1164,30 @@
                         </Grid.RowDefinitions>
 
                         <DockPanel Margin="0,0,0,18">
-                            <StackPanel>
-                                <TextBlock Text="{Binding AgentRunHistoryTitle}"
-                                           FontSize="20"
-                                           FontWeight="SemiBold"
-                                           Foreground="#1E252E" />
-                                <TextBlock Text="{Binding AgentRunHistorySummary}"
-                                           Margin="0,6,0,0"
-                                           Foreground="#748092" />
-                            </StackPanel>
                             <Button DockPanel.Dock="Right"
                                     Command="{Binding CloseAgentRunHistoryCommand}"
                                     Content="×"
                                     Style="{StaticResource IconButtonStyle}"
-                                    HorizontalAlignment="Right" />
-                            <ComboBox DockPanel.Dock="Right"
-                                      ItemsSource="{Binding AgentRunHistoryFilterOptions}"
-                                      SelectedValue="{Binding AgentRunHistoryFilterId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                      DisplayMemberPath="Name"
-                                      SelectedValuePath="Id"
-                                      Width="116"
-                                      Height="32"
-                                      Margin="0,0,12,0"
-                                      VerticalAlignment="Top" />
+                                    HorizontalAlignment="Right" FontSize="20" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding AgentRunHistoryTitle}"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               Foreground="#1E252E" />
+                                    <TextBlock Text="{Binding AgentRunHistorySummary}"
+                                               Margin="0,6,0,0"
+                                               Foreground="#748092" />
+                                </StackPanel>
+                                <ComboBox ItemsSource="{Binding AgentRunHistoryFilterOptions}"
+                                          SelectedValue="{Binding AgentRunHistoryFilterId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          DisplayMemberPath="Name"
+                                          SelectedValuePath="Id"
+                                          Width="130"
+                                          Height="34"
+                                          Margin="12,0,0,0"
+                                          VerticalAlignment="Bottom" />
+                            </StackPanel>
                         </DockPanel>
 
                         <Border Grid.Row="1"
@@ -1500,10 +1196,12 @@
                                 CornerRadius="8"
                                 Background="#F8FAFC">
                             <Grid>
+                                <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}" VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                 <ListBox ItemsSource="{Binding AgentRunHistory}"
                                          BorderThickness="0"
                                          Background="Transparent"
-                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Disabled">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Border Margin="8,8,8,0"
@@ -1573,6 +1271,7 @@
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
+                                </ScrollViewer>
                                 <TextBlock Text="暂无 Agent 运行记录"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
@@ -1677,9 +1376,9 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TabControl Grid.Column="0" Padding="0">
+                            <TabControl Grid.Column="0" Padding="0" x:Name="LeftTabControl" SelectionChanged="LeftTabControl_SelectionChanged">
                                 <TabItem Header="总览">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                         <StackPanel>
                                 <Border Padding="14"
                                         CornerRadius="8"
@@ -1690,56 +1389,48 @@
                                         <TextBlock Text="目标"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding Goal}"
-                                                   Margin="0,7,0,0"
-                                                   Foreground="#2A3340"
-                                                   TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding Goal, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,7,0,0" />
                                         <TextBlock Text="开始时间"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding StartedText}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="#596473" />
+                                        <TextBox Text="{Binding StartedText, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
                                         <TextBlock Text="运行环境"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding Model, StringFormat=模型：{0}}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="#596473"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding ProjectPath, StringFormat=项目：{0}}"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="#596473"
-                                                   TextTrimming="CharacterEllipsis" />
-                                        <TextBlock Text="{Binding EnabledToolsText, StringFormat=工具：{0}}"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding BudgetText, StringFormat=预算：{0}}"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding MutationGuardrailText, StringFormat=修改护栏：{0}}"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding ApprovalSummary, StringFormat=审批：{0}}"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
-                                        <TextBlock Text="{Binding WorkspaceSnapshotText, StringFormat=工作区：{0}}"
-                                                   Margin="0,3,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding Model, StringFormat=模型：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
+                                        <TextBox Text="{Binding ProjectPath, StringFormat=项目：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding EnabledToolsText, StringFormat=工具：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding BudgetText, StringFormat=预算：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding MutationGuardrailText, StringFormat=修改护栏：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding ApprovalSummary, StringFormat=审批：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding WorkspaceSnapshotText, StringFormat=工作区：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
                                         <TextBlock Text="当前阶段"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding PhaseText}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="#596473" />
+                                        <TextBox Text="{Binding PhaseText, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
                                         <StackPanel Margin="0,14,0,0">
                                             <StackPanel.Style>
                                                 <Style TargetType="StackPanel">
@@ -1754,9 +1445,9 @@
                                             <TextBlock Text="继续运行"
                                                        FontWeight="SemiBold"
                                                        Foreground="#303A47" />
-                                            <TextBlock Text="{Binding ContinuedFromRunText}"
-                                                       Margin="0,5,0,0"
-                                                       Foreground="#596473" />
+                                            <TextBox Text="{Binding ContinuedFromRunText, Mode=OneWay}"
+                                                     Style="{StaticResource SelectableTextBoxStyle}"
+                                                     Margin="0,5,0,0" />
                                         </StackPanel>
                                         <StackPanel Margin="0,14,0,0">
                                             <StackPanel.Style>
@@ -1772,42 +1463,38 @@
                                             <TextBlock Text="结束原因"
                                                        FontWeight="SemiBold"
                                                        Foreground="#303A47" />
-                                            <TextBlock Text="{Binding CompletionReasonText}"
-                                                       Margin="0,5,0,0"
-                                                       Foreground="#596473"
-                                                       TextWrapping="Wrap" />
+                                            <TextBox Text="{Binding CompletionReasonText, Mode=OneWay}"
+                                                     Style="{StaticResource SelectableTextBoxStyle}"
+                                                     Margin="0,5,0,0" />
                                         </StackPanel>
                                         <TextBlock Text="变更摘要"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding RunSummary}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding RunSummary, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
                                         <TextBlock Text="结束校验"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding FinalValidationSummary}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding FinalValidationSummary, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
                                         <TextBlock Text="恢复建议"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
-                                        <TextBlock Text="{Binding RecoverySuggestion}"
-                                                   Margin="0,5,0,0"
-                                                   Foreground="#596473"
-                                                   TextWrapping="Wrap" />
+                                        <TextBox Text="{Binding RecoverySuggestion, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
                                     </StackPanel>
                                 </Border>
                                         </StackPanel>
                                     </ScrollViewer>
                                 </TabItem>
                                 <TabItem Header="计划">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                 <Border Margin="0,4,0,0"
                                         Padding="14"
                                         CornerRadius="8"
@@ -1897,6 +1584,7 @@
                                 </Border>
                                     </ScrollViewer>
                                 </TabItem>
+                                <!-- Git 功能已隐藏
                                 <TabItem Header="文件变更">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
                                 <Border Margin="0,4,0,0"
@@ -1924,8 +1612,9 @@
                                 </Border>
                                     </ScrollViewer>
                                 </TabItem>
+                                -->
                                 <TabItem Header="验证">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                         <StackPanel>
                                 <Border Margin="0,4,0,0"
                                         Padding="14"
@@ -1997,7 +1686,7 @@
                                     </ScrollViewer>
                                 </TabItem>
                                 <TabItem Header="审计">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                         <StackPanel>
                                             <TextBlock Text="审计事件"
                                                        FontWeight="SemiBold"
@@ -2071,7 +1760,8 @@
                                                Foreground="#303A47" />
                                     <ScrollViewer Grid.Row="1"
                                                   Style="{StaticResource ModernScrollViewerStyle}"
-                                                  VerticalScrollBarVisibility="Auto">
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                         <ItemsControl ItemsSource="{Binding Steps}"
                                                       Margin="12,0,12,12">
                                             <ItemsControl.ItemTemplate>
@@ -2110,11 +1800,14 @@
                                                                     Background="#FFFFFF"
                                                                     BorderBrush="#E6EAF0"
                                                                     BorderThickness="1">
-                                                                <TextBlock Text="{Binding OutputPreview}"
-                                                                           FontFamily="Consolas"
-                                                                           FontSize="11"
-                                                                           Foreground="#2A3340"
-                                                                           TextWrapping="Wrap" />
+                                                                <TextBox Text="{Binding OutputPreview, Mode=OneWay}"
+                                                                         IsReadOnly="True"
+                                                                         FontFamily="Consolas"
+                                                                         FontSize="11"
+                                                                         Foreground="#2A3340"
+                                                                         TextWrapping="Wrap"
+                                                                         Background="Transparent"
+                                                                         BorderThickness="0" />
                                                             </Border>
                                                         </StackPanel>
                                                     </Border>
@@ -2307,7 +2000,8 @@
                             <TabItem Header="模型">
                                 <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
                                               VerticalAlignment="Stretch"
-                                              VerticalScrollBarVisibility="Auto">
+                                              VerticalScrollBarVisibility="Auto"
+                                              PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -2469,7 +2163,8 @@
                             <TabItem Header="工具">
                                 <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
                                               VerticalAlignment="Stretch"
-                                              VerticalScrollBarVisibility="Auto">
+                                              VerticalScrollBarVisibility="Auto"
+                                              PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                     <StackPanel>
                                         <Border Padding="14"
                                                 CornerRadius="8"
@@ -2661,7 +2356,7 @@
 
                             <!-- Advanced settings tab -->
                             <TabItem Header="高级">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="2,8">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="2,8" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                     <StackPanel>
                                         <!-- Retry count -->
                                         <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">

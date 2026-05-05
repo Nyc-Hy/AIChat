@@ -1,4 +1,6 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AIChat.Domain.Audit;
 
 namespace AIChat.Storage.Json;
@@ -10,7 +12,9 @@ public sealed class AuditLogRepository
     private readonly int _maxArchiveCount;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        WriteIndented = false
+        WriteIndented = false,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: true) }
     };
 
     public AuditLogRepository(string basePath, long maxFileSizeBytes = 5 * 1024 * 1024, int maxArchiveCount = 3)
@@ -49,24 +53,49 @@ public sealed class AuditLogRepository
     {
         var events = new List<AuditEvent>();
 
-        // Read from current file and archives (newest first)
-        var files = GetLogFilesNewestFirst(projectId);
-        foreach (var file in files)
+        try
         {
-            if (!File.Exists(file)) continue;
-
-            var lines = await File.ReadAllLinesAsync(file, cancellationToken);
-            foreach (var line in lines)
+            // Read from current file and archives (newest first)
+            var files = GetLogFilesNewestFirst(projectId);
+            foreach (var file in files)
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                var entry = JsonSerializer.Deserialize<AuditEvent>(line, JsonOptions);
-                if (entry is null) continue;
-                if (after.HasValue && entry.Timestamp < after.Value) continue;
-                if (type.HasValue && entry.Type != type.Value) continue;
-                if (!string.IsNullOrWhiteSpace(runId) &&
-                    !string.Equals(entry.RunId, runId, StringComparison.Ordinal)) continue;
-                events.Add(entry);
+                if (!File.Exists(file)) continue;
+
+                string[] lines;
+                try
+                {
+                    lines = await File.ReadAllLinesAsync(file, cancellationToken);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (var line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    try
+                    {
+                        var entry = JsonSerializer.Deserialize<AuditEvent>(line, JsonOptions);
+                        if (entry is null) continue;
+                        if (after.HasValue && entry.Timestamp < after.Value) continue;
+                        if (type.HasValue && entry.Type != type.Value) continue;
+                        if (!string.IsNullOrWhiteSpace(runId) &&
+                            !string.Equals(entry.RunId, runId, StringComparison.Ordinal)) continue;
+                        events.Add(entry);
+                    }
+                    catch
+                    {
+                        // Skip malformed lines
+                        continue;
+                    }
+                }
             }
+        }
+        catch
+        {
+            // Return empty list on any error
+            return events;
         }
 
         // Sort by timestamp descending and take last N

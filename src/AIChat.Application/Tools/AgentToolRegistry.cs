@@ -6,36 +6,125 @@ public sealed class AgentToolRegistry
 {
     private readonly Dictionary<string, IAgentTool> _toolsById;
     private readonly Dictionary<string, ToolMetadata> _metadataById;
+    private readonly Lazy<IReadOnlyList<IAgentTool>> _lazyAll;
+    private bool _initialized;
 
-    public AgentToolRegistry(
-        IEnumerable<IAgentTool> tools,
-        IEnumerable<ToolMetadata>? metadata = null)
+    private AgentToolRegistry(
+        IEnumerable<IAgentTool>? tools,
+        IEnumerable<ToolMetadata>? metadata,
+        Lazy<IReadOnlyList<IAgentTool>> lazyAll)
     {
-        _toolsById = tools.ToDictionary(
-            t => t.Id,
-            t => t,
-            StringComparer.OrdinalIgnoreCase);
-        _metadataById = (metadata ?? []).ToDictionary(
-            m => m.ToolId,
-            m => m,
-            StringComparer.OrdinalIgnoreCase);
+        _toolsById = new Dictionary<string, IAgentTool>(StringComparer.OrdinalIgnoreCase);
+        _metadataById = new Dictionary<string, ToolMetadata>(StringComparer.OrdinalIgnoreCase);
+        _lazyAll = lazyAll;
+        _initialized = false;
+
+        if (tools != null)
+        {
+            foreach (var tool in tools)
+            {
+                _toolsById[tool.Id] = tool;
+            }
+        }
+
+        if (metadata != null)
+        {
+            foreach (var m in metadata)
+            {
+                _metadataById[m.ToolId] = m;
+            }
+        }
     }
 
-    public IReadOnlyList<IAgentTool> All => _toolsById.Values.ToList();
+    public static AgentToolRegistry CreateDefault()
+    {
+        return new AgentToolRegistry(
+            null,
+            null,
+            new Lazy<IReadOnlyList<IAgentTool>>(CreateDefaultTools));
+    }
+
+    private void EnsureInitialized()
+    {
+        if (_initialized) return;
+        _initialized = true;
+
+        if (_toolsById.Count == 0)
+        {
+            foreach (var tool in _lazyAll.Value)
+            {
+                _toolsById[tool.Id] = tool;
+            }
+        }
+    }
+
+    private static IReadOnlyList<IAgentTool> CreateDefaultTools()
+    {
+        return new IAgentTool[]
+        {
+            new ListFilesTool(),
+            new ReadFileTool(),
+            new SearchTextTool(),
+            new WriteFileTool(),
+            new EditFileTool(),
+            new ApplyPatchTool(),
+            new UpdatePlanTool(),
+            new GitStatusTool(),
+            new GitDiffTool(),
+            new GitRestoreFileTool(),
+            new GitCommitTool(),
+            new RunBuildTool(),
+            new RunTestTool(),
+            new ShellCommandTool()
+        };
+    }
+
+    private static ToolMetadata[] CreateDefaultMetadata()
+    {
+        return new ToolMetadata[]
+        {
+            new() { ToolId = "list_files", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
+            new() { ToolId = "read_file", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
+            new() { ToolId = "search_text", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
+            new() { ToolId = "write_file", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
+            new() { ToolId = "edit_file", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
+            new() { ToolId = "apply_patch", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
+            new() { ToolId = "update_plan", Category = "计划", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "计划管理" },
+            new() { ToolId = "git_status", Category = "Git", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "Git 操作" },
+            new() { ToolId = "git_diff", Category = "Git", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "Git 操作" },
+            new() { ToolId = "git_restore_file", Category = "Git", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "Git 操作" },
+            new() { ToolId = "git_commit", Category = "Git", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "Git 操作" },
+            new() { ToolId = "run_build", Category = "构建", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "构建与测试" },
+            new() { ToolId = "run_test", Category = "构建", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "构建与测试" },
+            new() { ToolId = "run_shell", Category = "Shell", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "Shell 命令" }
+        };
+    }
+
+    public IReadOnlyList<IAgentTool> All
+    {
+        get
+        {
+            EnsureInitialized();
+            return _toolsById.Values.ToList();
+        }
+    }
 
     public IAgentTool? Find(string toolId)
     {
+        EnsureInitialized();
         return _toolsById.TryGetValue(toolId, out var tool) ? tool : null;
     }
 
     public IReadOnlyList<IAgentTool> ResolveEnabled(IEnumerable<string> enabledToolIds)
     {
+        EnsureInitialized();
         var enabled = enabledToolIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         return _toolsById.Values.Where(t => enabled.Contains(t.Id)).ToList();
     }
 
     public ToolMetadata GetMetadata(string toolId)
     {
+        EnsureInitialized();
         if (_metadataById.TryGetValue(toolId, out var meta))
         {
             return meta;
@@ -54,6 +143,7 @@ public sealed class AgentToolRegistry
 
     public IReadOnlyList<(IAgentTool Tool, ToolMetadata Metadata)> AllWithMetadata()
     {
+        EnsureInitialized();
         return _toolsById.Values
             .Select(t => (t, GetMetadata(t.Id)))
             .ToList();
@@ -79,47 +169,6 @@ public sealed class AgentToolRegistry
     }
 
     private readonly List<IExternalToolProvider> _externalProviders = [];
-
-    public static AgentToolRegistry CreateDefault()
-    {
-        var tools = new IAgentTool[]
-        {
-            new ListFilesTool(),
-            new ReadFileTool(),
-            new SearchTextTool(),
-            new WriteFileTool(),
-            new EditFileTool(),
-            new ApplyPatchTool(),
-            new UpdatePlanTool(),
-            new GitStatusTool(),
-            new GitDiffTool(),
-            new GitRestoreFileTool(),
-            new GitCommitTool(),
-            new RunBuildTool(),
-            new RunTestTool(),
-            new ShellCommandTool()
-        };
-
-        var metadata = new ToolMetadata[]
-        {
-            new() { ToolId = "list_files", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
-            new() { ToolId = "read_file", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
-            new() { ToolId = "search_text", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
-            new() { ToolId = "write_file", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
-            new() { ToolId = "edit_file", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
-            new() { ToolId = "apply_patch", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
-            new() { ToolId = "update_plan", Category = "计划", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "计划管理" },
-            new() { ToolId = "git_status", Category = "Git", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "Git 操作" },
-            new() { ToolId = "git_diff", Category = "Git", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "Git 操作" },
-            new() { ToolId = "git_restore_file", Category = "Git", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "Git 操作" },
-            new() { ToolId = "git_commit", Category = "Git", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "Git 操作" },
-            new() { ToolId = "run_build", Category = "构建", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "构建与测试" },
-            new() { ToolId = "run_test", Category = "构建", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "构建与测试" },
-            new() { ToolId = "run_shell", Category = "Shell", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "Shell 命令" }
-        };
-
-        return new AgentToolRegistry(tools, metadata);
-    }
 
     private static string ClassifyCategory(IAgentTool? tool)
     {

@@ -66,6 +66,15 @@ public partial class MainWindow : Window
         HookMessageCollection();
     }
 
+    private void LeftTabControl_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        // Load workspace changes on-demand when user switches to the "文件变更" tab.
+        if (LeftTabControl.SelectedIndex == 2 && _viewModel.RefreshWorkspaceChangesCommand.CanExecute(null))
+        {
+            _viewModel.RefreshWorkspaceChangesCommand.Execute(null);
+        }
+    }
+
     private async void ComposerBox_KeyDown(object sender, KeyEventArgs e)
     {
         // Ctrl+Enter sends the current draft, matching common chat/editor behavior.

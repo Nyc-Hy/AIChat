@@ -345,9 +345,16 @@ public sealed class MainViewModel : ObservableObject
         get
         {
             var items = new List<ModelOptionItem>();
+            var selectedProviderId = Settings.ActiveConfiguredProviderId;
             foreach (var configured in Settings.ConfiguredProviders)
             {
                 if (string.IsNullOrWhiteSpace(configured.ApiKey))
+                {
+                    continue;
+                }
+
+                // Filter by selected provider
+                if (!string.IsNullOrEmpty(selectedProviderId) && configured.Id != selectedProviderId)
                 {
                     continue;
                 }
@@ -717,7 +724,14 @@ public sealed class MainViewModel : ObservableObject
 
             foreach (var e in items)
             {
-                AuditEvents.Add(new AuditEventViewModel(e));
+                try
+                {
+                    AuditEvents.Add(new AuditEventViewModel(e));
+                }
+                catch
+                {
+                    // Skip individual malformed audit entries
+                }
             }
 
             OnPropertyChanged(nameof(HasAuditEvents));
@@ -1039,7 +1053,8 @@ public sealed class MainViewModel : ObservableObject
             PromptForProjectPath();
         }
 
-        await RefreshWorkspaceChangesAsync();
+        // Workspace changes are loaded on-demand via RefreshWorkspaceChangesCommand
+        // when the user switches to the "文件变更" tab, to avoid blocking startup.
         StatusText = HasApiKey ? "可直接对话" : "请先在设置中添加模型提供商";
     }
 

@@ -1,4 +1,6 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using AIChat.Domain.Chat;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Persistence;
@@ -13,7 +15,9 @@ public sealed class JsonAppRepository : IAppRepository
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
-        WriteIndented = true
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: true) }
     };
 
     private readonly string _dataDirectory;

@@ -12,12 +12,12 @@ namespace AIChat.Application.Context;
 /// </summary>
 public sealed class TokenizerContextEstimator : IContextEstimator
 {
-    private readonly GptEncoding _encoding;
+    private readonly Lazy<GptEncoding> _encoding;
     private readonly SimpleContextEstimator _fallback = new();
 
     public TokenizerContextEstimator(string encodingName = "cl100k_base")
     {
-        _encoding = GptEncoding.GetEncoding(encodingName);
+        _encoding = new Lazy<GptEncoding>(() => GptEncoding.GetEncoding(encodingName));
     }
 
     public ContextUsage Estimate(IReadOnlyList<ChatMessage> messages, AppSettings settings)
@@ -29,15 +29,15 @@ public sealed class TokenizerContextEstimator : IContextEstimator
             {
                 // Each message has ~4 tokens of overhead (role, separators)
                 totalTokens += 4;
-                totalTokens += _encoding.Encode(message.Content).Count;
+                totalTokens += _encoding.Value.Encode(message.Content).Count;
 
                 if (message.ToolCalls is { Count: > 0 })
                 {
                     foreach (var toolCall in message.ToolCalls)
                     {
                         totalTokens += 4;
-                        totalTokens += _encoding.Encode(toolCall.Name ?? "").Count;
-                        totalTokens += _encoding.Encode(toolCall.ArgumentsJson ?? "").Count;
+                        totalTokens += _encoding.Value.Encode(toolCall.Name ?? "").Count;
+                        totalTokens += _encoding.Value.Encode(toolCall.ArgumentsJson ?? "").Count;
                     }
                 }
             }

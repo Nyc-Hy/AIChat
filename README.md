@@ -101,8 +101,7 @@ tests/
 - [Agent Harness](docs/AGENT_HARNESS.md) — agent loop lifecycle, tool budget, and recovery
 - [Tool Security](docs/TOOL_SECURITY.md) — permission model, path guard, and shell policy
 - [A2A Adapter Design](docs/A2A_ADAPTER_DESIGN.md) — future Agent-to-Agent boundary design
-- [Development Plan](docs/REMAINING_DEVELOPMENT_PLAN.md) — completed work, optimization priorities, and future roadmap
-- [Next Development Tasks](docs/NEXT_DEVELOPMENT_HANDOFF_PLAN.md) — step-by-step task breakdown for continuing development
+- [Development Roadmap](docs/REMAINING_DEVELOPMENT_PLAN.md) — current state, maintenance priorities, and future roadmap
 
 ## Publish
 

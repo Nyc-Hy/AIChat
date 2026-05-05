@@ -79,16 +79,17 @@
         </Style>
 
         <Style x:Key="IconButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="34" />
-            <Setter Property="Height" Value="34" />
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="FontSize" Value="18" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="9">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" CornerRadius="10">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -124,6 +125,29 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SelectableTextBoxStyle" TargetType="TextBox">
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="Background" Value="#F8FAFC" />
+            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Foreground" Value="#2A3340" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
                             <ScrollViewer x:Name="PART_ContentHost" />
                         </Border>
                     </ControlTemplate>
@@ -406,18 +430,19 @@
                     <ControlTemplate TargetType="ListBoxItem">
                         <Border x:Name="Chrome"
                                 Background="Transparent"
-                                BorderBrush="Transparent"
+                                BorderBrush="#E8EDF2"
                                 BorderThickness="1"
                                 CornerRadius="8">
                             <ContentPresenter />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#EEF3F2" />
+                                <Setter TargetName="Chrome" Property="Background" Value="#F5F7FA" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#C5D0DD" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="#E3F1EE" />
-                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#BCD8D3" />
+                                <Setter TargetName="Chrome" Property="Background" Value="#EBF4F2" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="#8FBDBA" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
