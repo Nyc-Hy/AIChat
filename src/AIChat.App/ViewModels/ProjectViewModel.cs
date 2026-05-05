@@ -48,7 +48,7 @@ public sealed class ProjectViewModel : ObservableObject
 
     public ConversationViewModel? FindUnstartedConversation()
     {
-        return Conversations.FirstOrDefault(conversation => conversation.Messages.Count == 0);
+        return Conversations.FirstOrDefault(conversation => conversation.MessageCount == 0);
     }
 
     public void ApplyConversationFilter(string searchText)

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
@@ -25,7 +26,11 @@ public partial class MainWindow : Window
 {
     private readonly MainViewModel _viewModel;
     private INotifyCollectionChanged? _hookedMessages;
+    private ObservableCollection<ChatMessageViewModel>? _hookedMessageItems;
     private bool _isSyncingPasswordBox;
+    private double? _messageExtentBeforeLoadingEarlier;
+    private double? _messageOffsetBeforeLoadingEarlier;
+    private bool _isAutoLoadingEarlierMessages;
 
     public MainWindow()
     {
@@ -55,6 +60,7 @@ public partial class MainWindow : Window
         _viewModel.ConfigureAgent(
             new AgentHarness(agentRunner),
             toolRegistry);
+        _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         DataContext = _viewModel;
     }
 
@@ -100,30 +106,46 @@ public partial class MainWindow : Window
             _hookedMessages.CollectionChanged -= Messages_CollectionChanged;
         }
 
-        if (_viewModel.Messages is INotifyCollectionChanged collection)
+        if (_hookedMessageItems is not null)
         {
-            _hookedMessages = collection;
-            collection.CollectionChanged += Messages_CollectionChanged;
-            foreach (var message in _viewModel.Messages)
+            foreach (var message in _hookedMessageItems)
             {
                 message.PropertyChanged -= Message_PropertyChanged;
-                message.PropertyChanged += Message_PropertyChanged;
             }
         }
 
-        _viewModel.PropertyChanged += (_, args) =>
+        _hookedMessages = null;
+        _hookedMessageItems = null;
+
+        if (_viewModel.Messages is { } messages)
         {
-            if (args.PropertyName == nameof(MainViewModel.Messages))
+            _hookedMessageItems = messages;
+            if (messages is INotifyCollectionChanged collection)
             {
-                HookMessageCollection();
-                Dispatcher.InvokeAsync(ScrollMessagesToEnd);
+                _hookedMessages = collection;
+                collection.CollectionChanged += Messages_CollectionChanged;
             }
 
-            if (args.PropertyName == nameof(MainViewModel.NewProviderApiKey))
+            var streamingMessage = messages.LastOrDefault(message => message.IsStreaming);
+            if (streamingMessage is not null)
             {
-                SyncPasswordBoxFromViewModel();
+                streamingMessage.PropertyChanged += Message_PropertyChanged;
             }
-        };
+        }
+    }
+
+    private void ViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(MainViewModel.Messages))
+        {
+            HookMessageCollection();
+            Dispatcher.InvokeAsync(ScrollMessagesToEnd);
+        }
+
+        if (args.PropertyName == nameof(MainViewModel.NewProviderApiKey))
+        {
+            SyncPasswordBoxFromViewModel();
+        }
     }
 
     private void NewProviderPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
@@ -152,6 +174,11 @@ public partial class MainWindow : Window
 
     private void Messages_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        var shouldScrollToEnd = e.Action != NotifyCollectionChangedAction.Add ||
+                                e.NewStartingIndex < 0 ||
+                                (_hookedMessageItems is not null &&
+                                 e.NewStartingIndex >= _hookedMessageItems.Count - (e.NewItems?.Count ?? 0));
+
         if (e.NewItems is not null)
         {
             foreach (var item in e.NewItems.OfType<ChatMessageViewModel>())
@@ -161,7 +188,18 @@ public partial class MainWindow : Window
             }
         }
 
-        Dispatcher.InvokeAsync(ScrollMessagesToEnd);
+        if (e.OldItems is not null)
+        {
+            foreach (var item in e.OldItems.OfType<ChatMessageViewModel>())
+            {
+                item.PropertyChanged -= Message_PropertyChanged;
+            }
+        }
+
+        if (shouldScrollToEnd)
+        {
+            Dispatcher.InvokeAsync(ScrollMessagesToEnd);
+        }
     }
 
     private void Message_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -177,6 +215,68 @@ public partial class MainWindow : Window
     private void ScrollMessagesToEnd()
     {
         MessagesScrollViewer.ScrollToEnd();
+    }
+
+    private void MessagesScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (_isAutoLoadingEarlierMessages ||
+            e.VerticalOffset > 24 ||
+            !_viewModel.LoadEarlierMessagesCommand.CanExecute(null))
+        {
+            return;
+        }
+
+        _isAutoLoadingEarlierMessages = true;
+        _messageExtentBeforeLoadingEarlier = MessagesScrollViewer.ExtentHeight;
+        _messageOffsetBeforeLoadingEarlier = MessagesScrollViewer.VerticalOffset;
+        _viewModel.LoadEarlierMessagesCommand.Execute(null);
+        Dispatcher.InvokeAsync(RestoreMessageScrollAnchor, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void LoadEarlierMessages()
+    {
+        _messageExtentBeforeLoadingEarlier = MessagesScrollViewer.ExtentHeight;
+        _messageOffsetBeforeLoadingEarlier = MessagesScrollViewer.VerticalOffset;
+        _viewModel.LoadEarlierMessagesCommand.Execute(null);
+        Dispatcher.InvokeAsync(RestoreMessageScrollAnchor, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void RestoreMessageScrollAnchor()
+    {
+        if (_messageExtentBeforeLoadingEarlier is not { } oldExtent ||
+            _messageOffsetBeforeLoadingEarlier is not { } oldOffset)
+        {
+            return;
+        }
+
+        var extentDelta = MessagesScrollViewer.ExtentHeight - oldExtent;
+        if (extentDelta > 0)
+        {
+            MessagesScrollViewer.ScrollToVerticalOffset(oldOffset + extentDelta);
+        }
+
+        _messageExtentBeforeLoadingEarlier = null;
+        _messageOffsetBeforeLoadingEarlier = null;
+        _isAutoLoadingEarlierMessages = false;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+        if (_hookedMessages is not null)
+        {
+            _hookedMessages.CollectionChanged -= Messages_CollectionChanged;
+        }
+
+        if (_hookedMessageItems is not null)
+        {
+            foreach (var message in _hookedMessageItems)
+            {
+                message.PropertyChanged -= Message_PropertyChanged;
+            }
+        }
+
+        base.OnClosed(e);
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e)

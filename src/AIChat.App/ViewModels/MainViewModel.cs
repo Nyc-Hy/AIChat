@@ -44,6 +44,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly IAppRepository _repository;
     private readonly IChatCompletionService _chatService;
     private readonly IContextEstimator _contextEstimator;
+    private readonly SimpleContextEstimator _fastContextEstimator = new();
     private readonly ConversationContextBuilder _contextBuilder;
     private readonly WorkspaceChangeService _workspaceChangeService;
     private readonly AuditLogRepository? _auditLogRepository;
@@ -62,11 +63,17 @@ public sealed class MainViewModel : ObservableObject
     private string _agentStatusBudget = "";
     private string _agentStatusPlan = "";
     private ContextUsage _contextUsage = new() { ModelLimit = 128_000, ConversationLimit = 64_000 };
+    private CancellationTokenSource? _contextUsageCts;
+    private int _contextUsageRevision;
+    private readonly Dictionary<string, ContextUsage> _contextUsageCache = new(StringComparer.Ordinal);
+    private CancellationTokenSource? _settingsPersistCts;
     private CancellationTokenSource? _sendCts;
     private bool _isSettingsOpen;
     private bool _isCallDetailsOpen;
     private bool _isAgentRunHistoryOpen;
     private bool _isAgentRunDetailsOpen;
+    private bool _isRemoveProjectConfirmationOpen;
+    private ProjectViewModel? _projectPendingRemoval;
     private bool _isNewProviderApiKeyVisible;
     private bool _isTestingProviderConnection;
     private PendingToolApprovalViewModel? _pendingToolApproval;
@@ -113,6 +120,7 @@ public sealed class MainViewModel : ObservableObject
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
         SelectProjectCommand = new RelayCommand(parameter => SelectProject((ProjectViewModel)parameter!));
         SelectConversationCommand = new RelayCommand(parameter => SelectConversation((ConversationViewModel)parameter!));
+        LoadEarlierMessagesCommand = new RelayCommand(_ => LoadEarlierMessages(), _ => SelectedConversation?.HasHiddenMessages == true);
         OpenSettingsCommand = new RelayCommand(_ => IsSettingsOpen = true);
         CloseSettingsCommand = new RelayCommand(_ => IsSettingsOpen = false);
         SaveSettingsCommand = new RelayCommand(async _ =>
@@ -127,11 +135,11 @@ public sealed class MainViewModel : ObservableObject
         DeleteConversationCommand = new RelayCommand(async parameter => await DeleteConversationAsync((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
         OpenCallDetailsCommand = new RelayCommand(parameter => OpenCallDetails((ConversationViewModel)parameter!), parameter => parameter is ConversationViewModel);
         CloseCallDetailsCommand = new RelayCommand(_ => IsCallDetailsOpen = false);
-        OpenAgentRunHistoryCommand = new RelayCommand(_ => OpenAgentRunHistory(), _ => SelectedProject is not null);
+        OpenAgentRunHistoryCommand = new RelayCommand(_ => OpenAgentRunHistory(), _ => SelectedConversation is not null);
         CloseAgentRunHistoryCommand = new RelayCommand(_ => IsAgentRunHistoryOpen = false);
         SelectAgentRunHistoryItemCommand = new RelayCommand(parameter => SelectAgentRunHistoryItem((AgentRunHistoryItemViewModel)parameter!), parameter => parameter is AgentRunHistoryItemViewModel);
         RetryAgentRunCommand = new RelayCommand(parameter => RetryAgentRun((AgentRunHistoryItemViewModel)parameter!), parameter => parameter is AgentRunHistoryItemViewModel { CanRetry: true } && !IsSending);
-        OpenAgentRunDetailsCommand = new RelayCommand(parameter => OpenAgentRunDetails((ChatMessageViewModel)parameter!), parameter => parameter is ChatMessageViewModel { AgentRun: not null });
+        OpenAgentRunDetailsCommand = new RelayCommand(parameter => OpenAgentRunDetails((ChatMessageViewModel)parameter!), parameter => parameter is ChatMessageViewModel { HasAgentRun: true });
         CloseAgentRunDetailsCommand = new RelayCommand(_ => IsAgentRunDetailsOpen = false);
         AddConfiguredProviderCommand = new RelayCommand(async _ => await AddConfiguredProviderAsync(), _ => !string.IsNullOrWhiteSpace(NewProviderApiKey));
         RemoveConfiguredProviderCommand = new RelayCommand(async _ => await RemoveConfiguredProviderAsync(), _ => SelectedConfiguredProvider is not null);
@@ -166,7 +174,9 @@ public sealed class MainViewModel : ObservableObject
         AddProjectToolOverrideCommand = new RelayCommand(_ => AddProjectToolOverride());
         RemoveProjectToolOverrideCommand = new RelayCommand(param => RemoveProjectToolOverride(param as string));
         AddProjectCommand = new RelayCommand(async _ => await AddProjectAsync());
-        RemoveProjectCommand = new RelayCommand(param => RemoveProject(param as ProjectViewModel), param => param is ProjectViewModel && Projects.Count > 1);
+        RemoveProjectCommand = new RelayCommand(param => OpenRemoveProjectConfirmation(param as ProjectViewModel), param => param is ProjectViewModel && Projects.Count > 1);
+        ConfirmRemoveProjectCommand = new RelayCommand(async _ => await ConfirmRemoveProjectAsync(), _ => ProjectPendingRemoval is not null && Projects.Count > 1);
+        CancelRemoveProjectCommand = new RelayCommand(_ => CloseRemoveProjectConfirmation());
     }
 
     public ObservableCollection<ProjectViewModel> Projects { get; } = [];
@@ -192,6 +202,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand SendCommand { get; }
     public RelayCommand SelectProjectCommand { get; }
     public RelayCommand SelectConversationCommand { get; }
+    public RelayCommand LoadEarlierMessagesCommand { get; }
     public RelayCommand OpenSettingsCommand { get; }
     public RelayCommand CloseSettingsCommand { get; }
     public RelayCommand SaveSettingsCommand { get; }
@@ -242,6 +253,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RemoveProjectToolOverrideCommand { get; }
     public RelayCommand AddProjectCommand { get; }
     public RelayCommand RemoveProjectCommand { get; }
+    public RelayCommand ConfirmRemoveProjectCommand { get; }
+    public RelayCommand CancelRemoveProjectCommand { get; }
 
     public PendingToolApprovalViewModel? PendingToolApproval
     {
@@ -294,9 +307,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _selectedProject, value))
             {
                 OnPropertyChanged(nameof(CurrentProjectName));
-                OnPropertyChanged(nameof(AgentRunHistoryTitle));
                 NewChatCommand.RaiseCanExecuteChanged();
-                OpenAgentRunHistoryCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
                 LoadProjectToolPermissionOverrides();
             }
@@ -311,16 +322,23 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _selectedConversation, value))
             {
                 OnPropertyChanged(nameof(CurrentConversationTitle));
+                OnPropertyChanged(nameof(AgentRunHistoryTitle));
                 OnPropertyChanged(nameof(Messages));
                 OnPropertyChanged(nameof(HasMessages));
+                OnPropertyChanged(nameof(HasHiddenMessages));
+                OnPropertyChanged(nameof(LoadEarlierMessagesText));
+                LoadEarlierMessagesCommand.RaiseCanExecuteChanged();
+                OpenAgentRunHistoryCommand.RaiseCanExecuteChanged();
                 UpdateContextUsage();
-                RebuildAgentRunHistory();
+                RebuildAgentRunHistoryIfOpen();
             }
         }
     }
 
     public ObservableCollection<ChatMessageViewModel>? Messages => SelectedConversation?.Messages;
     public bool HasMessages => Messages?.Count > 0;
+    public bool HasHiddenMessages => SelectedConversation?.HasHiddenMessages == true;
+    public string LoadEarlierMessagesText => SelectedConversation?.LoadEarlierMessagesText ?? "";
     public string CurrentProjectName => SelectedProject?.Name ?? "未选择项目";
     public string WindowTitle
     {
@@ -650,6 +668,32 @@ public sealed class MainViewModel : ObservableObject
         set => SetProperty(ref _isAgentRunDetailsOpen, value);
     }
 
+    public bool IsRemoveProjectConfirmationOpen
+    {
+        get => _isRemoveProjectConfirmationOpen;
+        private set => SetProperty(ref _isRemoveProjectConfirmationOpen, value);
+    }
+
+    public ProjectViewModel? ProjectPendingRemoval
+    {
+        get => _projectPendingRemoval;
+        private set
+        {
+            if (SetProperty(ref _projectPendingRemoval, value))
+            {
+                OnPropertyChanged(nameof(ProjectRemovalName));
+                OnPropertyChanged(nameof(ProjectRemovalPathText));
+                ConfirmRemoveProjectCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string ProjectRemovalName => ProjectPendingRemoval?.Name ?? "";
+
+    public string ProjectRemovalPathText => string.IsNullOrWhiteSpace(ProjectPendingRemoval?.Path)
+        ? "未设置项目路径"
+        : ProjectPendingRemoval.Path;
+
     public AgentRunHistoryItemViewModel? SelectedAgentRunHistoryItem
     {
         get => _selectedAgentRunHistoryItem;
@@ -664,13 +708,13 @@ public sealed class MainViewModel : ObservableObject
         {
             if (SetProperty(ref _agentRunHistoryFilterId, string.IsNullOrWhiteSpace(value) ? "all" : value))
             {
-                RebuildAgentRunHistory();
+                RebuildAgentRunHistoryIfOpen();
             }
         }
     }
-    public string AgentRunHistoryTitle => SelectedProject is null
+    public string AgentRunHistoryTitle => SelectedConversation is null
         ? "运行历史"
-        : $"{SelectedProject.Name} · 运行历史";
+        : $"{SelectedConversation.Title} · 运行历史";
     public string AgentRunHistorySummary => AgentRunHistory.Count == 0
         ? _agentRunHistoryTotalCount == 0
             ? "暂无 Agent 运行记录"
@@ -702,8 +746,11 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task LoadAuditEventsAsync(AgentRunViewModel? run)
     {
-        AuditEvents.Clear();
-        OnPropertyChanged(nameof(HasAuditEvents));
+        await InvokeOnUiAsync(() =>
+        {
+            AuditEvents.Clear();
+            OnPropertyChanged(nameof(HasAuditEvents));
+        });
 
         var projectId = SelectedProject?.Project.Id ?? "";
         var runId = run?.Id ?? "";
@@ -722,24 +769,32 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            foreach (var e in items)
+            await InvokeOnUiAsync(() =>
             {
-                try
+                foreach (var e in items)
                 {
                     AuditEvents.Add(new AuditEventViewModel(e));
                 }
-                catch
-                {
-                    // Skip individual malformed audit entries
-                }
-            }
 
-            OnPropertyChanged(nameof(HasAuditEvents));
+                OnPropertyChanged(nameof(HasAuditEvents));
+            });
         }
         catch
         {
             // Audit display is best-effort; don't break the UI.
         }
+    }
+
+    private static Task InvokeOnUiAsync(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        return dispatcher.InvokeAsync(action).Task;
     }
 
     public ObservableCollection<LlmCallDetailViewModel>? CurrentCallDetails => _callDetailsConversation?.CallDetails;
@@ -1086,12 +1141,17 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        foreach (var item in Projects)
+        if (ReferenceEquals(SelectedProject, project))
         {
-            // Selection state is kept on each item because the sidebar binds to it.
-            item.IsSelected = item == project;
+            return;
         }
 
+        if (SelectedProject is not null)
+        {
+            SelectedProject.IsSelected = false;
+        }
+
+        project.IsSelected = true;
         SelectedProject = project;
         Settings.LastActiveProjectId = project.Project.Id;
         var conversation = project.Conversations.FirstOrDefault();
@@ -1182,33 +1242,43 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void RemoveProject(ProjectViewModel? project)
+    private void OpenRemoveProjectConfirmation(ProjectViewModel? project)
     {
         if (project is null || Projects.Count <= 1)
         {
             return;
         }
 
-        var result = System.Windows.MessageBox.Show(
-            $"确定要移除项目 \"{project.Name}\" 吗？\n\n项目文件不会被删除，只是从列表中移除。",
-            "移除项目",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+        ProjectPendingRemoval = project;
+        IsRemoveProjectConfirmationOpen = true;
+    }
 
-        if (result != MessageBoxResult.Yes)
+    private void CloseRemoveProjectConfirmation()
+    {
+        IsRemoveProjectConfirmationOpen = false;
+        ProjectPendingRemoval = null;
+    }
+
+    private async Task ConfirmRemoveProjectAsync()
+    {
+        var project = ProjectPendingRemoval;
+        if (project is null || Projects.Count <= 1)
         {
             return;
         }
 
         var wasSelected = project.IsSelected;
         Projects.Remove(project);
+        CloseRemoveProjectConfirmation();
 
         if (wasSelected)
         {
             SelectProject(Projects.FirstOrDefault());
         }
 
-        _ = _repository.SaveProjectsAsync(Projects.Select(project => project.Project).ToList());
+        await _repository.SaveProjectsAsync(Projects.Select(project => project.Project).ToList());
+        StatusText = "项目已移除";
+        RemoveProjectCommand.RaiseCanExecuteChanged();
     }
 
     private void SelectConversation(ConversationViewModel conversation)
@@ -1218,30 +1288,63 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        foreach (var project in Projects)
+        if (ReferenceEquals(SelectedConversation, conversation))
         {
-            foreach (var item in project.Conversations)
-            {
-                item.IsSelected = item == conversation;
-            }
+            return;
         }
 
+        if (SelectedConversation is not null)
+        {
+            SelectedConversation.IsSelected = false;
+        }
+
+        conversation.IsSelected = true;
         SelectedConversation = conversation;
         Settings.LastActiveConversationId = conversation.Conversation.Id;
-        _ = PersistSettingsQuietlyAsync();
+        QueueSettingsPersist();
+    }
+
+    private void QueueSettingsPersist()
+    {
+        _settingsPersistCts?.Cancel();
+        _settingsPersistCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _settingsPersistCts = cts;
+        _ = PersistSettingsAfterDelayAsync(cts.Token);
+    }
+
+    private async Task PersistSettingsAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(400, cancellationToken);
+            await PersistSettingsQuietlyAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void LoadEarlierMessages()
+    {
+        SelectedConversation?.LoadEarlierMessages();
+        OnPropertyChanged(nameof(HasHiddenMessages));
+        OnPropertyChanged(nameof(LoadEarlierMessagesText));
+        OnPropertyChanged(nameof(HasMessages));
+        LoadEarlierMessagesCommand.RaiseCanExecuteChanged();
     }
 
     private void RebuildAgentRunHistory()
     {
         AgentRunHistory.Clear();
-        if (SelectedProject is null)
+        if (SelectedConversation is null)
         {
             _agentRunHistoryTotalCount = 0;
             RaiseAgentRunHistoryProperties();
             return;
         }
 
-        var allItems = AgentRunHistoryFilter.GatherFromProject(SelectedProject);
+        var allItems = AgentRunHistoryFilter.GatherFromConversation(SelectedConversation);
 
         _agentRunHistoryTotalCount = allItems.Count;
         var items = FilterAgentRunHistory(allItems).ToList();
@@ -1252,6 +1355,14 @@ public sealed class MainViewModel : ObservableObject
         }
 
         RaiseAgentRunHistoryProperties();
+    }
+
+    private void RebuildAgentRunHistoryIfOpen()
+    {
+        if (IsAgentRunHistoryOpen)
+        {
+            RebuildAgentRunHistory();
+        }
     }
 
     private void RaiseAgentRunHistoryProperties()
@@ -2362,7 +2473,7 @@ public sealed class MainViewModel : ObservableObject
                                 if (agentEvent.Run is not null)
                                 {
                                     assistantViewModel.AttachAgentRun(agentEvent.Run);
-                                    RebuildAgentRunHistory();
+                                    RebuildAgentRunHistoryIfOpen();
                                 }
                                 AgentStatusPhase = "正在规划";
                                 OnPropertyChanged(nameof(HasAgentStatus));
@@ -2503,7 +2614,7 @@ public sealed class MainViewModel : ObservableObject
                                     assistantViewModel.SyncAgentFileChanges();
                                     assistantViewModel.SyncAgentVerifications();
                                     assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
-                                    RebuildAgentRunHistory();
+                                    RebuildAgentRunHistoryIfOpen();
                                 }
 
                                 AgentStatusPhase = agentEvent.Run?.Status == AgentRunStatus.Completed ? "已完成" : "已结束";
@@ -2575,7 +2686,7 @@ public sealed class MainViewModel : ObservableObject
 
             StatusText = "已停止生成";
             assistantViewModel.AgentRun?.Complete(AgentRunStatus.Cancelled, cancellationReason);
-            RebuildAgentRunHistory();
+            RebuildAgentRunHistoryIfOpen();
             await CompleteCallDetailAsync(callDetail, "已停止", new
             {
                 status = "cancelled",
@@ -2594,7 +2705,7 @@ public sealed class MainViewModel : ObservableObject
             assistantViewModel.IsError = true;
             StatusText = "请求失败";
             assistantViewModel.AgentRun?.Complete(AgentRunStatus.Failed, ex.Message);
-            RebuildAgentRunHistory();
+            RebuildAgentRunHistoryIfOpen();
             await CompleteCallDetailAsync(callDetail, "失败", new
             {
                 status = "failed",
@@ -2775,12 +2886,90 @@ public sealed class MainViewModel : ObservableObject
 
     private void UpdateContextUsage()
     {
-        // Context usage is recomputed whenever selected conversation or model
-        // settings change.
         ApplySelectedConfiguredProvider();
-        ContextUsage = _contextEstimator.Estimate(
-            SelectedConversation?.Conversation.Messages ?? [],
-            Settings);
+        var conversation = SelectedConversation?.Conversation;
+        var settings = Settings;
+        var revision = Interlocked.Increment(ref _contextUsageRevision);
+
+        _contextUsageCts?.Cancel();
+        _contextUsageCts?.Dispose();
+
+        if (conversation is null)
+        {
+            _contextUsageCts = null;
+            ContextUsage = CreateEmptyContextUsage(settings);
+            return;
+        }
+
+        if (_contextUsageCache.TryGetValue(conversation.Id, out var cachedUsage))
+        {
+            ContextUsage = cachedUsage;
+        }
+        else
+        {
+            ContextUsage = CreateEmptyContextUsage(settings);
+        }
+
+        var cts = new CancellationTokenSource();
+        _contextUsageCts = cts;
+        _ = UpdateContextUsageAsync(conversation, settings, revision, cts.Token);
+    }
+
+    private static ContextUsage CreateEmptyContextUsage(AppSettings settings)
+    {
+        return new ContextUsage
+        {
+            CurrentTokens = 0,
+            ConversationLimit = Math.Min(settings.ModelContextLimit, 64_000),
+            ModelLimit = settings.ModelContextLimit
+        };
+    }
+
+    private async Task UpdateContextUsageAsync(
+        Conversation conversation,
+        AppSettings settings,
+        int revision,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(150, cancellationToken);
+            var usage = await Task.Run(() =>
+            {
+                var messages = conversation.Messages.ToList();
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var estimatedUsage = _fastContextEstimator.Estimate(messages, settings);
+                if (!settings.UseTokenizerEstimation || messages.Count == 0)
+                {
+                    return estimatedUsage;
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                return _contextEstimator.Estimate(messages, settings);
+            }, cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested || revision != _contextUsageRevision)
+            {
+                return;
+            }
+
+            await InvokeOnUiAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested && revision == _contextUsageRevision)
+                {
+                    _contextUsageCache[conversation.Id] = usage;
+                    ContextUsage = usage;
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch
+        {
+            // The fast estimate is already visible; tokenizer refinement is best-effort.
+        }
     }
 
     private async Task AppendAssistantContentAsync(ChatMessageViewModel assistantViewModel, string content, CancellationToken cancellationToken)

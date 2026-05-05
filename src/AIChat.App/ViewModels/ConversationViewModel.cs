@@ -7,29 +7,35 @@ namespace AIChat.App.ViewModels;
 // list controls update automatically when ObservableCollection changes.
 public sealed class ConversationViewModel : ObservableObject
 {
+    private const int InitialRenderWindowSize = 5;
+    private const int RenderWindowBatchSize = 80;
+
     private bool _isSelected;
     private string _searchSnippet = "";
+    private ObservableCollection<ChatMessageViewModel>? _messages;
+    private ObservableCollection<LlmCallDetailViewModel>? _callDetails;
+    private int _renderedMessageStartIndex;
 
     public ConversationViewModel(Conversation conversation)
     {
         Conversation = conversation;
-        Messages = new ObservableCollection<ChatMessageViewModel>(
-            conversation.Messages.Select(message => new ChatMessageViewModel(
-                message,
-                conversation.AgentRuns.FirstOrDefault(run => run.Id == message.AgentRunId))));
-        CallDetails = new ObservableCollection<LlmCallDetailViewModel>(
-            conversation.CallDetails
-                .OrderByDescending(detail => detail.CreatedAt)
-                .Select(detail => new LlmCallDetailViewModel(detail)));
     }
 
     public Conversation Conversation { get; }
-    public ObservableCollection<ChatMessageViewModel> Messages { get; }
-    public ObservableCollection<LlmCallDetailViewModel> CallDetails { get; }
+    public ObservableCollection<ChatMessageViewModel> Messages => _messages ??= BuildMessages();
+    public ObservableCollection<LlmCallDetailViewModel> CallDetails => _callDetails ??= BuildCallDetails();
 
     public string Id => Conversation.Id;
     public string Title => Conversation.Title;
     public string UpdatedText => Conversation.UpdatedAt.ToLocalTime().ToString("M/d");
+    public int MessageCount => Conversation.Messages.Count;
+    public bool HasHiddenMessages => HiddenMessageCount > 0;
+    public int HiddenMessageCount => _messages is null
+        ? Math.Max(0, Conversation.Messages.Count - InitialRenderWindowSize)
+        : _renderedMessageStartIndex;
+    public string LoadEarlierMessagesText => HiddenMessageCount <= 0
+        ? "已显示全部消息"
+        : $"加载更早的 {Math.Min(RenderWindowBatchSize, HiddenMessageCount)} 条消息";
     public string SearchSnippet
     {
         get => _searchSnippet;
@@ -56,10 +62,38 @@ public sealed class ConversationViewModel : ObservableObject
             OnPropertyChanged(nameof(Title));
         }
 
+        var messagesLoaded = _messages is not null;
         Conversation.Messages.Add(message);
-        Messages.Add(new ChatMessageViewModel(message));
+        if (messagesLoaded)
+        {
+            Messages.Add(new ChatMessageViewModel(message));
+        }
+
         Conversation.UpdatedAt = DateTimeOffset.Now;
         OnPropertyChanged(nameof(UpdatedText));
+        OnPropertyChanged(nameof(MessageCount));
+        OnPropertyChanged(nameof(HiddenMessageCount));
+        OnPropertyChanged(nameof(LoadEarlierMessagesText));
+    }
+
+    public void LoadEarlierMessages()
+    {
+        if (!HasHiddenMessages)
+        {
+            return;
+        }
+
+        var newStartIndex = Math.Max(0, _renderedMessageStartIndex - RenderWindowBatchSize);
+        var runsById = Conversation.AgentRuns.ToDictionary(run => run.Id, StringComparer.Ordinal);
+        for (var index = _renderedMessageStartIndex - 1; index >= newStartIndex; index--)
+        {
+            Messages.Insert(0, CreateMessageViewModel(Conversation.Messages[index], runsById));
+        }
+
+        _renderedMessageStartIndex = newStartIndex;
+        OnPropertyChanged(nameof(HasHiddenMessages));
+        OnPropertyChanged(nameof(HiddenMessageCount));
+        OnPropertyChanged(nameof(LoadEarlierMessagesText));
     }
 
     public AgentRun AddAgentRun(ChatMessageViewModel assistantMessage, string userMessageId, string goal)
@@ -94,7 +128,7 @@ public sealed class ConversationViewModel : ObservableObject
             return true;
         }
 
-        var message = Messages.FirstOrDefault(item =>
+        var message = Conversation.Messages.FirstOrDefault(item =>
             item.Content.Contains(normalized, StringComparison.OrdinalIgnoreCase));
         if (message is null)
         {
@@ -126,6 +160,11 @@ public sealed class ConversationViewModel : ObservableObject
 
     public void RefreshCallDetail(LlmCallDetail detail)
     {
+        if (_callDetails is null)
+        {
+            return;
+        }
+
         var index = CallDetails
             .Select((item, itemIndex) => new { item, itemIndex })
             .FirstOrDefault(entry => entry.item.Detail.Id == detail.Id)
@@ -157,6 +196,32 @@ public sealed class ConversationViewModel : ObservableObject
     {
         var normalized = content.ReplaceLineEndings(" ").Trim();
         return normalized.Length <= 18 ? normalized : $"{normalized[..18]}...";
+    }
+
+    private ObservableCollection<ChatMessageViewModel> BuildMessages()
+    {
+        var runsById = Conversation.AgentRuns.ToDictionary(run => run.Id, StringComparer.Ordinal);
+        _renderedMessageStartIndex = Math.Max(0, Conversation.Messages.Count - InitialRenderWindowSize);
+        return new ObservableCollection<ChatMessageViewModel>(
+            Conversation.Messages
+                .Skip(_renderedMessageStartIndex)
+                .Select(message => CreateMessageViewModel(message, runsById)));
+    }
+
+    private static ChatMessageViewModel CreateMessageViewModel(
+        ChatMessage message,
+        IReadOnlyDictionary<string, AgentRun> runsById)
+    {
+        runsById.TryGetValue(message.AgentRunId, out var run);
+        return new ChatMessageViewModel(message, run, includeDetails: false);
+    }
+
+    private ObservableCollection<LlmCallDetailViewModel> BuildCallDetails()
+    {
+        return new ObservableCollection<LlmCallDetailViewModel>(
+            Conversation.CallDetails
+                .OrderByDescending(detail => detail.CreatedAt)
+                .Select(detail => new LlmCallDetailViewModel(detail)));
     }
 
     private static string CreateSnippet(string content, string searchText)

@@ -6,17 +6,14 @@ namespace AIChat.App.ViewModels;
 public sealed class AgentRunViewModel : ObservableObject
 {
     private readonly AgentRun _run;
+    private ObservableCollection<AgentStepViewModel>? _steps;
+    private ObservableCollection<AgentFileChangeViewModel>? _fileChanges;
+    private ObservableCollection<AgentVerificationViewModel>? _verifications;
+    private AgentPlanViewModel? _plan;
 
     public AgentRunViewModel(AgentRun run)
     {
         _run = run;
-        Steps = new ObservableCollection<AgentStepViewModel>(
-            run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
-        FileChanges = new ObservableCollection<AgentFileChangeViewModel>(
-            run.FileChanges.Select(change => new AgentFileChangeViewModel(change)));
-        Verifications = new ObservableCollection<AgentVerificationViewModel>(
-            run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
-        Plan = run.Plan is not null ? new AgentPlanViewModel(run.Plan) : null;
     }
 
     public AgentRun Run => _run;
@@ -76,8 +73,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public bool HasContinuation => !string.IsNullOrWhiteSpace(_run.ContinuedFromRunId);
     public string ContinuedFromRunText => HasContinuation ? $"从 {ContinuedFromRunId[..Math.Min(8, ContinuedFromRunId.Length)]} 继续" : "";
     public bool CanResume => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed &&
-                             Plan is not null &&
-                             Plan.Items.Any(item => item.Status is AgentPlanItemStatus.Pending or AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Blocked);
+                             _run.Plan?.Items.Any(item => item.Status is AgentPlanItemStatus.Pending or AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Blocked) == true;
     public string ShortGoal
     {
         get
@@ -119,22 +115,29 @@ public sealed class AgentRunViewModel : ObservableObject
             return elapsed.TotalSeconds < 1 ? "<1s" : $"{elapsed.TotalSeconds:0.0}s";
         }
     }
-    public int StepCount => Steps.Count;
-    public int FileChangeCount => FileChanges.Count;
-    public int VerificationCount => Verifications.Count;
+    public int StepCount => _run.Steps.Count;
+    public int FileChangeCount => _run.FileChanges.Count;
+    public int VerificationCount => _run.Verifications.Count;
     public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {DurationText}";
-    public ObservableCollection<AgentStepViewModel> Steps { get; }
-    public ObservableCollection<AgentFileChangeViewModel> FileChanges { get; }
-    public ObservableCollection<AgentVerificationViewModel> Verifications { get; }
-    public AgentPlanViewModel? Plan { get; private set; }
-    public bool HasPlan => Plan is not null;
-    public string PlanSummary => Plan is null
+    public ObservableCollection<AgentStepViewModel> Steps => _steps ??= new ObservableCollection<AgentStepViewModel>(
+        _run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
+    public ObservableCollection<AgentFileChangeViewModel> FileChanges => _fileChanges ??= new ObservableCollection<AgentFileChangeViewModel>(
+        _run.FileChanges.Select(change => new AgentFileChangeViewModel(change)));
+    public ObservableCollection<AgentVerificationViewModel> Verifications => _verifications ??= new ObservableCollection<AgentVerificationViewModel>(
+        _run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
+    public AgentPlanViewModel? Plan
+    {
+        get => _run.Plan is null ? null : _plan ??= new AgentPlanViewModel(_run.Plan);
+        private set => _plan = value;
+    }
+    public bool HasPlan => _run.Plan is not null;
+    public string PlanSummary => _run.Plan is null
         ? "无计划"
-        : $"{Plan.Summary} ({Plan.ProgressText})";
-    public bool HasSteps => Steps.Count > 0;
-    public bool HasFileChanges => FileChanges.Count > 0;
-    public bool HasVerifications => Verifications.Count > 0;
-    public IReadOnlyList<string> ChangedPaths => FileChanges
+        : $"{Plan!.Summary} ({Plan.ProgressText})";
+    public bool HasSteps => _run.Steps.Count > 0;
+    public bool HasFileChanges => _run.FileChanges.Count > 0;
+    public bool HasVerifications => _run.Verifications.Count > 0;
+    public IReadOnlyList<string> ChangedPaths => _run.FileChanges
         .Select(change => change.Path)
         .Where(path => !string.IsNullOrWhiteSpace(path))
         .Distinct(StringComparer.OrdinalIgnoreCase)

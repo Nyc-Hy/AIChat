@@ -407,81 +407,50 @@
                         </DockPanel>
                         <Border x:Name="AgentRunPanel"
                                 Margin="0,0,0,10"
+                                Padding="10"
+                                CornerRadius="8"
+                                Background="#F5F8FA"
+                                BorderBrush="#E1E8EF"
+                                BorderThickness="1"
                                 Visibility="Collapsed">
-                            <StackPanel>
-                                <DockPanel Margin="0,0,0,7">
-                                    <StackPanel>
-                                        <TextBlock Text="执行步骤"
-                                                   FontSize="12"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="#667386" />
-                                        <TextBlock Text="{Binding AgentRun.Summary}"
-                                                   Margin="0,2,0,0"
-                                                   FontSize="11"
-                                                   Foreground="#98A2B0"
-                                                   TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
-                                    <Button DockPanel.Dock="Right"
-                                            Command="{Binding DataContext.OpenAgentRunDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            CommandParameter="{Binding}"
-                                            Content="详情"
-                                            Width="54"
-                                            Height="28"
-                                            Style="{StaticResource SubtleButtonStyle}" />
-                                </DockPanel>
-                                <ItemsControl ItemsSource="{Binding AgentRun.Steps}"
-                                              ItemTemplate="{StaticResource AgentStepTemplate}" />
-                                <Border x:Name="FileChangePanel"
-                                        Margin="0,5,0,0"
-                                        Visibility="Collapsed">
-                                    <StackPanel>
-                                        <DockPanel Margin="0,0,0,7">
-                                            <TextBlock Text="文件变更"
-                                                       FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#667386"
-                                                       VerticalAlignment="Center" />
-                                            <StackPanel DockPanel.Dock="Right"
-                                                        Orientation="Horizontal">
-                                                <Button Command="{Binding DataContext.CommitAgentRunChangesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="提交本轮"
-                                                        Width="78"
-                                                        Height="28"
-                                                        Margin="0,0,6,0"
-                                                        Style="{StaticResource SubtleButtonStyle}" />
-                                                <Button Command="{Binding DataContext.RestoreAgentRunChangesCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="撤销"
-                                                        Width="54"
-                                                        Height="28"
-                                                        Margin="0,0,6,0"
-                                                        Style="{StaticResource SubtleButtonStyle}" />
-                                                <Button Command="{Binding DataContext.CopyAgentRunChangeSummaryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                        CommandParameter="{Binding}"
-                                                        Content="复制"
-                                                        Width="54"
-                                                        Height="28"
-                                                        Style="{StaticResource SubtleButtonStyle}" />
-                                            </StackPanel>
-                                        </DockPanel>
-                                        <ItemsControl ItemsSource="{Binding AgentRun.FileChanges}"
-                                                      ItemTemplate="{StaticResource AgentFileChangeTemplate}" />
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
+                            <DockPanel LastChildFill="True">
+                                <Button DockPanel.Dock="Right"
+                                        Command="{Binding DataContext.OpenAgentRunDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}"
+                                        Content="详情"
+                                        Width="54"
+                                        Height="28"
+                                        Margin="10,0,0,0"
+                                        Style="{StaticResource SubtleButtonStyle}" />
+                                <StackPanel>
+                                    <TextBlock Text="{Binding AgentRunStatusText}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="#42505F" />
+                                    <TextBlock Text="{Binding AgentRunSummaryText}"
+                                               Margin="0,3,0,0"
+                                               FontSize="11"
+                                               Foreground="#7A8797"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DockPanel>
                         </Border>
-                        <Border x:Name="ToolTracePanel"
+                        <Border x:Name="AgentFileChangesPanel"
                                 Margin="0,0,0,10"
+                                Padding="10"
+                                CornerRadius="8"
+                                Background="#F7FBFA"
+                                BorderBrush="#D7E8E4"
+                                BorderThickness="1"
                                 Visibility="Collapsed">
                             <StackPanel>
-                                <TextBlock Text="工具调用"
-                                           Margin="0,0,0,7"
+                                <TextBlock Text="文件变更"
+                                           Margin="0,0,0,8"
                                            FontSize="12"
                                            FontWeight="SemiBold"
-                                           Foreground="#667386" />
-                                <ItemsControl ItemsSource="{Binding ToolTraces}"
-                                              ItemTemplate="{StaticResource ToolTraceTemplate}" />
+                                           Foreground="#42505F" />
+                                <ItemsControl ItemsSource="{Binding AgentFileChanges}"
+                                              ItemTemplate="{StaticResource AgentFileChangeTemplate}" />
                             </StackPanel>
                         </Border>
                         <TextBlock x:Name="StreamingText"
@@ -527,14 +496,11 @@
                     <Setter TargetName="Bubble" Property="Background" Value="#EAF5F2" />
                     <Setter TargetName="Bubble" Property="BorderBrush" Value="#CBE5DE" />
                 </DataTrigger>
-                <DataTrigger Binding="{Binding HasToolTraces}" Value="True">
-                    <Setter TargetName="ToolTracePanel" Property="Visibility" Value="Visible" />
-                </DataTrigger>
                 <DataTrigger Binding="{Binding HasAgentRun}" Value="True">
                     <Setter TargetName="AgentRunPanel" Property="Visibility" Value="Visible" />
                 </DataTrigger>
-                <DataTrigger Binding="{Binding AgentRun.HasFileChanges}" Value="True">
-                    <Setter TargetName="FileChangePanel" Property="Visibility" Value="Visible" />
+                <DataTrigger Binding="{Binding HasAgentFileChanges}" Value="True">
+                    <Setter TargetName="AgentFileChangesPanel" Property="Visibility" Value="Visible" />
                 </DataTrigger>
                 <MultiDataTrigger>
                     <MultiDataTrigger.Conditions>
@@ -681,11 +647,12 @@
                             <ItemsControl ItemsSource="{Binding Projects}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <StackPanel Margin="0,0,0,14">
+                                        <StackPanel Margin="0,0,0,14"
+                                                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                                             <StackPanel.ContextMenu>
                                                 <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                                     <MenuItem Header="移除项目"
-                                                              Command="{Binding DataContext.RemoveProjectCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              Command="{Binding PlacementTarget.Tag.RemoveProjectCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                               CommandParameter="{Binding}" />
                                                 </ContextMenu>
                                             </StackPanel.ContextMenu>
@@ -837,13 +804,13 @@
 
                     <Border Grid.Row="1" Margin="0,0,0,8" Background="#FFFFFF" CornerRadius="10" BorderBrush="#CFD9E4" BorderThickness="1.5">
                         <Grid>
-                            <!-- Main transcript. Code-behind auto-scrolls this when messages stream. -->
                             <ScrollViewer x:Name="MessagesScrollViewer"
                                           Style="{StaticResource ModernScrollViewerStyle}"
                                           Padding="30,20"
                                           VerticalScrollBarVisibility="Auto"
                                           Background="Transparent"
-                                          PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                          PreviewMouseWheel="ScrollViewer_PreviewMouseWheel"
+                                          ScrollChanged="MessagesScrollViewer_ScrollChanged">
                                 <ItemsControl ItemsSource="{Binding Messages}" ItemTemplate="{StaticResource MessageTemplate}" />
                             </ScrollViewer>
                             <StackPanel Width="380"
@@ -1137,6 +1104,87 @@
                     <Style TargetType="Grid">
                         <Setter Property="Visibility" Value="Collapsed" />
                         <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsRemoveProjectConfirmationOpen}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+
+                <Border Width="480"
+                        MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Margin="24"
+                        Padding="22"
+                        Background="#FFFFFF"
+                        CornerRadius="10"
+                        BorderBrush="#DCE3EC"
+                        BorderThickness="1"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Text="移除项目"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       Foreground="#1E252E" />
+                            <TextBlock Text="项目文件不会被删除，只会从左侧列表中移除。"
+                                       Margin="0,6,0,0"
+                                       Foreground="#667386"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Border Grid.Row="1"
+                                Margin="0,18,0,0"
+                                Padding="12"
+                                CornerRadius="8"
+                                Background="#F8FAFC"
+                                BorderBrush="#E2E8F0"
+                                BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="{Binding ProjectRemovalName}"
+                                           FontWeight="SemiBold"
+                                           Foreground="#2A3340"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding ProjectRemovalPathText}"
+                                           Margin="0,4,0,0"
+                                           Foreground="#748092"
+                                           FontSize="12"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Grid.Row="2"
+                                    Margin="0,20,0,0"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right">
+                            <Button Command="{Binding CancelRemoveProjectCommand}"
+                                    Content="取消"
+                                    Width="82"
+                                    Height="36"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource SubtleButtonStyle}" />
+                            <Button Command="{Binding ConfirmRemoveProjectCommand}"
+                                    Content="移除"
+                                    Width="82"
+                                    Height="36"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Grid Grid.RowSpan="2" Background="#B8EEF1F4">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
                             <DataTrigger Binding="{Binding IsAgentRunHistoryOpen}" Value="True">
                                 <Setter Property="Visibility" Value="Visible" />
                             </DataTrigger>
@@ -1378,8 +1426,8 @@
 
                             <TabControl Grid.Column="0" Padding="0" x:Name="LeftTabControl" SelectionChanged="LeftTabControl_SelectionChanged">
                                 <TabItem Header="总览">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
-                                        <StackPanel>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                        <StackPanel Margin="4">
                                 <Border Padding="14"
                                         CornerRadius="8"
                                         Background="#F8FAFC"
@@ -1494,8 +1542,8 @@
                                     </ScrollViewer>
                                 </TabItem>
                                 <TabItem Header="计划">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
-                                <Border Margin="0,4,0,0"
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                <Border Margin="4,8,4,4"
                                         Padding="14"
                                         CornerRadius="8"
                                         Background="#FDFBFE"
@@ -1614,8 +1662,8 @@
                                 </TabItem>
                                 -->
                                 <TabItem Header="验证">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
-                                        <StackPanel>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                        <StackPanel Margin="4">
                                 <Border Margin="0,4,0,0"
                                         Padding="14"
                                         CornerRadius="8"
@@ -1686,8 +1734,8 @@
                                     </ScrollViewer>
                                 </TabItem>
                                 <TabItem Header="审计">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="4" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
-                                        <StackPanel>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                        <StackPanel Margin="4">
                                             <TextBlock Text="审计事件"
                                                        FontWeight="SemiBold"
                                                        Foreground="#303A47"
@@ -1728,12 +1776,11 @@
                                                                                Foreground="#98A2B0"
                                                                                FontSize="11" />
                                                                 </DockPanel>
-                                                                <TextBlock Margin="0,3,0,0"
-                                                                       FontSize="11"
-                                                                       Foreground="#596473"
-                                                                       TextWrapping="Wrap">
-                                                                    <Run Text="{Binding Summary}" />
-                                                                </TextBlock>
+                                                                <TextBlock Text="{Binding Summary}"
+                                                                           Margin="0,3,0,0"
+                                                                           FontSize="11"
+                                                                           Foreground="#596473"
+                                                                           TextWrapping="Wrap" />
                                                             </StackPanel>
                                                         </Border>
                                                     </DataTemplate>
@@ -2356,8 +2403,8 @@
 
                             <!-- Advanced settings tab -->
                             <TabItem Header="高级">
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="2,8" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
-                                    <StackPanel>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                    <StackPanel Margin="2,8">
                                         <!-- Retry count -->
                                         <Border Padding="16,14" CornerRadius="8" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" Margin="0,0,0,10">
                                             <Grid>

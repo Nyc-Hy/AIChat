@@ -9,15 +9,20 @@ public sealed class ChatMessageViewModel : ObservableObject
 {
     private string _content;
     private bool _isStreaming;
+    private AgentRun? _agentRunSource;
     private AgentRunViewModel? _agentRun;
+    private ObservableCollection<AgentFileChangeViewModel>? _agentFileChanges;
 
-    public ChatMessageViewModel(ChatMessage message, AgentRun? agentRun = null)
+    public ChatMessageViewModel(ChatMessage message, AgentRun? agentRun = null, bool includeDetails = true)
     {
         Message = message;
         _content = message.Content;
+        _agentRunSource = agentRun;
         ToolTraces = new ObservableCollection<ToolTraceViewModel>(
-            message.ToolTraces.Select(trace => new ToolTraceViewModel(trace)));
-        if (agentRun is not null)
+            includeDetails
+                ? message.ToolTraces.Select(trace => new ToolTraceViewModel(trace))
+                : []);
+        if (includeDetails && agentRun is not null)
         {
             _agentRun = new AgentRunViewModel(agentRun);
         }
@@ -27,12 +32,25 @@ public sealed class ChatMessageViewModel : ObservableObject
     public ObservableCollection<ToolTraceViewModel> ToolTraces { get; }
     public AgentRunViewModel? AgentRun
     {
-        get => _agentRun;
+        get
+        {
+            if (_agentRun is null && _agentRunSource is not null)
+            {
+                _agentRun = new AgentRunViewModel(_agentRunSource);
+            }
+
+            return _agentRun;
+        }
         private set
         {
             if (SetProperty(ref _agentRun, value))
             {
+                _agentRunSource = value?.Run;
                 OnPropertyChanged(nameof(HasAgentRun));
+                OnPropertyChanged(nameof(AgentRunStatusText));
+                OnPropertyChanged(nameof(AgentRunSummaryText));
+                OnPropertyChanged(nameof(HasAgentFileChanges));
+                OnPropertyChanged(nameof(AgentFileChanges));
             }
         }
     }
@@ -41,8 +59,41 @@ public sealed class ChatMessageViewModel : ObservableObject
     public string TimeText => Message.CreatedAt.ToLocalTime().ToString("HH:mm");
     public bool IsUser => Role == ChatRole.User;
     public bool IsAssistant => Role == ChatRole.Assistant;
-    public bool HasToolTraces => ToolTraces.Count > 0;
-    public bool HasAgentRun => AgentRun?.HasSteps == true;
+    public int ToolTraceCount => Message.ToolTraces.Count;
+    public bool HasToolTraces => ToolTraceCount > 0;
+    public bool HasAgentRun => _agentRunSource is not null || _agentRun is not null;
+    public bool HasAgentFileChanges => (_agentRunSource ?? _agentRun?.Run)?.FileChanges.Count > 0;
+    public ObservableCollection<AgentFileChangeViewModel> AgentFileChanges
+    {
+        get
+        {
+            var run = _agentRunSource ?? _agentRun?.Run;
+            return _agentFileChanges ??= new ObservableCollection<AgentFileChangeViewModel>(
+                run?.FileChanges.Select(change => new AgentFileChangeViewModel(change)) ?? []);
+        }
+    }
+    public string AgentRunStatusText => (_agentRunSource ?? _agentRun?.Run)?.Status switch
+    {
+        AgentRunStatus.Running => "Agent 正在执行",
+        AgentRunStatus.Cancelled => "Agent 已停止",
+        AgentRunStatus.Failed => "Agent 执行失败",
+        AgentRunStatus.Completed => "Agent 已完成",
+        _ => "Agent 运行"
+    };
+    public string AgentRunSummaryText
+    {
+        get
+        {
+            var run = _agentRunSource ?? _agentRun?.Run;
+            if (run is null)
+            {
+                return "";
+            }
+
+            return $"{run.Steps.Count} 个步骤 · {run.FileChanges.Count} 个文件变更 · {run.Verifications.Count} 个验证";
+        }
+    }
+    public string ToolTraceSummaryText => ToolTraceCount <= 0 ? "" : $"{ToolTraceCount} 次工具调用";
     public bool IsError
     {
         get => Message.IsError;
@@ -91,6 +142,8 @@ public sealed class ChatMessageViewModel : ObservableObject
         var viewModel = new ToolTraceViewModel(trace);
         ToolTraces.Add(viewModel);
         OnPropertyChanged(nameof(HasToolTraces));
+        OnPropertyChanged(nameof(ToolTraceCount));
+        OnPropertyChanged(nameof(ToolTraceSummaryText));
         return viewModel;
     }
 
@@ -103,6 +156,8 @@ public sealed class ChatMessageViewModel : ObservableObject
     public void AttachAgentRun(AgentRun run)
     {
         Message.AgentRunId = run.Id;
+        _agentRunSource = run;
+        _agentFileChanges = null;
         AgentRun = new AgentRunViewModel(run);
     }
 
@@ -121,7 +176,11 @@ public sealed class ChatMessageViewModel : ObservableObject
 
     public void SyncAgentFileChanges()
     {
+        _agentFileChanges = null;
         AgentRun?.SyncFileChanges();
+        OnPropertyChanged(nameof(HasAgentFileChanges));
+        OnPropertyChanged(nameof(AgentFileChanges));
+        OnPropertyChanged(nameof(AgentRunSummaryText));
     }
 
     public void SyncAgentVerifications()

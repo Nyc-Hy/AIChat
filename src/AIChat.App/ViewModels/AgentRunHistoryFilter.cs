@@ -13,16 +13,16 @@ public static class AgentRunHistoryFilter
         new() { Id = "running", Name = "运行中" }
     ];
 
-    public static List<AgentRunHistoryItemViewModel> GatherFromProject(ProjectViewModel project)
+    public static List<AgentRunHistoryItemViewModel> GatherFromConversation(ConversationViewModel conversation)
     {
-        return project.Conversations
-            .SelectMany(conversation => conversation.Messages
-                .Where(message => message.AgentRun is not null)
-                .Select(message => new AgentRunHistoryItemViewModel
-                {
-                    Conversation = conversation,
-                    Run = message.AgentRun!
-                }))
+        var runsById = conversation.Conversation.AgentRuns.ToDictionary(run => run.Id, StringComparer.Ordinal);
+        return conversation.Conversation.Messages
+            .Where(message => !string.IsNullOrWhiteSpace(message.AgentRunId) && runsById.ContainsKey(message.AgentRunId))
+            .Select(message => new AgentRunHistoryItemViewModel
+            {
+                Conversation = conversation,
+                Run = new AgentRunViewModel(runsById[message.AgentRunId])
+            })
             .OrderByDescending(item => item.Run.Run.StartedAt)
             .ToList();
     }
