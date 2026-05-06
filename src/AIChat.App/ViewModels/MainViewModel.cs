@@ -45,7 +45,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly IChatCompletionService _chatService;
     private readonly IContextEstimator _contextEstimator;
     private readonly SimpleContextEstimator _fastContextEstimator = new();
-    private readonly ConversationContextBuilder _contextBuilder;
+    private readonly AgentRequestFactory _agentRequestFactory;
     private readonly WorkspaceChangeService _workspaceChangeService;
     private readonly AgentRunAuditService? _auditService;
     private AgentHarness? _agentHarness;
@@ -112,7 +112,7 @@ public sealed class MainViewModel : ObservableObject
         _repository = repository;
         _chatService = chatService;
         _contextEstimator = contextEstimator;
-        _contextBuilder = contextBuilder;
+        _agentRequestFactory = new AgentRequestFactory(contextBuilder);
         _workspaceChangeService = workspaceChangeService;
         _auditService = auditService;
         // Commands are the bridge from XAML buttons/menu items to ViewModel methods.
@@ -2270,28 +2270,14 @@ public sealed class MainViewModel : ObservableObject
             Model = effectiveSettings.Model,
             CreatedAt = DateTimeOffset.Now,
             Status = "进行中",
-            RequestJson = SerializeJson(new
-            {
-                provider = effectiveSettings.ProviderName,
-                protocol = effectiveSettings.ProtocolId,
-                baseUrl = effectiveSettings.BaseUrl,
-                model = effectiveSettings.Model,
-                temperature = effectiveSettings.Temperature,
-                modelParameters = effectiveSettings.ModelParameters,
-                enabledTools = ToolOptions
+            RequestJson = SerializeJson(AgentRequestFactory.CreateSnapshot(
+                SelectedConversation.Conversation,
+                assistantMessage.Id,
+                effectiveSettings,
+                Settings,
+                ToolOptions
                     .Where(tool => tool.IsEnabled)
-                    .Select(tool => tool.Id)
-                    .ToList(),
-                toolPermissionModes = Settings.ToolPermissionModes,
-                messages = SelectedConversation.Conversation.Messages
-                    .Where(message => message.Id != assistantMessage.Id && !string.IsNullOrWhiteSpace(message.Content))
-                    .Select(message => new
-                    {
-                        id = message.Id,
-                        role = message.Role.ToString().ToLowerInvariant(),
-                        content = message.Content
-                    })
-            })
+                    .Select(tool => tool.Id)))
         };
         SelectedConversation.AddCallDetail(callDetail);
 
@@ -2310,44 +2296,28 @@ public sealed class MainViewModel : ObservableObject
         var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
         var stepByToolCallId = new Dictionary<string, AgentStepViewModel>(StringComparer.Ordinal);
 
-        var projectPath = string.IsNullOrWhiteSpace(SelectedProject?.Path) ? Environment.CurrentDirectory : SelectedProject!.Path;
-        var fileIndex = new ProjectFileIndexBuilder().Build(projectPath);
-        var workspaceSummary = workspaceSnapshot is { Branch: { Length: > 0 } branch }
-            ? $"分支：{branch}，未提交变更：{workspaceSnapshot.ChangeCount} 个文件"
-            : "";
-        var pinnedItems = SelectedProject?.Project.PinnedContext ?? [];
-
-        var contextMessages = _contextBuilder.Build(new ConversationContextBuildRequest
+        var requestBuild = _agentRequestFactory.Build(new AgentRequestBuildRequest
         {
-            Messages = SelectedConversation.Conversation.Messages
-                .Where(message => message.Id != assistantMessage.Id && !string.IsNullOrWhiteSpace(message.Content))
-                .ToList(),
-            Settings = effectiveSettings,
-            PromptContext = new SystemPromptContext
-            {
-                ProviderId = effectiveSettings.ProviderId,
-                ProjectName = SelectedProject?.Name ?? "AIChat",
-                ProjectPath = projectPath,
-                EnabledToolIds = Settings.EnabledToolIds,
-                ToolPermissionModes = Settings.ToolPermissionModes,
-                FileIndex = fileIndex,
-                WorkspaceSummary = workspaceSummary,
-                PinnedContextItems = pinnedItems
-            }
+            Conversation = SelectedConversation.Conversation,
+            AssistantMessageId = assistantMessage.Id,
+            EffectiveSettings = effectiveSettings,
+            RuntimeSettings = Settings,
+            ProjectName = SelectedProject?.Name ?? "AIChat",
+            ProjectPath = SelectedProject?.Path ?? "",
+            WorkspaceBranch = workspaceSnapshot.Branch,
+            WorkspaceChangeCount = workspaceSnapshot.ChangeCount,
+            PinnedContextItems = SelectedProject?.Project.PinnedContext ?? [],
+            ProjectToolPermissionModes = SelectedProject?.Project.ProjectToolPermissionModes,
+            VerificationCommands = SelectedProject?.Project.VerificationCommands ?? [],
+            RequestToolApprovalAsync = RequestToolApprovalAsync
         });
+        var request = requestBuild.ChatRequest;
 
         try
         {
             // Give WPF one dispatcher turn so the placeholder message can render
             // before the network call begins.
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => { });
-
-            var request = new ChatRequest
-            {
-                Model = effectiveSettings.Model,
-                Temperature = effectiveSettings.Temperature,
-                Messages = contextMessages
-            };
 
             await Task.Run(async () =>
             {
@@ -2413,19 +2383,7 @@ public sealed class MainViewModel : ObservableObject
                                        WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
                                        WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,
                                        ContinuedFromRunId = continuedFromRunId,
-                                       Context = new AgentRunContext
-                                       {
-                                           ProjectPath = string.IsNullOrWhiteSpace(SelectedProject?.Path) ? Environment.CurrentDirectory : SelectedProject!.Path,
-                                           EnabledToolIds = Settings.EnabledToolIds,
-                                           ToolPermissionModes = ToolSettingsService.MergePermissionModes(
-                                               Settings.ToolPermissionModes,
-                                               SelectedProject?.Project.ProjectToolPermissionModes),
-                                           MaxToolRounds = Settings.AgentMaxToolRounds,
-                                           RequestToolApprovalAsync = RequestToolApprovalAsync,
-                                           AutoVerifyAgentRuns = Settings.AutoVerifyAgentRuns,
-                                           MaxAutoFixRounds = Settings.MaxAutoFixRounds,
-                                           VerificationCommands = SelectedProject?.Project.VerificationCommands ?? []
-                                       }
+                                       Context = requestBuild.AgentContext
                                    },
                                    _sendCts.Token))
                 {
