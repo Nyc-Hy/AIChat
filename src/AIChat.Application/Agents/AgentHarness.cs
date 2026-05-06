@@ -167,6 +167,11 @@ public sealed class AgentHarness
                             agentEvent.ToolPreview,
                             agentEvent.ToolResult);
                         RecordPlan(run, agentEvent.ToolCall, agentEvent.ToolResult);
+                        RecordArtifact(
+                            run,
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolResult);
                     }
 
                     yield return new AgentHarnessEvent
@@ -526,6 +531,42 @@ public sealed class AgentHarness
         });
     }
 
+    private static void RecordArtifact(
+        AgentRun run,
+        Dictionary<string, AgentStep> stepByToolCallId,
+        ChatToolCall? toolCall,
+        AgentToolResult toolResult)
+    {
+        if (toolCall is null ||
+            !toolResult.WasSummarized ||
+            string.IsNullOrWhiteSpace(toolResult.Content) ||
+            run.Artifacts.Any(artifact => string.Equals(artifact.ToolCallId, toolCall.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var stepId = stepByToolCallId.TryGetValue(toolCall.Id, out var step)
+            ? step.Id
+            : "";
+
+        run.Artifacts.Add(new AgentArtifact
+        {
+            RunId = run.Id,
+            StepId = stepId,
+            ToolCallId = toolCall.Id,
+            ToolName = toolResult.ToolName,
+            Kind = string.IsNullOrWhiteSpace(toolResult.ArtifactKind) ? "tool_result" : toolResult.ArtifactKind,
+            Summary = toolResult.Summary,
+            Content = toolResult.Content,
+            CreatedAt = DateTimeOffset.Now,
+            Metadata =
+            {
+                ["contentLength"] = toolResult.Content.Length.ToString(),
+                ["modelContentLength"] = toolResult.ContentForModel.Length.ToString()
+            }
+        });
+    }
+
     private static bool IsVerificationTool(string toolName)
     {
         return string.Equals(toolName, "run_build", StringComparison.OrdinalIgnoreCase) ||
@@ -576,10 +617,12 @@ public sealed class AgentHarness
                     ToolCall = new ChatToolCall { Id = toolCallId, Name = toolName, ArgumentsJson = argsJson }
                 };
 
-                var result = await tool.ExecuteAsync(argsJson, CreateToolContext(context), cancellationToken);
+                var result = ToolResultSummarizer.Summarize(
+                    await tool.ExecuteAsync(argsJson, CreateToolContext(context), cancellationToken));
                 var verifyToolCall = new ChatToolCall { Id = toolCallId, Name = toolName, ArgumentsJson = argsJson };
                 CompleteToolStep(stepByToolCallId, verifyToolCall, result.Content, result.IsError);
                 RecordVerification(run, stepByToolCallId, verifyToolCall, result);
+                RecordArtifact(run, stepByToolCallId, verifyToolCall, result);
                 run.ToolCallCount++;
 
                 var verification = run.Verifications.LastOrDefault(v => v.ToolCallId == toolCallId);
@@ -693,6 +736,11 @@ public sealed class AgentHarness
                                 run,
                                 fixEvent.ToolCall,
                                 fixEvent.ToolPreview,
+                                fixEvent.ToolResult);
+                            RecordArtifact(
+                                run,
+                                stepByToolCallId,
+                                fixEvent.ToolCall,
                                 fixEvent.ToolResult);
                         }
 

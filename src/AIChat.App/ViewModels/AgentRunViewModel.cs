@@ -9,6 +9,7 @@ public sealed class AgentRunViewModel : ObservableObject
     private ObservableCollection<AgentStepViewModel>? _steps;
     private ObservableCollection<AgentFileChangeViewModel>? _fileChanges;
     private ObservableCollection<AgentVerificationViewModel>? _verifications;
+    private ObservableCollection<AgentArtifactViewModel>? _artifacts;
     private AgentPlanViewModel? _plan;
 
     public AgentRunViewModel(AgentRun run)
@@ -118,13 +119,16 @@ public sealed class AgentRunViewModel : ObservableObject
     public int StepCount => _run.Steps.Count;
     public int FileChangeCount => _run.FileChanges.Count;
     public int VerificationCount => _run.Verifications.Count;
-    public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {DurationText}";
+    public int ArtifactCount => _run.Artifacts.Count;
+    public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {ArtifactCount} 个产物 · {DurationText}";
     public ObservableCollection<AgentStepViewModel> Steps => _steps ??= new ObservableCollection<AgentStepViewModel>(
         _run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
     public ObservableCollection<AgentFileChangeViewModel> FileChanges => _fileChanges ??= new ObservableCollection<AgentFileChangeViewModel>(
         _run.FileChanges.Select(change => new AgentFileChangeViewModel(change)));
     public ObservableCollection<AgentVerificationViewModel> Verifications => _verifications ??= new ObservableCollection<AgentVerificationViewModel>(
         _run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
+    public ObservableCollection<AgentArtifactViewModel> Artifacts => _artifacts ??= new ObservableCollection<AgentArtifactViewModel>(
+        _run.Artifacts.Select(artifact => new AgentArtifactViewModel(artifact)));
     public AgentPlanViewModel? Plan
     {
         get => _run.Plan is null ? null : _plan ??= new AgentPlanViewModel(_run.Plan);
@@ -137,6 +141,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public bool HasSteps => _run.Steps.Count > 0;
     public bool HasFileChanges => _run.FileChanges.Count > 0;
     public bool HasVerifications => _run.Verifications.Count > 0;
+    public bool HasArtifacts => _run.Artifacts.Count > 0;
     public IReadOnlyList<string> ChangedPaths => _run.FileChanges
         .Select(change => change.Path)
         .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -229,6 +234,25 @@ public sealed class AgentRunViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasVerifications));
         OnPropertyChanged(nameof(VerificationCount));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
+    }
+
+    public void SyncArtifacts()
+    {
+        foreach (var artifact in _run.Artifacts)
+        {
+            if (Artifacts.Any(item => item.Id == artifact.Id))
+            {
+                continue;
+            }
+
+            Artifacts.Add(new AgentArtifactViewModel(artifact));
+        }
+
+        OnPropertyChanged(nameof(HasArtifacts));
+        OnPropertyChanged(nameof(ArtifactCount));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));

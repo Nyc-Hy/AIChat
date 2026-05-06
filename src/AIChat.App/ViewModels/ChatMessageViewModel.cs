@@ -90,7 +90,7 @@ public sealed class ChatMessageViewModel : ObservableObject
                 return "";
             }
 
-            return $"{run.Steps.Count} 个步骤 · {run.FileChanges.Count} 个文件变更 · {run.Verifications.Count} 个验证";
+            return $"{run.Steps.Count} 个步骤 · {run.FileChanges.Count} 个文件变更 · {run.Verifications.Count} 个验证 · {run.Artifacts.Count} 个产物";
         }
     }
     public string ToolTraceSummaryText => ToolTraceCount <= 0 ? "" : $"{ToolTraceCount} 次工具调用";
@@ -186,6 +186,12 @@ public sealed class ChatMessageViewModel : ObservableObject
     public void SyncAgentVerifications()
     {
         AgentRun?.SyncVerifications();
+    }
+
+    public void SyncAgentArtifacts()
+    {
+        AgentRun?.SyncArtifacts();
+        OnPropertyChanged(nameof(AgentRunSummaryText));
     }
 
     public void SyncAgentPlan()

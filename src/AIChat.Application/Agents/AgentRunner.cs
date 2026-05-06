@@ -280,7 +280,7 @@ public sealed class AgentRunner
                     Role = ChatRole.Tool,
                     ToolCallId = toolCall.Id,
                     ToolName = toolCall.Name,
-                    Content = result.Content,
+                    Content = result.ContentForModel,
                     CreatedAt = DateTimeOffset.Now
                 });
             }

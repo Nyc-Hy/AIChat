@@ -2513,6 +2513,7 @@ public sealed class MainViewModel : ObservableObject
 
                                 assistantViewModel.SyncAgentFileChanges();
                                 assistantViewModel.SyncAgentVerifications();
+                                assistantViewModel.SyncAgentArtifacts();
                                 assistantViewModel.SyncAgentPlan();
                             });
                             rawResponseEvents.Add(SerializeJson(new
@@ -2535,6 +2536,7 @@ public sealed class MainViewModel : ObservableObject
                                 {
                                     assistantViewModel.SyncAgentFileChanges();
                                     assistantViewModel.SyncAgentVerifications();
+                                    assistantViewModel.SyncAgentArtifacts();
                                     assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
                                     RebuildAgentRunHistoryIfOpen();
                                 }

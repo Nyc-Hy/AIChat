@@ -1711,6 +1711,62 @@
                                         </ItemsControl>
                                     </StackPanel>
                                 </Border>
+
+                                <Border Margin="0,14,0,0"
+                                        Padding="14"
+                                        CornerRadius="8"
+                                        Background="#FBFCFD"
+                                        BorderBrush="#E2E8F0"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="工具产物"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <ItemsControl ItemsSource="{Binding Artifacts}"
+                                                      Margin="0,8,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,8"
+                                                            Padding="8"
+                                                            CornerRadius="6"
+                                                            Background="#FFFFFF"
+                                                            BorderBrush="#E6EAF0"
+                                                            BorderThickness="1">
+                                                        <Expander IsExpanded="False">
+                                                            <Expander.Header>
+                                                                <DockPanel>
+                                                                    <TextBlock Text="{Binding ToolName}"
+                                                                               FontWeight="SemiBold"
+                                                                               Foreground="#2A3340" />
+                                                                    <TextBlock DockPanel.Dock="Right"
+                                                                               Text="{Binding ContentLengthText}"
+                                                                               Margin="12,0,0,0"
+                                                                               Foreground="#748092"
+                                                                               FontSize="11" />
+                                                                </DockPanel>
+                                                            </Expander.Header>
+                                                            <StackPanel Margin="0,8,0,0">
+                                                                <TextBlock Text="{Binding Summary}"
+                                                                           FontSize="11"
+                                                                           Foreground="#596473"
+                                                                           TextWrapping="Wrap" />
+                                                                <ScrollViewer Margin="0,8,0,0"
+                                                                              MaxHeight="240"
+                                                                              VerticalScrollBarVisibility="Auto">
+                                                                    <TextBlock Text="{Binding Content}"
+                                                                               FontFamily="Consolas"
+                                                                               FontSize="11"
+                                                                               Foreground="#2A3340"
+                                                                               TextWrapping="Wrap" />
+                                                                </ScrollViewer>
+                                                            </StackPanel>
+                                                        </Expander>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
                                         </StackPanel>
                                     </ScrollViewer>
                                 </TabItem>

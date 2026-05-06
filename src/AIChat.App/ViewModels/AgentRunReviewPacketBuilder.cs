@@ -20,6 +20,7 @@ public static class AgentRunReviewPacketBuilder
             $"步骤：{run.StepCount}",
             $"文件变更：{run.FileChangeCount}",
             $"验证：{run.VerificationCount}",
+            $"产物：{run.ArtifactCount}",
             $"耗时：{run.DurationText}"
         };
 
@@ -59,6 +60,13 @@ public static class AgentRunReviewPacketBuilder
             lines.Add("");
             lines.Add("验证结果：");
             lines.AddRange(run.Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
+        }
+
+        if (run.Artifacts.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("产物：");
+            lines.AddRange(run.Artifacts.Select(item => $"- {item.ToolName}: {item.Kind}, {item.ContentLengthText}"));
         }
 
         return string.Join(Environment.NewLine, lines);
@@ -129,6 +137,13 @@ public static class AgentRunReviewPacketBuilder
             lines.Add("");
             lines.Add("## Verifications");
             lines.AddRange(run.Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
+        }
+
+        if (run.Artifacts.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("## Artifacts");
+            lines.AddRange(run.Artifacts.Select(item => $"- {item.ToolName}: {item.Kind}, {item.ContentLengthText}"));
         }
 
         return string.Join(Environment.NewLine, lines);

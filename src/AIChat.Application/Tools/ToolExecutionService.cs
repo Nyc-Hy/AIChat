@@ -113,7 +113,7 @@ public sealed class ToolExecutionService
             Type = ToolExecutionEventType.Result,
             ToolCall = toolCall,
             Preview = preview,
-            Result = result,
+            Result = ToolResultSummarizer.Summarize(result),
             IsMutation = isMutation
         };
     }

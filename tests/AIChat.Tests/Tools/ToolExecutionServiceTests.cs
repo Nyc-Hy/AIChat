@@ -26,6 +26,25 @@ public sealed class ToolExecutionServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_SummarizesLargeResultForModel()
+    {
+        var content = string.Join('\n', Enumerable.Range(1, 600).Select(i => $"line {i:000}"));
+        var tool = new FakeTool("read_file", AgentToolRisk.ReadOnly, content);
+        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+
+        var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "read_file", ArgumentsJson = "{}" },
+            ProjectPath = Environment.CurrentDirectory
+        }));
+
+        var result = Assert.Single(events).Result!;
+        Assert.True(result.WasSummarized);
+        Assert.Equal(content, result.Content);
+        Assert.NotEqual(content, result.ContentForModel);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_AsksApprovalForWriteTool()
     {
         var tool = new FakeTool("write_file", AgentToolRisk.Write);
@@ -156,11 +175,11 @@ public sealed class ToolExecutionServiceTests
     {
         private readonly AgentToolResult _result;
 
-        public FakeTool(string id, AgentToolRisk risk)
+        public FakeTool(string id, AgentToolRisk risk, string content = "ok")
         {
             Id = id;
             Risk = risk;
-            _result = new AgentToolResult { ToolName = id, Content = "ok" };
+            _result = new AgentToolResult { ToolName = id, Content = content };
             Definition = new ChatToolDefinition
             {
                 Name = id,

@@ -36,6 +36,7 @@ public sealed class AgentRun
     public List<AgentStep> Steps { get; set; } = [];
     public List<AgentFileChange> FileChanges { get; set; } = [];
     public List<AgentVerification> Verifications { get; set; } = [];
+    public List<AgentArtifact> Artifacts { get; set; } = [];
 
     public void Complete(AgentRunStatus status, DateTimeOffset? completedAt = null, string completionReason = "")
     {

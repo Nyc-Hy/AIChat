@@ -112,6 +112,19 @@ public sealed class AgentRunSerializationTests
                             Output = "Passed",
                             Summary = "All tests passed"
                         }
+                    ],
+                    Artifacts =
+                    [
+                        new AgentArtifact
+                        {
+                            RunId = "run-1",
+                            StepId = "step-2",
+                            ToolCallId = "tool-call-2",
+                            ToolName = "run_test",
+                            Kind = "tool_result",
+                            Summary = "large test output",
+                            Content = "full output"
+                        }
                     ]
                 }
             ]
@@ -126,6 +139,7 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns[0].Steps);
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
         Assert.Single(roundTripped.AgentRuns[0].Verifications);
+        Assert.Single(roundTripped.AgentRuns[0].Artifacts);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].Phase);
         Assert.Equal("all tests passed", roundTripped.AgentRuns[0].CompletionReason);
         Assert.Equal("D:/Code/AIChat", roundTripped.AgentRuns[0].ProjectPath);
@@ -150,6 +164,7 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);
         Assert.True(roundTripped.AgentRuns[0].Verifications[0].IsSuccess);
         Assert.Equal("All tests passed", roundTripped.AgentRuns[0].Verifications[0].Summary);
+        Assert.Equal("full output", roundTripped.AgentRuns[0].Artifacts[0].Content);
     }
 
     [Fact]
