@@ -354,9 +354,7 @@ public sealed class MainViewModel : ObservableObject
         ? "未配置模型"
         : $"{SelectedConfiguredProvider.Name} · {SelectedConfiguredProvider.SelectedModelId}";
     public IReadOnlyList<ConfiguredLlmProvider> ConfiguredProviders => Settings.ConfiguredProviders;
-    public ConfiguredLlmProvider? SelectedConfiguredProvider =>
-        Settings.ConfiguredProviders.FirstOrDefault(provider => provider.Id == Settings.ActiveConfiguredProviderId) ??
-        Settings.ConfiguredProviders.FirstOrDefault();
+    public ConfiguredLlmProvider? SelectedConfiguredProvider => ProviderSettingsService.GetSelectedProvider(Settings);
     public IReadOnlyList<ModelOptionItem> ActiveModelOptions
     {
         get
@@ -489,15 +487,7 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            var provider = ChatProviderCatalog.Resolve(value);
-            // Provider template changes reset protocol/base URL/model to known
-            // catalog values before persisting.
-            Settings.ProviderId = provider.Id;
-            Settings.ProtocolId = provider.ProtocolId;
-            Settings.ProviderName = provider.Name;
-            Settings.BaseUrl = provider.DefaultBaseUrl;
-            Settings.Model = provider.DefaultModel;
-            Settings.ModelContextLimit = provider.DefaultContextLimit;
+            ProviderSettingsService.SelectProviderTemplate(Settings, value);
             OnPropertyChanged();
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(ModelName));
@@ -520,9 +510,7 @@ public sealed class MainViewModel : ObservableObject
             }
 
             Settings.ActiveConfiguredProviderId = value;
-            // Copy the selected saved provider into the flat Settings fields used
-            // by the rest of the app.
-            ApplySelectedConfiguredProvider();
+            ProviderSettingsService.ApplySelectedProvider(Settings);
             OnPropertyChanged();
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(SelectedConfiguredProvider));
@@ -550,33 +538,10 @@ public sealed class MainViewModel : ObservableObject
                 return;
             }
 
-            var parts = value.Split('|', 2);
-            if (parts.Length != 2)
+            if (!ProviderSettingsService.SelectActiveModel(Settings, value))
             {
                 return;
             }
-
-            var templateId = parts[0];
-            var modelId = parts[1];
-
-            // If the model belongs to a different provider, switch to it.
-            var configured = Settings.ConfiguredProviders.FirstOrDefault(
-                p => string.Equals(p.TemplateId, templateId, StringComparison.OrdinalIgnoreCase) &&
-                     !string.IsNullOrWhiteSpace(p.ApiKey));
-            if (configured is null)
-            {
-                return;
-            }
-
-            if (!string.Equals(Settings.ActiveConfiguredProviderId, configured.Id, StringComparison.Ordinal))
-            {
-                Settings.ActiveConfiguredProviderId = configured.Id;
-            }
-
-            var model = ChatProviderCatalog.ResolveModel(templateId, modelId);
-            configured.SelectedModelId = model.Id;
-            configured.ModelParameters = NormalizeModelParameterValues(templateId, model.Id, configured.ModelParameters);
-            ApplySelectedConfiguredProvider();
             OnPropertyChanged();
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(ModelName));
@@ -3002,75 +2967,10 @@ public sealed class MainViewModel : ObservableObject
 
     private void NormalizeProviderSettings()
     {
-        // Normalize current settings against the catalog and migrate older flat
-        // settings into the configured-provider list.
-        var provider = ChatProviderCatalog.Resolve(Settings.ProviderId);
-        Settings.ProviderId = provider.Id;
-        Settings.ProviderName = provider.Name;
-        Settings.ProtocolId = provider.ProtocolId;
-        Settings.BaseUrl = provider.DefaultBaseUrl;
-        Settings.Temperature = AgentDefaultTemperature;
-
-        if (string.IsNullOrWhiteSpace(Settings.Model))
-        {
-            Settings.Model = provider.DefaultModel;
-        }
-
-        var model = ChatProviderCatalog.ResolveModel(provider.Id, Settings.Model);
-        Settings.Model = model.Id;
-        if (Settings.ModelContextLimit <= 0 || Settings.ModelContextLimit == provider.DefaultContextLimit)
-        {
-            Settings.ModelContextLimit = model.ContextLimit;
-        }
-
-        foreach (var configured in Settings.ConfiguredProviders)
-        {
-            // Normalize each saved provider so stale IDs/base URLs do not leak
-            // into future requests.
-            var configuredTemplate = ChatProviderCatalog.Resolve(configured.TemplateId);
-            var configuredModel = ChatProviderCatalog.ResolveModel(configuredTemplate.Id, configured.SelectedModelId);
-            if (string.IsNullOrWhiteSpace(configured.Id))
-            {
-                configured.Id = Guid.NewGuid().ToString("N");
-            }
-
-            configured.TemplateId = configuredTemplate.Id;
-            configured.ProtocolId = configuredTemplate.ProtocolId;
-            configured.Name = configuredTemplate.Name;
-            configured.BaseUrl = configuredTemplate.DefaultBaseUrl;
-            configured.SelectedModelId = configuredModel.Id;
-            configured.ModelParameters = NormalizeModelParameterValues(configuredTemplate.Id, configuredModel.Id, configured.ModelParameters);
-        }
-
-        DeduplicateConfiguredProviders();
+        ProviderSettingsService.Normalize(Settings, AgentDefaultTemperature);
         OnPropertyChanged(nameof(SelectedProviderId));
         OnPropertyChanged(nameof(SelectedActiveModelId));
         OnPropertyChanged(nameof(ActiveModelOptions));
-        if (Settings.ConfiguredProviders.Count == 0 && !string.IsNullOrWhiteSpace(Settings.ApiKey))
-        {
-            Settings.ConfiguredProviders.Add(new ConfiguredLlmProvider
-            {
-                TemplateId = provider.Id,
-                ProtocolId = provider.ProtocolId,
-                Name = provider.Name,
-                BaseUrl = Settings.BaseUrl,
-                ApiKey = Settings.ApiKey,
-                SelectedModelId = Settings.Model,
-                ModelParameters = NormalizeModelParameterValues(provider.Id, Settings.Model, Settings.ModelParameters)
-            });
-        }
-
-        if (string.IsNullOrWhiteSpace(Settings.ActiveConfiguredProviderId) && Settings.ConfiguredProviders.Count > 0)
-        {
-            Settings.ActiveConfiguredProviderId = Settings.ConfiguredProviders[0].Id;
-        }
-        else if (Settings.ConfiguredProviders.Count > 0 &&
-                 Settings.ConfiguredProviders.All(provider => provider.Id != Settings.ActiveConfiguredProviderId))
-        {
-            Settings.ActiveConfiguredProviderId = Settings.ConfiguredProviders[0].Id;
-        }
-
-        ApplySelectedConfiguredProvider();
         OnPropertyChanged(nameof(ConfiguredProviders));
         OnPropertyChanged(nameof(Settings));
         OnPropertyChanged(nameof(SelectedConfiguredProviderId));
@@ -3144,54 +3044,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void NormalizeModelParameters()
     {
-        var configured = SelectedConfiguredProvider;
-        if (configured is null)
-        {
-            Settings.ModelParameters = [];
-            return;
-        }
-
-        configured.ModelParameters = NormalizeModelParameterValues(
-            configured.TemplateId,
-            configured.SelectedModelId,
-            configured.ModelParameters);
-        Settings.ModelParameters = new Dictionary<string, string>(configured.ModelParameters, StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static Dictionary<string, string> NormalizeModelParameterValues(
-        string providerId,
-        string modelId,
-        IDictionary<string, string>? values)
-    {
-        var model = ChatProviderCatalog.ResolveModel(providerId, modelId);
-        var known = model.Parameters.ToDictionary(parameter => parameter.Id, StringComparer.OrdinalIgnoreCase);
-        var normalized = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (values is not null)
-        {
-            foreach (var entry in values)
-            {
-                if (!known.TryGetValue(entry.Key, out var parameter))
-                {
-                    continue;
-                }
-
-                var value = entry.Value ?? "";
-                if (parameter.Options.Count > 0 &&
-                    parameter.Options.All(option => !string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase)))
-                {
-                    value = parameter.DefaultValue;
-                }
-
-                normalized[parameter.Id] = value;
-            }
-        }
-
-        foreach (var parameter in model.Parameters)
-        {
-            normalized.TryAdd(parameter.Id, parameter.DefaultValue);
-        }
-
-        return normalized;
+        ProviderSettingsService.NormalizeModelParameters(Settings);
     }
 
     private void RebuildToolOptions()
@@ -3341,7 +3194,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var model = ChatProviderCatalog.ResolveModel(configured.TemplateId, configured.SelectedModelId);
-        var values = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters);
+        var values = ProviderSettingsService.NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters);
         configured.ModelParameters = values;
         Settings.ModelParameters = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
 
@@ -3375,7 +3228,7 @@ public sealed class MainViewModel : ObservableObject
         var configured = SelectedConfiguredProvider;
         if (configured is not null)
         {
-            configured.ModelParameters = NormalizeModelParameterValues(
+            configured.ModelParameters = ProviderSettingsService.NormalizeModelParameterValues(
                 configured.TemplateId,
                 configured.SelectedModelId,
                 values);
@@ -3392,46 +3245,16 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task AddConfiguredProviderAsync()
     {
-        var template = ChatProviderCatalog.Resolve(_newProviderTemplateId);
-        var model = ChatProviderCatalog.ResolveModel(template.Id, template.DefaultModel);
-        var apiKey = NewProviderApiKey.Trim();
-        var existing = Settings.ConfiguredProviders.FirstOrDefault(provider =>
-            string.Equals(provider.TemplateId, template.Id, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(provider.ApiKey, apiKey, StringComparison.Ordinal));
-        if (existing is not null)
-        {
-            // Avoid duplicate entries for the same template/API key pair.
-            Settings.ActiveConfiguredProviderId = existing.Id;
-            existing.ProtocolId = template.ProtocolId;
-            existing.Name = template.Name;
-            existing.BaseUrl = template.DefaultBaseUrl;
-            existing.SelectedModelId = ChatProviderCatalog.ResolveModel(template.Id, existing.SelectedModelId).Id;
-            existing.ModelParameters = NormalizeModelParameterValues(template.Id, existing.SelectedModelId, existing.ModelParameters);
-            NewProviderApiKey = "";
-            ApplySelectedConfiguredProvider();
-            await _repository.SaveSettingsAsync(Settings);
-            RaiseConfiguredProviderChanges();
-            StatusText = "该模型提供商已存在，已切换到该配置";
-            return;
-        }
-
-        var configured = new ConfiguredLlmProvider
-        {
-            TemplateId = template.Id,
-            ProtocolId = template.ProtocolId,
-            Name = template.Name,
-            BaseUrl = template.DefaultBaseUrl,
-            ApiKey = apiKey,
-            SelectedModelId = model.Id,
-            ModelParameters = NormalizeModelParameterValues(template.Id, model.Id, null)
-        };
-        Settings.ConfiguredProviders.Add(configured);
-        Settings.ActiveConfiguredProviderId = configured.Id;
+        var result = ProviderSettingsService.AddConfiguredProvider(
+            Settings,
+            _newProviderTemplateId,
+            NewProviderApiKey);
         NewProviderApiKey = "";
-        ApplySelectedConfiguredProvider();
         await _repository.SaveSettingsAsync(Settings);
         RaiseConfiguredProviderChanges();
-        StatusText = $"{configured.Name} 已添加";
+        StatusText = result.AlreadyExisted
+            ? "该模型提供商已存在，已切换到该配置"
+            : $"{result.Provider.Name} 已添加";
     }
 
     private async Task TestProviderConnectionAsync()
@@ -3470,15 +3293,11 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task RemoveConfiguredProviderAsync()
     {
-        var configured = SelectedConfiguredProvider;
-        if (configured is null)
+        if (!ProviderSettingsService.RemoveSelectedProvider(Settings))
         {
             return;
         }
 
-        Settings.ConfiguredProviders.Remove(configured);
-        Settings.ActiveConfiguredProviderId = Settings.ConfiguredProviders.FirstOrDefault()?.Id ?? "";
-        ApplySelectedConfiguredProvider();
         await _repository.SaveSettingsAsync(Settings);
         RaiseConfiguredProviderChanges();
         StatusText = "模型提供商已移除";
@@ -3486,56 +3305,12 @@ public sealed class MainViewModel : ObservableObject
 
     private AppSettings? CreateEffectiveSettings()
     {
-        var configured = SelectedConfiguredProvider;
-        if (configured is null || string.IsNullOrWhiteSpace(configured.ApiKey))
-        {
-            return null;
-        }
-
-        var template = ChatProviderCatalog.Resolve(configured.TemplateId);
-        var model = ChatProviderCatalog.ResolveModel(template.Id, configured.SelectedModelId);
-        // Build a request-ready settings object from the selected saved provider.
-        configured.TemplateId = template.Id;
-        configured.ProtocolId = template.ProtocolId;
-        configured.Name = template.Name;
-        configured.BaseUrl = template.DefaultBaseUrl;
-        configured.SelectedModelId = model.Id;
-        return new AppSettings
-        {
-            ProviderId = configured.TemplateId,
-            ProtocolId = configured.ProtocolId,
-            ProviderName = configured.Name,
-            BaseUrl = configured.BaseUrl,
-            ApiKey = configured.ApiKey,
-            Model = model.Id,
-            Temperature = AgentDefaultTemperature,
-            ModelContextLimit = model.ContextLimit,
-            ModelParameters = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters),
-            ActiveConfiguredProviderId = configured.Id,
-            AgentMaxToolRounds = Settings.AgentMaxToolRounds,
-            ConfiguredProviders = Settings.ConfiguredProviders
-        };
+        return ProviderSettingsService.CreateEffectiveSettings(Settings, AgentDefaultTemperature);
     }
 
     private void ApplySelectedConfiguredProvider()
     {
-        var configured = SelectedConfiguredProvider;
-        if (configured is null)
-        {
-            return;
-        }
-
-        var template = ChatProviderCatalog.Resolve(configured.TemplateId);
-        var model = ChatProviderCatalog.ResolveModel(template.Id, configured.SelectedModelId);
-        // Keep legacy flat settings in sync with the active configured provider.
-        Settings.ProviderId = configured.TemplateId;
-        Settings.ProtocolId = configured.ProtocolId;
-        Settings.ProviderName = configured.Name;
-        Settings.BaseUrl = configured.BaseUrl;
-        Settings.ApiKey = configured.ApiKey;
-        Settings.Model = model.Id;
-        Settings.ModelContextLimit = model.ContextLimit;
-        Settings.ModelParameters = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters);
+        ProviderSettingsService.ApplySelectedProvider(Settings);
     }
 
     private void RaiseConfiguredProviderChanges()
@@ -3567,32 +3342,4 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void DeduplicateConfiguredProviders()
-    {
-        if (Settings.ConfiguredProviders.Count < 2)
-        {
-            return;
-        }
-
-        var activeId = Settings.ActiveConfiguredProviderId;
-        // Prefer keeping the active duplicate so the current UI selection is stable.
-        var uniqueProviders = Settings.ConfiguredProviders
-            .GroupBy(provider => $"{provider.TemplateId}|{provider.ApiKey}", StringComparer.Ordinal)
-            .Select(group =>
-                group.FirstOrDefault(provider => provider.Id == activeId) ??
-                group.First())
-            .ToList();
-
-        if (uniqueProviders.Count == Settings.ConfiguredProviders.Count)
-        {
-            return;
-        }
-
-        Settings.ConfiguredProviders.Clear();
-        Settings.ConfiguredProviders.AddRange(uniqueProviders);
-        if (Settings.ConfiguredProviders.All(provider => provider.Id != activeId))
-        {
-            Settings.ActiveConfiguredProviderId = Settings.ConfiguredProviders.FirstOrDefault()?.Id ?? "";
-        }
-    }
 }
