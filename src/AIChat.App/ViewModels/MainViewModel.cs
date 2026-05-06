@@ -15,6 +15,7 @@ using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.Application.Agents;
 using AIChat.Application.Audit;
+using AIChat.Application.Configuration;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Projects;
@@ -920,7 +921,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.AgentMaxToolRounds;
         set
         {
-            var normalized = Math.Clamp(value, 1, 100);
+            var normalized = AdvancedSettingsService.NormalizeAgentMaxToolRounds(value);
             if (Settings.AgentMaxToolRounds == normalized)
             {
                 return;
@@ -936,7 +937,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.RetryMaxAttempts;
         set
         {
-            var normalized = Math.Clamp(value, 0, 10);
+            var normalized = AdvancedSettingsService.NormalizeRetryMaxAttempts(value);
             if (Settings.RetryMaxAttempts == normalized) return;
             Settings.RetryMaxAttempts = normalized;
             OnPropertyChanged();
@@ -948,7 +949,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.MaxOutputTokens;
         set
         {
-            var normalized = Math.Clamp(value, 256, 32768);
+            var normalized = AdvancedSettingsService.NormalizeMaxOutputTokens(value);
             if (Settings.MaxOutputTokens == normalized) return;
             Settings.MaxOutputTokens = normalized;
             OnPropertyChanged();
@@ -960,7 +961,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.ConversationContextRatio;
         set
         {
-            var normalized = Math.Clamp(value, 0.3, 1.0);
+            var normalized = AdvancedSettingsService.NormalizeConversationContextRatio(value);
             if (Math.Abs(Settings.ConversationContextRatio - normalized) < 0.01) return;
             Settings.ConversationContextRatio = normalized;
             OnPropertyChanged();
@@ -983,7 +984,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.AuditLogMaxFileSizeBytes / (1024 * 1024);
         set
         {
-            var bytes = Math.Max(1, value) * 1024 * 1024;
+            var bytes = AdvancedSettingsService.NormalizeAuditLogMaxFileSizeMegabytes(value) * 1024 * 1024;
             if (Settings.AuditLogMaxFileSizeBytes == bytes) return;
             Settings.AuditLogMaxFileSizeBytes = bytes;
             OnPropertyChanged();
@@ -995,7 +996,7 @@ public sealed class MainViewModel : ObservableObject
         get => Settings.AuditLogRetentionDays;
         set
         {
-            var normalized = Math.Clamp(value, 1, 365);
+            var normalized = AdvancedSettingsService.NormalizeAuditLogRetentionDays(value);
             if (Settings.AuditLogRetentionDays == normalized) return;
             Settings.AuditLogRetentionDays = normalized;
             OnPropertyChanged();
@@ -2987,13 +2988,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void NormalizeHarnessSettings()
     {
-        Settings.AgentMaxToolRounds = Math.Clamp(Settings.AgentMaxToolRounds, 1, 100);
-        Settings.RetryMaxAttempts = Math.Clamp(Settings.RetryMaxAttempts, 0, 10);
-        Settings.MaxOutputTokens = Math.Clamp(Settings.MaxOutputTokens, 256, 32768);
-        Settings.ConversationContextRatio = Math.Clamp(Settings.ConversationContextRatio, 0.3, 1.0);
-        Settings.AuditLogRetentionDays = Math.Clamp(Settings.AuditLogRetentionDays, 1, 365);
-        if (Settings.AuditLogMaxFileSizeBytes < 1024 * 1024)
-            Settings.AuditLogMaxFileSizeBytes = 5 * 1024 * 1024;
+        AdvancedSettingsService.Normalize(Settings);
         OnPropertyChanged(nameof(AgentMaxToolRounds));
         OnPropertyChanged(nameof(RetryMaxAttempts));
         OnPropertyChanged(nameof(MaxOutputTokens));
