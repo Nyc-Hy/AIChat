@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Llm;
 using AIChat.Application.Agents;
+using AIChat.Application.Agents.Planning;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
@@ -69,6 +70,60 @@ public sealed class AgentHarnessTests
         Assert.Contains("工作区：## main · 2 个启动变更", run.Steps[0].Output);
         Assert.Equal(AgentStepType.Final, run.Steps[1].Type);
         Assert.Equal("done", run.Steps[1].Output);
+    }
+
+    [Fact]
+    public async Task RunAsync_StartsWithStructuredPlanWhenPlannerIsConfigured()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """
+            {
+              "summary": "Plan first",
+              "phases": [
+                {
+                  "name": "gathering_context",
+                  "tasks": [
+                    { "title": "Read context", "risk": "low", "suggestedTools": ["read_file"] }
+                  ]
+                }
+              ]
+            }
+            """
+        }]);
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "do work",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "do work" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"]
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.NotNull(run.StructuredPlan);
+        Assert.Equal("Plan first", run.StructuredPlan!.Summary);
+        Assert.NotNull(run.Plan);
+        Assert.Contains(run.Steps, step => step.Title == "生成结构化计划");
+        Assert.Contains(run.Plan!.Items, item => item.Title.Contains("Read context", StringComparison.Ordinal));
     }
 
     [Fact]

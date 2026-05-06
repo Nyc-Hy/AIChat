@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using AIChat.App.ViewModels;
 using AIChat.Application.Agents;
+using AIChat.Application.Agents.Planning;
 using AIChat.Application.Audit;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
@@ -59,7 +60,7 @@ public partial class MainWindow : Window
         var toolCatalog = new AgentToolCatalog(toolRegistry.All);
         var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(
-            new AgentHarness(agentRunner),
+            new AgentHarness(agentRunner, new AgentPlanner(chatService)),
             toolRegistry);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         DataContext = _viewModel;

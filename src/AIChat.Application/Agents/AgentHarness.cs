@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using AIChat.Abstractions.Configuration;
+using AIChat.Application.Agents.Planning;
 using AIChat.Application.Tools;
 using AIChat.Application.Verification;
 using AIChat.Domain.Chat;
@@ -12,10 +13,12 @@ namespace AIChat.Application.Agents;
 public sealed class AgentHarness
 {
     private readonly AgentRunner _agentRunner;
+    private readonly AgentPlanner? _planner;
 
-    public AgentHarness(AgentRunner agentRunner)
+    public AgentHarness(AgentRunner agentRunner, AgentPlanner? planner = null)
     {
         _agentRunner = agentRunner;
+        _planner = planner;
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -51,6 +54,36 @@ public sealed class AgentHarness
         };
 
         var stepNumber = 0;
+        if (_planner is not null)
+        {
+            run.Phase = "planning";
+            var structuredPlan = await _planner.PlanAsync(
+                new AgentPlanningRequest(
+                    request.Goal,
+                    request.Context.ProjectPath,
+                    request.Context.EnabledToolIds,
+                    request.ChatRequest.Messages),
+                request.Settings,
+                cancellationToken);
+            structuredPlan.RunId = run.Id;
+            run.StructuredPlan = structuredPlan;
+            run.Plan = structuredPlan.ToAgentPlan();
+
+            var planStep = AddCompletedStep(
+                run,
+                ++stepNumber,
+                AgentStepType.Model,
+                structuredPlan.IsFallback ? "生成兜底计划" : "生成结构化计划",
+                request.Goal,
+                CreateStructuredPlanStepOutput(structuredPlan));
+            yield return new AgentHarnessEvent
+            {
+                Type = AgentHarnessEventType.StepAdded,
+                Run = run,
+                Step = planStep
+            };
+        }
+
         var contextStep = AddCompletedStep(
             run,
             ++stepNumber,
@@ -440,6 +473,29 @@ public sealed class AgentHarness
         };
         run.Steps.Add(step);
         return step;
+    }
+
+    private static string CreateStructuredPlanStepOutput(AgentStructuredPlan plan)
+    {
+        var lines = new List<string>
+        {
+            $"摘要：{plan.Summary}",
+            $"来源：{(plan.IsFallback ? "兜底计划" : "LLM 结构化规划")}",
+            $"预算：工具 {plan.Budget.MaxToolCalls} 次，tokens {plan.Budget.TokenBudget}",
+            $"阶段：{plan.Phases.Count}",
+            $"任务：{plan.Phases.Sum(phase => phase.Tasks.Count)}"
+        };
+
+        foreach (var phase in plan.Phases)
+        {
+            lines.Add($"- {phase.Name}: {phase.Objective}");
+            foreach (var task in phase.Tasks)
+            {
+                lines.Add($"  - {task.Title} ({task.Risk})");
+            }
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 
     private static void CompleteToolStep(

@@ -2411,6 +2411,8 @@ public sealed class MainViewModel : ObservableObject
                                 {
                                     _ = assistantViewModel.AddAgentStep(agentEvent.Step);
                                 }
+
+                                assistantViewModel.SyncAgentPlan();
                             });
                             break;
                         case AgentHarnessEventType.RawProviderEvent:

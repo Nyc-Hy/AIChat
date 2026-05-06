@@ -72,6 +72,31 @@ public sealed class AgentRunSerializationTests
                     FinalValidationSummary = "工具预算：未耗尽",
                     RecoverySuggestion = "继续处理：test",
                     Status = AgentRunStatus.Completed,
+                    StructuredPlan = new AgentStructuredPlan
+                    {
+                        RunId = "run-1",
+                        Summary = "structured summary",
+                        Budget = new AgentPlanBudget { MaxToolCalls = 4, TokenBudget = 8000 },
+                        Phases =
+                        [
+                            new AgentPlanPhase
+                            {
+                                Name = "executing",
+                                Objective = "do work",
+                                Tasks =
+                                [
+                                    new AgentPlanTask
+                                    {
+                                        Phase = "executing",
+                                        Title = "Patch code",
+                                        Risk = AgentPlanRisk.High,
+                                        SuggestedTools = ["apply_patch"],
+                                        Budget = new AgentPlanBudget { MaxToolCalls = 2, TokenBudget = 3000 }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
                     Steps =
                     [
                         new AgentStep
@@ -159,6 +184,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
         Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
+        Assert.NotNull(roundTripped.AgentRuns[0].StructuredPlan);
+        Assert.Equal("structured summary", roundTripped.AgentRuns[0].StructuredPlan!.Summary);
+        Assert.Equal(AgentPlanRisk.High, roundTripped.AgentRuns[0].StructuredPlan!.Phases[0].Tasks[0].Risk);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);
         Assert.Equal(18, roundTripped.AgentRuns[0].FileChanges[0].NewChars);

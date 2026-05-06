@@ -33,6 +33,7 @@ public sealed class AgentRun
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }
     public AgentPlan? Plan { get; set; }
+    public AgentStructuredPlan? StructuredPlan { get; set; }
     public List<AgentStep> Steps { get; set; } = [];
     public List<AgentFileChange> FileChanges { get; set; } = [];
     public List<AgentVerification> Verifications { get; set; } = [];
