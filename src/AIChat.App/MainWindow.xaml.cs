@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using AIChat.App.ViewModels;
 using AIChat.Application.Agents;
+using AIChat.Application.Audit;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
@@ -54,7 +55,7 @@ public partial class MainWindow : Window
                 contextEstimator,
                 new SystemPromptBuilder()),
             new WorkspaceChangeService(),
-            auditLogRepository);
+            new AgentRunAuditService(auditLogRepository));
         var toolCatalog = new AgentToolCatalog(toolRegistry.All);
         var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(

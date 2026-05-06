@@ -80,8 +80,8 @@ public sealed class WorkspaceStageBatchRunnerTests
             service.Object, "/proj", changes);
 
         Assert.Equal(1, result.Count);
-        Assert.Single(capturedPaths!);
-        Assert.Equal("b.cs", capturedPaths[0]);
+        var path = Assert.Single(capturedPaths!);
+        Assert.Equal("b.cs", path);
     }
 
     [Fact]

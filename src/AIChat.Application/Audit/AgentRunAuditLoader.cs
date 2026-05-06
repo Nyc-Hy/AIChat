@@ -1,12 +1,12 @@
+using AIChat.Abstractions.Persistence;
 using AIChat.Domain.Audit;
-using AIChat.Storage.Json;
 
 namespace AIChat.Application.Audit;
 
 public static class AgentRunAuditLoader
 {
     public static async Task<IReadOnlyList<AuditEvent>> LoadAsync(
-        AuditLogRepository repository,
+        IAuditLogRepository repository,
         string projectId,
         string runId,
         DateTimeOffset startedAt,

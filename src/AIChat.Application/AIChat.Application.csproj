@@ -3,7 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="..\AIChat.Domain\AIChat.Domain.csproj" />
     <ProjectReference Include="..\AIChat.Abstractions\AIChat.Abstractions.csproj" />
-    <ProjectReference Include="..\AIChat.Storage.Json\AIChat.Storage.Json.csproj" />
   </ItemGroup>
 
   <ItemGroup>

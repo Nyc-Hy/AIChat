@@ -21,30 +21,10 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- Templates translate ViewModel objects into reusable pieces of UI. -->
-        <DataTemplate x:Key="ProviderOptionTemplate">
-            <TextBlock Text="{Binding Name}"
-                       Foreground="#1E252E"
-                       TextTrimming="CharacterEllipsis" />
-        </DataTemplate>
-
-        <DataTemplate x:Key="ConfiguredProviderTemplate">
-            <TextBlock Text="{Binding DisplayName}"
-                       Foreground="#1E252E"
-                       TextTrimming="CharacterEllipsis" />
-        </DataTemplate>
-
-        <DataTemplate x:Key="ModelOptionTemplate">
-            <TextBlock Text="{Binding DisplayName}"
-                       Foreground="#1E252E"
-                       TextTrimming="CharacterEllipsis" />
-        </DataTemplate>
-
-        <DataTemplate x:Key="SelectionOptionTemplate">
-            <TextBlock Text="{Binding Name}"
-                       Foreground="#1E252E"
-                       TextTrimming="CharacterEllipsis" />
-        </DataTemplate>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/ProviderTemplates.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
         <DataTemplate x:Key="CallDetailListTemplate">
             <Border Padding="10,8" CornerRadius="8">
@@ -519,6 +499,7 @@
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Border Margin="0"

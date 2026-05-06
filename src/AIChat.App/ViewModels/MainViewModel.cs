@@ -21,7 +21,6 @@ using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
-using AIChat.Storage.Json;
 using Ookii.Dialogs.Wpf;
 using AIChat.Domain.Context;
 
@@ -47,7 +46,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly SimpleContextEstimator _fastContextEstimator = new();
     private readonly ConversationContextBuilder _contextBuilder;
     private readonly WorkspaceChangeService _workspaceChangeService;
-    private readonly AuditLogRepository? _auditLogRepository;
+    private readonly AgentRunAuditService? _auditService;
     private AgentHarness? _agentHarness;
     private AgentToolRegistry? _toolRegistry;
     private readonly AgentRunQueue _agentRunQueue = new();
@@ -107,14 +106,14 @@ public sealed class MainViewModel : ObservableObject
         IContextEstimator contextEstimator,
         ConversationContextBuilder contextBuilder,
         WorkspaceChangeService workspaceChangeService,
-        AuditLogRepository? auditLogRepository = null)
+        AgentRunAuditService? auditService = null)
     {
         _repository = repository;
         _chatService = chatService;
         _contextEstimator = contextEstimator;
         _contextBuilder = contextBuilder;
         _workspaceChangeService = workspaceChangeService;
-        _auditLogRepository = auditLogRepository;
+        _auditService = auditService;
         // Commands are the bridge from XAML buttons/menu items to ViewModel methods.
         NewChatCommand = new RelayCommand(_ => NewChat(), _ => SelectedProject is not null && !IsSending);
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
@@ -754,15 +753,14 @@ public sealed class MainViewModel : ObservableObject
 
         var projectId = SelectedProject?.Project.Id ?? "";
         var runId = run?.Id ?? "";
-        if (run is null || _auditLogRepository is null || string.IsNullOrWhiteSpace(projectId))
+        if (run is null || _auditService?.IsAvailable != true || string.IsNullOrWhiteSpace(projectId))
         {
             return;
         }
 
         try
         {
-            var items = await AgentRunAuditLoader.LoadAsync(
-                _auditLogRepository, projectId, runId, run.Run.StartedAt);
+            var items = await _auditService.LoadRunEventsAsync(projectId, runId, run.Run.StartedAt);
 
             if (SelectedAgentRunDetails?.Id != runId)
             {
@@ -3246,7 +3244,7 @@ public sealed class MainViewModel : ObservableObject
 
     private Task RecordAuditEventAsync(AuditEventType type, string projectId, string runId, string toolName = "", string summary = "", string detail = "")
     {
-        return AuditEventRecorder.RecordAsync(_auditLogRepository, type, projectId, runId, toolName, summary, detail);
+        return _auditService?.RecordAsync(type, projectId, runId, toolName, summary, detail) ?? Task.CompletedTask;
     }
 
     private static Dictionary<string, ToolPermissionMode> MergeToolPermissionModes(

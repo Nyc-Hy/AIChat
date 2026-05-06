@@ -1,12 +1,12 @@
+using AIChat.Abstractions.Persistence;
 using AIChat.Domain.Audit;
-using AIChat.Storage.Json;
 
 namespace AIChat.Application.Audit;
 
 public static class AuditEventRecorder
 {
     public static async Task RecordAsync(
-        AuditLogRepository? repository,
+        IAuditLogRepository? repository,
         AuditEventType type,
         string projectId,
         string runId,

@@ -1,11 +1,12 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AIChat.Abstractions.Persistence;
 using AIChat.Domain.Audit;
 
 namespace AIChat.Storage.Json;
 
-public sealed class AuditLogRepository
+public sealed class AuditLogRepository : IAuditLogRepository
 {
     private readonly string _basePath;
     private readonly long _maxFileSizeBytes;
