@@ -2416,7 +2416,7 @@ public sealed class MainViewModel : ObservableObject
                                        {
                                            ProjectPath = string.IsNullOrWhiteSpace(SelectedProject?.Path) ? Environment.CurrentDirectory : SelectedProject!.Path,
                                            EnabledToolIds = Settings.EnabledToolIds,
-                                           ToolPermissionModes = MergeToolPermissionModes(
+                                           ToolPermissionModes = ToolSettingsService.MergePermissionModes(
                                                Settings.ToolPermissionModes,
                                                SelectedProject?.Project.ProjectToolPermissionModes),
                                            MaxToolRounds = Settings.AgentMaxToolRounds,
@@ -2981,47 +2981,8 @@ public sealed class MainViewModel : ObservableObject
 
     private void NormalizeToolSettings()
     {
-        if (_toolRegistry is null)
-        {
-            return;
-        }
-
-        var knownIds = _toolRegistry.All.Select(tool => tool.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Settings.EnabledToolIds = Settings.EnabledToolIds
-            .Where(knownIds.Contains)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (Settings.EnabledToolIds.Count == 0)
-        {
-            Settings.EnabledToolIds = _toolRegistry.All
-                .Select(tool => tool.Id)
-                .ToList();
-        }
-        else if (Settings.EnabledToolIds.Contains("git_status", StringComparer.OrdinalIgnoreCase) &&
-                 Settings.EnabledToolIds.Contains("git_diff", StringComparer.OrdinalIgnoreCase) &&
-                 knownIds.Contains("git_restore_file"))
-        {
-            AddEnabledToolIfKnown("git_restore_file");
-            AddEnabledToolIfKnown("git_commit");
-        }
-
-        Settings.ToolPermissionModes = Settings.ToolPermissionModes
-            .Where(entry => knownIds.Contains(entry.Key))
-            .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var tool in _toolRegistry.All)
-        {
-            Settings.ToolPermissionModes.TryAdd(tool.Id, _toolRegistry.GetMetadata(tool.Id).DefaultPermissionMode);
-        }
-
-        void AddEnabledToolIfKnown(string toolId)
-        {
-            if (knownIds.Contains(toolId) &&
-                !Settings.EnabledToolIds.Contains(toolId, StringComparer.OrdinalIgnoreCase))
-            {
-                Settings.EnabledToolIds.Add(toolId);
-            }
-        }
+        if (_toolRegistry is null) return;
+        ToolSettingsService.Normalize(Settings, _toolRegistry);
     }
 
     private void NormalizeHarnessSettings()
@@ -3054,18 +3015,14 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var enabled = Settings.EnabledToolIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         ToolOptions.Clear();
-        foreach (var (tool, meta) in _toolRegistry.AllWithMetadata())
+        foreach (var tool in ToolSettingsService.CreateToolOptions(Settings, _toolRegistry))
         {
-            var mode = Settings.ToolPermissionModes.TryGetValue(tool.Id, out var configuredMode)
-                ? configuredMode
-                : meta.DefaultPermissionMode;
             ToolOptions.Add(new ToolOptionViewModel
             {
                 Id = tool.Id,
-                Name = tool.Definition.Name,
-                Description = tool.Definition.Description,
+                Name = tool.Name,
+                Description = tool.Description,
                 RiskLabel = tool.Risk switch
                 {
                     AgentToolRisk.ReadOnly => "只读",
@@ -3074,8 +3031,8 @@ public sealed class MainViewModel : ObservableObject
                     _ => "工具"
                 },
                 PermissionModeOptions = ToolPermissionModeOptions,
-                IsEnabled = enabled.Contains(tool.Id),
-                PermissionMode = mode.ToString()
+                IsEnabled = tool.IsEnabled,
+                PermissionMode = tool.PermissionMode.ToString()
             });
         }
 
@@ -3084,41 +3041,14 @@ public sealed class MainViewModel : ObservableObject
 
     private void SyncToolOptionsToSettings()
     {
-        Settings.EnabledToolIds = ToolOptions
-            .Where(tool => tool.IsEnabled && !string.Equals(tool.PermissionMode, nameof(ToolPermissionMode.Disabled), StringComparison.OrdinalIgnoreCase))
-            .Select(tool => tool.Id)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        Settings.ToolPermissionModes = ToolOptions.ToDictionary(
-            tool => tool.Id,
-            tool => Enum.TryParse<ToolPermissionMode>(tool.PermissionMode, out var mode) ? mode : ToolPermissionMode.ConfirmEachTime,
-            StringComparer.OrdinalIgnoreCase);
+        ToolSettingsService.SyncToolOptions(
+            Settings,
+            ToolOptions.Select(tool => (tool.Id, tool.IsEnabled, tool.PermissionMode)));
     }
 
     private Task RecordAuditEventAsync(AuditEventType type, string projectId, string runId, string toolName = "", string summary = "", string detail = "")
     {
         return _auditService?.RecordAsync(type, projectId, runId, toolName, summary, detail) ?? Task.CompletedTask;
-    }
-
-    private static Dictionary<string, ToolPermissionMode> MergeToolPermissionModes(
-        Dictionary<string, ToolPermissionMode> global,
-        Dictionary<string, string>? projectOverrides)
-    {
-        if (projectOverrides is null or { Count: 0 })
-        {
-            return global;
-        }
-
-        var merged = new Dictionary<string, ToolPermissionMode>(global, StringComparer.OrdinalIgnoreCase);
-        foreach (var (toolId, modeName) in projectOverrides)
-        {
-            if (Enum.TryParse<ToolPermissionMode>(modeName, ignoreCase: true, out var mode))
-            {
-                merged[toolId] = mode;
-            }
-        }
-
-        return merged;
     }
 
     private void LoadProjectToolPermissionOverrides()
@@ -3145,12 +3075,8 @@ public sealed class MainViewModel : ObservableObject
         var project = SelectedProject?.Project;
         if (project is null) return;
 
-        project.ProjectToolPermissionModes = ProjectToolPermissionOverrides
-            .Where(o => !string.IsNullOrWhiteSpace(o.ToolId))
-            .ToDictionary(
-                o => o.ToolId,
-                o => o.PermissionMode,
-                StringComparer.OrdinalIgnoreCase);
+        project.ProjectToolPermissionModes = ToolSettingsService.CreateProjectOverrides(
+            ProjectToolPermissionOverrides.Select(o => (o.ToolId, o.PermissionMode)));
     }
 
     private void AddProjectToolOverride()
