@@ -2404,6 +2404,29 @@ public sealed class MainViewModel : ObservableObject
                                 SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
                                 summary: text);
                             break;
+                        case AgentHarnessEventType.PhaseChanged:
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                assistantViewModel.SyncAgentPhase();
+                                AgentStatusPhase = agentEvent.Run is null
+                                    ? ""
+                                    : agentEvent.Run.Phase switch
+                                    {
+                                        "planning" => "正在规划",
+                                        "gathering_context" => "收集上下文",
+                                        "executing" => "正在执行",
+                                        "verifying" => "正在验证",
+                                        "repairing" => "正在修复",
+                                        "summarizing" => "正在总结",
+                                        "waiting_for_user" => "等待用户",
+                                        "completed" => "已完成",
+                                        "cancelled" => "已停止",
+                                        "failed" => "失败",
+                                        _ => "执行中"
+                                    };
+                                OnPropertyChanged(nameof(HasAgentStatus));
+                            });
+                            break;
                         case AgentHarnessEventType.StepAdded:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {

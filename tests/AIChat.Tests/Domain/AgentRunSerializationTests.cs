@@ -71,6 +71,7 @@ public sealed class AgentRunSerializationTests
                     ToolSessionAllowedCount = 1,
                     FinalValidationSummary = "工具预算：未耗尽",
                     RecoverySuggestion = "继续处理：test",
+                    CurrentPhaseSummary = "running tests",
                     Status = AgentRunStatus.Completed,
                     StructuredPlan = new AgentStructuredPlan
                     {
@@ -97,6 +98,18 @@ public sealed class AgentRunSerializationTests
                             }
                         ]
                     },
+                    PhaseHistory =
+                    [
+                        new AgentRunPhaseRecord
+                        {
+                            RunId = "run-1",
+                            Phase = "verifying",
+                            Status = "completed",
+                            Summary = "running tests",
+                            StartedAt = new DateTimeOffset(2026, 5, 1, 9, 0, 0, TimeSpan.Zero),
+                            CompletedAt = new DateTimeOffset(2026, 5, 1, 9, 1, 0, TimeSpan.Zero)
+                        }
+                    ],
                     Steps =
                     [
                         new AgentStep
@@ -184,6 +197,10 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
         Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
+        Assert.Equal("running tests", roundTripped.AgentRuns[0].CurrentPhaseSummary);
+        Assert.Single(roundTripped.AgentRuns[0].PhaseHistory);
+        Assert.Equal("verifying", roundTripped.AgentRuns[0].PhaseHistory[0].Phase);
+        Assert.Equal("completed", roundTripped.AgentRuns[0].PhaseHistory[0].Status);
         Assert.NotNull(roundTripped.AgentRuns[0].StructuredPlan);
         Assert.Equal("structured summary", roundTripped.AgentRuns[0].StructuredPlan!.Summary);
         Assert.Equal(AgentPlanRisk.High, roundTripped.AgentRuns[0].StructuredPlan!.Phases[0].Tasks[0].Risk);

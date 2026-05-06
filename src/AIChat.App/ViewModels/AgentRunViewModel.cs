@@ -10,6 +10,7 @@ public sealed class AgentRunViewModel : ObservableObject
     private ObservableCollection<AgentFileChangeViewModel>? _fileChanges;
     private ObservableCollection<AgentVerificationViewModel>? _verifications;
     private ObservableCollection<AgentArtifactViewModel>? _artifacts;
+    private ObservableCollection<AgentRunPhaseRecordViewModel>? _phaseHistory;
     private AgentPlanViewModel? _plan;
 
     public AgentRunViewModel(AgentRun run)
@@ -90,10 +91,15 @@ public sealed class AgentRunViewModel : ObservableObject
     public string PhaseText => _run.Phase switch
     {
         "planning" => "规划中",
-        "reading" => "读取上下文",
-        "editing" => "修改文件",
+        "gathering_context" => "收集上下文",
+        "reading" => "收集上下文",
+        "editing" => "执行中",
+        "executing" => "执行中",
         "verifying" => "验证中",
+        "repairing" => "修复中",
         "responding" => "生成回复",
+        "summarizing" => "生成回复",
+        "waiting_for_user" => "等待用户",
         "completed" => "已完成",
         "cancelled" => "已停止",
         "failed" => "失败",
@@ -120,7 +126,9 @@ public sealed class AgentRunViewModel : ObservableObject
     public int FileChangeCount => _run.FileChanges.Count;
     public int VerificationCount => _run.Verifications.Count;
     public int ArtifactCount => _run.Artifacts.Count;
-    public string Summary => $"{StatusText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {ArtifactCount} 个产物 · {DurationText}";
+    public int PhaseHistoryCount => _run.PhaseHistory.Count;
+    public string CurrentPhaseSummary => string.IsNullOrWhiteSpace(_run.CurrentPhaseSummary) ? PhaseText : _run.CurrentPhaseSummary;
+    public string Summary => $"{StatusText} · {PhaseText} · {StepCount} 个步骤 · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {ArtifactCount} 个产物 · {DurationText}";
     public ObservableCollection<AgentStepViewModel> Steps => _steps ??= new ObservableCollection<AgentStepViewModel>(
         _run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
     public ObservableCollection<AgentFileChangeViewModel> FileChanges => _fileChanges ??= new ObservableCollection<AgentFileChangeViewModel>(
@@ -129,6 +137,8 @@ public sealed class AgentRunViewModel : ObservableObject
         _run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
     public ObservableCollection<AgentArtifactViewModel> Artifacts => _artifacts ??= new ObservableCollection<AgentArtifactViewModel>(
         _run.Artifacts.Select(artifact => new AgentArtifactViewModel(artifact)));
+    public ObservableCollection<AgentRunPhaseRecordViewModel> PhaseHistory => _phaseHistory ??= new ObservableCollection<AgentRunPhaseRecordViewModel>(
+        _run.PhaseHistory.Select(record => new AgentRunPhaseRecordViewModel(record)));
     public AgentPlanViewModel? Plan
     {
         get => _run.Plan is null ? null : _plan ??= new AgentPlanViewModel(_run.Plan);
@@ -142,6 +152,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public bool HasFileChanges => _run.FileChanges.Count > 0;
     public bool HasVerifications => _run.Verifications.Count > 0;
     public bool HasArtifacts => _run.Artifacts.Count > 0;
+    public bool HasPhaseHistory => _run.PhaseHistory.Count > 0;
     public IReadOnlyList<string> ChangedPaths => _run.FileChanges
         .Select(change => change.Path)
         .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -187,6 +198,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(CanContinue));
         OnPropertyChanged(nameof(CanResume));
         OnPropertyChanged(nameof(PhaseText));
+        OnPropertyChanged(nameof(CurrentPhaseSummary));
+        OnPropertyChanged(nameof(HasPhaseHistory));
+        OnPropertyChanged(nameof(PhaseHistoryCount));
         OnPropertyChanged(nameof(FinalValidationSummary));
         OnPropertyChanged(nameof(RecoverySuggestion));
         OnPropertyChanged(nameof(HasRecoverySuggestion));
@@ -253,6 +267,23 @@ public sealed class AgentRunViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasArtifacts));
         OnPropertyChanged(nameof(ArtifactCount));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
+    }
+
+    public void SyncPhaseHistory()
+    {
+        PhaseHistory.Clear();
+        foreach (var record in _run.PhaseHistory)
+        {
+            PhaseHistory.Add(new AgentRunPhaseRecordViewModel(record));
+        }
+
+        OnPropertyChanged(nameof(PhaseText));
+        OnPropertyChanged(nameof(CurrentPhaseSummary));
+        OnPropertyChanged(nameof(HasPhaseHistory));
+        OnPropertyChanged(nameof(PhaseHistoryCount));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));

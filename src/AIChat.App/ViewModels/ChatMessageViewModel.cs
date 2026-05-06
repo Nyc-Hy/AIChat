@@ -194,6 +194,12 @@ public sealed class ChatMessageViewModel : ObservableObject
         OnPropertyChanged(nameof(AgentRunSummaryText));
     }
 
+    public void SyncAgentPhase()
+    {
+        AgentRun?.SyncPhaseHistory();
+        OnPropertyChanged(nameof(AgentRunSummaryText));
+    }
+
     public void SyncAgentPlan()
     {
         AgentRun?.SyncPlan();

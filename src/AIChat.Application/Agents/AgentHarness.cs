@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using AIChat.Abstractions.Configuration;
+using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Agents.Planning;
 using AIChat.Application.Tools;
 using AIChat.Application.Verification;
@@ -14,11 +15,13 @@ public sealed class AgentHarness
 {
     private readonly AgentRunner _agentRunner;
     private readonly AgentPlanner? _planner;
+    private readonly AgentCoordinator _coordinator;
 
-    public AgentHarness(AgentRunner agentRunner, AgentPlanner? planner = null)
+    public AgentHarness(AgentRunner agentRunner, AgentPlanner? planner = null, AgentCoordinator? coordinator = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
+        _coordinator = coordinator ?? new AgentCoordinator();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -56,7 +59,7 @@ public sealed class AgentHarness
         var stepNumber = 0;
         if (_planner is not null)
         {
-            run.Phase = "planning";
+            yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
             var structuredPlan = await _planner.PlanAsync(
                 new AgentPlanningRequest(
                     request.Goal,
@@ -84,6 +87,7 @@ public sealed class AgentHarness
             };
         }
 
+        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, "准备系统提示和会话上下文"));
         var contextStep = AddCompletedStep(
             run,
             ++stepNumber,
@@ -117,7 +121,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.ContentDelta:
-                    run.Phase = "responding";
+                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
                     assistantContent += agentEvent.Content;
                     yield return new AgentHarnessEvent
                     {
@@ -132,7 +136,12 @@ public sealed class AgentHarness
                         break;
                     }
 
-                    run.Phase = ClassifyToolPhase(agentEvent.ToolCall.Name);
+                    yield return CreatePhaseChanged(
+                        run,
+                        _coordinator.StartPhase(
+                            run,
+                            AgentCoordinator.ClassifyToolPhase(agentEvent.ToolCall.Name),
+                            $"调用工具：{agentEvent.ToolCall.Name}"));
                     run.ToolCallCount++;
                     var step = AddRunningStep(
                         run,
@@ -244,6 +253,7 @@ public sealed class AgentHarness
                         request.Context.VerificationCommands.Count > 0 &&
                         run.MutationToolSucceeded)
                     {
+                        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Verifying, "运行自动验证"));
                         await foreach (var verifyEvent in RunAutoVerifyLoopAsync(
                                            run, request, stepByToolCallId,
                                            request.Settings, request.Context, cancellationToken))
@@ -255,7 +265,8 @@ public sealed class AgentHarness
                     CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
-                    CompleteRun(run, AgentRunStatus.Completed);
+                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
+                    yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
                     // Use steps count to derive the final step number; the auto-verify
                     // loop may have added intermediate steps that overflow stepNumber.
                     var finalStep = AddCompletedStep(
@@ -275,19 +286,7 @@ public sealed class AgentHarness
             }
         }
 
-        CompleteRun(run, AgentRunStatus.Completed);
-    }
-
-    private static string ClassifyToolPhase(string toolName)
-    {
-        return toolName switch
-        {
-            "list_files" or "read_file" or "search_text" or "git_status" or "git_diff" => "reading",
-            "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit" => "editing",
-            "run_build" or "run_test" => "verifying",
-            "update_plan" => "planning",
-            _ => "working"
-        };
+        yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
     }
 
     private static bool RequiresProjectMutation(string goal)
@@ -708,6 +707,7 @@ public sealed class AgentHarness
 
             // Feed failure summary back to the model for another fix round
             var failureSummary = "自动验证失败，请修复后重试：\n\n" + string.Join("\n\n", failureMessages);
+            yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Repairing, "自动验证失败，进入修复阶段"));
             var updatedMessages = new List<ChatMessage>(request.ChatRequest.Messages)
             {
                 new() { Role = ChatRole.User, Content = failureSummary }
@@ -737,7 +737,7 @@ public sealed class AgentHarness
                         };
                         break;
                     case AgentRunEventType.ContentDelta:
-                        run.Phase = "responding";
+                        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成修复说明"));
                         yield return new AgentHarnessEvent
                         {
                             Type = AgentHarnessEventType.ContentDelta,
@@ -748,7 +748,12 @@ public sealed class AgentHarness
                     case AgentRunEventType.ToolCall:
                         if (fixEvent.ToolCall is not null)
                         {
-                            run.Phase = ClassifyToolPhase(fixEvent.ToolCall.Name);
+                            yield return CreatePhaseChanged(
+                                run,
+                                _coordinator.StartPhase(
+                                    run,
+                                    AgentCoordinator.ClassifyToolPhase(fixEvent.ToolCall.Name),
+                                    $"修复阶段调用工具：{fixEvent.ToolCall.Name}"));
                             run.ToolCallCount++;
                             var fixStep = AddRunningStep(
                                 run,
@@ -1106,9 +1111,19 @@ public sealed class AgentHarness
                value.GetBoolean();
     }
 
-    private static void CompleteRun(AgentRun run, AgentRunStatus status)
+    private static AgentHarnessEvent CreatePhaseChanged(AgentRun run, AgentPhaseTransition transition)
     {
-        run.Complete(status);
+        return new AgentHarnessEvent
+        {
+            Type = AgentHarnessEventType.PhaseChanged,
+            Run = run,
+            PhaseTransition = transition
+        };
+    }
+
+    private AgentPhaseTransition CompleteRun(AgentRun run, AgentRunStatus status)
+    {
+        return _coordinator.CompleteRun(run, status, run.CompletionReason);
     }
 
     private sealed record ChangedFileInfo(string Path, int OldChars, int NewChars, string ContentSnapshot, string PostChangeHash);

@@ -1,4 +1,5 @@
 using AIChat.Application.Tools;
+using AIChat.Application.Agents.Coordinator;
 using AIChat.Domain.Chat;
 
 namespace AIChat.Application.Agents;
@@ -13,4 +14,5 @@ public sealed class AgentHarnessEvent
     public ChatToolCall? ToolCall { get; init; }
     public AgentToolPreview? ToolPreview { get; init; }
     public AgentToolResult? ToolResult { get; init; }
+    public AgentPhaseTransition? PhaseTransition { get; init; }
 }
