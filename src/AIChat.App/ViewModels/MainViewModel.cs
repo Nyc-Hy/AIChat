@@ -2307,6 +2307,7 @@ public sealed class MainViewModel : ObservableObject
             WorkspaceBranch = workspaceSnapshot.Branch,
             WorkspaceChangeCount = workspaceSnapshot.ChangeCount,
             PinnedContextItems = SelectedProject?.Project.PinnedContext ?? [],
+            MemoryEntries = SelectedProject?.Project.Memories ?? [],
             ProjectToolPermissionModes = SelectedProject?.Project.ProjectToolPermissionModes,
             VerificationCommands = SelectedProject?.Project.VerificationCommands ?? [],
             RequestToolApprovalAsync = RequestToolApprovalAsync

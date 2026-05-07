@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AIChat.Domain.Chat;
+using AIChat.Domain.Memory;
 
 namespace AIChat.Tests.Domain;
 
@@ -395,7 +396,17 @@ public sealed class AgentRunSerializationTests
             {
                 ["write_file"] = "AutoReadOnly",
                 ["run_shell"] = "Disabled"
-            }
+            },
+            Memories =
+            [
+                new MemoryEntry
+                {
+                    ProjectId = "project-1",
+                    Category = MemoryCategory.Project,
+                    Content = "Use MVVM.",
+                    Source = "test"
+                }
+            ]
         };
 
         var json = JsonSerializer.Serialize(workspace, new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -405,6 +416,8 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(2, roundTripped.ProjectToolPermissionModes.Count);
         Assert.Equal("AutoReadOnly", roundTripped.ProjectToolPermissionModes["write_file"]);
         Assert.Equal("Disabled", roundTripped.ProjectToolPermissionModes["run_shell"]);
+        Assert.Single(roundTripped.Memories);
+        Assert.Equal("Use MVVM.", roundTripped.Memories[0].Content);
     }
 
     [Fact]

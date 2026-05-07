@@ -1,5 +1,6 @@
 using AIChat.Domain.Chat;
 using AIChat.Domain.Context;
+using AIChat.Domain.Memory;
 
 namespace AIChat.Domain.Projects;
 
@@ -13,6 +14,7 @@ public sealed class ProjectWorkspace
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.Now;
     public List<Conversation> Conversations { get; set; } = [];
     public List<PinnedContextItem> PinnedContext { get; set; } = [];
+    public List<MemoryEntry> Memories { get; set; } = [];
     public List<ProjectVerificationCommand> VerificationCommands { get; set; } = [];
     // Per-project tool permission overrides (tool ID -> mode name).
     // Merged with global AppSettings.ToolPermissionModes; project values take precedence.

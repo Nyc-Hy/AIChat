@@ -1,11 +1,13 @@
 using AIChat.Abstractions.Configuration;
 using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
+using AIChat.Application.Memory;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Context;
+using AIChat.Domain.Memory;
 using AIChat.Domain.Projects;
 
 namespace AIChat.Application.Agents;
@@ -21,6 +23,7 @@ public sealed record AgentRequestBuildRequest
     public string WorkspaceBranch { get; init; } = "";
     public int WorkspaceChangeCount { get; init; }
     public IReadOnlyList<PinnedContextItem> PinnedContextItems { get; init; } = [];
+    public IReadOnlyList<MemoryEntry> MemoryEntries { get; init; } = [];
     public Dictionary<string, string>? ProjectToolPermissionModes { get; init; }
     public IReadOnlyList<ProjectVerificationCommand> VerificationCommands { get; init; } = [];
     public Func<ToolApprovalRequest, CancellationToken, Task<ToolApprovalDecision>>? RequestToolApprovalAsync { get; init; }
@@ -54,15 +57,18 @@ public sealed class AgentRequestFactory
     private readonly ConversationContextBuilder _contextBuilder;
     private readonly ProjectFileIndexBuilder _fileIndexBuilder;
     private readonly ContextRouter _contextRouter;
+    private readonly MemoryRetriever _memoryRetriever;
 
     public AgentRequestFactory(
         ConversationContextBuilder contextBuilder,
         ProjectFileIndexBuilder? fileIndexBuilder = null,
-        ContextRouter? contextRouter = null)
+        ContextRouter? contextRouter = null,
+        MemoryRetriever? memoryRetriever = null)
     {
         _contextBuilder = contextBuilder;
         _fileIndexBuilder = fileIndexBuilder ?? new ProjectFileIndexBuilder();
         _contextRouter = contextRouter ?? new ContextRouter();
+        _memoryRetriever = memoryRetriever ?? new MemoryRetriever();
     }
 
     public AgentRequestBuildResult Build(AgentRequestBuildRequest request)
@@ -73,13 +79,22 @@ public sealed class AgentRequestFactory
             ? $"分支：{request.WorkspaceBranch}，未提交变更：{request.WorkspaceChangeCount} 个文件"
             : "";
         var requestMessages = GetRequestMessages(request.Conversation, request.AssistantMessageId);
+        var goal = requestMessages.LastOrDefault(message => message.Role == ChatRole.User)?.Content ?? "";
+        var memorySnippets = _memoryRetriever.RetrieveSnippets(
+            request.MemoryEntries,
+            new MemoryRetrievalRequest
+            {
+                Query = goal,
+                MaxResults = 6
+            });
         var contextPack = _contextRouter.Route(new ContextRouterRequest
         {
-            Goal = requestMessages.LastOrDefault(message => message.Role == ChatRole.User)?.Content ?? "",
+            Goal = goal,
             Phase = AgentRunPhase.Executing,
             FileIndex = fileIndex,
             PinnedItems = request.PinnedContextItems,
             ConversationMessages = requestMessages,
+            MemorySnippets = memorySnippets,
             Artifacts = request.Conversation.AgentRuns
                 .SelectMany(run => run.Artifacts)
                 .OrderByDescending(artifact => artifact.CreatedAt)

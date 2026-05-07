@@ -4,6 +4,7 @@ using AIChat.Application.Context;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
+using AIChat.Domain.Memory;
 using AIChat.Domain.Projects;
 
 namespace AIChat.Tests.Agents;
@@ -63,7 +64,17 @@ public sealed class AgentRequestFactoryTests : IDisposable
             ProjectName = "Sample",
             ProjectPath = _tempDir,
             WorkspaceBranch = "main",
-            WorkspaceChangeCount = 2
+            WorkspaceChangeCount = 2,
+            MemoryEntries =
+            [
+                new MemoryEntry
+                {
+                    ProjectId = "project-1",
+                    Category = MemoryCategory.Project,
+                    Content = "Program.cs is the sample entry point.",
+                    Source = "test"
+                }
+            ]
         });
 
         Assert.Equal("deepseek-v4-pro", result.ChatRequest.Model);
@@ -75,6 +86,7 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.True(result.ContextPack.EstimatedTokens > 0);
         Assert.Equal(ChatRole.System, result.ChatRequest.Messages[0].Role);
         Assert.Contains("Context refs:", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("memory:", result.ChatRequest.Messages[0].Content);
         Assert.Contains(result.ChatRequest.Messages, message => message.Role == ChatRole.User && message.Content == "fix bug");
         Assert.DoesNotContain(result.ChatRequest.Messages, message => message.Id == assistant.Id);
     }

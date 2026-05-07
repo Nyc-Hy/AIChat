@@ -55,6 +55,7 @@ public sealed class ContextRouter
         }
 
         var snippets = BuildPinnedSnippets(request, budget - estimatedTokens);
+        snippets.AddRange(BuildMemorySnippets(request, budget - estimatedTokens - snippets.Sum(EstimateTokens)));
         estimatedTokens += snippets.Sum(EstimateTokens);
 
         var artifactRefs = request.Artifacts
@@ -94,6 +95,31 @@ public sealed class ContextRouter
                     : $" (line {item.StartLine})";
             }
 
+            var tokens = EstimateTokens(label);
+            if (usedTokens + tokens > remainingTokens)
+            {
+                break;
+            }
+
+            snippets.Add(label);
+            usedTokens += tokens;
+        }
+
+        return snippets;
+    }
+
+    private static List<string> BuildMemorySnippets(ContextRouterRequest request, int remainingTokens)
+    {
+        if (remainingTokens <= 0)
+        {
+            return [];
+        }
+
+        var snippets = new List<string>();
+        var usedTokens = 0;
+        foreach (var memory in request.MemorySnippets.Take(8))
+        {
+            var label = "memory: " + Truncate(memory, 300);
             var tokens = EstimateTokens(label);
             if (usedTokens + tokens > remainingTokens)
             {
