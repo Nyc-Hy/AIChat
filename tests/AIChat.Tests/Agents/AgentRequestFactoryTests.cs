@@ -3,6 +3,7 @@ using AIChat.Application.Agents;
 using AIChat.Application.Context;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
+using AIChat.Domain.Artifacts;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Memory;
 using AIChat.Domain.Projects;
@@ -65,6 +66,16 @@ public sealed class AgentRequestFactoryTests : IDisposable
             ProjectPath = _tempDir,
             WorkspaceBranch = "main",
             WorkspaceChangeCount = 2,
+            InputArtifacts =
+            [
+                new InputArtifact
+                {
+                    ConversationId = conversation.Id,
+                    Kind = InputArtifactKind.Document,
+                    FileName = "bug-report.pdf",
+                    Summary = "Report says Program.cs prints the wrong message."
+                }
+            ],
             MemoryEntries =
             [
                 new MemoryEntry
@@ -86,6 +97,8 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.True(result.ContextPack.EstimatedTokens > 0);
         Assert.Equal(ChatRole.System, result.ChatRequest.Messages[0].Role);
         Assert.Contains("Context refs:", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("input-artifact:", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("bug-report.pdf", result.ChatRequest.Messages[0].Content);
         Assert.Contains("memory:", result.ChatRequest.Messages[0].Content);
         Assert.Contains(result.ChatRequest.Messages, message => message.Role == ChatRole.User && message.Content == "fix bug");
         Assert.DoesNotContain(result.ChatRequest.Messages, message => message.Id == assistant.Id);

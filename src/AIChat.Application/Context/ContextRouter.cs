@@ -1,14 +1,17 @@
 using AIChat.Domain.Chat;
+using AIChat.Application.Artifacts;
 
 namespace AIChat.Application.Context;
 
 public sealed class ContextRouter
 {
     private readonly FileRelevanceScorer _fileScorer;
+    private readonly InputArtifactService _inputArtifactService;
 
-    public ContextRouter(FileRelevanceScorer? fileScorer = null)
+    public ContextRouter(FileRelevanceScorer? fileScorer = null, InputArtifactService? inputArtifactService = null)
     {
         _fileScorer = fileScorer ?? new FileRelevanceScorer();
+        _inputArtifactService = inputArtifactService ?? new InputArtifactService();
     }
 
     public TaskContextPack Route(ContextRouterRequest request)
@@ -63,6 +66,8 @@ public sealed class ContextRouter
             .Take(5)
             .Select(artifact => $"{artifact.ToolName}:{artifact.Kind}:{Truncate(artifact.Summary, 160)}")
             .ToList();
+
+        artifactRefs.AddRange(_inputArtifactService.BuildPromptRefs(request.InputArtifacts, 8));
         estimatedTokens += artifactRefs.Sum(EstimateTokens);
 
         return new TaskContextPack

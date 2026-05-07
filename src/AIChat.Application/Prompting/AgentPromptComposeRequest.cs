@@ -13,6 +13,7 @@ public sealed class AgentPromptComposeRequest
     public AgentPlanBudget? Budget { get; init; }
     public IReadOnlyList<string> AllowedTools { get; init; } = [];
     public IReadOnlyList<string> ContextRefs { get; init; } = [];
+    public IReadOnlyList<string> InputArtifactRefs { get; init; } = [];
     public IReadOnlyList<string> MemorySnippets { get; init; } = [];
     public IReadOnlyList<ChatMessage> ConversationMessages { get; init; } = [];
     public string FailureSummary { get; init; } = "";

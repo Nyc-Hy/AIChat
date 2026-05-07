@@ -80,4 +80,38 @@ public sealed class AgentPromptComposerTests
         Assert.Contains("run_test", composition.Messages[0].Content);
         Assert.Contains("dotnet test failed", composition.Messages[1].Content);
     }
+
+    [Fact]
+    public void Compose_PlanningPromptIncludesInputArtifactRefs()
+    {
+        var composition = new AgentPromptComposer().Compose(new AgentPromptComposeRequest
+        {
+            Profile = AgentPromptProfile.Planning,
+            Goal = "use attached image",
+            InputArtifactRefs = ["input-artifact:abc [Image] ui.png: login form screenshot"]
+        });
+
+        Assert.Contains("输入 artifact 引用", composition.Messages[1].Content);
+        Assert.Contains("input-artifact:abc", composition.Messages[1].Content);
+    }
+
+    [Fact]
+    public void Compose_ExecutionPromptIncludesInputArtifactRefs()
+    {
+        var composition = new AgentPromptComposer().Compose(new AgentPromptComposeRequest
+        {
+            Profile = AgentPromptProfile.Execution,
+            Goal = "summarize upload",
+            SystemContext = new SystemPromptContext
+            {
+                ProjectName = "Demo",
+                InputArtifactRefs = ["input-artifact:def [Document] spec.pdf: API notes"]
+            },
+            InputArtifactRefs = ["input-artifact:def [Document] spec.pdf: API notes"]
+        });
+
+        Assert.Contains("输入 artifact：", composition.Messages[0].Content);
+        Assert.Contains("Input artifact refs:", composition.Messages[0].Content);
+        Assert.Contains("input-artifact:def", composition.Messages[0].Content);
+    }
 }

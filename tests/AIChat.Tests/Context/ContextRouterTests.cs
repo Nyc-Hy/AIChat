@@ -1,6 +1,7 @@
 using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
 using AIChat.Application.Workspace;
+using AIChat.Domain.Artifacts;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Context;
 
@@ -101,5 +102,30 @@ public sealed class ContextRouterTests
 
         Assert.Contains(pack.IncludedSnippets, snippet => snippet.Contains("tests/AuthTests.cs", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(pack.ArtifactRefs, artifact => artifact.Contains("AuthTests failed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Route_IncludesInputArtifactRefs()
+    {
+        var pack = new ContextRouter().Route(new ContextRouterRequest
+        {
+            Goal = "explain attached screenshot",
+            Phase = AgentRunPhase.GatheringContext,
+            InputArtifacts =
+            [
+                new InputArtifact
+                {
+                    Id = "artifact-1",
+                    Kind = InputArtifactKind.Screenshot,
+                    FileName = "checkout-screenshot.png",
+                    MimeType = "image/png",
+                    Summary = "Screenshot shows checkout button disabled."
+                }
+            ],
+            MaxTokens = 500
+        });
+
+        Assert.Contains(pack.ArtifactRefs, artifact => artifact.Contains("input-artifact:artifact-1", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack.ArtifactRefs, artifact => artifact.Contains("checkout button disabled", StringComparison.OrdinalIgnoreCase));
     }
 }

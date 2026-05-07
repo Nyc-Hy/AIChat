@@ -1,4 +1,5 @@
 using AIChat.Abstractions.Configuration;
+using AIChat.Application.Artifacts;
 using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
 using AIChat.Application.Memory;
@@ -6,6 +7,7 @@ using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Domain.Chat;
+using AIChat.Domain.Artifacts;
 using AIChat.Domain.Context;
 using AIChat.Domain.Memory;
 using AIChat.Domain.Projects;
@@ -23,6 +25,7 @@ public sealed record AgentRequestBuildRequest
     public string WorkspaceBranch { get; init; } = "";
     public int WorkspaceChangeCount { get; init; }
     public IReadOnlyList<PinnedContextItem> PinnedContextItems { get; init; } = [];
+    public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
     public IReadOnlyList<MemoryEntry> MemoryEntries { get; init; } = [];
     public Dictionary<string, string>? ProjectToolPermissionModes { get; init; }
     public IReadOnlyList<ProjectVerificationCommand> VerificationCommands { get; init; } = [];
@@ -58,17 +61,20 @@ public sealed class AgentRequestFactory
     private readonly ProjectFileIndexBuilder _fileIndexBuilder;
     private readonly ContextRouter _contextRouter;
     private readonly MemoryRetriever _memoryRetriever;
+    private readonly InputArtifactService _inputArtifactService;
 
     public AgentRequestFactory(
         ConversationContextBuilder contextBuilder,
         ProjectFileIndexBuilder? fileIndexBuilder = null,
         ContextRouter? contextRouter = null,
-        MemoryRetriever? memoryRetriever = null)
+        MemoryRetriever? memoryRetriever = null,
+        InputArtifactService? inputArtifactService = null)
     {
         _contextBuilder = contextBuilder;
         _fileIndexBuilder = fileIndexBuilder ?? new ProjectFileIndexBuilder();
         _contextRouter = contextRouter ?? new ContextRouter();
         _memoryRetriever = memoryRetriever ?? new MemoryRetriever();
+        _inputArtifactService = inputArtifactService ?? new InputArtifactService();
     }
 
     public AgentRequestBuildResult Build(AgentRequestBuildRequest request)
@@ -87,6 +93,12 @@ public sealed class AgentRequestFactory
                 Query = goal,
                 MaxResults = 6
             });
+        var selectedInputArtifacts = request.InputArtifacts
+            .Where(artifact => string.IsNullOrWhiteSpace(artifact.ConversationId) ||
+                               string.Equals(artifact.ConversationId, request.Conversation.Id, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(artifact => artifact.CreatedAt)
+            .Take(12)
+            .ToList();
         var contextPack = _contextRouter.Route(new ContextRouterRequest
         {
             Goal = goal,
@@ -99,8 +111,10 @@ public sealed class AgentRequestFactory
                 .SelectMany(run => run.Artifacts)
                 .OrderByDescending(artifact => artifact.CreatedAt)
                 .Take(12)
-                .ToList()
+                .ToList(),
+            InputArtifacts = selectedInputArtifacts
         });
+        var inputArtifactRefs = _inputArtifactService.BuildPromptRefs(selectedInputArtifacts, 8);
 
         var contextMessages = _contextBuilder.Build(new ConversationContextBuildRequest
         {
@@ -116,7 +130,8 @@ public sealed class AgentRequestFactory
                 FileIndex = fileIndex,
                 WorkspaceSummary = workspaceSummary,
                 PinnedContextItems = request.PinnedContextItems,
-                ContextRefs = contextPack.ToPromptRefs()
+                ContextRefs = contextPack.ToPromptRefs(),
+                InputArtifactRefs = inputArtifactRefs
             }
         });
 

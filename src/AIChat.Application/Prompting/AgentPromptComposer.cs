@@ -42,7 +42,8 @@ public sealed class AgentPromptComposer
             SystemContext = context,
             Plan = plan,
             AllowedTools = context.EnabledToolIds,
-            ContextRefs = context.ContextRefs
+            ContextRefs = context.ContextRefs,
+            InputArtifactRefs = context.InputArtifactRefs
         }).Messages[0];
     }
 
@@ -148,6 +149,7 @@ public sealed class AgentPromptComposer
 
         AppendList(builder, "启用工具", request.AllowedTools);
         AppendList(builder, "上下文引用", request.ContextRefs);
+        AppendList(builder, "输入 artifact 引用", request.InputArtifactRefs);
         AppendList(builder, "记忆片段", request.MemorySnippets);
 
         builder.AppendLine();
@@ -206,6 +208,7 @@ public sealed class AgentPromptComposer
 
         AppendList(builder, "Allowed tools", request.AllowedTools);
         AppendList(builder, "Context refs", request.ContextRefs);
+        AppendList(builder, "Input artifact refs", request.InputArtifactRefs);
         AppendList(builder, "Memory snippets", request.MemorySnippets.Select(item => Truncate(item, 300)).ToList());
         return builder.ToString().Trim();
     }

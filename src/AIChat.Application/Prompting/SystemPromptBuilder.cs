@@ -70,6 +70,7 @@ public sealed class SystemPromptBuilder
         if (context.EnabledToolIds.Count == 0)
         {
             builder.AppendLine("- 无。不能声称已经读取、修改或执行项目操作。");
+            AppendInputArtifacts(builder, context.InputArtifactRefs);
             return builder.ToString().Trim();
         }
 
@@ -91,6 +92,8 @@ public sealed class SystemPromptBuilder
             builder.AppendLine(contextPack);
         }
 
+        AppendInputArtifacts(builder, context.InputArtifactRefs);
+
         AppendProviderSpecificInstructions(builder, context.ProviderId);
 
         return builder.ToString().Trim();
@@ -110,6 +113,22 @@ public sealed class SystemPromptBuilder
             ToolPermissionMode.Disabled => "已关闭，不要调用",
             _ => "每次执行前需要确认"
         };
+    }
+
+    private static void AppendInputArtifacts(StringBuilder builder, IReadOnlyList<string> inputArtifactRefs)
+    {
+        if (inputArtifactRefs.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("输入 artifact：");
+        builder.AppendLine("- 这些引用是用户上传或粘贴输入的结构化摘要；需要更多细节时，按 ref 请求更完整内容。");
+        foreach (var artifactRef in inputArtifactRefs.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            builder.AppendLine($"- {artifactRef.Trim()}");
+        }
     }
 
     private static void AppendProviderSpecificInstructions(StringBuilder builder, string providerId)
