@@ -7,12 +7,17 @@ namespace AIChat.Application.Context;
 public sealed class ConversationContextBuilder
 {
     private readonly IContextEstimator _contextEstimator;
-    private readonly SystemPromptBuilder _systemPromptBuilder;
+    private readonly AgentPromptComposer _promptComposer;
 
     public ConversationContextBuilder(IContextEstimator contextEstimator, SystemPromptBuilder systemPromptBuilder)
+        : this(contextEstimator, new AgentPromptComposer(systemPromptBuilder))
+    {
+    }
+
+    public ConversationContextBuilder(IContextEstimator contextEstimator, AgentPromptComposer promptComposer)
     {
         _contextEstimator = contextEstimator;
-        _systemPromptBuilder = systemPromptBuilder;
+        _promptComposer = promptComposer;
     }
 
     public IReadOnlyList<ChatMessage> Build(ConversationContextBuildRequest request)
@@ -20,7 +25,7 @@ public sealed class ConversationContextBuilder
         var systemMessage = new ChatMessage
         {
             Role = ChatRole.System,
-            Content = _systemPromptBuilder.Build(request.PromptContext),
+            Content = _promptComposer.ComposeExecutionSystemMessage(request.PromptContext).Content,
             CreatedAt = DateTimeOffset.Now
         };
         var sourceMessages = request.Messages

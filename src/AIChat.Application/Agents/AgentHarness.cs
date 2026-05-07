@@ -3,6 +3,7 @@ using System.Text.Json;
 using AIChat.Abstractions.Configuration;
 using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Agents.Planning;
+using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Verification;
 using AIChat.Domain.Chat;
@@ -16,12 +17,18 @@ public sealed class AgentHarness
     private readonly AgentRunner _agentRunner;
     private readonly AgentPlanner? _planner;
     private readonly AgentCoordinator _coordinator;
+    private readonly AgentPromptComposer _promptComposer;
 
-    public AgentHarness(AgentRunner agentRunner, AgentPlanner? planner = null, AgentCoordinator? coordinator = null)
+    public AgentHarness(
+        AgentRunner agentRunner,
+        AgentPlanner? planner = null,
+        AgentCoordinator? coordinator = null,
+        AgentPromptComposer? promptComposer = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
         _coordinator = coordinator ?? new AgentCoordinator();
+        _promptComposer = promptComposer ?? new AgentPromptComposer();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -708,10 +715,18 @@ public sealed class AgentHarness
             // Feed failure summary back to the model for another fix round
             var failureSummary = "自动验证失败，请修复后重试：\n\n" + string.Join("\n\n", failureMessages);
             yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Repairing, "自动验证失败，进入修复阶段"));
-            var updatedMessages = new List<ChatMessage>(request.ChatRequest.Messages)
+            var repairPrompt = _promptComposer.Compose(new AgentPromptComposeRequest
             {
-                new() { Role = ChatRole.User, Content = failureSummary }
-            };
+                Profile = AgentPromptProfile.VerificationRepair,
+                Goal = request.Goal,
+                Plan = run.StructuredPlan,
+                Budget = run.StructuredPlan?.Budget,
+                AllowedTools = context.EnabledToolIds,
+                FailureSummary = failureSummary,
+                ResponseRequirements = "修复后简要说明改动和验证结果。"
+            });
+            var updatedMessages = new List<ChatMessage>(request.ChatRequest.Messages);
+            updatedMessages.AddRange(repairPrompt.Messages);
             var updatedRequest = new ChatRequest
             {
                 Model = request.ChatRequest.Model,
