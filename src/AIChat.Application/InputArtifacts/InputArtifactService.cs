@@ -62,6 +62,42 @@ public sealed class InputArtifactService
             .ToList();
     }
 
+    public int Prune(ICollection<InputArtifact> artifacts, InputArtifactCleanupOptions? options = null)
+    {
+        options ??= new InputArtifactCleanupOptions();
+        var keepIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in artifacts
+                     .Where(artifact => !string.IsNullOrWhiteSpace(artifact.ConversationId))
+                     .GroupBy(artifact => artifact.ConversationId, StringComparer.OrdinalIgnoreCase))
+        {
+            foreach (var artifact in group
+                         .OrderByDescending(artifact => artifact.CreatedAt)
+                         .Take(Math.Max(0, options.MaxArtifactsPerConversation)))
+            {
+                keepIds.Add(artifact.Id);
+            }
+        }
+
+        foreach (var artifact in artifacts
+                     .Where(artifact => string.IsNullOrWhiteSpace(artifact.ConversationId))
+                     .OrderByDescending(artifact => artifact.CreatedAt)
+                     .Take(Math.Max(0, options.MaxProjectLevelArtifacts)))
+        {
+            keepIds.Add(artifact.Id);
+        }
+
+        var removed = artifacts
+            .Where(artifact => !keepIds.Contains(artifact.Id))
+            .ToList();
+        foreach (var artifact in removed)
+        {
+            artifacts.Remove(artifact);
+        }
+
+        return removed.Count;
+    }
+
     public string GetDetail(InputArtifact artifact, int maxChars = 4000)
     {
         var builder = new StringBuilder();

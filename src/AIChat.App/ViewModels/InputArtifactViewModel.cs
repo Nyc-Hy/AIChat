@@ -17,6 +17,28 @@ public sealed class InputArtifactViewModel
     public string FileName => string.IsNullOrWhiteSpace(_artifact.FileName) ? "(unnamed)" : _artifact.FileName;
     public string Kind => _artifact.Kind.ToString();
     public string Summary => string.IsNullOrWhiteSpace(_artifact.Summary) ? "metadata only" : _artifact.Summary;
+    public string MimeType => _artifact.MimeType;
+    public string CreatedAtText => _artifact.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+    public string DetailPreview
+    {
+        get
+        {
+            var lines = new List<string>
+            {
+                FileName,
+                Subtitle
+            };
+            if (!string.IsNullOrWhiteSpace(MimeType))
+            {
+                lines.Add($"Mime: {MimeType}");
+            }
+
+            lines.Add($"Created: {CreatedAtText}");
+            lines.Add("");
+            lines.Add(Truncate(Summary, 700));
+            return string.Join(Environment.NewLine, lines.Where(line => line is not null));
+        }
+    }
     public string SizeText => _artifact.Metadata.TryGetValue("sizeBytes", out var value) &&
                               long.TryParse(value, out var sizeBytes)
         ? FormatBytes(sizeBytes)
@@ -46,5 +68,11 @@ public sealed class InputArtifactViewModel
         }
 
         return $"{kb / 1024.0:0.#} MB";
+    }
+
+    private static string Truncate(string value, int maxChars)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxChars ? trimmed : trimmed[..maxChars] + "...";
     }
 }

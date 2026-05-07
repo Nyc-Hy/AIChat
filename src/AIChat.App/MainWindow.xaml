@@ -1036,7 +1036,8 @@
                                                     Background="#FFFFFF"
                                                     BorderBrush="#DDE6EE"
                                                     BorderThickness="1"
-                                                    MaxWidth="260">
+                                                    MaxWidth="260"
+                                                    ToolTip="{Binding DetailPreview}">
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*" />

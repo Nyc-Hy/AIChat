@@ -1473,9 +1473,12 @@ public sealed class MainViewModel : ObservableObject
 
         if (added > 0)
         {
+            var pruned = _inputArtifactService.Prune(SelectedProject.Project.InputArtifacts);
             SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
             await SaveProjectsAsync();
-            StatusText = $"已加入 {added} 个输入附件";
+            StatusText = pruned == 0
+                ? $"已加入 {added} 个输入附件"
+                : $"已加入 {added} 个输入附件，清理 {pruned} 个旧附件";
             OnPropertyChanged(nameof(CurrentInputArtifactSummary));
             RebuildCurrentInputArtifacts();
             UpdateContextUsage();

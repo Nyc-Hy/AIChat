@@ -74,4 +74,39 @@ public sealed class InputArtifactServiceTests
         Assert.Contains("[Spreadsheet]", promptRef);
         Assert.Contains("data.csv", promptRef);
     }
+
+    [Fact]
+    public void Prune_KeepsNewestArtifactsPerConversationAndProjectLevel()
+    {
+        var service = new InputArtifactService();
+        var artifacts = new List<InputArtifact>
+        {
+            Artifact("old-a", "conversation-a", 1),
+            Artifact("new-a", "conversation-a", 2),
+            Artifact("old-b", "conversation-b", 1),
+            Artifact("new-b", "conversation-b", 2),
+            Artifact("old-project", "", 1),
+            Artifact("new-project", "", 2)
+        };
+
+        var removed = service.Prune(artifacts, new InputArtifactCleanupOptions
+        {
+            MaxArtifactsPerConversation = 1,
+            MaxProjectLevelArtifacts = 1
+        });
+
+        Assert.Equal(3, removed);
+        Assert.Equal(["new-a", "new-b", "new-project"], artifacts.Select(item => item.Id).Order());
+    }
+
+    private static InputArtifact Artifact(string id, string conversationId, int day)
+    {
+        return new InputArtifact
+        {
+            Id = id,
+            ConversationId = conversationId,
+            CreatedAt = DateTimeOffset.Parse($"2026-01-{day:00}T00:00:00Z"),
+            Summary = id
+        };
+    }
 }
