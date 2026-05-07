@@ -1011,8 +1011,18 @@
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button Content="＋" Style="{StaticResource IconButtonStyle}" ToolTip="添加文件" />
+                                    <Button Command="{Binding AttachInputArtifactCommand}"
+                                            Content="&#xE723;"
+                                            FontFamily="Segoe MDL2 Assets"
+                                            Style="{StaticResource IconButtonStyle}"
+                                            ToolTip="添加输入附件" />
                                     <Button Content="@" Style="{StaticResource IconButtonStyle}" ToolTip="引用当前项目文件" />
+                                    <TextBlock Text="{Binding CurrentInputArtifactSummary}"
+                                               Margin="8,0,0,0"
+                                               Foreground="#5E6C7A"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
                                     <Border Margin="8,0,0,0" Padding="10,6" CornerRadius="8" Background="#EEF5F3" BorderBrush="#D9E9E5" BorderThickness="1">
                                         <TextBlock Text="只读模式" Foreground="#3E6F68" FontSize="12" />
                                     </Border>

@@ -2,11 +2,14 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Windows;
 using AIChat.App.Controls;
+using AIChat.Application.Artifacts;
 using AIChat.Domain.Audit;
+using AIChat.Domain.Artifacts;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using AIChat.Abstractions.Configuration;
@@ -22,6 +25,7 @@ using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
+using Microsoft.Win32;
 using Ookii.Dialogs.Wpf;
 using AIChat.Domain.Context;
 
@@ -48,6 +52,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly AgentRequestFactory _agentRequestFactory;
     private readonly WorkspaceChangeService _workspaceChangeService;
     private readonly AgentRunAuditService? _auditService;
+    private readonly InputArtifactService _inputArtifactService = new();
     private AgentHarness? _agentHarness;
     private AgentToolRegistry? _toolRegistry;
     private readonly AgentRunQueue _agentRunQueue = new();
@@ -118,6 +123,7 @@ public sealed class MainViewModel : ObservableObject
         // Commands are the bridge from XAML buttons/menu items to ViewModel methods.
         NewChatCommand = new RelayCommand(_ => NewChat(), _ => SelectedProject is not null && !IsSending);
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
+        AttachInputArtifactCommand = new RelayCommand(async _ => await AttachInputArtifactAsync(), _ => SelectedProject is not null && SelectedConversation is not null && !IsSending);
         SelectProjectCommand = new RelayCommand(parameter => SelectProject((ProjectViewModel)parameter!));
         SelectConversationCommand = new RelayCommand(parameter => SelectConversation((ConversationViewModel)parameter!));
         LoadEarlierMessagesCommand = new RelayCommand(_ => LoadEarlierMessages(), _ => SelectedConversation?.HasHiddenMessages == true);
@@ -200,6 +206,7 @@ public sealed class MainViewModel : ObservableObject
     public IReadOnlyList<LlmProviderInfo> ProviderOptions { get; } = ChatProviderCatalog.All;
     public RelayCommand NewChatCommand { get; }
     public RelayCommand SendCommand { get; }
+    public RelayCommand AttachInputArtifactCommand { get; }
     public RelayCommand SelectProjectCommand { get; }
     public RelayCommand SelectConversationCommand { get; }
     public RelayCommand LoadEarlierMessagesCommand { get; }
@@ -309,6 +316,7 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(CurrentProjectName));
                 NewChatCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
+                AttachInputArtifactCommand.RaiseCanExecuteChanged();
                 LoadProjectToolPermissionOverrides();
             }
         }
@@ -329,6 +337,8 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(LoadEarlierMessagesText));
                 LoadEarlierMessagesCommand.RaiseCanExecuteChanged();
                 OpenAgentRunHistoryCommand.RaiseCanExecuteChanged();
+                AttachInputArtifactCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(CurrentInputArtifactSummary));
                 UpdateContextUsage();
                 RebuildAgentRunHistoryIfOpen();
             }
@@ -351,6 +361,21 @@ public sealed class MainViewModel : ObservableObject
         }
     }
     public string CurrentConversationTitle => SelectedConversation?.Title ?? "新对话";
+    public string CurrentInputArtifactSummary
+    {
+        get
+        {
+            if (SelectedProject is null || SelectedConversation is null)
+            {
+                return "";
+            }
+
+            var count = SelectedProject.Project.InputArtifacts.Count(artifact =>
+                string.IsNullOrWhiteSpace(artifact.ConversationId) ||
+                string.Equals(artifact.ConversationId, SelectedConversation.Conversation.Id, StringComparison.OrdinalIgnoreCase));
+            return count == 0 ? "" : $"{count} 个输入附件已加入上下文";
+        }
+    }
     public string ModelName => SelectedConfiguredProvider is null
         ? "未配置模型"
         : $"{SelectedConfiguredProvider.Name} · {SelectedConfiguredProvider.SelectedModelId}";
@@ -822,6 +847,7 @@ public sealed class MainViewModel : ObservableObject
             {
                 SendCommand.RaiseCanExecuteChanged();
                 NewChatCommand.RaiseCanExecuteChanged();
+                AttachInputArtifactCommand.RaiseCanExecuteChanged();
                 StopCommand.RaiseCanExecuteChanged();
                 RetryAgentRunCommand.RaiseCanExecuteChanged();
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
@@ -1380,6 +1406,74 @@ public sealed class MainViewModel : ObservableObject
         StatusText = "标题已复制";
     }
 
+    private async Task AttachInputArtifactAsync()
+    {
+        if (SelectedProject is null || SelectedConversation is null)
+        {
+            return;
+        }
+
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择输入附件",
+            CheckFileExists = true,
+            Multiselect = true,
+            Filter = "支持的输入|*.txt;*.md;*.json;*.xml;*.yaml;*.yml;*.csv;*.tsv;*.log;*.cs;*.xaml;*.png;*.jpg;*.jpeg;*.gif;*.webp;*.bmp;*.pdf;*.doc;*.docx;*.xlsx;*.xls|所有文件|*.*"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var added = 0;
+        foreach (var fileName in dialog.FileNames)
+        {
+            try
+            {
+                var fileInfo = new FileInfo(fileName);
+                if (!fileInfo.Exists)
+                {
+                    continue;
+                }
+
+                var mimeType = GuessMimeType(fileInfo.Extension);
+                var contentText = ShouldReadText(fileInfo.Extension, mimeType)
+                    ? await ReadTextPreviewAsync(fileInfo.FullName, 200_000)
+                    : "";
+                var artifact = _inputArtifactService.Create(new InputArtifactCreateRequest
+                {
+                    ProjectId = SelectedProject.Project.Id,
+                    ConversationId = SelectedConversation.Conversation.Id,
+                    FileName = fileInfo.Name,
+                    MimeType = mimeType,
+                    ContentText = contentText,
+                    Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["sourcePath"] = fileInfo.FullName,
+                        ["sizeBytes"] = fileInfo.Length.ToString()
+                    }
+                });
+
+                SelectedProject.Project.InputArtifacts.Add(artifact);
+                added++;
+            }
+            catch (Exception ex)
+            {
+                StatusText = $"附件读取失败：{Path.GetFileName(fileName)} - {ex.Message}";
+            }
+        }
+
+        if (added > 0)
+        {
+            SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
+            await SaveProjectsAsync();
+            StatusText = $"已加入 {added} 个输入附件";
+            OnPropertyChanged(nameof(CurrentInputArtifactSummary));
+            UpdateContextUsage();
+        }
+    }
+
     private async Task RenameConversationAsync(ConversationViewModel conversation)
     {
         var title = TextPromptDialog.Show(System.Windows.Application.Current.MainWindow, "重命名会话", conversation.Title);
@@ -1393,6 +1487,49 @@ public sealed class MainViewModel : ObservableObject
         ApplyConversationFilters();
         await SaveProjectsAsync();
         StatusText = "会话已重命名";
+    }
+
+    private static bool ShouldReadText(string extension, string mimeType)
+    {
+        var ext = extension.TrimStart('.').ToLowerInvariant();
+        return mimeType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) ||
+               ext is "txt" or "md" or "json" or "xml" or "yaml" or "yml" or "csv" or "tsv" or "log" or
+                   "cs" or "xaml" or "csproj" or "sln" or "props" or "targets";
+    }
+
+    private static async Task<string> ReadTextPreviewAsync(string path, int maxChars)
+    {
+        await using var stream = File.OpenRead(path);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 8192);
+        var buffer = new char[maxChars + 1];
+        var read = await reader.ReadBlockAsync(buffer, 0, buffer.Length);
+        return new string(buffer, 0, Math.Min(read, maxChars));
+    }
+
+    private static string GuessMimeType(string extension)
+    {
+        return extension.TrimStart('.').ToLowerInvariant() switch
+        {
+            "txt" or "log" => "text/plain",
+            "md" => "text/markdown",
+            "json" => "application/json",
+            "xml" or "xaml" or "csproj" or "props" or "targets" => "application/xml",
+            "yaml" or "yml" => "application/yaml",
+            "csv" => "text/csv",
+            "tsv" => "text/tab-separated-values",
+            "cs" => "text/x-csharp",
+            "png" => "image/png",
+            "jpg" or "jpeg" => "image/jpeg",
+            "gif" => "image/gif",
+            "webp" => "image/webp",
+            "bmp" => "image/bmp",
+            "pdf" => "application/pdf",
+            "doc" => "application/msword",
+            "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls" => "application/vnd.ms-excel",
+            "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            _ => "application/octet-stream"
+        };
     }
 
     private void OpenCallDetails(ConversationViewModel conversation)
