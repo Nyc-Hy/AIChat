@@ -1,9 +1,22 @@
 using AIChat.Domain.Chat;
+using AIChat.Application.Agents.Templates;
 
 namespace AIChat.Application.Agents.Coordinator;
 
 public sealed class AgentCoordinator
 {
+    private readonly AgentTemplateCatalog _templateCatalog;
+
+    public AgentCoordinator(AgentTemplateCatalog? templateCatalog = null)
+    {
+        _templateCatalog = templateCatalog ?? new AgentTemplateCatalog();
+    }
+
+    public AgentTemplate SelectTemplate(AgentRunPhase phase, bool requiresWrite = false)
+    {
+        return _templateCatalog.SelectForPhase(phase, requiresWrite);
+    }
+
     public AgentPhaseTransition StartPhase(AgentRun run, AgentRunPhase phase, string summary = "")
     {
         var key = ToPhaseKey(phase);
