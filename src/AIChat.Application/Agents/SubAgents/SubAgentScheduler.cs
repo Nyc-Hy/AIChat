@@ -124,6 +124,8 @@ public sealed class SubAgentScheduler
                     case AgentRunEventType.Error:
                         findings.Add(agentEvent.Content);
                         return Complete(run, SubAgentStatus.Failed, agentEvent.Content, findings, "Inspect the sub-agent error and retry with narrower context.");
+                    case AgentRunEventType.BudgetExceeded:
+                        return Complete(run, SubAgentStatus.BudgetExceeded, agentEvent.Content, findings, "Continue with a larger sub-agent budget if needed.");
                     case AgentRunEventType.Completed:
                         return Complete(run, SubAgentStatus.Completed, content, findings, "Use the findings in the parent run.");
                 }

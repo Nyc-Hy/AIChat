@@ -44,6 +44,41 @@ public sealed class AgentRunnerTests
         Assert.Contains("原文已保存为运行产物", toolMessage.Content);
     }
 
+    [Fact]
+    public async Task RunAsync_EmitsBudgetExceededBeforeExecutingPastToolLimit()
+    {
+        var first = new ChatToolCall { Id = "tool-1", Name = "read_file", ArgumentsJson = "{}" };
+        var second = new ChatToolCall { Id = "tool-2", Name = "read_file", ArgumentsJson = "{}" };
+        var tool = new LargeReadOnlyTool("ok");
+        var runner = new AgentRunner(
+            new RecordingChatCompletionService([
+                [new ChatDelta { ToolCalls = [first, second] }]
+            ]),
+            new AgentToolCatalog([tool]));
+
+        var events = new List<AgentRunEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "inspect files" }]
+                           },
+                           new AppSettings { Model = "test" },
+                           new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 1
+                           }))
+        {
+            events.Add(item);
+        }
+
+        Assert.Contains(events, item => item.Type == AgentRunEventType.BudgetExceeded);
+        Assert.Equal(1, tool.ExecuteCount);
+        Assert.Single(events, item => item.Type == AgentRunEventType.Completed);
+    }
+
     private sealed class RecordingChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;
@@ -107,11 +142,14 @@ public sealed class AgentRunnerTests
             AgentToolContext context,
             CancellationToken cancellationToken = default)
         {
+            ExecuteCount++;
             return Task.FromResult(new AgentToolResult
             {
                 ToolName = Id,
                 Content = _content
             });
         }
+
+        public int ExecuteCount { get; private set; }
     }
 }

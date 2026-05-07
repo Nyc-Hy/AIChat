@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Llm;
+using AIChat.Application.Agents.Budget;
 using AIChat.Application.Llm.Resilience;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
@@ -40,6 +41,12 @@ public sealed class AgentRunner
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var enabledTools = _toolCatalog.ResolveEnabled(context.EnabledToolIds);
+        var budgetManager = new AgentBudgetManager(new AgentBudget
+        {
+            MaxToolCalls = context.MaxToolRounds,
+            PauseBeforeHighRiskMutation = false,
+            ToolCheckpointInterval = 0
+        });
         var requiresProjectMutation = RequiresProjectMutation(initialRequest.Messages);
         var hasMutationToolResult = false;
         var sessionAllowedTools = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -192,6 +199,22 @@ public sealed class AgentRunner
 
             foreach (var toolCall in requestedToolCalls)
             {
+                var toolRisk = _toolCatalog.Find(toolCall.Name)?.Risk ?? AgentToolRisk.Shell;
+                var budgetDecision = budgetManager.ConsumeToolCall(
+                    toolCall.Name,
+                    isHighRiskMutation: toolRisk != AgentToolRisk.ReadOnly,
+                    allowCheckpointPause: false);
+                if (budgetDecision.IsHardLimit)
+                {
+                    yield return new AgentRunEvent
+                    {
+                        Type = AgentRunEventType.BudgetExceeded,
+                        Content = budgetDecision.Reason
+                    };
+                    yield return new AgentRunEvent { Type = AgentRunEventType.Completed };
+                    yield break;
+                }
+
                 yield return new AgentRunEvent
                 {
                     Type = AgentRunEventType.ToolCall,

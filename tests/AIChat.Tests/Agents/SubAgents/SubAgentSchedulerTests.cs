@@ -93,7 +93,7 @@ public sealed class SubAgentSchedulerTests
         var run = await scheduler.RunAsync(CreateRequest(maxToolCalls: 1));
 
         Assert.Equal(SubAgentStatus.BudgetExceeded, run.Status);
-        Assert.Equal(2, run.ToolCallCount);
+        Assert.Equal(1, run.ToolCallCount);
         Assert.Single(run.ToolCalls);
     }
 
