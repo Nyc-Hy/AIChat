@@ -124,6 +124,7 @@ public sealed class MainViewModel : ObservableObject
         NewChatCommand = new RelayCommand(_ => NewChat(), _ => SelectedProject is not null && !IsSending);
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
         AttachInputArtifactCommand = new RelayCommand(async _ => await AttachInputArtifactAsync(), _ => SelectedProject is not null && SelectedConversation is not null && !IsSending);
+        RemoveInputArtifactCommand = new RelayCommand(async parameter => await RemoveInputArtifactAsync((InputArtifactViewModel)parameter!), parameter => parameter is InputArtifactViewModel && !IsSending);
         SelectProjectCommand = new RelayCommand(parameter => SelectProject((ProjectViewModel)parameter!));
         SelectConversationCommand = new RelayCommand(parameter => SelectConversation((ConversationViewModel)parameter!));
         LoadEarlierMessagesCommand = new RelayCommand(_ => LoadEarlierMessages(), _ => SelectedConversation?.HasHiddenMessages == true);
@@ -195,6 +196,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<WorkspaceChangeViewModel> UntrackedWorkspaceChanges { get; } = [];
     public ObservableCollection<AgentRunHistoryItemViewModel> AgentRunHistory { get; } = [];
     public ObservableCollection<AuditEventViewModel> AuditEvents { get; } = [];
+    public ObservableCollection<InputArtifactViewModel> CurrentInputArtifacts { get; } = [];
     public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions => AgentRunHistoryFilter.Options;
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
@@ -207,6 +209,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand NewChatCommand { get; }
     public RelayCommand SendCommand { get; }
     public RelayCommand AttachInputArtifactCommand { get; }
+    public RelayCommand RemoveInputArtifactCommand { get; }
     public RelayCommand SelectProjectCommand { get; }
     public RelayCommand SelectConversationCommand { get; }
     public RelayCommand LoadEarlierMessagesCommand { get; }
@@ -317,6 +320,7 @@ public sealed class MainViewModel : ObservableObject
                 NewChatCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
+                RebuildCurrentInputArtifacts();
                 LoadProjectToolPermissionOverrides();
             }
         }
@@ -339,6 +343,7 @@ public sealed class MainViewModel : ObservableObject
                 OpenAgentRunHistoryCommand.RaiseCanExecuteChanged();
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
                 OnPropertyChanged(nameof(CurrentInputArtifactSummary));
+                RebuildCurrentInputArtifacts();
                 UpdateContextUsage();
                 RebuildAgentRunHistoryIfOpen();
             }
@@ -361,6 +366,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
     public string CurrentConversationTitle => SelectedConversation?.Title ?? "新对话";
+    public bool HasCurrentInputArtifacts => CurrentInputArtifacts.Count > 0;
     public string CurrentInputArtifactSummary
     {
         get
@@ -848,6 +854,7 @@ public sealed class MainViewModel : ObservableObject
                 SendCommand.RaiseCanExecuteChanged();
                 NewChatCommand.RaiseCanExecuteChanged();
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
+                RemoveInputArtifactCommand.RaiseCanExecuteChanged();
                 StopCommand.RaiseCanExecuteChanged();
                 RetryAgentRunCommand.RaiseCanExecuteChanged();
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
@@ -1470,8 +1477,69 @@ public sealed class MainViewModel : ObservableObject
             await SaveProjectsAsync();
             StatusText = $"已加入 {added} 个输入附件";
             OnPropertyChanged(nameof(CurrentInputArtifactSummary));
+            RebuildCurrentInputArtifacts();
             UpdateContextUsage();
         }
+    }
+
+    private async Task RemoveInputArtifactAsync(InputArtifactViewModel artifactViewModel)
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        var removed = SelectedProject.Project.InputArtifacts.Remove(artifactViewModel.Artifact);
+        if (!removed)
+        {
+            var match = SelectedProject.Project.InputArtifacts.FirstOrDefault(artifact =>
+                string.Equals(artifact.Id, artifactViewModel.Id, StringComparison.OrdinalIgnoreCase));
+            if (match is not null)
+            {
+                removed = SelectedProject.Project.InputArtifacts.Remove(match);
+            }
+        }
+
+        if (!removed)
+        {
+            return;
+        }
+
+        SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
+        await SaveProjectsAsync();
+        StatusText = $"已移除输入附件：{artifactViewModel.FileName}";
+        RebuildCurrentInputArtifacts();
+        UpdateContextUsage();
+    }
+
+    private void RebuildCurrentInputArtifacts()
+    {
+        CurrentInputArtifacts.Clear();
+        if (SelectedProject is null || SelectedConversation is null)
+        {
+            RaiseInputArtifactProperties();
+            return;
+        }
+
+        var conversationId = SelectedConversation.Conversation.Id;
+        var artifacts = SelectedProject.Project.InputArtifacts
+            .Where(artifact => string.IsNullOrWhiteSpace(artifact.ConversationId) ||
+                               string.Equals(artifact.ConversationId, conversationId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(artifact => artifact.CreatedAt)
+            .Take(8);
+        foreach (var artifact in artifacts)
+        {
+            CurrentInputArtifacts.Add(new InputArtifactViewModel(artifact));
+        }
+
+        RaiseInputArtifactProperties();
+    }
+
+    private void RaiseInputArtifactProperties()
+    {
+        OnPropertyChanged(nameof(CurrentInputArtifactSummary));
+        OnPropertyChanged(nameof(HasCurrentInputArtifacts));
+        RemoveInputArtifactCommand.RaiseCanExecuteChanged();
     }
 
     private async Task RenameConversationAsync(ConversationViewModel conversation)

@@ -907,6 +907,7 @@
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <!-- Agent status bar: shows live phase/tool/budget info during runs. -->
@@ -1004,7 +1005,71 @@
                                        VerticalAlignment="Center"
                                        IsHitTestVisible="False" />
 
-                            <Grid Grid.Row="3" Margin="0,9,0,0">
+                            <Border Grid.Row="3"
+                                    Margin="0,8,0,0"
+                                    Padding="8"
+                                    CornerRadius="8"
+                                    Background="#F7FAFC"
+                                    BorderBrush="#E1E8EF"
+                                    BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasCurrentInputArtifacts}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <ItemsControl ItemsSource="{Binding CurrentInputArtifacts}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,8,8"
+                                                    Padding="8,6"
+                                                    CornerRadius="8"
+                                                    Background="#FFFFFF"
+                                                    BorderBrush="#DDE6EE"
+                                                    BorderThickness="1"
+                                                    MaxWidth="260">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding FileName}"
+                                                                   FontSize="12"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="#1E252E"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding Subtitle}"
+                                                                   Margin="0,2,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#748092"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1"
+                                                            Command="{Binding DataContext.RemoveInputArtifactCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="×"
+                                                            Margin="8,0,0,0"
+                                                            Style="{StaticResource IconButtonStyle}"
+                                                            ToolTip="移除输入附件"
+                                                            VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+
+                            <Grid Grid.Row="4" Margin="0,9,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" MinWidth="210" />
                                     <ColumnDefinition Width="Auto" />
