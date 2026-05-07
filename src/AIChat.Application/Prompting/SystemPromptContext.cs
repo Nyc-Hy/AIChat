@@ -15,4 +15,5 @@ public sealed class SystemPromptContext
     public ProjectFileIndex? FileIndex { get; init; }
     public string WorkspaceSummary { get; init; } = "";
     public IReadOnlyList<PinnedContextItem> PinnedContextItems { get; init; } = [];
+    public IReadOnlyList<string> ContextRefs { get; init; } = [];
 }

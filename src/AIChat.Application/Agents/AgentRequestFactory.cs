@@ -1,4 +1,5 @@
 using AIChat.Abstractions.Configuration;
+using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
@@ -29,7 +30,8 @@ public sealed record AgentRequestBuildResult(
     ChatRequest ChatRequest,
     AgentRunContext AgentContext,
     ProjectFileIndex FileIndex,
-    string WorkspaceSummary);
+    string WorkspaceSummary,
+    TaskContextPack ContextPack);
 
 public sealed record AgentRequestSnapshot(
     string Provider,
@@ -51,13 +53,16 @@ public sealed class AgentRequestFactory
 {
     private readonly ConversationContextBuilder _contextBuilder;
     private readonly ProjectFileIndexBuilder _fileIndexBuilder;
+    private readonly ContextRouter _contextRouter;
 
     public AgentRequestFactory(
         ConversationContextBuilder contextBuilder,
-        ProjectFileIndexBuilder? fileIndexBuilder = null)
+        ProjectFileIndexBuilder? fileIndexBuilder = null,
+        ContextRouter? contextRouter = null)
     {
         _contextBuilder = contextBuilder;
         _fileIndexBuilder = fileIndexBuilder ?? new ProjectFileIndexBuilder();
+        _contextRouter = contextRouter ?? new ContextRouter();
     }
 
     public AgentRequestBuildResult Build(AgentRequestBuildRequest request)
@@ -67,10 +72,24 @@ public sealed class AgentRequestFactory
         var workspaceSummary = !string.IsNullOrWhiteSpace(request.WorkspaceBranch)
             ? $"分支：{request.WorkspaceBranch}，未提交变更：{request.WorkspaceChangeCount} 个文件"
             : "";
+        var requestMessages = GetRequestMessages(request.Conversation, request.AssistantMessageId);
+        var contextPack = _contextRouter.Route(new ContextRouterRequest
+        {
+            Goal = requestMessages.LastOrDefault(message => message.Role == ChatRole.User)?.Content ?? "",
+            Phase = AgentRunPhase.Executing,
+            FileIndex = fileIndex,
+            PinnedItems = request.PinnedContextItems,
+            ConversationMessages = requestMessages,
+            Artifacts = request.Conversation.AgentRuns
+                .SelectMany(run => run.Artifacts)
+                .OrderByDescending(artifact => artifact.CreatedAt)
+                .Take(12)
+                .ToList()
+        });
 
         var contextMessages = _contextBuilder.Build(new ConversationContextBuildRequest
         {
-            Messages = GetRequestMessages(request.Conversation, request.AssistantMessageId),
+            Messages = requestMessages,
             Settings = request.EffectiveSettings,
             PromptContext = new SystemPromptContext
             {
@@ -81,7 +100,8 @@ public sealed class AgentRequestFactory
                 ToolPermissionModes = request.RuntimeSettings.ToolPermissionModes,
                 FileIndex = fileIndex,
                 WorkspaceSummary = workspaceSummary,
-                PinnedContextItems = request.PinnedContextItems
+                PinnedContextItems = request.PinnedContextItems,
+                ContextRefs = contextPack.ToPromptRefs()
             }
         });
 
@@ -106,7 +126,8 @@ public sealed class AgentRequestFactory
                 VerificationCommands = request.VerificationCommands
             },
             fileIndex,
-            workspaceSummary);
+            workspaceSummary,
+            contextPack);
     }
 
     public static AgentRequestSnapshot CreateSnapshot(

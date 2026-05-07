@@ -41,7 +41,8 @@ public sealed class AgentPromptComposer
             ProviderId = context.ProviderId,
             SystemContext = context,
             Plan = plan,
-            AllowedTools = context.EnabledToolIds
+            AllowedTools = context.EnabledToolIds,
+            ContextRefs = context.ContextRefs
         }).Messages[0];
     }
 

@@ -71,7 +71,10 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Equal(_tempDir, result.FileIndex.RootPath);
         Assert.Contains(result.FileIndex.Entries, entry => entry.RelativePath == "Program.cs");
         Assert.Contains("分支：main，未提交变更：2 个文件", result.WorkspaceSummary);
+        Assert.NotNull(result.ContextPack);
+        Assert.True(result.ContextPack.EstimatedTokens > 0);
         Assert.Equal(ChatRole.System, result.ChatRequest.Messages[0].Role);
+        Assert.Contains("Context refs:", result.ChatRequest.Messages[0].Content);
         Assert.Contains(result.ChatRequest.Messages, message => message.Role == ChatRole.User && message.Content == "fix bug");
         Assert.DoesNotContain(result.ChatRequest.Messages, message => message.Id == assistant.Id);
     }
