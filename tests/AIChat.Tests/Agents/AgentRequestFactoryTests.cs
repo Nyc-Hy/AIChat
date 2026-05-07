@@ -140,6 +140,31 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Single(result.AgentContext.VerificationCommands);
     }
 
+    [Fact]
+    public void Build_PassesCurrentConversationInputArtifactsToAgentContext()
+    {
+        var conversation = CreateConversation();
+        var assistant = AddMessage(conversation, ChatRole.Assistant, "placeholder");
+        var factory = CreateFactory();
+
+        var result = factory.Build(new AgentRequestBuildRequest
+        {
+            Conversation = conversation,
+            AssistantMessageId = assistant.Id,
+            EffectiveSettings = CreateEffectiveSettings(),
+            RuntimeSettings = CreateRuntimeSettings(),
+            ProjectPath = _tempDir,
+            InputArtifacts =
+            [
+                new InputArtifact { Id = "current", ConversationId = conversation.Id, Summary = "current conversation", CreatedAt = DateTimeOffset.Parse("2026-01-02T00:00:00Z") },
+                new InputArtifact { Id = "other", ConversationId = "other-conversation", Summary = "other conversation", CreatedAt = DateTimeOffset.Parse("2026-01-03T00:00:00Z") },
+                new InputArtifact { Id = "global", ConversationId = "", Summary = "project level", CreatedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z") }
+            ]
+        });
+
+        Assert.Equal(["current", "global"], result.AgentContext.InputArtifacts.Select(item => item.Id));
+    }
+
     private static AgentRequestFactory CreateFactory()
     {
         return new AgentRequestFactory(new ConversationContextBuilder(

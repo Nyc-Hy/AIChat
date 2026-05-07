@@ -29,6 +29,7 @@ public sealed class AgentTemplateCatalogTests
         Assert.Equal(AgentPromptProfile.ContextGathering, explorer.PromptProfile);
         Assert.All(modes.Values, mode => Assert.Equal(ToolPermissionMode.AutoReadOnly, mode));
         Assert.Contains("read_file", explorer.DefaultToolIds);
+        Assert.Contains("read_input_artifact", explorer.DefaultToolIds);
         Assert.DoesNotContain("apply_patch", explorer.DefaultToolIds);
     }
 
@@ -42,6 +43,7 @@ public sealed class AgentTemplateCatalogTests
         Assert.False(worker.CanVerify);
         Assert.Equal(AgentPromptProfile.Execution, worker.PromptProfile);
         Assert.Equal(ToolPermissionMode.AutoReadOnly, modes["read_file"]);
+        Assert.Equal(ToolPermissionMode.AutoReadOnly, modes["read_input_artifact"]);
         Assert.Equal(ToolPermissionMode.ConfirmEachTime, modes["apply_patch"]);
         Assert.Equal(ToolPermissionMode.ConfirmEachTime, modes["write_file"]);
     }

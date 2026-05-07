@@ -888,7 +888,11 @@ public sealed class AgentHarness
 
     private static AgentToolContext CreateToolContext(AgentRunContext context)
     {
-        return new AgentToolContext { ProjectPath = context.ProjectPath };
+        return new AgentToolContext
+        {
+            ProjectPath = context.ProjectPath,
+            InputArtifacts = context.InputArtifacts
+        };
     }
 
 

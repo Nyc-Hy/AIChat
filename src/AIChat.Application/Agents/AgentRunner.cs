@@ -229,6 +229,7 @@ public sealed class AgentRunner
                                        ProjectPath = context.ProjectPath,
                                        ToolPermissionModes = context.ToolPermissionModes,
                                        SessionAllowedToolIds = sessionAllowedTools,
+                                       InputArtifacts = context.InputArtifacts,
                                        RequestToolApprovalAsync = context.RequestToolApprovalAsync
                                    },
                                    cancellationToken))

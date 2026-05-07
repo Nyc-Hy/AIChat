@@ -1,6 +1,7 @@
 namespace AIChat.Application.Agents;
 
 using AIChat.Abstractions.Configuration;
+using AIChat.Domain.Artifacts;
 using AIChat.Domain.Projects;
 
 public sealed class AgentRunContext
@@ -14,4 +15,5 @@ public sealed class AgentRunContext
     public bool AutoVerifyAgentRuns { get; init; }
     public int MaxAutoFixRounds { get; init; } = 3;
     public IReadOnlyList<ProjectVerificationCommand> VerificationCommands { get; init; } = [];
+    public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
 }

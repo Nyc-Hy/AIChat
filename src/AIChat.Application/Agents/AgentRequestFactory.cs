@@ -153,7 +153,8 @@ public sealed class AgentRequestFactory
                 RequestToolApprovalAsync = request.RequestToolApprovalAsync,
                 AutoVerifyAgentRuns = request.RuntimeSettings.AutoVerifyAgentRuns,
                 MaxAutoFixRounds = request.RuntimeSettings.MaxAutoFixRounds,
-                VerificationCommands = request.VerificationCommands
+                VerificationCommands = request.VerificationCommands,
+                InputArtifacts = selectedInputArtifacts
             },
             fileIndex,
             workspaceSummary,

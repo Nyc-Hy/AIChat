@@ -10,7 +10,8 @@ public sealed class AgentToolRegistryTests
     {
         var registry = AgentToolRegistry.CreateDefault();
 
-        Assert.Equal(14, registry.All.Count);
+        Assert.Equal(15, registry.All.Count);
+        Assert.NotNull(registry.Find("read_input_artifact"));
         Assert.NotNull(registry.Find("read_file"));
         Assert.NotNull(registry.Find("write_file"));
         Assert.NotNull(registry.Find("run_shell"));
@@ -24,6 +25,9 @@ public sealed class AgentToolRegistryTests
 
         var readMeta = registry.GetMetadata("read_file");
         Assert.Equal("读取", readMeta.Category);
+
+        var artifactMeta = registry.GetMetadata("read_input_artifact");
+        Assert.Equal("读取", artifactMeta.Category);
 
         var writeMeta = registry.GetMetadata("write_file");
         Assert.Equal("写入", writeMeta.Category);
@@ -41,6 +45,7 @@ public sealed class AgentToolRegistryTests
         var registry = AgentToolRegistry.CreateDefault();
 
         Assert.Equal(ToolPermissionMode.AutoReadOnly, registry.GetMetadata("read_file").DefaultPermissionMode);
+        Assert.Equal(ToolPermissionMode.AutoReadOnly, registry.GetMetadata("read_input_artifact").DefaultPermissionMode);
         Assert.Equal(ToolPermissionMode.ConfirmEachTime, registry.GetMetadata("write_file").DefaultPermissionMode);
         Assert.Equal(ToolPermissionMode.ConfirmEachTime, registry.GetMetadata("run_shell").DefaultPermissionMode);
     }
@@ -76,7 +81,7 @@ public sealed class AgentToolRegistryTests
 
         var pairs = registry.AllWithMetadata();
 
-        Assert.Equal(14, pairs.Count);
+        Assert.Equal(15, pairs.Count);
         Assert.All(pairs, p => Assert.NotNull(p.Metadata));
         Assert.All(pairs, p => Assert.Equal(p.Tool.Id, p.Metadata.ToolId));
     }

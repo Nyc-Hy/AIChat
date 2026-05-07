@@ -1,5 +1,6 @@
 using AIChat.Abstractions.Configuration;
 using AIChat.Application.Agents;
+using AIChat.Domain.Artifacts;
 using AIChat.Domain.Chat;
 
 namespace AIChat.Application.Tools;
@@ -12,5 +13,6 @@ public sealed class ToolExecutionRequest
         new Dictionary<string, ToolPermissionMode>(StringComparer.OrdinalIgnoreCase);
     public IReadOnlySet<string> SessionAllowedToolIds { get; init; } =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
     public Func<ToolApprovalRequest, CancellationToken, Task<ToolApprovalDecision>>? RequestToolApprovalAsync { get; init; }
 }

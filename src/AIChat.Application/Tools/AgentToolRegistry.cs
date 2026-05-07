@@ -63,6 +63,7 @@ public sealed class AgentToolRegistry
         return new IAgentTool[]
         {
             new ListFilesTool(),
+            new ReadInputArtifactTool(),
             new ReadFileTool(),
             new SearchTextTool(),
             new WriteFileTool(),
@@ -84,6 +85,7 @@ public sealed class AgentToolRegistry
         return new ToolMetadata[]
         {
             new() { ToolId = "list_files", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
+            new() { ToolId = "read_input_artifact", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "输入附件" },
             new() { ToolId = "read_file", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
             new() { ToolId = "search_text", Category = "读取", DefaultPermissionMode = ToolPermissionMode.AutoReadOnly, GroupLabel = "文件浏览" },
             new() { ToolId = "write_file", Category = "写入", DefaultPermissionMode = ToolPermissionMode.ConfirmEachTime, GroupLabel = "文件修改" },
@@ -175,7 +177,7 @@ public sealed class AgentToolRegistry
         if (tool is null) return "通用";
         return tool.Id switch
         {
-            "list_files" or "read_file" or "search_text" => "读取",
+            "list_files" or "read_file" or "search_text" or "read_input_artifact" => "读取",
             "write_file" or "edit_file" or "apply_patch" => "写入",
             "update_plan" => "计划",
             "git_status" or "git_diff" or "git_restore_file" or "git_commit" => "Git",

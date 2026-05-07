@@ -32,7 +32,11 @@ public sealed class ToolExecutionService
             yield break;
         }
 
-        var context = new AgentToolContext { ProjectPath = request.ProjectPath };
+        var context = new AgentToolContext
+        {
+            ProjectPath = request.ProjectPath,
+            InputArtifacts = request.InputArtifacts
+        };
         var preview = await tool.PreviewAsync(request.ToolCall.ArgumentsJson, context, cancellationToken);
         var mode = ResolvePermissionMode(request, tool);
         if (mode == ToolPermissionMode.Disabled)

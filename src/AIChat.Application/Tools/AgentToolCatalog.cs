@@ -29,6 +29,7 @@ public sealed class AgentToolCatalog
         return new AgentToolCatalog(
         [
             new ListFilesTool(),
+            new ReadInputArtifactTool(),
             new ReadFileTool(),
             new SearchTextTool(),
             new WriteFileTool(),
