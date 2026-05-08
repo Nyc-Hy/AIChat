@@ -64,6 +64,17 @@ public sealed class AgentPromptComposer
                   "suggestedTools": ["read_file"],
                   "suggestedContext": ["files or concepts to inspect"],
                   "budget": { "maxToolCalls": 8, "tokenBudget": 12000, "notes": "" },
+                  "subAgents": [
+                    {
+                      "templateId": "explorer",
+                      "phase": "gathering_context",
+                      "task": "focused read-only investigation task",
+                      "reason": "why this child agent helps",
+                      "maxToolCalls": 4,
+                      "dependsOn": [],
+                      "writeScope": []
+                    }
+                  ],
                   "phases": [
                     {
                       "name": "planning|gathering_context|executing|verifying|summarizing",
@@ -85,7 +96,9 @@ public sealed class AgentPromptComposer
                 规则：
                 - 至少返回一个 phase 和一个 task。
                 - 总任务数保持精简，默认 3-7 个。
-                - 不要创建多个 agent，不要描述并行执行。
+                - 只有当独立只读调研能明显减少主 Agent 上下文压力时，才在 subAgents 中规划 explorer。
+                - 当前只允许 templateId=explorer；不要规划写入型子 Agent。
+                - subAgents 最多 2 个，并且必须是可独立完成的聚焦任务。
                 - 对代码修改任务必须包含 gathering_context、executing、verifying。
                 - suggestedTools 只能从用户当前启用工具中选择。
                 """,

@@ -6,6 +6,15 @@ namespace AIChat.Application.Agents.Planning;
 public sealed class AgentStructuredPlanParser
 {
     public const int MaxTaskCount = 12;
+    public const int MaxPlannedSubAgentCount = 4;
+
+    private static readonly HashSet<string> KnownSubAgentTemplates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "explorer",
+        "verifier",
+        "reviewer",
+        "summarizer"
+    };
 
     private static readonly HashSet<string> KnownPhases = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -86,7 +95,8 @@ public sealed class AgentStructuredPlanParser
             Summary = GetString(root, "summary"),
             SuggestedTools = GetStringArray(root, "suggestedTools"),
             SuggestedContext = GetStringArray(root, "suggestedContext"),
-            Budget = GetBudget(root, "budget")
+            Budget = GetBudget(root, "budget"),
+            SubAgents = GetSubAgents(root)
         };
 
         if (root.TryGetProperty("phases", out var phasesElement) &&
@@ -145,6 +155,7 @@ public sealed class AgentStructuredPlanParser
         plan.SuggestedTools = NormalizeTools(plan.SuggestedTools, request.EnabledToolIds);
         plan.SuggestedContext = NormalizeStrings(plan.SuggestedContext);
         plan.Budget = NormalizeBudget(plan.Budget, 8, 12000);
+        plan.SubAgents = NormalizeSubAgents(plan.SubAgents);
 
         var order = 0;
         var remaining = MaxTaskCount;
@@ -181,8 +192,36 @@ public sealed class AgentStructuredPlanParser
             plan.SuggestedTools = fallback.SuggestedTools;
             plan.SuggestedContext = fallback.SuggestedContext;
             plan.Budget = fallback.Budget;
+            plan.SubAgents = fallback.SubAgents;
             plan.Phases = fallback.Phases;
         }
+    }
+
+    private static List<AgentPlannedSubAgent> NormalizeSubAgents(IReadOnlyList<AgentPlannedSubAgent> subAgents)
+    {
+        var order = 0;
+        return subAgents
+            .Where(agent => !string.IsNullOrWhiteSpace(agent.Task))
+            .Take(MaxPlannedSubAgentCount)
+            .Select(agent => new AgentPlannedSubAgent
+            {
+                Id = string.IsNullOrWhiteSpace(agent.Id) ? Guid.NewGuid().ToString("N") : agent.Id,
+                TemplateId = NormalizeTemplate(agent.TemplateId),
+                Phase = NormalizePhase(FirstNonBlank(agent.Phase, "gathering_context")),
+                Task = agent.Task.Trim(),
+                Reason = agent.Reason.Trim(),
+                MaxToolCalls = Math.Clamp(agent.MaxToolCalls <= 0 ? 4 : agent.MaxToolCalls, 1, 8),
+                Order = order++,
+                DependsOn = NormalizeStrings(agent.DependsOn),
+                WriteScope = NormalizeStrings(agent.WriteScope)
+            })
+            .ToList();
+    }
+
+    private static string NormalizeTemplate(string templateId)
+    {
+        var normalized = templateId.Trim().Replace('-', '_').Replace(' ', '_').ToLowerInvariant();
+        return KnownSubAgentTemplates.Contains(normalized) ? normalized : "explorer";
     }
 
     private static string ExtractJson(string value)
@@ -257,6 +296,36 @@ public sealed class AgentStructuredPlanParser
             TokenBudget = GetInt(value, "tokenBudget"),
             Notes = GetString(value, "notes")
         };
+    }
+
+    private static List<AgentPlannedSubAgent> GetSubAgents(JsonElement root)
+    {
+        if (!root.TryGetProperty("subAgents", out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var result = new List<AgentPlannedSubAgent>();
+        foreach (var item in value.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            result.Add(new AgentPlannedSubAgent
+            {
+                TemplateId = FirstNonBlank(GetString(item, "templateId"), GetString(item, "template"), "explorer"),
+                Phase = FirstNonBlank(GetString(item, "phase"), "gathering_context"),
+                Task = FirstNonBlank(GetString(item, "task"), GetString(item, "title")),
+                Reason = GetString(item, "reason"),
+                MaxToolCalls = GetInt(item, "maxToolCalls"),
+                DependsOn = GetStringArray(item, "dependsOn"),
+                WriteScope = GetStringArray(item, "writeScope")
+            });
+        }
+
+        return result;
     }
 
     private static List<string> GetStringArray(JsonElement root, string propertyName)

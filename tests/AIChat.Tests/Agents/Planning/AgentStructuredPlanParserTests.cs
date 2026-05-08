@@ -15,6 +15,21 @@ public sealed class AgentStructuredPlanParserTests
           "summary": "Update the planner",
           "suggestedTools": ["read_file", "missing_tool"],
           "budget": { "maxToolCalls": 99, "tokenBudget": 500 },
+          "subAgents": [
+            {
+              "templateId": "explorer",
+              "phase": "gathering-context",
+              "task": "Inspect planner flow",
+              "reason": "needs focused read-only context",
+              "maxToolCalls": 99,
+              "dependsOn": ["plan"],
+              "writeScope": ["src/Nope.cs"]
+            },
+            {
+              "templateId": "worker",
+              "task": "Invalid template becomes explorer"
+            }
+          ],
           "phases": [
             {
               "name": "gathering-context",
@@ -44,6 +59,14 @@ public sealed class AgentStructuredPlanParserTests
         Assert.Equal(["read_file"], plan.Phases[0].Tasks[0].SuggestedTools);
         Assert.Equal(2, plan.Phases[0].Tasks[0].Budget.MaxToolCalls);
         Assert.Equal(200000, plan.Phases[0].Tasks[0].Budget.TokenBudget);
+        Assert.Equal(2, plan.SubAgents.Count);
+        Assert.Equal("explorer", plan.SubAgents[0].TemplateId);
+        Assert.Equal("gathering_context", plan.SubAgents[0].Phase);
+        Assert.Equal("Inspect planner flow", plan.SubAgents[0].Task);
+        Assert.Equal(8, plan.SubAgents[0].MaxToolCalls);
+        Assert.Equal(["plan"], plan.SubAgents[0].DependsOn);
+        Assert.Equal(["src/Nope.cs"], plan.SubAgents[0].WriteScope);
+        Assert.Equal("explorer", plan.SubAgents[1].TemplateId);
     }
 
     [Fact]

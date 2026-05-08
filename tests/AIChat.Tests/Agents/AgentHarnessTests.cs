@@ -203,6 +203,81 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public async Task RunAsync_RunsPlannerRequestedExplorerSubAgent()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """
+            {
+              "summary": "Explore requested area",
+              "subAgents": [
+                {
+                  "templateId": "explorer",
+                  "phase": "gathering_context",
+                  "task": "Inspect repository routing code",
+                  "reason": "The parent run needs focused context before editing.",
+                  "maxToolCalls": 3
+                }
+              ],
+              "phases": [
+                {
+                  "name": "executing",
+                  "objective": "finish task",
+                  "tasks": [
+                    { "title": "Apply fix", "risk": "medium", "suggestedTools": ["read_file"] }
+                  ]
+                }
+              ]
+            }
+            """
+        }]);
+        var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "Explorer completed planned task." }]);
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService),
+            subAgentScheduler: subAgentScheduler);
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix routing",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix routing" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           ContextPack = new TaskContextPack
+                           {
+                               Summary = "Context pack",
+                               IncludedFiles = [new TaskContextFileRef { Path = "src/Routing.cs", Reason = "goal match" }]
+                           },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 9
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Single(run.StructuredPlan!.SubAgents);
+        var subAgentRun = Assert.Single(run.SubAgentRuns);
+        Assert.Equal("explorer", subAgentRun.TemplateId);
+        Assert.Contains("Inspect repository routing code", subAgentRun.Task, StringComparison.Ordinal);
+        Assert.Contains("The parent run needs focused context", subAgentRun.Task, StringComparison.Ordinal);
+        Assert.Equal(3, subAgentRun.MaxToolCalls);
+        Assert.Contains("Explorer completed planned task.", subAgentRun.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RunAsync_RecordsFailedExplorerSubAgentAndContinuesParentRun()
     {
         var conversation = new Conversation { Id = "conversation-1" };

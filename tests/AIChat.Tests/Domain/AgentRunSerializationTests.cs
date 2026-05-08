@@ -79,6 +79,19 @@ public sealed class AgentRunSerializationTests
                         RunId = "run-1",
                         Summary = "structured summary",
                         Budget = new AgentPlanBudget { MaxToolCalls = 4, TokenBudget = 8000 },
+                        SubAgents =
+                        [
+                            new AgentPlannedSubAgent
+                            {
+                                TemplateId = "explorer",
+                                Phase = "gathering_context",
+                                Task = "Inspect service",
+                                Reason = "Need focused context",
+                                MaxToolCalls = 3,
+                                DependsOn = ["plan"],
+                                Order = 0
+                            }
+                        ],
                         Phases =
                         [
                             new AgentPlanPhase
@@ -232,6 +245,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("completed", roundTripped.AgentRuns[0].PhaseHistory[0].Status);
         Assert.NotNull(roundTripped.AgentRuns[0].StructuredPlan);
         Assert.Equal("structured summary", roundTripped.AgentRuns[0].StructuredPlan!.Summary);
+        Assert.Single(roundTripped.AgentRuns[0].StructuredPlan!.SubAgents);
+        Assert.Equal("Inspect service", roundTripped.AgentRuns[0].StructuredPlan!.SubAgents[0].Task);
+        Assert.Equal(["plan"], roundTripped.AgentRuns[0].StructuredPlan!.SubAgents[0].DependsOn);
         Assert.Equal(AgentPlanRisk.High, roundTripped.AgentRuns[0].StructuredPlan!.Phases[0].Tasks[0].Risk);
         Assert.Equal(AgentStepType.ToolCall, roundTripped.AgentRuns[0].Steps[0].Type);
         Assert.Equal("src/App.cs", roundTripped.AgentRuns[0].FileChanges[0].Path);

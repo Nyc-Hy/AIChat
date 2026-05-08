@@ -114,51 +114,59 @@ public sealed class AgentHarness
         };
 
         var executionRequest = request.ChatRequest;
-        if (_subAgentScheduler is not null &&
-            _coordinator.ShouldRunExplorer(run.StructuredPlan, request.ContextPack, request.Goal, run.RequiresProjectMutation))
+        var plannedSubAgents = _coordinator.SelectPlannedSubAgents(
+            run.StructuredPlan,
+            request.ContextPack,
+            request.Goal,
+            run.RequiresProjectMutation);
+        if (_subAgentScheduler is not null && plannedSubAgents.Count > 0)
         {
-            yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, "运行 Explorer 子 Agent"));
-            var subAgentRun = await _subAgentScheduler.RunAsync(new SubAgentRunRequest
+            foreach (var plannedSubAgent in plannedSubAgents)
             {
-                ParentRunId = run.Id,
-                Task = BuildExplorerTask(run, request.Goal),
-                ProjectPath = request.Context.ProjectPath,
-                Settings = request.Settings,
-                TemplateId = "explorer",
-                ContextPack = request.ContextPack,
-                MaxToolCalls = Math.Min(4, Math.Max(1, request.Context.MaxToolRounds / 3)),
-                InputArtifacts = request.Context.InputArtifacts
-            }, cancellationToken);
-            var runRecord = ToAgentSubAgentRun(subAgentRun);
-            run.SubAgentRuns.Add(runRecord);
-            yield return new AgentHarnessEvent
-            {
-                Type = AgentHarnessEventType.SubAgentStarted,
-                Run = run,
-                SubAgentRun = runRecord
-            };
-            var subAgentStep = AddCompletedStep(
-                run,
-                ++stepNumber,
-                AgentStepType.Model,
-                "Explorer 子 Agent",
-                subAgentRun.Task,
-                FormatSubAgentResult(subAgentRun));
-            RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
-            executionRequest = AppendSubAgentResultMessage(executionRequest, subAgentRun);
-            yield return new AgentHarnessEvent
-            {
-                Type = AgentHarnessEventType.SubAgentCompleted,
-                Run = run,
-                Step = subAgentStep,
-                SubAgentRun = runRecord
-            };
-            yield return new AgentHarnessEvent
-            {
-                Type = AgentHarnessEventType.StepAdded,
-                Run = run,
-                Step = subAgentStep
-            };
+                yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, $"运行 {plannedSubAgent.TemplateId} 子 Agent"));
+                var subAgentRun = await _subAgentScheduler.RunAsync(new SubAgentRunRequest
+                {
+                    ParentRunId = run.Id,
+                    Task = BuildSubAgentTask(plannedSubAgent, run, request.Goal),
+                    ProjectPath = request.Context.ProjectPath,
+                    Settings = request.Settings,
+                    TemplateId = plannedSubAgent.TemplateId,
+                    ContextPack = request.ContextPack,
+                    MaxToolCalls = Math.Min(plannedSubAgent.MaxToolCalls, Math.Max(1, request.Context.MaxToolRounds / 3)),
+                    WriteScope = plannedSubAgent.WriteScope,
+                    InputArtifacts = request.Context.InputArtifacts
+                }, cancellationToken);
+                var runRecord = ToAgentSubAgentRun(subAgentRun);
+                run.SubAgentRuns.Add(runRecord);
+                yield return new AgentHarnessEvent
+                {
+                    Type = AgentHarnessEventType.SubAgentStarted,
+                    Run = run,
+                    SubAgentRun = runRecord
+                };
+                var subAgentStep = AddCompletedStep(
+                    run,
+                    ++stepNumber,
+                    AgentStepType.Model,
+                    $"{FormatTemplateName(subAgentRun.TemplateId)} 子 Agent",
+                    subAgentRun.Task,
+                    FormatSubAgentResult(subAgentRun));
+                RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
+                executionRequest = AppendSubAgentResultMessage(executionRequest, subAgentRun);
+                yield return new AgentHarnessEvent
+                {
+                    Type = AgentHarnessEventType.SubAgentCompleted,
+                    Run = run,
+                    Step = subAgentStep,
+                    SubAgentRun = runRecord
+                };
+                yield return new AgentHarnessEvent
+                {
+                    Type = AgentHarnessEventType.StepAdded,
+                    Run = run,
+                    Step = subAgentStep
+                };
+            }
         }
 
         var assistantContent = "";
@@ -484,7 +492,19 @@ public sealed class AgentHarness
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static string BuildExplorerTask(AgentRun run, string goal)
+    private static string BuildSubAgentTask(AgentPlannedSubAgent plannedSubAgent, AgentRun run, string goal)
+    {
+        if (!string.IsNullOrWhiteSpace(plannedSubAgent.Task))
+        {
+            return string.IsNullOrWhiteSpace(plannedSubAgent.Reason)
+                ? plannedSubAgent.Task
+                : $"{plannedSubAgent.Task}\nReason: {plannedSubAgent.Reason}";
+        }
+
+        return BuildFallbackExplorerTask(run, goal);
+    }
+
+    private static string BuildFallbackExplorerTask(AgentRun run, string goal)
     {
         var task = run.StructuredPlan?.Phases
             .FirstOrDefault(phase => phase.Name.Contains("gather", StringComparison.OrdinalIgnoreCase) ||
@@ -595,7 +615,7 @@ public sealed class AgentHarness
         messages.Add(new ChatMessage
         {
             Role = ChatRole.System,
-            Content = "Explorer sub-agent result:\n" + FormatSubAgentResult(subAgentRun),
+            Content = $"{FormatTemplateName(subAgentRun.TemplateId)} sub-agent result:\n" + FormatSubAgentResult(subAgentRun),
             CreatedAt = DateTimeOffset.Now
         });
         return new ChatRequest
@@ -605,6 +625,13 @@ public sealed class AgentHarness
             Messages = messages,
             Tools = request.Tools
         };
+    }
+
+    private static string FormatTemplateName(string templateId)
+    {
+        return string.IsNullOrWhiteSpace(templateId)
+            ? "Sub-agent"
+            : char.ToUpperInvariant(templateId[0]) + templateId[1..];
     }
 
     private static AgentStep AddRunningStep(

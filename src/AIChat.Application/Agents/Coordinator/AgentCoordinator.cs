@@ -48,6 +48,39 @@ public sealed class AgentCoordinator
         return requiresWrite && ContainsExplorerHint(goal);
     }
 
+    public IReadOnlyList<AgentPlannedSubAgent> SelectPlannedSubAgents(
+        AgentStructuredPlan? plan,
+        TaskContextPack? contextPack,
+        string goal,
+        bool requiresWrite)
+    {
+        if (plan is not null)
+        {
+            var planned = plan.SubAgents
+                .Where(IsRunnableBeforeExecution)
+                .OrderBy(agent => agent.Order)
+                .ToList();
+            if (planned.Count > 0)
+            {
+                return planned;
+            }
+        }
+
+        return ShouldRunExplorer(plan, contextPack, goal, requiresWrite)
+            ?
+            [
+                new AgentPlannedSubAgent
+                {
+                    TemplateId = "explorer",
+                    Phase = "gathering_context",
+                    Task = "",
+                    Reason = "Coordinator fallback for context gathering.",
+                    MaxToolCalls = 4
+                }
+            ]
+            : [];
+    }
+
     public AgentPhaseTransition StartPhase(AgentRun run, AgentRunPhase phase, string summary = "")
     {
         var key = ToPhaseKey(phase);
@@ -148,6 +181,14 @@ public sealed class AgentCoordinator
     private static bool IsExplorerTool(string toolName)
     {
         return toolName is "list_files" or "read_file" or "read_input_artifact" or "search_text" or "git_status" or "git_diff";
+    }
+
+    private static bool IsRunnableBeforeExecution(AgentPlannedSubAgent agent)
+    {
+        return string.Equals(agent.TemplateId, "explorer", StringComparison.OrdinalIgnoreCase) &&
+               agent.WriteScope.Count == 0 &&
+               (string.Equals(agent.Phase, "gathering_context", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(agent.Phase, "planning", StringComparison.OrdinalIgnoreCase));
     }
 
     public static string ToPhaseKey(AgentRunPhase phase)

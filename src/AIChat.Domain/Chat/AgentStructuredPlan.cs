@@ -10,6 +10,7 @@ public sealed class AgentStructuredPlan
     public List<string> SuggestedTools { get; set; } = [];
     public List<string> SuggestedContext { get; set; } = [];
     public AgentPlanBudget Budget { get; set; } = new();
+    public List<AgentPlannedSubAgent> SubAgents { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
 
     public AgentPlan ToAgentPlan()

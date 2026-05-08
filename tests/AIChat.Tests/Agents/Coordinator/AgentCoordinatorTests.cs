@@ -95,4 +95,46 @@ public sealed class AgentCoordinatorTests
         Assert.False(coordinator.ShouldRunExplorer(null, new TaskContextPack(), "inspect", requiresWrite: false));
         Assert.False(coordinator.ShouldRunExplorer(plan, null, "inspect", requiresWrite: false));
     }
+
+    [Fact]
+    public void SelectPlannedSubAgents_ReturnsRunnableExplorerPlansBeforeFallback()
+    {
+        var plan = new AgentStructuredPlan
+        {
+            SubAgents =
+            [
+                new AgentPlannedSubAgent
+                {
+                    TemplateId = "explorer",
+                    Phase = "gathering_context",
+                    Task = "Inspect auth flow",
+                    Order = 2
+                },
+                new AgentPlannedSubAgent
+                {
+                    TemplateId = "verifier",
+                    Phase = "verifying",
+                    Task = "Run checks",
+                    Order = 1
+                },
+                new AgentPlannedSubAgent
+                {
+                    TemplateId = "explorer",
+                    Phase = "gathering_context",
+                    Task = "Would write",
+                    WriteScope = ["src/App.cs"],
+                    Order = 0
+                }
+            ]
+        };
+
+        var selected = new AgentCoordinator().SelectPlannedSubAgents(
+            plan,
+            new TaskContextPack { IncludedFiles = [new TaskContextFileRef { Path = "src/Auth.cs" }] },
+            "fix auth",
+            requiresWrite: true);
+
+        var agent = Assert.Single(selected);
+        Assert.Equal("Inspect auth flow", agent.Task);
+    }
 }
