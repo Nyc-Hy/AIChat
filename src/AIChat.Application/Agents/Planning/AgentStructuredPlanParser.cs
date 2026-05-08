@@ -315,6 +315,7 @@ public sealed class AgentStructuredPlanParser
 
             result.Add(new AgentPlannedSubAgent
             {
+                Id = GetString(item, "id"),
                 TemplateId = FirstNonBlank(GetString(item, "templateId"), GetString(item, "template"), "explorer"),
                 Phase = FirstNonBlank(GetString(item, "phase"), "gathering_context"),
                 Task = FirstNonBlank(GetString(item, "task"), GetString(item, "title")),

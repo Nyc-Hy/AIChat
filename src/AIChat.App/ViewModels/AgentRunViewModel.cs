@@ -10,6 +10,7 @@ public sealed class AgentRunViewModel : ObservableObject
     private ObservableCollection<AgentFileChangeViewModel>? _fileChanges;
     private ObservableCollection<AgentVerificationViewModel>? _verifications;
     private ObservableCollection<AgentArtifactViewModel>? _artifacts;
+    private ObservableCollection<AgentSubAgentScheduleDecisionViewModel>? _subAgentScheduleDecisions;
     private ObservableCollection<AgentSubAgentRunViewModel>? _subAgentRuns;
     private ObservableCollection<AgentRunPhaseRecordViewModel>? _phaseHistory;
     private AgentPlanViewModel? _plan;
@@ -127,6 +128,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public int FileChangeCount => _run.FileChanges.Count;
     public int VerificationCount => _run.Verifications.Count;
     public int ArtifactCount => _run.Artifacts.Count;
+    public int SubAgentScheduleDecisionCount => _run.SubAgentScheduleDecisions.Count;
     public int SubAgentRunCount => _run.SubAgentRuns.Count;
     public int PhaseHistoryCount => _run.PhaseHistory.Count;
     public string CurrentPhaseSummary => string.IsNullOrWhiteSpace(_run.CurrentPhaseSummary) ? PhaseText : _run.CurrentPhaseSummary;
@@ -139,6 +141,8 @@ public sealed class AgentRunViewModel : ObservableObject
         _run.Verifications.Select(verification => new AgentVerificationViewModel(verification)));
     public ObservableCollection<AgentArtifactViewModel> Artifacts => _artifacts ??= new ObservableCollection<AgentArtifactViewModel>(
         _run.Artifacts.Select(artifact => new AgentArtifactViewModel(artifact)));
+    public ObservableCollection<AgentSubAgentScheduleDecisionViewModel> SubAgentScheduleDecisions => _subAgentScheduleDecisions ??= new ObservableCollection<AgentSubAgentScheduleDecisionViewModel>(
+        _run.SubAgentScheduleDecisions.OrderBy(decision => decision.Order).Select(decision => new AgentSubAgentScheduleDecisionViewModel(decision)));
     public ObservableCollection<AgentSubAgentRunViewModel> SubAgentRuns => _subAgentRuns ??= new ObservableCollection<AgentSubAgentRunViewModel>(
         _run.SubAgentRuns.Select(subAgentRun => new AgentSubAgentRunViewModel(subAgentRun)));
     public ObservableCollection<AgentRunPhaseRecordViewModel> PhaseHistory => _phaseHistory ??= new ObservableCollection<AgentRunPhaseRecordViewModel>(
@@ -156,6 +160,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public bool HasFileChanges => _run.FileChanges.Count > 0;
     public bool HasVerifications => _run.Verifications.Count > 0;
     public bool HasArtifacts => _run.Artifacts.Count > 0;
+    public bool HasSubAgentScheduleDecisions => _run.SubAgentScheduleDecisions.Count > 0;
     public bool HasSubAgentRuns => _run.SubAgentRuns.Count > 0;
     public bool HasPhaseHistory => _run.PhaseHistory.Count > 0;
     public IReadOnlyList<string> ChangedPaths => _run.FileChanges
@@ -279,6 +284,16 @@ public sealed class AgentRunViewModel : ObservableObject
 
     public void SyncSubAgentRuns()
     {
+        foreach (var decision in _run.SubAgentScheduleDecisions.OrderBy(item => item.Order))
+        {
+            if (SubAgentScheduleDecisions.Any(item => item.Id == decision.Id))
+            {
+                continue;
+            }
+
+            SubAgentScheduleDecisions.Add(new AgentSubAgentScheduleDecisionViewModel(decision));
+        }
+
         foreach (var subAgentRun in _run.SubAgentRuns)
         {
             if (SubAgentRuns.Any(item => item.Id == subAgentRun.Id))
@@ -289,6 +304,8 @@ public sealed class AgentRunViewModel : ObservableObject
             SubAgentRuns.Add(new AgentSubAgentRunViewModel(subAgentRun));
         }
 
+        OnPropertyChanged(nameof(HasSubAgentScheduleDecisions));
+        OnPropertyChanged(nameof(SubAgentScheduleDecisionCount));
         OnPropertyChanged(nameof(HasSubAgentRuns));
         OnPropertyChanged(nameof(SubAgentRunCount));
         OnPropertyChanged(nameof(Summary));

@@ -268,6 +268,8 @@ public sealed class AgentHarnessTests
         }
 
         var run = Assert.Single(conversation.AgentRuns);
+        var scheduleDecision = Assert.Single(run.SubAgentScheduleDecisions);
+        Assert.Equal("Scheduled", scheduleDecision.Status);
         Assert.Single(run.StructuredPlan!.SubAgents);
         var subAgentRun = Assert.Single(run.SubAgentRuns);
         Assert.Equal("explorer", subAgentRun.TemplateId);

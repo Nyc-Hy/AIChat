@@ -54,27 +54,51 @@ public sealed class AgentCoordinator
         string goal,
         bool requiresWrite)
     {
+        return CreateSubAgentSchedule("", plan, contextPack, goal, requiresWrite)
+            .Where(decision => string.Equals(decision.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
+            .Select(decision => new AgentPlannedSubAgent
+            {
+                Id = decision.PlannedSubAgentId,
+                TemplateId = decision.TemplateId,
+                Phase = decision.Phase,
+                Task = decision.Task,
+                Reason = decision.Reason,
+                MaxToolCalls = decision.MaxToolCalls,
+                Order = decision.Order,
+                DependsOn = decision.DependsOn.ToList(),
+                WriteScope = decision.WriteScope.ToList()
+            })
+            .ToList();
+    }
+
+    public IReadOnlyList<AgentSubAgentScheduleDecision> CreateSubAgentSchedule(
+        string runId,
+        AgentStructuredPlan? plan,
+        TaskContextPack? contextPack,
+        string goal,
+        bool requiresWrite)
+    {
         if (plan is not null)
         {
-            var planned = plan.SubAgents
-                .Where(IsRunnableBeforeExecution)
-                .OrderBy(agent => agent.Order)
+            var decisions = BuildPlannedSubAgentDecisions(runId, plan.SubAgents)
                 .ToList();
-            if (planned.Count > 0)
+            if (decisions.Count > 0)
             {
-                return planned;
+                return decisions;
             }
         }
 
         return ShouldRunExplorer(plan, contextPack, goal, requiresWrite)
             ?
             [
-                new AgentPlannedSubAgent
+                new AgentSubAgentScheduleDecision
                 {
+                    RunId = runId,
                     TemplateId = "explorer",
                     Phase = "gathering_context",
                     Task = "",
                     Reason = "Coordinator fallback for context gathering.",
+                    Status = "Scheduled",
                     MaxToolCalls = 4
                 }
             ]
@@ -183,12 +207,77 @@ public sealed class AgentCoordinator
         return toolName is "list_files" or "read_file" or "read_input_artifact" or "search_text" or "git_status" or "git_diff";
     }
 
-    private static bool IsRunnableBeforeExecution(AgentPlannedSubAgent agent)
+    private static IEnumerable<AgentSubAgentScheduleDecision> BuildPlannedSubAgentDecisions(
+        string runId,
+        IReadOnlyList<AgentPlannedSubAgent> plannedSubAgents)
     {
-        return string.Equals(agent.TemplateId, "explorer", StringComparison.OrdinalIgnoreCase) &&
-               agent.WriteScope.Count == 0 &&
-               (string.Equals(agent.Phase, "gathering_context", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(agent.Phase, "planning", StringComparison.OrdinalIgnoreCase));
+        var scheduledIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var scheduledTasks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var agent in plannedSubAgents.OrderBy(agent => agent.Order))
+        {
+            var decision = ToScheduleDecision(runId, agent);
+            var taskKey = NormalizeTaskKey(agent.TemplateId, agent.Task);
+            if (!string.Equals(agent.TemplateId, "explorer", StringComparison.OrdinalIgnoreCase))
+            {
+                decision.Status = "Skipped";
+                decision.SkipReason = $"Unsupported sub-agent template before execution: {agent.TemplateId}.";
+            }
+            else if (agent.WriteScope.Count > 0)
+            {
+                decision.Status = "Skipped";
+                decision.SkipReason = "Read-only explorer sub-agent cannot receive a write scope.";
+            }
+            else if (!IsBeforeExecutionPhase(agent.Phase))
+            {
+                decision.Status = "Skipped";
+                decision.SkipReason = $"Sub-agent phase is not runnable before execution: {agent.Phase}.";
+            }
+            else if (agent.DependsOn.Any(dependency => !scheduledIds.Contains(dependency)))
+            {
+                decision.Status = "Skipped";
+                decision.SkipReason = "Sub-agent dependencies are not satisfied.";
+            }
+            else if (!scheduledTasks.Add(taskKey))
+            {
+                decision.Status = "Skipped";
+                decision.SkipReason = "Duplicate sub-agent task.";
+            }
+            else
+            {
+                scheduledIds.Add(agent.Id);
+            }
+
+            yield return decision;
+        }
+    }
+
+    private static AgentSubAgentScheduleDecision ToScheduleDecision(string runId, AgentPlannedSubAgent agent)
+    {
+        return new AgentSubAgentScheduleDecision
+        {
+            RunId = runId,
+            PlannedSubAgentId = agent.Id,
+            TemplateId = agent.TemplateId,
+            Phase = agent.Phase,
+            Task = agent.Task,
+            Reason = agent.Reason,
+            Status = "Scheduled",
+            MaxToolCalls = agent.MaxToolCalls,
+            Order = agent.Order,
+            DependsOn = agent.DependsOn.ToList(),
+            WriteScope = agent.WriteScope.ToList()
+        };
+    }
+
+    private static bool IsBeforeExecutionPhase(string phase)
+    {
+        return string.Equals(phase, "gathering_context", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(phase, "planning", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeTaskKey(string templateId, string task)
+    {
+        return $"{templateId}:{string.Join(' ', task.Split([' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries))}";
     }
 
     public static string ToPhaseKey(AgentRunPhase phase)

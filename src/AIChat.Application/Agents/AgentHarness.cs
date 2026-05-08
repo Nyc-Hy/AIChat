@@ -114,14 +114,19 @@ public sealed class AgentHarness
         };
 
         var executionRequest = request.ChatRequest;
-        var plannedSubAgents = _coordinator.SelectPlannedSubAgents(
+        var subAgentSchedule = _coordinator.CreateSubAgentSchedule(
+            run.Id,
             run.StructuredPlan,
             request.ContextPack,
             request.Goal,
             run.RequiresProjectMutation);
-        if (_subAgentScheduler is not null && plannedSubAgents.Count > 0)
+        run.SubAgentScheduleDecisions.AddRange(subAgentSchedule);
+        var scheduledSubAgents = subAgentSchedule
+            .Where(decision => string.Equals(decision.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (_subAgentScheduler is not null && scheduledSubAgents.Count > 0)
         {
-            foreach (var plannedSubAgent in plannedSubAgents)
+            foreach (var plannedSubAgent in scheduledSubAgents)
             {
                 yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, $"运行 {plannedSubAgent.TemplateId} 子 Agent"));
                 var subAgentRun = await _subAgentScheduler.RunAsync(new SubAgentRunRequest
@@ -492,7 +497,7 @@ public sealed class AgentHarness
         return string.Join(Environment.NewLine, lines);
     }
 
-    private static string BuildSubAgentTask(AgentPlannedSubAgent plannedSubAgent, AgentRun run, string goal)
+    private static string BuildSubAgentTask(AgentSubAgentScheduleDecision plannedSubAgent, AgentRun run, string goal)
     {
         if (!string.IsNullOrWhiteSpace(plannedSubAgent.Task))
         {
@@ -691,7 +696,8 @@ public sealed class AgentHarness
             $"来源：{(plan.IsFallback ? "兜底计划" : "LLM 结构化规划")}",
             $"预算：工具 {plan.Budget.MaxToolCalls} 次，tokens {plan.Budget.TokenBudget}",
             $"阶段：{plan.Phases.Count}",
-            $"任务：{plan.Phases.Sum(phase => phase.Tasks.Count)}"
+            $"任务：{plan.Phases.Sum(phase => phase.Tasks.Count)}",
+            $"计划子 Agent：{plan.SubAgents.Count}"
         };
 
         foreach (var phase in plan.Phases)
@@ -700,6 +706,15 @@ public sealed class AgentHarness
             foreach (var task in phase.Tasks)
             {
                 lines.Add($"  - {task.Title} ({task.Risk})");
+            }
+        }
+
+        if (plan.SubAgents.Count > 0)
+        {
+            lines.Add("子 Agent 计划：");
+            foreach (var agent in plan.SubAgents.OrderBy(agent => agent.Order))
+            {
+                lines.Add($"- {agent.TemplateId}: {agent.Task} ({agent.Phase}, tools {agent.MaxToolCalls})");
             }
         }
 

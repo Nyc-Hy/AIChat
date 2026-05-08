@@ -178,6 +178,23 @@ public sealed class AgentRunSerializationTests
                             Content = "full output"
                         }
                     ],
+                    SubAgentScheduleDecisions =
+                    [
+                        new AgentSubAgentScheduleDecision
+                        {
+                            RunId = "run-1",
+                            PlannedSubAgentId = "planned-sub-1",
+                            TemplateId = "explorer",
+                            Phase = "gathering_context",
+                            Task = "Inspect service",
+                            Reason = "Need focused context",
+                            Status = "Skipped",
+                            SkipReason = "Duplicate sub-agent task.",
+                            MaxToolCalls = 3,
+                            DependsOn = ["plan"],
+                            Order = 0
+                        }
+                    ],
                     SubAgentRuns =
                     [
                         new AgentSubAgentRun
@@ -219,6 +236,7 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
         Assert.Single(roundTripped.AgentRuns[0].Verifications);
         Assert.Single(roundTripped.AgentRuns[0].Artifacts);
+        Assert.Single(roundTripped.AgentRuns[0].SubAgentScheduleDecisions);
         Assert.Single(roundTripped.AgentRuns[0].SubAgentRuns);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].Phase);
         Assert.Equal("all tests passed", roundTripped.AgentRuns[0].CompletionReason);
@@ -255,6 +273,8 @@ public sealed class AgentRunSerializationTests
         Assert.True(roundTripped.AgentRuns[0].Verifications[0].IsSuccess);
         Assert.Equal("All tests passed", roundTripped.AgentRuns[0].Verifications[0].Summary);
         Assert.Equal("full output", roundTripped.AgentRuns[0].Artifacts[0].Content);
+        Assert.Equal("Skipped", roundTripped.AgentRuns[0].SubAgentScheduleDecisions[0].Status);
+        Assert.Equal("Duplicate sub-agent task.", roundTripped.AgentRuns[0].SubAgentScheduleDecisions[0].SkipReason);
         Assert.Equal("explorer", roundTripped.AgentRuns[0].SubAgentRuns[0].TemplateId);
         Assert.Single(roundTripped.AgentRuns[0].SubAgentRuns[0].ToolCalls);
         Assert.Equal("read_file", roundTripped.AgentRuns[0].SubAgentRuns[0].ToolCalls[0].ToolName);

@@ -137,4 +137,71 @@ public sealed class AgentCoordinatorTests
         var agent = Assert.Single(selected);
         Assert.Equal("Inspect auth flow", agent.Task);
     }
+
+    [Fact]
+    public void CreateSubAgentSchedule_RecordsSkippedDecisions()
+    {
+        var plan = new AgentStructuredPlan
+        {
+            SubAgents =
+            [
+                new AgentPlannedSubAgent
+                {
+                    Id = "agent-a",
+                    TemplateId = "explorer",
+                    Phase = "gathering_context",
+                    Task = "Inspect auth flow",
+                    Order = 0
+                },
+                new AgentPlannedSubAgent
+                {
+                    Id = "agent-b",
+                    TemplateId = "explorer",
+                    Phase = "gathering_context",
+                    Task = "Inspect auth flow",
+                    Order = 1
+                },
+                new AgentPlannedSubAgent
+                {
+                    Id = "agent-c",
+                    TemplateId = "explorer",
+                    Phase = "executing",
+                    Task = "Late inspect",
+                    Order = 2
+                },
+                new AgentPlannedSubAgent
+                {
+                    Id = "agent-d",
+                    TemplateId = "explorer",
+                    Phase = "gathering_context",
+                    Task = "Blocked inspect",
+                    DependsOn = ["missing-agent"],
+                    Order = 3
+                },
+                new AgentPlannedSubAgent
+                {
+                    Id = "agent-e",
+                    TemplateId = "worker",
+                    Phase = "gathering_context",
+                    Task = "Unsupported worker",
+                    Order = 4
+                }
+            ]
+        };
+
+        var decisions = new AgentCoordinator().CreateSubAgentSchedule(
+            "run-1",
+            plan,
+            new TaskContextPack { IncludedFiles = [new TaskContextFileRef { Path = "src/Auth.cs" }] },
+            "fix auth",
+            requiresWrite: true);
+
+        Assert.Equal(5, decisions.Count);
+        Assert.Equal("Scheduled", decisions[0].Status);
+        Assert.All(decisions.Skip(1), decision => Assert.Equal("Skipped", decision.Status));
+        Assert.Contains("Duplicate", decisions[1].SkipReason);
+        Assert.Contains("not runnable", decisions[2].SkipReason);
+        Assert.Contains("dependencies", decisions[3].SkipReason);
+        Assert.Contains("Unsupported", decisions[4].SkipReason);
+    }
 }
