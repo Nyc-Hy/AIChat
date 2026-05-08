@@ -61,7 +61,8 @@ public sealed class SubAgentScheduler
                 ProjectPath = request.ProjectPath,
                 EnabledToolIds = template.DefaultToolIds,
                 ToolPermissionModes = template.BuildPermissionModes(),
-                MaxToolRounds = run.MaxToolCalls
+                MaxToolRounds = run.MaxToolCalls,
+                InputArtifacts = request.InputArtifacts
             };
             var findings = new List<string>();
             var content = "";

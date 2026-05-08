@@ -1,4 +1,5 @@
 using AIChat.Application.Agents.Coordinator;
+using AIChat.Application.Context;
 using AIChat.Domain.Chat;
 
 namespace AIChat.Tests.Agents.Coordinator;
@@ -47,5 +48,51 @@ public sealed class AgentCoordinatorTests
     public void ClassifyToolPhase_ReturnsExpectedPhase(string toolName, AgentRunPhase expectedPhase)
     {
         Assert.Equal(expectedPhase, AgentCoordinator.ClassifyToolPhase(toolName));
+    }
+
+    [Fact]
+    public void ShouldRunExplorer_ReturnsTrueForGatheringPlanWithContextPack()
+    {
+        var plan = new AgentStructuredPlan
+        {
+            Summary = "inspect first",
+            Phases =
+            [
+                new AgentPlanPhase
+                {
+                    Name = "gathering_context",
+                    Objective = "inspect files",
+                    Tasks =
+                    [
+                        new AgentPlanTask
+                        {
+                            Title = "Read context",
+                            SuggestedTools = ["read_file"]
+                        }
+                    ]
+                }
+            ]
+        };
+        var pack = new TaskContextPack
+        {
+            IncludedFiles = [new TaskContextFileRef { Path = "src/App.cs" }]
+        };
+
+        var shouldRun = new AgentCoordinator().ShouldRunExplorer(plan, pack, "fix app", requiresWrite: true);
+
+        Assert.True(shouldRun);
+    }
+
+    [Fact]
+    public void ShouldRunExplorer_ReturnsFalseWithoutPlanOrContextPack()
+    {
+        var coordinator = new AgentCoordinator();
+        var plan = new AgentStructuredPlan
+        {
+            Phases = [new AgentPlanPhase { Name = "gathering_context" }]
+        };
+
+        Assert.False(coordinator.ShouldRunExplorer(null, new TaskContextPack(), "inspect", requiresWrite: false));
+        Assert.False(coordinator.ShouldRunExplorer(plan, null, "inspect", requiresWrite: false));
     }
 }

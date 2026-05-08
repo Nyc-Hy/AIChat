@@ -3,6 +3,8 @@ using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Llm;
 using AIChat.Application.Agents;
 using AIChat.Application.Agents.Planning;
+using AIChat.Application.Agents.SubAgents;
+using AIChat.Application.Context;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
@@ -124,6 +126,76 @@ public sealed class AgentHarnessTests
         Assert.NotNull(run.Plan);
         Assert.Contains(run.Steps, step => step.Title == "生成结构化计划");
         Assert.Contains(run.Plan!.Items, item => item.Title.Contains("Read context", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunAsync_RunsExplorerSubAgentAndRecordsResultArtifact()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """
+            {
+              "summary": "Explore first",
+              "phases": [
+                {
+                  "name": "gathering_context",
+                  "objective": "inspect files",
+                  "tasks": [
+                    { "title": "Inspect service", "details": "Read the relevant service", "risk": "low", "suggestedTools": ["read_file"] }
+                  ]
+                },
+                { "name": "executing", "objective": "finish task" }
+              ]
+            }
+            """
+        }]);
+        var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "Explorer found src/App.cs." }]);
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService),
+            subAgentScheduler: subAgentScheduler);
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix app",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix app" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           ContextPack = new TaskContextPack
+                           {
+                               Summary = "Context pack",
+                               IncludedFiles = [new TaskContextFileRef { Path = "src/App.cs", Reason = "goal match" }]
+                           },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 9
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Contains(run.Steps, step => step.Title == "Explorer 子 Agent" &&
+                                          step.Output.Contains("Explorer found src/App.cs.", StringComparison.Ordinal));
+        var artifact = Assert.Single(run.Artifacts, item => item.Kind == "sub_agent_result");
+        Assert.Equal("explorer", artifact.Metadata["templateId"]);
+        Assert.Contains("Explorer found src/App.cs.", artifact.Content);
+        Assert.Contains(
+            runnerService.Requests.Last().Messages,
+            message => message.Role == ChatRole.System &&
+                       message.Content.Contains("Explorer sub-agent result", StringComparison.Ordinal) &&
+                       message.Content.Contains("Explorer found src/App.cs.", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -620,6 +692,7 @@ public sealed class AgentHarnessTests
             AppSettings settings,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            Requests.Add(request);
             var deltas = _responses.Count > 0 ? _responses.Dequeue() : [];
             foreach (var delta in deltas)
             {
@@ -628,6 +701,8 @@ public sealed class AgentHarnessTests
                 await Task.Yield();
             }
         }
+
+        public List<ChatRequest> Requests { get; } = [];
     }
 
     private sealed class FakeVerificationTool : IAgentTool

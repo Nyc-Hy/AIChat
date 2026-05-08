@@ -1,5 +1,6 @@
 using AIChat.Abstractions.Configuration;
 using AIChat.Application.Context;
+using AIChat.Domain.Artifacts;
 
 namespace AIChat.Application.Agents.SubAgents;
 
@@ -13,4 +14,5 @@ public sealed class SubAgentRunRequest
     public TaskContextPack? ContextPack { get; init; }
     public int MaxToolCalls { get; init; } = 4;
     public IReadOnlyList<string> WriteScope { get; init; } = [];
+    public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
 }

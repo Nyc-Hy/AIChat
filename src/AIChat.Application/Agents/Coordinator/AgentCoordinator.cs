@@ -1,4 +1,5 @@
 using AIChat.Domain.Chat;
+using AIChat.Application.Context;
 using AIChat.Application.Agents.Templates;
 
 namespace AIChat.Application.Agents.Coordinator;
@@ -15,6 +16,36 @@ public sealed class AgentCoordinator
     public AgentTemplate SelectTemplate(AgentRunPhase phase, bool requiresWrite = false)
     {
         return _templateCatalog.SelectForPhase(phase, requiresWrite);
+    }
+
+    public bool ShouldRunExplorer(
+        AgentStructuredPlan? plan,
+        TaskContextPack? contextPack,
+        string goal,
+        bool requiresWrite)
+    {
+        if (plan is null || contextPack is null)
+        {
+            return false;
+        }
+
+        if (plan.IsFallback && contextPack.IncludedFiles.Count == 0 && contextPack.ArtifactRefs.Count == 0)
+        {
+            return false;
+        }
+
+        if (plan.Phases.Any(phase =>
+                IsGatheringPhase(phase.Name) ||
+                ContainsExplorerHint(phase.Objective) ||
+                phase.Tasks.Any(task =>
+                    ContainsExplorerHint(task.Title) ||
+                    ContainsExplorerHint(task.Details) ||
+                    task.SuggestedTools.Any(IsExplorerTool))))
+        {
+            return true;
+        }
+
+        return requiresWrite && ContainsExplorerHint(goal);
     }
 
     public AgentPhaseTransition StartPhase(AgentRun run, AgentRunPhase phase, string summary = "")
@@ -86,12 +117,37 @@ public sealed class AgentCoordinator
     {
         return toolName switch
         {
-            "list_files" or "read_file" or "search_text" or "git_status" or "git_diff" => AgentRunPhase.GatheringContext,
+            "list_files" or "read_file" or "read_input_artifact" or "search_text" or "git_status" or "git_diff" => AgentRunPhase.GatheringContext,
             "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit" => AgentRunPhase.Executing,
             "run_build" or "run_test" => AgentRunPhase.Verifying,
             "update_plan" => AgentRunPhase.Planning,
             _ => AgentRunPhase.Executing
         };
+    }
+
+    private static bool IsGatheringPhase(string phaseName)
+    {
+        return phaseName.Contains("gather", StringComparison.OrdinalIgnoreCase) ||
+               phaseName.Contains("context", StringComparison.OrdinalIgnoreCase) ||
+               phaseName.Contains("explor", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsExplorerHint(string value)
+    {
+        return value.Contains("inspect", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("explore", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("read", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("search", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("context", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("查看", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("读取", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("搜索", StringComparison.OrdinalIgnoreCase) ||
+               value.Contains("上下文", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsExplorerTool(string toolName)
+    {
+        return toolName is "list_files" or "read_file" or "read_input_artifact" or "search_text" or "git_status" or "git_diff";
     }
 
     public static string ToPhaseKey(AgentRunPhase phase)

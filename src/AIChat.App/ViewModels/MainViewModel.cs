@@ -2589,6 +2589,7 @@ public sealed class MainViewModel : ObservableObject
                                        Goal = text,
                                        ChatRequest = request,
                                        Settings = effectiveSettings,
+                                       ContextPack = requestBuild.ContextPack,
                                        WorkspaceBranch = workspaceSnapshot.Branch,
                                        WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
                                        WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,

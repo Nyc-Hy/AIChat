@@ -3,6 +3,7 @@ using System.Text.Json;
 using AIChat.Abstractions.Configuration;
 using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Agents.Planning;
+using AIChat.Application.Agents.SubAgents;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Verification;
@@ -18,17 +19,20 @@ public sealed class AgentHarness
     private readonly AgentPlanner? _planner;
     private readonly AgentCoordinator _coordinator;
     private readonly AgentPromptComposer _promptComposer;
+    private readonly SubAgentScheduler? _subAgentScheduler;
 
     public AgentHarness(
         AgentRunner agentRunner,
         AgentPlanner? planner = null,
         AgentCoordinator? coordinator = null,
-        AgentPromptComposer? promptComposer = null)
+        AgentPromptComposer? promptComposer = null,
+        SubAgentScheduler? subAgentScheduler = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
         _coordinator = coordinator ?? new AgentCoordinator();
         _promptComposer = promptComposer ?? new AgentPromptComposer();
+        _subAgentScheduler = subAgentScheduler ?? new SubAgentScheduler(agentRunner);
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -109,10 +113,43 @@ public sealed class AgentHarness
             Step = contextStep
         };
 
+        var executionRequest = request.ChatRequest;
+        if (_subAgentScheduler is not null &&
+            _coordinator.ShouldRunExplorer(run.StructuredPlan, request.ContextPack, request.Goal, run.RequiresProjectMutation))
+        {
+            yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, "运行 Explorer 子 Agent"));
+            var subAgentRun = await _subAgentScheduler.RunAsync(new SubAgentRunRequest
+            {
+                ParentRunId = run.Id,
+                Task = BuildExplorerTask(run, request.Goal),
+                ProjectPath = request.Context.ProjectPath,
+                Settings = request.Settings,
+                TemplateId = "explorer",
+                ContextPack = request.ContextPack,
+                MaxToolCalls = Math.Min(4, Math.Max(1, request.Context.MaxToolRounds / 3)),
+                InputArtifacts = request.Context.InputArtifacts
+            }, cancellationToken);
+            var subAgentStep = AddCompletedStep(
+                run,
+                ++stepNumber,
+                AgentStepType.Model,
+                "Explorer 子 Agent",
+                subAgentRun.Task,
+                FormatSubAgentResult(subAgentRun));
+            RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
+            executionRequest = AppendSubAgentResultMessage(executionRequest, subAgentRun);
+            yield return new AgentHarnessEvent
+            {
+                Type = AgentHarnessEventType.StepAdded,
+                Run = run,
+                Step = subAgentStep
+            };
+        }
+
         var assistantContent = "";
         var stepByToolCallId = new Dictionary<string, AgentStep>(StringComparer.Ordinal);
         await foreach (var agentEvent in _agentRunner.RunAsync(
-                           request.ChatRequest,
+                           executionRequest,
                            request.Settings,
                            request.Context,
                            cancellationToken))
@@ -430,6 +467,100 @@ public sealed class AgentHarness
         }
 
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string BuildExplorerTask(AgentRun run, string goal)
+    {
+        var task = run.StructuredPlan?.Phases
+            .FirstOrDefault(phase => phase.Name.Contains("gather", StringComparison.OrdinalIgnoreCase) ||
+                                     phase.Name.Contains("context", StringComparison.OrdinalIgnoreCase))
+            ?.Tasks.FirstOrDefault();
+        if (task is not null)
+        {
+            return string.IsNullOrWhiteSpace(task.Details)
+                ? task.Title
+                : $"{task.Title}: {task.Details}";
+        }
+
+        return $"Gather the minimum read-only context needed for: {goal}";
+    }
+
+    private static string FormatSubAgentResult(SubAgentRun subAgentRun)
+    {
+        var result = subAgentRun.Result;
+        if (result is null)
+        {
+            return $"{subAgentRun.TemplateId} {subAgentRun.Status}";
+        }
+
+        var lines = new List<string>
+        {
+            $"Status: {result.Status}",
+            $"Summary: {result.Summary}",
+            $"Tool calls: {subAgentRun.ToolCallCount}/{subAgentRun.MaxToolCalls}"
+        };
+        if (result.Findings.Count > 0)
+        {
+            lines.Add("Findings:");
+            lines.AddRange(result.Findings.Select(finding => "- " + finding));
+        }
+
+        if (result.ArtifactRefs.Count > 0)
+        {
+            lines.Add("Artifact refs:");
+            lines.AddRange(result.ArtifactRefs.Select(artifact => "- " + artifact));
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.RecommendedNextStep))
+        {
+            lines.Add("Next: " + result.RecommendedNextStep);
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void RecordSubAgentArtifact(AgentRun run, AgentStep step, SubAgentRun subAgentRun)
+    {
+        if (subAgentRun.Result is null)
+        {
+            return;
+        }
+
+        run.Artifacts.Add(new AgentArtifact
+        {
+            RunId = run.Id,
+            StepId = step.Id,
+            ToolName = subAgentRun.TemplateId,
+            Kind = "sub_agent_result",
+            Summary = subAgentRun.Result.Summary,
+            Content = FormatSubAgentResult(subAgentRun),
+            CreatedAt = DateTimeOffset.Now,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["subAgentRunId"] = subAgentRun.Id,
+                ["templateId"] = subAgentRun.TemplateId,
+                ["status"] = subAgentRun.Status.ToString(),
+                ["toolCallCount"] = subAgentRun.ToolCallCount.ToString()
+            }
+        });
+    }
+
+    private static ChatRequest AppendSubAgentResultMessage(ChatRequest request, SubAgentRun subAgentRun)
+    {
+        var messages = request.Messages.ToList();
+        messages.Add(new ChatMessage
+        {
+            Role = ChatRole.System,
+            Content = "Explorer sub-agent result:\n" + FormatSubAgentResult(subAgentRun),
+            CreatedAt = DateTimeOffset.Now
+        });
+        return new ChatRequest
+        {
+            Model = request.Model,
+            Temperature = request.Temperature,
+            Messages = messages,
+            Tools = request.Tools
+        };
     }
 
     private static AgentStep AddRunningStep(
