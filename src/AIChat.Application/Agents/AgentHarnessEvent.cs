@@ -15,4 +15,5 @@ public sealed class AgentHarnessEvent
     public AgentToolPreview? ToolPreview { get; init; }
     public AgentToolResult? ToolResult { get; init; }
     public AgentPhaseTransition? PhaseTransition { get; init; }
+    public AgentSubAgentRun? SubAgentRun { get; init; }
 }

@@ -6,6 +6,8 @@ public enum AgentHarnessEventType
     PhaseChanged,
     StepAdded,
     RawProviderEvent,
+    SubAgentStarted,
+    SubAgentCompleted,
     ContentDelta,
     ToolCall,
     ToolApprovalRequired,

@@ -2649,6 +2649,39 @@ public sealed class MainViewModel : ObservableObject
                                 assistantViewModel.SyncAgentPlan();
                             });
                             break;
+                        case AgentHarnessEventType.SubAgentStarted:
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                StatusText = $"运行子 Agent：{agentEvent.SubAgentRun?.TemplateId}";
+                                AgentStatusPhase = "收集上下文";
+                                AgentStatusTool = agentEvent.SubAgentRun?.TemplateId ?? "";
+                                assistantViewModel.SyncSubAgentRuns();
+                                OnPropertyChanged(nameof(HasAgentStatus));
+                            });
+                            await RecordAuditEventAsync(AuditEventType.SubAgentStarted,
+                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                                toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
+                                summary: $"Sub-agent started: {agentEvent.SubAgentRun?.TemplateId}",
+                                detail: agentEvent.SubAgentRun?.Task ?? "");
+                            break;
+                        case AgentHarnessEventType.SubAgentCompleted:
+                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                assistantViewModel.SyncSubAgentRuns();
+                                assistantViewModel.SyncAgentArtifacts();
+                                StatusText = $"子 Agent 完成：{agentEvent.SubAgentRun?.TemplateId}";
+                                AgentStatusTool = "";
+                                OnPropertyChanged(nameof(HasAgentStatus));
+                            });
+                            await RecordAuditEventAsync(
+                                string.Equals(agentEvent.SubAgentRun?.Status, "Completed", StringComparison.OrdinalIgnoreCase)
+                                    ? AuditEventType.SubAgentCompleted
+                                    : AuditEventType.SubAgentFailed,
+                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                                toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
+                                summary: $"Sub-agent {agentEvent.SubAgentRun?.Status}: {agentEvent.SubAgentRun?.TemplateId}",
+                                detail: agentEvent.SubAgentRun?.Summary ?? "");
+                            break;
                         case AgentHarnessEventType.RawProviderEvent:
                             if (!string.IsNullOrWhiteSpace(agentEvent.RawJson))
                             {
@@ -2773,6 +2806,7 @@ public sealed class MainViewModel : ObservableObject
                                     assistantViewModel.SyncAgentFileChanges();
                                     assistantViewModel.SyncAgentVerifications();
                                     assistantViewModel.SyncAgentArtifacts();
+                                    assistantViewModel.SyncSubAgentRuns();
                                     assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
                                     RebuildAgentRunHistoryIfOpen();
                                 }

@@ -1599,6 +1599,83 @@
                                         <TextBox Text="{Binding RunSummary, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,5,0,0" />
+                                        <Border Margin="0,14,0,0"
+                                                Padding="12"
+                                                CornerRadius="8"
+                                                Background="#F7FAFC"
+                                                BorderBrush="#DDE6EE"
+                                                BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasSubAgentRuns}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <StackPanel>
+                                                <TextBlock Text="子 Agent"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#303A47" />
+                                                <ItemsControl ItemsSource="{Binding SubAgentRuns}"
+                                                              Margin="0,8,0,0">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Margin="0,0,0,8"
+                                                                    Padding="10"
+                                                                    CornerRadius="8"
+                                                                    Background="#FFFFFF"
+                                                                    BorderBrush="#E6EAF0"
+                                                                    BorderThickness="1">
+                                                                <Expander IsExpanded="False">
+                                                                    <Expander.Header>
+                                                                        <DockPanel>
+                                                                            <StackPanel>
+                                                                                <TextBlock Text="{Binding TemplateId}"
+                                                                                           FontWeight="SemiBold"
+                                                                                           Foreground="#1E252E" />
+                                                                                <TextBlock Text="{Binding Task}"
+                                                                                           Margin="0,2,0,0"
+                                                                                           FontSize="11"
+                                                                                           Foreground="#748092"
+                                                                                           TextTrimming="CharacterEllipsis" />
+                                                                            </StackPanel>
+                                                                            <StackPanel DockPanel.Dock="Right"
+                                                                                        Orientation="Horizontal">
+                                                                                <TextBlock Text="{Binding Status}"
+                                                                                           FontSize="11"
+                                                                                           Foreground="#596473" />
+                                                                                <TextBlock Text="{Binding BudgetText}"
+                                                                                           Margin="8,0,0,0"
+                                                                                           FontSize="11"
+                                                                                           Foreground="#98A2B0" />
+                                                                            </StackPanel>
+                                                                        </DockPanel>
+                                                                    </Expander.Header>
+                                                                    <StackPanel Margin="0,8,0,0">
+                                                                        <TextBlock Text="{Binding Summary}"
+                                                                                   FontSize="11"
+                                                                                   Foreground="#596473"
+                                                                                   TextWrapping="Wrap" />
+                                                                        <TextBox Text="{Binding FindingsText, Mode=OneWay}"
+                                                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                                                 Margin="0,8,0,0" />
+                                                                        <TextBox Text="{Binding ToolCallsText, Mode=OneWay}"
+                                                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                                                 Margin="0,8,0,0" />
+                                                                        <TextBox Text="{Binding ArtifactRefsText, Mode=OneWay}"
+                                                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                                                 Margin="0,8,0,0" />
+                                                                    </StackPanel>
+                                                                </Expander>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
                                         <TextBlock Text="结束校验"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

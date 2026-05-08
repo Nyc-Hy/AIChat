@@ -129,6 +129,14 @@ public sealed class AgentHarness
                 MaxToolCalls = Math.Min(4, Math.Max(1, request.Context.MaxToolRounds / 3)),
                 InputArtifacts = request.Context.InputArtifacts
             }, cancellationToken);
+            var runRecord = ToAgentSubAgentRun(subAgentRun);
+            run.SubAgentRuns.Add(runRecord);
+            yield return new AgentHarnessEvent
+            {
+                Type = AgentHarnessEventType.SubAgentStarted,
+                Run = run,
+                SubAgentRun = runRecord
+            };
             var subAgentStep = AddCompletedStep(
                 run,
                 ++stepNumber,
@@ -138,6 +146,13 @@ public sealed class AgentHarness
                 FormatSubAgentResult(subAgentRun));
             RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
             executionRequest = AppendSubAgentResultMessage(executionRequest, subAgentRun);
+            yield return new AgentHarnessEvent
+            {
+                Type = AgentHarnessEventType.SubAgentCompleted,
+                Run = run,
+                Step = subAgentStep,
+                SubAgentRun = runRecord
+            };
             yield return new AgentHarnessEvent
             {
                 Type = AgentHarnessEventType.StepAdded,
@@ -543,6 +558,35 @@ public sealed class AgentHarness
                 ["toolCallCount"] = subAgentRun.ToolCallCount.ToString()
             }
         });
+    }
+
+    private static AgentSubAgentRun ToAgentSubAgentRun(SubAgentRun subAgentRun)
+    {
+        var result = subAgentRun.Result;
+        return new AgentSubAgentRun
+        {
+            Id = subAgentRun.Id,
+            ParentRunId = subAgentRun.ParentRunId,
+            TemplateId = subAgentRun.TemplateId,
+            Task = subAgentRun.Task,
+            Status = subAgentRun.Status.ToString(),
+            Summary = result?.Summary ?? "",
+            RecommendedNextStep = result?.RecommendedNextStep ?? "",
+            MaxToolCalls = subAgentRun.MaxToolCalls,
+            ToolCallCount = subAgentRun.ToolCallCount,
+            StartedAt = subAgentRun.StartedAt,
+            CompletedAt = subAgentRun.CompletedAt,
+            Findings = result?.Findings.ToList() ?? [],
+            ArtifactRefs = result?.ArtifactRefs.ToList() ?? [],
+            ToolCalls = subAgentRun.ToolCalls.Select(call => new AgentSubAgentToolCall
+            {
+                ToolCallId = call.ToolCallId,
+                ToolName = call.ToolName,
+                ArgumentsJson = call.ArgumentsJson,
+                IsError = call.IsError,
+                ResultSummary = call.ResultSummary
+            }).ToList()
+        };
     }
 
     private static ChatRequest AppendSubAgentResultMessage(ChatRequest request, SubAgentRun subAgentRun)

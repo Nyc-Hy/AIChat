@@ -186,6 +186,10 @@ public sealed class AgentHarnessTests
         }
 
         var run = Assert.Single(conversation.AgentRuns);
+        var subAgentRun = Assert.Single(run.SubAgentRuns);
+        Assert.Equal("explorer", subAgentRun.TemplateId);
+        Assert.Equal("Completed", subAgentRun.Status);
+        Assert.Contains("Explorer found src/App.cs.", subAgentRun.Summary);
         Assert.Contains(run.Steps, step => step.Title == "Explorer 子 Agent" &&
                                           step.Output.Contains("Explorer found src/App.cs.", StringComparison.Ordinal));
         var artifact = Assert.Single(run.Artifacts, item => item.Kind == "sub_agent_result");
@@ -196,6 +200,90 @@ public sealed class AgentHarnessTests
             message => message.Role == ChatRole.System &&
                        message.Content.Contains("Explorer sub-agent result", StringComparison.Ordinal) &&
                        message.Content.Contains("Explorer found src/App.cs.", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsFailedExplorerSubAgentAndContinuesParentRun()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "main continued" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """
+            {
+              "summary": "Explore first",
+              "phases": [
+                {
+                  "name": "gathering_context",
+                  "objective": "inspect files",
+                  "tasks": [
+                    { "title": "Inspect service", "details": "Read the relevant service", "risk": "low", "suggestedTools": ["read_file"] }
+                  ]
+                },
+                { "name": "executing", "objective": "finish task" }
+              ]
+            }
+            """
+        }]);
+        var forbiddenToolCall = new ChatToolCall
+        {
+            Id = "sub-agent-tool-1",
+            Name = "apply_patch",
+            ArgumentsJson = "{}"
+        };
+        var subAgentService = new FakeChatCompletionService([
+            [new ChatDelta { ToolCalls = [forbiddenToolCall] }]
+        ]);
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService),
+            subAgentScheduler: subAgentScheduler);
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix app",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix app" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           ContextPack = new TaskContextPack
+                           {
+                               Summary = "Context pack",
+                               IncludedFiles = [new TaskContextFileRef { Path = "src/App.cs", Reason = "goal match" }]
+                           },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 9
+                           }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.SubAgentCompleted &&
+                                       item.SubAgentRun?.Status == "Failed");
+        var subAgentRun = Assert.Single(run.SubAgentRuns);
+        Assert.Equal("explorer", subAgentRun.TemplateId);
+        Assert.Equal("Failed", subAgentRun.Status);
+        Assert.Contains("forbidden tool: apply_patch", subAgentRun.Summary, StringComparison.Ordinal);
+        Assert.Contains(run.Steps, step => step.Type == AgentStepType.Final &&
+                                          step.Output.Contains("main continued", StringComparison.Ordinal));
+        Assert.Contains(
+            runnerService.Requests.Last().Messages,
+            message => message.Role == ChatRole.System &&
+                       message.Content.Contains("Explorer sub-agent result", StringComparison.Ordinal) &&
+                       message.Content.Contains("forbidden tool: apply_patch", StringComparison.Ordinal));
     }
 
     [Fact]

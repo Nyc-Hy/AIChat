@@ -164,6 +164,33 @@ public sealed class AgentRunSerializationTests
                             Summary = "large test output",
                             Content = "full output"
                         }
+                    ],
+                    SubAgentRuns =
+                    [
+                        new AgentSubAgentRun
+                        {
+                            Id = "sub-1",
+                            ParentRunId = "run-1",
+                            TemplateId = "explorer",
+                            Task = "Inspect service",
+                            Status = "Completed",
+                            Summary = "Found service",
+                            RecommendedNextStep = "Use findings",
+                            MaxToolCalls = 4,
+                            ToolCallCount = 1,
+                            Findings = ["src/App.cs is relevant"],
+                            ArtifactRefs = ["artifact: ref"],
+                            ToolCalls =
+                            [
+                                new AgentSubAgentToolCall
+                                {
+                                    ToolCallId = "sub-tool-1",
+                                    ToolName = "read_file",
+                                    ArgumentsJson = "{}",
+                                    ResultSummary = "ok"
+                                }
+                            ]
+                        }
                     ]
                 }
             ]
@@ -179,6 +206,7 @@ public sealed class AgentRunSerializationTests
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
         Assert.Single(roundTripped.AgentRuns[0].Verifications);
         Assert.Single(roundTripped.AgentRuns[0].Artifacts);
+        Assert.Single(roundTripped.AgentRuns[0].SubAgentRuns);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].Phase);
         Assert.Equal("all tests passed", roundTripped.AgentRuns[0].CompletionReason);
         Assert.Equal("D:/Code/AIChat", roundTripped.AgentRuns[0].ProjectPath);
@@ -211,6 +239,9 @@ public sealed class AgentRunSerializationTests
         Assert.True(roundTripped.AgentRuns[0].Verifications[0].IsSuccess);
         Assert.Equal("All tests passed", roundTripped.AgentRuns[0].Verifications[0].Summary);
         Assert.Equal("full output", roundTripped.AgentRuns[0].Artifacts[0].Content);
+        Assert.Equal("explorer", roundTripped.AgentRuns[0].SubAgentRuns[0].TemplateId);
+        Assert.Single(roundTripped.AgentRuns[0].SubAgentRuns[0].ToolCalls);
+        Assert.Equal("read_file", roundTripped.AgentRuns[0].SubAgentRuns[0].ToolCalls[0].ToolName);
     }
 
     [Fact]
