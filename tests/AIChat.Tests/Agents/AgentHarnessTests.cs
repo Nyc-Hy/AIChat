@@ -129,6 +129,47 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public async Task RunAsync_SkipsPlannerForSimpleReadOnlyTask()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """{"summary":"should not be used","phases":[]}"""
+        }]);
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "解释这个项目的 Agent loop",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "解释这个项目的 Agent loop" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"]
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Null(run.StructuredPlan);
+        Assert.Null(run.Plan);
+        Assert.Empty(plannerService.Requests);
+        Assert.Single(runnerService.Requests);
+    }
+
+    [Fact]
     public async Task RunAsync_RunsExplorerSubAgentAndRecordsResultArtifact()
     {
         var conversation = new Conversation { Id = "conversation-1" };

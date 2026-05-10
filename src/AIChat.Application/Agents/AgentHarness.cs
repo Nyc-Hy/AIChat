@@ -20,19 +20,22 @@ public sealed class AgentHarness
     private readonly AgentCoordinator _coordinator;
     private readonly AgentPromptComposer _promptComposer;
     private readonly SubAgentScheduler? _subAgentScheduler;
+    private readonly AgentTaskClassifier _taskClassifier;
 
     public AgentHarness(
         AgentRunner agentRunner,
         AgentPlanner? planner = null,
         AgentCoordinator? coordinator = null,
         AgentPromptComposer? promptComposer = null,
-        SubAgentScheduler? subAgentScheduler = null)
+        SubAgentScheduler? subAgentScheduler = null,
+        AgentTaskClassifier? taskClassifier = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
         _coordinator = coordinator ?? new AgentCoordinator();
         _promptComposer = promptComposer ?? new AgentPromptComposer();
         _subAgentScheduler = subAgentScheduler ?? new SubAgentScheduler(agentRunner);
+        _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -61,6 +64,7 @@ public sealed class AgentHarness
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);
+        var taskComplexity = _taskClassifier.Classify(request.Goal, request.Context);
         yield return new AgentHarnessEvent
         {
             Type = AgentHarnessEventType.RunStarted,
@@ -68,10 +72,14 @@ public sealed class AgentHarness
         };
 
         var stepNumber = 0;
-        if (_planner is not null)
+        var planner = _planner;
+        var shouldPlan = planner is not null &&
+                         taskComplexity != AgentTaskComplexity.Simple &&
+                         string.IsNullOrWhiteSpace(request.ContinuedFromRunId);
+        if (shouldPlan)
         {
             yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
-            var structuredPlan = await _planner.PlanAsync(
+            var structuredPlan = await planner!.PlanAsync(
                 new AgentPlanningRequest(
                     request.Goal,
                     request.Context.ProjectPath,
@@ -120,6 +128,10 @@ public sealed class AgentHarness
             request.ContextPack,
             request.Goal,
             run.RequiresProjectMutation);
+        if (taskComplexity == AgentTaskComplexity.Simple)
+        {
+            subAgentSchedule = [];
+        }
         run.SubAgentScheduleDecisions.AddRange(subAgentSchedule);
         var scheduledSubAgents = subAgentSchedule
             .Where(decision => string.Equals(decision.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
