@@ -207,11 +207,11 @@ public sealed class AgentHarnessTests
                            Conversation = conversation,
                            UserMessageId = "user-1",
                            AssistantMessageId = "assistant-1",
-                           Goal = "fix app",
+                           Goal = "complex multi-module fix app",
                            ChatRequest = new ChatRequest
                            {
                                Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix app" }]
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "complex multi-module fix app" }]
                            },
                            Settings = new AppSettings { Model = "test" },
                            ContextPack = new TaskContextPack
@@ -289,11 +289,11 @@ public sealed class AgentHarnessTests
                            Conversation = conversation,
                            UserMessageId = "user-1",
                            AssistantMessageId = "assistant-1",
-                           Goal = "fix routing",
+                           Goal = "complex multi-module fix routing",
                            ChatRequest = new ChatRequest
                            {
                                Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix routing" }]
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "complex multi-module fix routing" }]
                            },
                            Settings = new AppSettings { Model = "test" },
                            ContextPack = new TaskContextPack
@@ -367,11 +367,11 @@ public sealed class AgentHarnessTests
                            Conversation = conversation,
                            UserMessageId = "user-1",
                            AssistantMessageId = "assistant-1",
-                           Goal = "fix app",
+                           Goal = "complex multi-module fix app",
                            ChatRequest = new ChatRequest
                            {
                                Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix app" }]
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "complex multi-module fix app" }]
                            },
                            Settings = new AppSettings { Model = "test" },
                            ContextPack = new TaskContextPack

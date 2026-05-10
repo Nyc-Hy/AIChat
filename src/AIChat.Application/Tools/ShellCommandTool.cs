@@ -33,7 +33,8 @@ public sealed class ShellCommandTool : IAgentTool
         "git remote", "git tag",
         "rg ", "grep ", "find ", "ls ", "dir ", "cat ", "head ", "tail ",
         "wc ", "file ", "stat ", "which ", "where ", "echo ", "pwd",
-        "npm list", "npm ls", "npm outdated",
+        "npm list", "npm ls", "npm outdated", "npm test", "npm run build",
+        "pytest", "cargo build", "cargo test", "go test",
         "node --version", "dotnet --version", "git --version"
     ];
 

@@ -39,6 +39,36 @@ public sealed class ProjectInitializerTests : IDisposable
         Assert.Empty(commands);
     }
 
+    [Fact]
+    public void SuggestVerificationCommands_ForNodePackageScriptsCreatesBuildAndTestCommands()
+    {
+        File.WriteAllText(Path.Combine(_tempDir, "package.json"), """
+        {
+          "scripts": {
+            "build": "vite build",
+            "test": "vitest run"
+          }
+        }
+        """);
+
+        var commands = new ProjectInitializer().SuggestVerificationCommands(_tempDir);
+
+        Assert.Equal(2, commands.Count);
+        Assert.Equal("npm run build", commands[0].Command);
+        Assert.Equal("npm test", commands[1].Command);
+    }
+
+    [Fact]
+    public void SuggestVerificationCommands_ForPythonProjectCreatesPytestCommand()
+    {
+        File.WriteAllText(Path.Combine(_tempDir, "pyproject.toml"), "[project]\nname='demo'");
+
+        var command = Assert.Single(new ProjectInitializer().SuggestVerificationCommands(_tempDir));
+
+        Assert.Equal("pytest", command.Command);
+        Assert.Equal(180, command.TimeoutSeconds);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

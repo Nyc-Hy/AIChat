@@ -2940,7 +2940,8 @@ public sealed class MainViewModel : ObservableObject
                                     assistantViewModel.AttachAgentRun(agentEvent.Run);
                                     RebuildAgentRunHistoryIfOpen();
                                 }
-                                AgentStatusPhase = "正在规划";
+                                StatusText = "正在处理...";
+                                AgentStatusPhase = "正在处理";
                                 OnPropertyChanged(nameof(HasAgentStatus));
                             });
                             await RecordAuditEventAsync(AuditEventType.AgentRunStarted,
@@ -2955,17 +2956,13 @@ public sealed class MainViewModel : ObservableObject
                                     ? ""
                                     : agentEvent.Run.Phase switch
                                     {
-                                        "planning" => "正在规划",
-                                        "gathering_context" => "收集上下文",
-                                        "executing" => "正在执行",
                                         "verifying" => "正在验证",
                                         "repairing" => "正在修复",
-                                        "summarizing" => "正在总结",
                                         "waiting_for_user" => "等待用户",
                                         "completed" => "已完成",
                                         "cancelled" => "已停止",
                                         "failed" => "失败",
-                                        _ => "执行中"
+                                        _ => "正在处理"
                                     };
                                 OnPropertyChanged(nameof(HasAgentStatus));
                             });
@@ -2984,9 +2981,9 @@ public sealed class MainViewModel : ObservableObject
                         case AgentHarnessEventType.SubAgentStarted:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
-                                StatusText = $"运行子 Agent：{agentEvent.SubAgentRun?.TemplateId}";
-                                AgentStatusPhase = "收集上下文";
-                                AgentStatusTool = agentEvent.SubAgentRun?.TemplateId ?? "";
+                                StatusText = "正在处理...";
+                                AgentStatusPhase = "正在处理";
+                                AgentStatusTool = "";
                                 assistantViewModel.SyncSubAgentRuns();
                                 OnPropertyChanged(nameof(HasAgentStatus));
                             });
@@ -3001,7 +2998,7 @@ public sealed class MainViewModel : ObservableObject
                             {
                                 assistantViewModel.SyncSubAgentRuns();
                                 assistantViewModel.SyncAgentArtifacts();
-                                StatusText = $"子 Agent 完成：{agentEvent.SubAgentRun?.TemplateId}";
+                                StatusText = "正在处理...";
                                 AgentStatusTool = "";
                                 OnPropertyChanged(nameof(HasAgentStatus));
                             });
@@ -3028,7 +3025,7 @@ public sealed class MainViewModel : ObservableObject
                                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     assistantViewModel.Content = "";
-                                    StatusText = "模型正在回复...";
+                                    StatusText = "正在处理...";
                                     AgentStatusPhase = "正在回复";
                                     AgentStatusTool = "";
                                     OnPropertyChanged(nameof(HasAgentStatus));
@@ -3040,9 +3037,9 @@ public sealed class MainViewModel : ObservableObject
                         case AgentHarnessEventType.ToolCall:
                             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             {
-                                StatusText = $"调用工具：{agentEvent.ToolCall?.Name}";
-                                AgentStatusPhase = "正在执行";
-                                AgentStatusTool = agentEvent.ToolCall?.Name ?? "";
+                                StatusText = "正在处理...";
+                                AgentStatusPhase = "正在处理";
+                                AgentStatusTool = "";
                                 OnPropertyChanged(nameof(HasAgentStatus));
                                 hasUsedTools = true;
                                 if (!hasReceivedContent && !hasShownToolProgress)

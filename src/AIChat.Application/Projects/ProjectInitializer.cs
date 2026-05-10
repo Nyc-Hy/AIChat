@@ -40,6 +40,71 @@ public sealed class ProjectInitializer
             });
         }
 
+        if (detection.TechStack.Contains("Node.js", StringComparer.Ordinal))
+        {
+            if (HasPackageScript(projectPath, "build"))
+            {
+                commands.Add(new ProjectVerificationCommand
+                {
+                    Name = "构建",
+                    Command = "npm run build",
+                    TimeoutSeconds = 180,
+                    IsDefault = true
+                });
+            }
+
+            if (HasPackageScript(projectPath, "test"))
+            {
+                commands.Add(new ProjectVerificationCommand
+                {
+                    Name = "测试",
+                    Command = "npm test",
+                    TimeoutSeconds = 180,
+                    IsDefault = true
+                });
+            }
+        }
+
+        if (detection.TechStack.Contains("Python", StringComparer.Ordinal))
+        {
+            commands.Add(new ProjectVerificationCommand
+            {
+                Name = "测试",
+                Command = "pytest",
+                TimeoutSeconds = 180,
+                IsDefault = true
+            });
+        }
+
+        if (detection.TechStack.Contains("Rust", StringComparer.Ordinal))
+        {
+            commands.Add(new ProjectVerificationCommand
+            {
+                Name = "构建",
+                Command = "cargo build",
+                TimeoutSeconds = 180,
+                IsDefault = true
+            });
+            commands.Add(new ProjectVerificationCommand
+            {
+                Name = "测试",
+                Command = "cargo test",
+                TimeoutSeconds = 180,
+                IsDefault = true
+            });
+        }
+
+        if (detection.TechStack.Contains("Go", StringComparer.Ordinal))
+        {
+            commands.Add(new ProjectVerificationCommand
+            {
+                Name = "测试",
+                Command = "go test ./...",
+                TimeoutSeconds = 180,
+                IsDefault = true
+            });
+        }
+
         return commands;
     }
 
@@ -143,6 +208,18 @@ public sealed class ProjectInitializer
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
         return string.IsNullOrWhiteSpace(project) ? "" : Path.GetFileName(project);
+    }
+
+    private static bool HasPackageScript(string root, string scriptName)
+    {
+        var packageJson = Path.Combine(root, "package.json");
+        if (!File.Exists(packageJson))
+        {
+            return false;
+        }
+
+        var text = File.ReadAllText(packageJson);
+        return text.Contains($"\"{scriptName}\"", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GenerateAgentsMd(string projectPath, ProjectDetection detection)

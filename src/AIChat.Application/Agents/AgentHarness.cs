@@ -21,6 +21,7 @@ public sealed class AgentHarness
     private readonly AgentPromptComposer _promptComposer;
     private readonly SubAgentScheduler? _subAgentScheduler;
     private readonly AgentTaskClassifier _taskClassifier;
+    private readonly AgentTaskExecutionPolicyBuilder _executionPolicyBuilder;
 
     public AgentHarness(
         AgentRunner agentRunner,
@@ -28,7 +29,8 @@ public sealed class AgentHarness
         AgentCoordinator? coordinator = null,
         AgentPromptComposer? promptComposer = null,
         SubAgentScheduler? subAgentScheduler = null,
-        AgentTaskClassifier? taskClassifier = null)
+        AgentTaskClassifier? taskClassifier = null,
+        AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
@@ -36,6 +38,7 @@ public sealed class AgentHarness
         _promptComposer = promptComposer ?? new AgentPromptComposer();
         _subAgentScheduler = subAgentScheduler ?? new SubAgentScheduler(agentRunner);
         _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
+        _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -65,6 +68,12 @@ public sealed class AgentHarness
         };
         request.Conversation.AgentRuns.Add(run);
         var taskComplexity = _taskClassifier.Classify(request.Goal, request.Context);
+        var executionPolicy = _executionPolicyBuilder.Build(
+            taskComplexity,
+            request.Context,
+            request.ContextPack,
+            !string.IsNullOrWhiteSpace(request.ContinuedFromRunId));
+        run.MaxToolRounds = executionPolicy.MaxToolRounds;
         yield return new AgentHarnessEvent
         {
             Type = AgentHarnessEventType.RunStarted,
@@ -73,9 +82,7 @@ public sealed class AgentHarness
 
         var stepNumber = 0;
         var planner = _planner;
-        var shouldPlan = planner is not null &&
-                         taskComplexity != AgentTaskComplexity.Simple &&
-                         string.IsNullOrWhiteSpace(request.ContinuedFromRunId);
+        var shouldPlan = planner is not null && executionPolicy.UsePlanner;
         if (shouldPlan)
         {
             yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
@@ -128,7 +135,7 @@ public sealed class AgentHarness
             request.ContextPack,
             request.Goal,
             run.RequiresProjectMutation);
-        if (taskComplexity == AgentTaskComplexity.Simple)
+        if (!executionPolicy.AllowExplorer)
         {
             subAgentSchedule = [];
         }
@@ -149,7 +156,7 @@ public sealed class AgentHarness
                     Settings = request.Settings,
                     TemplateId = plannedSubAgent.TemplateId,
                     ContextPack = request.ContextPack,
-                    MaxToolCalls = Math.Min(plannedSubAgent.MaxToolCalls, Math.Max(1, request.Context.MaxToolRounds / 3)),
+                    MaxToolCalls = Math.Min(plannedSubAgent.MaxToolCalls, executionPolicy.SubAgentMaxToolCalls),
                     WriteScope = plannedSubAgent.WriteScope,
                     InputArtifacts = request.Context.InputArtifacts
                 }, cancellationToken);
@@ -191,7 +198,7 @@ public sealed class AgentHarness
         await foreach (var agentEvent in _agentRunner.RunAsync(
                            executionRequest,
                            request.Settings,
-                           request.Context,
+                           ApplyExecutionPolicy(request.Context, executionPolicy),
                            cancellationToken))
         {
             switch (agentEvent.Type)
@@ -360,7 +367,7 @@ public sealed class AgentHarness
                         yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Verifying, "运行自动验证"));
                         await foreach (var verifyEvent in RunAutoVerifyLoopAsync(
                                            run, request, stepByToolCallId,
-                                           request.Settings, request.Context, cancellationToken))
+                                           request.Settings, ApplyExecutionPolicy(request.Context, executionPolicy), cancellationToken))
                         {
                             yield return verifyEvent;
                         }
@@ -455,6 +462,29 @@ public sealed class AgentHarness
         }
 
         return AgentRunStatus.Completed;
+    }
+
+    private static AgentRunContext ApplyExecutionPolicy(
+        AgentRunContext context,
+        AgentTaskExecutionPolicy policy)
+    {
+        if (context.MaxToolRounds == policy.MaxToolRounds)
+        {
+            return context;
+        }
+
+        return new AgentRunContext
+        {
+            ProjectPath = context.ProjectPath,
+            EnabledToolIds = context.EnabledToolIds,
+            ToolPermissionModes = context.ToolPermissionModes,
+            RequestToolApprovalAsync = context.RequestToolApprovalAsync,
+            MaxToolRounds = policy.MaxToolRounds,
+            AutoVerifyAgentRuns = context.AutoVerifyAgentRuns,
+            MaxAutoFixRounds = context.MaxAutoFixRounds,
+            VerificationCommands = context.VerificationCommands,
+            InputArtifacts = context.InputArtifacts
+        };
     }
 
     private static string BuildFinalContent(string assistantContent, AgentRun run, AgentRunStatus status)
