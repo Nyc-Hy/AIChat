@@ -1,8 +1,10 @@
 using AIChat.Application.Agents;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
+using AIChat.Abstractions.Configuration;
 using AIChat.Domain.Audit;
 using AIChat.Domain.Chat;
+using System.Text;
 
 namespace AIChat.App.ViewModels;
 
@@ -139,172 +141,20 @@ public sealed partial class MainViewModel
             // before the network call begins.
             await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => { });
 
-            await Task.Run(async () =>
-            {
-                var modelInfo = ChatProviderCatalog.ResolveModel(
-                    effectiveSettings.ActiveConfiguredProviderId,
-                    effectiveSettings.Model);
-                var supportsTools = modelInfo?.Capabilities?.SupportsTools == true;
-
-                if (_agentHarness is null || !supportsTools)
-                {
-                    await foreach (var delta in _chatService.SendAsync(request, effectiveSettings, _sendCts.Token))
-                    {
-                        // Preserve raw protocol events separately from rendered content.
-                        if (!string.IsNullOrWhiteSpace(delta.RawJson))
-                        {
-                            rawResponseEvents.Add(delta.RawJson);
-                        }
-
-                        if (!string.IsNullOrEmpty(delta.ReasoningContent))
-                        {
-                            reasoningContentBuilder.Append(delta.ReasoningContent);
-                        }
-
-                        if (!string.IsNullOrEmpty(delta.Content))
-                        {
-                            if (!agentUiState.HasReceivedContent)
-                            {
-                                // Replace the placeholder text as soon as the first
-                                // real token arrives.
-                                agentUiState.HasReceivedContent = true;
-                                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                {
-                                    assistantViewModel.Content = "";
-                                    StatusText = "模型正在回复...";
-                                });
-                            }
-
-                            await AppendAssistantContentAsync(assistantViewModel, delta.Content, _sendCts.Token);
-                        }
-                    }
-
-                    if (_agentHarness is not null && !supportsTools)
-                    {
-                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            StatusText = "当前模型不支持工具调用，已回退到普通聊天模式";
-                        });
-                    }
-
-                    return;
-                }
-
-                await foreach (var agentEvent in _agentHarness.RunAsync(
-                                   new AgentHarnessRunRequest
-                                   {
-                                       Conversation = SelectedConversation.Conversation,
-                                       UserMessageId = userMessage.Id,
-                                       AssistantMessageId = assistantMessage.Id,
-                                       Goal = text,
-                                       ChatRequest = request,
-                                       Settings = effectiveSettings,
-                                       ContextPack = requestBuild.ContextPack,
-                                       WorkspaceBranch = workspaceSnapshot.Branch,
-                                       WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
-                                       WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,
-                                       ContinuedFromRunId = continuedFromRunId,
-                                       Context = requestBuild.AgentContext
-                                   },
-                                   _sendCts.Token))
-                {
-                    switch (agentEvent.Type)
-                    {
-                        case AgentHarnessEventType.RunStarted:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            await RecordAuditEventAsync(AuditEventType.AgentRunStarted,
-                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
-                                summary: text);
-                            break;
-                        case AgentHarnessEventType.PhaseChanged:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            break;
-                        case AgentHarnessEventType.StepAdded:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            break;
-                        case AgentHarnessEventType.SubAgentStarted:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            await RecordAuditEventAsync(AuditEventType.SubAgentStarted,
-                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
-                                toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
-                                summary: $"Sub-agent started: {agentEvent.SubAgentRun?.TemplateId}",
-                                detail: agentEvent.SubAgentRun?.Task ?? "");
-                            break;
-                        case AgentHarnessEventType.SubAgentCompleted:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            await RecordAuditEventAsync(
-                                string.Equals(agentEvent.SubAgentRun?.Status, "Completed", StringComparison.OrdinalIgnoreCase)
-                                    ? AuditEventType.SubAgentCompleted
-                                    : AuditEventType.SubAgentFailed,
-                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
-                                toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
-                                summary: $"Sub-agent {agentEvent.SubAgentRun?.Status}: {agentEvent.SubAgentRun?.TemplateId}",
-                                detail: agentEvent.SubAgentRun?.Summary ?? "");
-                            break;
-                        case AgentHarnessEventType.RawProviderEvent:
-                            if (!string.IsNullOrWhiteSpace(agentEvent.RawJson))
-                            {
-                                rawResponseEvents.Add(agentEvent.RawJson);
-                            }
-                            break;
-                        case AgentHarnessEventType.ContentDelta:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            break;
-                        case AgentHarnessEventType.ToolCall:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            await RecordAuditEventAsync(AuditEventType.ToolCallRequested,
-                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
-                                toolName: agentEvent.ToolCall?.Name ?? "",
-                                summary: $"Tool call: {agentEvent.ToolCall?.Name}",
-                                detail: agentEvent.ToolCall?.ArgumentsJson ?? "");
-                            rawResponseEvents.Add(SerializeJson(new
-                            {
-                                type = "tool_call",
-                                id = agentEvent.ToolCall?.Id,
-                                name = agentEvent.ToolCall?.Name,
-                                arguments = agentEvent.ToolCall?.ArgumentsJson
-                            }));
-                            break;
-                        case AgentHarnessEventType.ToolApprovalRequired:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            break;
-                        case AgentHarnessEventType.ToolApprovalRejected:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            await RecordAuditEventAsync(AuditEventType.ToolCallRejected,
-                                SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
-                                toolName: agentEvent.ToolCall?.Name ?? "",
-                                summary: $"Rejected: {agentEvent.ToolCall?.Name}");
-                            break;
-                        case AgentHarnessEventType.ToolResult:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            rawResponseEvents.Add(SerializeJson(new
-                            {
-                                type = "tool_result",
-                                tool = agentEvent.ToolResult?.ToolName,
-                                isError = agentEvent.ToolResult?.IsError,
-                                content = agentEvent.ToolResult?.Content
-                            }));
-                            break;
-                        case AgentHarnessEventType.RunCompleted:
-                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
-                            {
-                                var runStatus = agentEvent.Run?.Status;
-                                var auditType = runStatus switch
-                                {
-                                    AgentRunStatus.Completed => AuditEventType.AgentRunCompleted,
-                                    AgentRunStatus.BudgetExceeded => AuditEventType.AgentRunCancelled,
-                                    AgentRunStatus.Failed => AuditEventType.AgentRunFailed,
-                                    AgentRunStatus.Cancelled => AuditEventType.AgentRunCancelled,
-                                    _ => AuditEventType.AgentRunCompleted
-                                };
-                                await RecordAuditEventAsync(auditType,
-                                    SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
-                                    summary: $"Run {runStatus}");
-                            }
-                            break;
-                    }
-                }
-            }, _sendCts.Token);
+            await ExecuteSendRequestAsync(
+                request,
+                requestBuild,
+                effectiveSettings,
+                workspaceSnapshot,
+                userMessage.Id,
+                assistantMessage.Id,
+                text,
+                continuedFromRunId,
+                assistantViewModel,
+                agentUiState,
+                reasoningContentBuilder,
+                rawResponseEvents,
+                _sendCts.Token);
 
             // Store reasoning content for DeepSeek thinking mode replay.
             if (reasoningContentBuilder.Length > 0)
@@ -403,6 +253,239 @@ public sealed partial class MainViewModel
             _sendCts = null;
             await SaveProjectsAsync();
             UpdateContextUsage();
+        }
+    }
+
+    private async Task ExecuteSendRequestAsync(
+        ChatRequest request,
+        AgentRequestBuildResult requestBuild,
+        AppSettings effectiveSettings,
+        WorkspaceRunSnapshot workspaceSnapshot,
+        string userMessageId,
+        string assistantMessageId,
+        string goal,
+        string continuedFromRunId,
+        ChatMessageViewModel assistantViewModel,
+        AgentUiEventState agentUiState,
+        StringBuilder reasoningContentBuilder,
+        List<string> rawResponseEvents,
+        CancellationToken cancellationToken)
+    {
+        await Task.Run(async () =>
+        {
+            var modelInfo = ChatProviderCatalog.ResolveModel(
+                effectiveSettings.ActiveConfiguredProviderId,
+                effectiveSettings.Model);
+            var supportsTools = modelInfo?.Capabilities?.SupportsTools == true;
+
+            if (_agentHarness is null || !supportsTools)
+            {
+                await ExecutePlainChatAsync(
+                    request,
+                    effectiveSettings,
+                    assistantViewModel,
+                    agentUiState,
+                    reasoningContentBuilder,
+                    rawResponseEvents,
+                    cancellationToken);
+
+                if (_agentHarness is not null && !supportsTools)
+                {
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        StatusText = "当前模型不支持工具调用，已回退到普通聊天模式";
+                    });
+                }
+
+                return;
+            }
+
+            await ExecuteAgentRunAsync(
+                request,
+                requestBuild,
+                effectiveSettings,
+                workspaceSnapshot,
+                userMessageId,
+                assistantMessageId,
+                goal,
+                continuedFromRunId,
+                assistantViewModel,
+                agentUiState,
+                rawResponseEvents,
+                cancellationToken);
+        }, cancellationToken);
+    }
+
+    private async Task ExecutePlainChatAsync(
+        ChatRequest request,
+        AppSettings effectiveSettings,
+        ChatMessageViewModel assistantViewModel,
+        AgentUiEventState agentUiState,
+        StringBuilder reasoningContentBuilder,
+        List<string> rawResponseEvents,
+        CancellationToken cancellationToken)
+    {
+        await foreach (var delta in _chatService.SendAsync(request, effectiveSettings, cancellationToken))
+        {
+            // Preserve raw protocol events separately from rendered content.
+            if (!string.IsNullOrWhiteSpace(delta.RawJson))
+            {
+                rawResponseEvents.Add(delta.RawJson);
+            }
+
+            if (!string.IsNullOrEmpty(delta.ReasoningContent))
+            {
+                reasoningContentBuilder.Append(delta.ReasoningContent);
+            }
+
+            if (!string.IsNullOrEmpty(delta.Content))
+            {
+                if (!agentUiState.HasReceivedContent)
+                {
+                    // Replace the placeholder text as soon as the first real token arrives.
+                    agentUiState.HasReceivedContent = true;
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        assistantViewModel.Content = "";
+                        StatusText = "模型正在回复...";
+                    });
+                }
+
+                await AppendAssistantContentAsync(assistantViewModel, delta.Content, cancellationToken);
+            }
+        }
+    }
+
+    private async Task ExecuteAgentRunAsync(
+        ChatRequest request,
+        AgentRequestBuildResult requestBuild,
+        AppSettings effectiveSettings,
+        WorkspaceRunSnapshot workspaceSnapshot,
+        string userMessageId,
+        string assistantMessageId,
+        string goal,
+        string continuedFromRunId,
+        ChatMessageViewModel assistantViewModel,
+        AgentUiEventState agentUiState,
+        List<string> rawResponseEvents,
+        CancellationToken cancellationToken)
+    {
+        if (_agentHarness is null)
+        {
+            return;
+        }
+
+        await foreach (var agentEvent in _agentHarness.RunAsync(
+                           new AgentHarnessRunRequest
+                           {
+                               Conversation = SelectedConversation!.Conversation,
+                               UserMessageId = userMessageId,
+                               AssistantMessageId = assistantMessageId,
+                               Goal = goal,
+                               ChatRequest = request,
+                               Settings = effectiveSettings,
+                               ContextPack = requestBuild.ContextPack,
+                               WorkspaceBranch = workspaceSnapshot.Branch,
+                               WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
+                               WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,
+                               ContinuedFromRunId = continuedFromRunId,
+                               Context = requestBuild.AgentContext
+                           },
+                           cancellationToken))
+        {
+            switch (agentEvent.Type)
+            {
+                case AgentHarnessEventType.RunStarted:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    await RecordAuditEventAsync(AuditEventType.AgentRunStarted,
+                        SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                        summary: goal);
+                    break;
+                case AgentHarnessEventType.PhaseChanged:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    break;
+                case AgentHarnessEventType.StepAdded:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    break;
+                case AgentHarnessEventType.SubAgentStarted:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    await RecordAuditEventAsync(AuditEventType.SubAgentStarted,
+                        SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                        toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
+                        summary: $"Sub-agent started: {agentEvent.SubAgentRun?.TemplateId}",
+                        detail: agentEvent.SubAgentRun?.Task ?? "");
+                    break;
+                case AgentHarnessEventType.SubAgentCompleted:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    await RecordAuditEventAsync(
+                        string.Equals(agentEvent.SubAgentRun?.Status, "Completed", StringComparison.OrdinalIgnoreCase)
+                            ? AuditEventType.SubAgentCompleted
+                            : AuditEventType.SubAgentFailed,
+                        SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                        toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
+                        summary: $"Sub-agent {agentEvent.SubAgentRun?.Status}: {agentEvent.SubAgentRun?.TemplateId}",
+                        detail: agentEvent.SubAgentRun?.Summary ?? "");
+                    break;
+                case AgentHarnessEventType.RawProviderEvent:
+                    if (!string.IsNullOrWhiteSpace(agentEvent.RawJson))
+                    {
+                        rawResponseEvents.Add(agentEvent.RawJson);
+                    }
+                    break;
+                case AgentHarnessEventType.ContentDelta:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    break;
+                case AgentHarnessEventType.ToolCall:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    await RecordAuditEventAsync(AuditEventType.ToolCallRequested,
+                        SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                        toolName: agentEvent.ToolCall?.Name ?? "",
+                        summary: $"Tool call: {agentEvent.ToolCall?.Name}",
+                        detail: agentEvent.ToolCall?.ArgumentsJson ?? "");
+                    rawResponseEvents.Add(SerializeJson(new
+                    {
+                        type = "tool_call",
+                        id = agentEvent.ToolCall?.Id,
+                        name = agentEvent.ToolCall?.Name,
+                        arguments = agentEvent.ToolCall?.ArgumentsJson
+                    }));
+                    break;
+                case AgentHarnessEventType.ToolApprovalRequired:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    break;
+                case AgentHarnessEventType.ToolApprovalRejected:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    await RecordAuditEventAsync(AuditEventType.ToolCallRejected,
+                        SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                        toolName: agentEvent.ToolCall?.Name ?? "",
+                        summary: $"Rejected: {agentEvent.ToolCall?.Name}");
+                    break;
+                case AgentHarnessEventType.ToolResult:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    rawResponseEvents.Add(SerializeJson(new
+                    {
+                        type = "tool_result",
+                        tool = agentEvent.ToolResult?.ToolName,
+                        isError = agentEvent.ToolResult?.IsError,
+                        content = agentEvent.ToolResult?.Content
+                    }));
+                    break;
+                case AgentHarnessEventType.RunCompleted:
+                    await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    var runStatus = agentEvent.Run?.Status;
+                    var auditType = runStatus switch
+                    {
+                        AgentRunStatus.Completed => AuditEventType.AgentRunCompleted,
+                        AgentRunStatus.BudgetExceeded => AuditEventType.AgentRunCancelled,
+                        AgentRunStatus.Failed => AuditEventType.AgentRunFailed,
+                        AgentRunStatus.Cancelled => AuditEventType.AgentRunCancelled,
+                        _ => AuditEventType.AgentRunCompleted
+                    };
+                    await RecordAuditEventAsync(auditType,
+                        SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
+                        summary: $"Run {runStatus}");
+                    break;
+            }
         }
     }
 
