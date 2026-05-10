@@ -120,7 +120,8 @@ public sealed class AgentHarnessTests
                            Context = new AgentRunContext
                            {
                                ProjectPath = Environment.CurrentDirectory,
-                               EnabledToolIds = ["read_file"]
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 50
                            }
                        }))
         {
@@ -163,7 +164,8 @@ public sealed class AgentHarnessTests
                            Context = new AgentRunContext
                            {
                                ProjectPath = Environment.CurrentDirectory,
-                               EnabledToolIds = ["read_file"]
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 50
                            }
                        }))
         {
@@ -176,9 +178,118 @@ public sealed class AgentHarnessTests
         Assert.Contains("planner=False", run.ExecutionPolicySummary);
         Assert.False(run.PlannerUsed);
         Assert.False(run.ExplorerUsed);
+        Assert.Equal(12, run.MaxToolRounds);
         Assert.Contains("Explorer skipped", run.ExplorerDecisionReason);
         Assert.Empty(plannerService.Requests);
         Assert.Single(runnerService.Requests);
+    }
+
+    [Fact]
+    public async Task RunAsync_SkipsExplorerForStandardTaskWhenContextIsAvailable()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """
+            {
+              "summary": "Use existing context",
+              "phases": [
+                {
+                  "name": "gathering_context",
+                  "tasks": [
+                    { "title": "Inspect existing file", "suggestedTools": ["read_file"] }
+                  ]
+                }
+              ]
+            }
+            """
+        }]);
+        var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "should not run" }]);
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService),
+            subAgentScheduler: subAgentScheduler);
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix login",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix login" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           ContextPack = new TaskContextPack
+                           {
+                               IncludedFiles = [new TaskContextFileRef { Path = "src/Login.cs", Reason = "goal match" }]
+                           },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 50
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal("Standard", run.TaskComplexity);
+        Assert.True(run.PlannerUsed);
+        Assert.False(run.ExplorerUsed);
+        Assert.Equal(35, run.MaxToolRounds);
+        Assert.Contains("Explorer skipped", run.ExplorerDecisionReason);
+        Assert.Empty(run.SubAgentRuns);
+        Assert.Empty(subAgentService.Requests);
+    }
+
+    [Fact]
+    public async Task RunAsync_SkipsPlannerWhenContinuingPausedRun()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "continued" }]);
+        var plannerService = new FakeChatCompletionService([new ChatDelta
+        {
+            Content = """{"summary":"should not plan continuation","phases":[]}"""
+        }]);
+        var harness = new AgentHarness(
+            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentPlanner(plannerService));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "继续完成这个已暂停的 Agent 任务。原始目标：fix login",
+                           ContinuedFromRunId = "previous-run",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "continue" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 50
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal("previous-run", run.ContinuedFromRunId);
+        Assert.False(run.PlannerUsed);
+        Assert.Contains("planner=False", run.ExecutionPolicySummary);
+        Assert.Equal(35, run.MaxToolRounds);
+        Assert.Empty(plannerService.Requests);
     }
 
     [Fact]
