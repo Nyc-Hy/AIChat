@@ -35,7 +35,7 @@ namespace AIChat.App.ViewModels;
 // Main application state machine. This ViewModel coordinates UI state,
 // persistence, context estimation, and model calls without depending on WPF
 // controls directly.
-public sealed class MainViewModel : ObservableObject
+public sealed partial class MainViewModel : ObservableObject
 {
     private const double AgentDefaultTemperature = 0.3;
 
@@ -2792,10 +2792,8 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasMessages));
         var assistantViewModel = SelectedConversation.Messages.Last();
         assistantViewModel.IsStreaming = true;
-        var hasReceivedContent = false;
-        var hasShownToolProgress = false;
+        var agentUiState = new AgentUiEventState();
         var reasoningContentBuilder = new System.Text.StringBuilder();
-        var hasUsedTools = false;
         var callDetail = new LlmCallDetail
         {
             // Call details intentionally capture both the user-facing settings and
@@ -2825,9 +2823,6 @@ public sealed class MainViewModel : ObservableObject
         _sendCts = new CancellationTokenSource();
         var workspaceSnapshot = await CaptureWorkspaceSnapshotAsync(_sendCts.Token);
         var rawResponseEvents = new List<string>();
-        var toolTraceByCallId = new Dictionary<string, ToolTraceViewModel>(StringComparer.Ordinal);
-        var stepByToolCallId = new Dictionary<string, AgentStepViewModel>(StringComparer.Ordinal);
-
         var requestBuild = _agentRequestFactory.Build(new AgentRequestBuildRequest
         {
             Conversation = SelectedConversation.Conversation,
@@ -2885,11 +2880,11 @@ public sealed class MainViewModel : ObservableObject
 
                         if (!string.IsNullOrEmpty(delta.Content))
                         {
-                            if (!hasReceivedContent)
+                            if (!agentUiState.HasReceivedContent)
                             {
                                 // Replace the placeholder text as soon as the first
                                 // real token arrives.
-                                hasReceivedContent = true;
+                                agentUiState.HasReceivedContent = true;
                                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     assistantViewModel.Content = "";
@@ -2933,60 +2928,19 @@ public sealed class MainViewModel : ObservableObject
                     switch (agentEvent.Type)
                     {
                         case AgentHarnessEventType.RunStarted:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                if (agentEvent.Run is not null)
-                                {
-                                    assistantViewModel.AttachAgentRun(agentEvent.Run);
-                                    RebuildAgentRunHistoryIfOpen();
-                                }
-                                StatusText = "正在处理...";
-                                AgentStatusPhase = "正在处理";
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             await RecordAuditEventAsync(AuditEventType.AgentRunStarted,
                                 SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
                                 summary: text);
                             break;
                         case AgentHarnessEventType.PhaseChanged:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                assistantViewModel.SyncAgentPhase();
-                                AgentStatusPhase = agentEvent.Run is null
-                                    ? ""
-                                    : agentEvent.Run.Phase switch
-                                    {
-                                        "verifying" => "正在验证",
-                                        "repairing" => "正在修复",
-                                        "waiting_for_user" => "等待用户",
-                                        "completed" => "已完成",
-                                        "cancelled" => "已停止",
-                                        "failed" => "失败",
-                                        _ => "正在处理"
-                                    };
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             break;
                         case AgentHarnessEventType.StepAdded:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                if (agentEvent.Step is not null)
-                                {
-                                    _ = assistantViewModel.AddAgentStep(agentEvent.Step);
-                                }
-
-                                assistantViewModel.SyncAgentPlan();
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             break;
                         case AgentHarnessEventType.SubAgentStarted:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                StatusText = "正在处理...";
-                                AgentStatusPhase = "正在处理";
-                                AgentStatusTool = "";
-                                assistantViewModel.SyncSubAgentRuns();
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             await RecordAuditEventAsync(AuditEventType.SubAgentStarted,
                                 SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
                                 toolName: agentEvent.SubAgentRun?.TemplateId ?? "",
@@ -2994,14 +2948,7 @@ public sealed class MainViewModel : ObservableObject
                                 detail: agentEvent.SubAgentRun?.Task ?? "");
                             break;
                         case AgentHarnessEventType.SubAgentCompleted:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                assistantViewModel.SyncSubAgentRuns();
-                                assistantViewModel.SyncAgentArtifacts();
-                                StatusText = "正在处理...";
-                                AgentStatusTool = "";
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             await RecordAuditEventAsync(
                                 string.Equals(agentEvent.SubAgentRun?.Status, "Completed", StringComparison.OrdinalIgnoreCase)
                                     ? AuditEventType.SubAgentCompleted
@@ -3018,48 +2965,10 @@ public sealed class MainViewModel : ObservableObject
                             }
                             break;
                         case AgentHarnessEventType.ContentDelta:
-                            if (!hasReceivedContent)
-                            {
-                                hasReceivedContent = true;
-                                hasShownToolProgress = false;
-                                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                {
-                                    assistantViewModel.Content = "";
-                                    StatusText = "正在处理...";
-                                    AgentStatusPhase = "正在回复";
-                                    AgentStatusTool = "";
-                                    OnPropertyChanged(nameof(HasAgentStatus));
-                                });
-                            }
-
-                            await AppendAssistantContentAsync(assistantViewModel, agentEvent.Content, _sendCts.Token);
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             break;
                         case AgentHarnessEventType.ToolCall:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                StatusText = "正在处理...";
-                                AgentStatusPhase = "正在处理";
-                                AgentStatusTool = "";
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                                hasUsedTools = true;
-                                if (!hasReceivedContent && !hasShownToolProgress)
-                                {
-                                    hasShownToolProgress = true;
-                                    assistantViewModel.Content = "正在查看项目文件并分析结果...";
-                                }
-
-                                if (agentEvent.ToolCall is not null)
-                                {
-                                    toolTraceByCallId[agentEvent.ToolCall.Id] = assistantViewModel.AddToolTrace(agentEvent.ToolCall);
-                                    var stepViewModel = agentEvent.Step is null
-                                        ? null
-                                        : assistantViewModel.AddAgentStep(agentEvent.Step);
-                                    if (stepViewModel is not null)
-                                    {
-                                        stepByToolCallId[agentEvent.ToolCall.Id] = stepViewModel;
-                                    }
-                                }
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             await RecordAuditEventAsync(AuditEventType.ToolCallRequested,
                                 SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
                                 toolName: agentEvent.ToolCall?.Name ?? "",
@@ -3074,46 +2983,17 @@ public sealed class MainViewModel : ObservableObject
                             }));
                             break;
                         case AgentHarnessEventType.ToolApprovalRequired:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                StatusText = $"等待确认工具：{agentEvent.ToolCall?.Name}";
-                                AgentStatusPhase = "等待审批";
-                                AgentStatusTool = agentEvent.ToolCall?.Name ?? "";
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             break;
                         case AgentHarnessEventType.ToolApprovalRejected:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                StatusText = $"已拒绝工具：{agentEvent.ToolCall?.Name}";
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             await RecordAuditEventAsync(AuditEventType.ToolCallRejected,
                                 SelectedProject?.Project.Id ?? "", agentEvent.Run?.Id ?? "",
                                 toolName: agentEvent.ToolCall?.Name ?? "",
                                 summary: $"Rejected: {agentEvent.ToolCall?.Name}");
                             break;
                         case AgentHarnessEventType.ToolResult:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                if (agentEvent.ToolCall is not null &&
-                                    agentEvent.ToolResult is not null &&
-                                    toolTraceByCallId.TryGetValue(agentEvent.ToolCall.Id, out var trace))
-                                {
-                                    trace.Complete(agentEvent.ToolResult.Content, agentEvent.ToolResult.IsError);
-                                }
-
-                                if (agentEvent.ToolCall is not null &&
-                                    agentEvent.ToolResult is not null &&
-                                    stepByToolCallId.TryGetValue(agentEvent.ToolCall.Id, out var step))
-                                {
-                                    step.Refresh();
-                                }
-
-                                assistantViewModel.SyncAgentFileChanges();
-                                assistantViewModel.SyncAgentVerifications();
-                                assistantViewModel.SyncAgentArtifacts();
-                                assistantViewModel.SyncAgentPlan();
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             rawResponseEvents.Add(SerializeJson(new
                             {
                                 type = "tool_result",
@@ -3123,32 +3003,7 @@ public sealed class MainViewModel : ObservableObject
                             }));
                             break;
                         case AgentHarnessEventType.RunCompleted:
-                            await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                if (agentEvent.Step is not null)
-                                {
-                                    _ = assistantViewModel.AddAgentStep(agentEvent.Step);
-                                }
-
-                                if (agentEvent.Run is not null)
-                                {
-                                    assistantViewModel.SyncAgentFileChanges();
-                                    assistantViewModel.SyncAgentVerifications();
-                                    assistantViewModel.SyncAgentArtifacts();
-                                    assistantViewModel.SyncSubAgentRuns();
-                                    assistantViewModel.AgentRun?.Complete(agentEvent.Run.Status);
-                                    RebuildAgentRunHistoryIfOpen();
-                                }
-
-                                AgentStatusPhase = agentEvent.Run?.Status switch
-                                {
-                                    AgentRunStatus.Completed => "已完成",
-                                    AgentRunStatus.BudgetExceeded => "已暂停",
-                                    _ => "已结束"
-                                };
-                                AgentStatusTool = "";
-                                OnPropertyChanged(nameof(HasAgentStatus));
-                            });
+                            await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, _sendCts.Token);
                             {
                                 var runStatus = agentEvent.Run?.Status;
                                 var auditType = runStatus switch
@@ -3174,9 +3029,9 @@ public sealed class MainViewModel : ObservableObject
                 assistantMessage.ReasoningContent = reasoningContentBuilder.ToString();
             }
 
-            if (!hasReceivedContent)
+            if (!agentUiState.HasReceivedContent)
             {
-                assistantViewModel.Content = hasUsedTools
+                assistantViewModel.Content = agentUiState.HasUsedTools
                     ? "已完成工具调用，但模型没有继续返回最终回复。请重试，或打开调用详情查看模型和工具的原始结果。"
                     : "模型没有返回可显示内容。";
             }
@@ -3207,7 +3062,7 @@ public sealed class MainViewModel : ObservableObject
             var cancellationReason = IsStopping
                 ? "用户手动停止生成。"
                 : "请求超过 90 秒未完成。";
-            if (!hasReceivedContent)
+            if (!agentUiState.HasReceivedContent)
             {
                 assistantViewModel.Content = "请求已停止，或模型长时间没有返回内容。";
                 assistantViewModel.IsError = true;
