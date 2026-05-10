@@ -54,6 +54,11 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Equal("Standard", run.TaskComplexity);
+        Assert.Contains("planner=True", run.ExecutionPolicySummary);
+        Assert.False(run.PlannerUsed);
+        Assert.False(run.ExplorerUsed);
+        Assert.Equal("Completion evidence satisfied.", run.FinalStatusReason);
         Assert.Equal("user-1", run.UserMessageId);
         Assert.Equal(Environment.CurrentDirectory, run.ProjectPath);
         Assert.Equal("test", run.Model);
@@ -167,6 +172,11 @@ public sealed class AgentHarnessTests
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Null(run.StructuredPlan);
         Assert.Null(run.Plan);
+        Assert.Equal("Simple", run.TaskComplexity);
+        Assert.Contains("planner=False", run.ExecutionPolicySummary);
+        Assert.False(run.PlannerUsed);
+        Assert.False(run.ExplorerUsed);
+        Assert.Contains("Explorer skipped", run.ExplorerDecisionReason);
         Assert.Empty(plannerService.Requests);
         Assert.Single(runnerService.Requests);
     }
@@ -231,6 +241,10 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         var subAgentRun = Assert.Single(run.SubAgentRuns);
+        Assert.Equal("Complex", run.TaskComplexity);
+        Assert.True(run.PlannerUsed);
+        Assert.True(run.ExplorerUsed);
+        Assert.Contains("Explorer scheduled", run.ExplorerDecisionReason);
         Assert.Equal("explorer", subAgentRun.TemplateId);
         Assert.Equal("Completed", subAgentRun.Status);
         Assert.Contains("Explorer found src/App.cs.", subAgentRun.Summary);
@@ -627,6 +641,7 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Failed, run.Status);
+        Assert.Equal("Mutation task had no successful mutation tool call.", run.FinalStatusReason);
         Assert.True(run.RequiresProjectMutation);
         Assert.False(run.MutationToolSucceeded);
         Assert.Equal("任务看起来需要修改项目，但本轮没有记录到成功的修改工具。", run.CompletionReason);
@@ -729,6 +744,7 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Failed, run.Status);
+        Assert.Equal("At least one verification failed.", run.FinalStatusReason);
         Assert.Contains("验证：0/1 通过", run.FinalValidationSummary);
         Assert.Contains("上一轮验证未全部通过", run.RecoverySuggestion);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
@@ -1046,6 +1062,7 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.BudgetExceeded, run.Status);
+        Assert.Equal("Tool budget exhausted; checkpoint created.", run.FinalStatusReason);
         Assert.Equal("waiting_for_user", run.Phase);
         Assert.True(run.ToolBudgetExceeded);
         Assert.Contains("工具调用：1/1", run.CheckpointSummary);

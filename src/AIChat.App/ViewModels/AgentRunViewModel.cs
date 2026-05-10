@@ -67,6 +67,26 @@ public sealed class AgentRunViewModel : ObservableObject
         ? "尚未生成结束校验。"
         : _run.FinalValidationSummary;
     public bool HasFinalValidationSummary => !string.IsNullOrWhiteSpace(_run.FinalValidationSummary);
+    public string ExecutionPolicySummary => string.IsNullOrWhiteSpace(_run.ExecutionPolicySummary)
+        ? "未记录执行策略。"
+        : _run.ExecutionPolicySummary;
+    public string FinalStatusReason => string.IsNullOrWhiteSpace(_run.FinalStatusReason)
+        ? "未记录最终状态原因。"
+        : _run.FinalStatusReason;
+    public string TaskComplexityText => string.IsNullOrWhiteSpace(_run.TaskComplexity)
+        ? "未记录"
+        : _run.TaskComplexity;
+    public string PlannerUsageText => _run.PlannerUsed ? "已启用" : "未启用";
+    public string ExplorerUsageText => _run.ExplorerUsed ? "已启用" : "未启用";
+    public string ExplorerDecisionReason => string.IsNullOrWhiteSpace(_run.ExplorerDecisionReason)
+        ? "未记录 Explorer 决策。"
+        : _run.ExplorerDecisionReason;
+    public string DebugSummary =>
+        $"复杂度：{TaskComplexityText}{Environment.NewLine}" +
+        $"执行策略：{ExecutionPolicySummary}{Environment.NewLine}" +
+        $"Planner：{PlannerUsageText}{Environment.NewLine}" +
+        $"Explorer：{ExplorerUsageText} · {ExplorerDecisionReason}{Environment.NewLine}" +
+        $"最终状态原因：{FinalStatusReason}";
     public string RecoverySuggestion => string.IsNullOrWhiteSpace(_run.RecoverySuggestion)
         ? $"继续处理：{Goal}"
         : _run.RecoverySuggestion;
@@ -213,6 +233,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasPhaseHistory));
         OnPropertyChanged(nameof(PhaseHistoryCount));
         OnPropertyChanged(nameof(FinalValidationSummary));
+        OnPropertyChanged(nameof(ExecutionPolicySummary));
+        OnPropertyChanged(nameof(FinalStatusReason));
+        OnPropertyChanged(nameof(DebugSummary));
         OnPropertyChanged(nameof(RecoverySuggestion));
         OnPropertyChanged(nameof(HasRecoverySuggestion));
         OnPropertyChanged(nameof(CompletionReasonText));

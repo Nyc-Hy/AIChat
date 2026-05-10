@@ -82,6 +82,12 @@ public sealed class AgentRunSerializationTests
                     ToolApprovalRejectedCount = 1,
                     ToolSessionAllowedCount = 1,
                     FinalValidationSummary = "工具预算：未耗尽",
+                    ExecutionPolicySummary = "complexity=Complex; maxToolRounds=4",
+                    FinalStatusReason = "Completion evidence satisfied.",
+                    TaskComplexity = "Complex",
+                    PlannerUsed = true,
+                    ExplorerUsed = true,
+                    ExplorerDecisionReason = "Explorer scheduled: 1.",
                     RecoverySuggestion = "继续处理：test",
                     CheckpointSummary = "目标：test",
                     CheckpointArtifactRefs = ["read_file:tool_result:artifact-1"],
@@ -271,6 +277,12 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolApprovalRejectedCount);
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
+        Assert.Equal("complexity=Complex; maxToolRounds=4", roundTripped.AgentRuns[0].ExecutionPolicySummary);
+        Assert.Equal("Completion evidence satisfied.", roundTripped.AgentRuns[0].FinalStatusReason);
+        Assert.Equal("Complex", roundTripped.AgentRuns[0].TaskComplexity);
+        Assert.True(roundTripped.AgentRuns[0].PlannerUsed);
+        Assert.True(roundTripped.AgentRuns[0].ExplorerUsed);
+        Assert.Equal("Explorer scheduled: 1.", roundTripped.AgentRuns[0].ExplorerDecisionReason);
         Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
         Assert.Equal("目标：test", roundTripped.AgentRuns[0].CheckpointSummary);
         Assert.Equal(["read_file:tool_result:artifact-1"], roundTripped.AgentRuns[0].CheckpointArtifactRefs);

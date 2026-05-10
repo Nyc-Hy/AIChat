@@ -74,6 +74,8 @@ public sealed class AgentHarness
             request.ContextPack,
             !string.IsNullOrWhiteSpace(request.ContinuedFromRunId));
         run.MaxToolRounds = executionPolicy.MaxToolRounds;
+        run.TaskComplexity = executionPolicy.Complexity.ToString();
+        run.ExecutionPolicySummary = CreateExecutionPolicySummary(executionPolicy);
         yield return new AgentHarnessEvent
         {
             Type = AgentHarnessEventType.RunStarted,
@@ -85,6 +87,7 @@ public sealed class AgentHarness
         var shouldPlan = planner is not null && executionPolicy.UsePlanner;
         if (shouldPlan)
         {
+            run.PlannerUsed = true;
             yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
             var structuredPlan = await planner!.PlanAsync(
                 new AgentPlanningRequest(
@@ -143,8 +146,10 @@ public sealed class AgentHarness
         var scheduledSubAgents = subAgentSchedule
             .Where(decision => string.Equals(decision.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        run.ExplorerDecisionReason = CreateExplorerDecisionReason(executionPolicy, subAgentSchedule, scheduledSubAgents);
         if (_subAgentScheduler is not null && scheduledSubAgents.Count > 0)
         {
+            run.ExplorerUsed = true;
             foreach (var plannedSubAgent in scheduledSubAgents)
             {
                 yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, $"运行 {plannedSubAgent.TemplateId} 子 Agent"));
@@ -334,6 +339,7 @@ public sealed class AgentHarness
                     CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
+                    run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                     var budgetMessage = CreateBudgetPausedUserMessage(run);
                     yield return new AgentHarnessEvent
                     {
@@ -377,6 +383,7 @@ public sealed class AgentHarness
                             CompleteMutationGuardrail(run);
                             CompleteFinalValidation(run);
                             CompleteRecoverySuggestion(run);
+                            run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                             var budgetMessage = CreateBudgetPausedUserMessage(run);
                             yield return new AgentHarnessEvent
                             {
@@ -406,6 +413,7 @@ public sealed class AgentHarness
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
                     var finalStatus = DetermineFinalStatus(run);
+                    run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
                     var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
                     if (!string.Equals(finalContent, assistantContent, StringComparison.Ordinal))
@@ -462,6 +470,55 @@ public sealed class AgentHarness
         }
 
         return AgentRunStatus.Completed;
+    }
+
+    private static string CreateExecutionPolicySummary(AgentTaskExecutionPolicy policy)
+    {
+        return $"complexity={policy.Complexity}; maxToolRounds={policy.MaxToolRounds}; planner={policy.UsePlanner}; explorer={policy.AllowExplorer}; subAgentMaxToolCalls={policy.SubAgentMaxToolCalls}";
+    }
+
+    private static string CreateExplorerDecisionReason(
+        AgentTaskExecutionPolicy policy,
+        IReadOnlyList<AgentSubAgentScheduleDecision> schedule,
+        IReadOnlyList<AgentSubAgentScheduleDecision> scheduled)
+    {
+        if (!policy.AllowExplorer)
+        {
+            return "Explorer skipped by execution policy.";
+        }
+
+        if (scheduled.Count > 0)
+        {
+            return $"Explorer scheduled: {scheduled.Count}.";
+        }
+
+        if (schedule.Count > 0)
+        {
+            var skipped = schedule.FirstOrDefault(decision => !string.IsNullOrWhiteSpace(decision.SkipReason));
+            return string.IsNullOrWhiteSpace(skipped?.SkipReason)
+                ? "Explorer not scheduled after coordinator filtering."
+                : "Explorer skipped: " + skipped.SkipReason;
+        }
+
+        return "Explorer allowed but no schedule was produced.";
+    }
+
+    private static string CreateFinalStatusReason(AgentRun run, AgentRunStatus status)
+    {
+        return status switch
+        {
+            AgentRunStatus.Completed => "Completion evidence satisfied.",
+            AgentRunStatus.BudgetExceeded => "Tool budget exhausted; checkpoint created.",
+            AgentRunStatus.Failed when run.RequiresProjectMutation && !run.MutationToolSucceeded =>
+                "Mutation task had no successful mutation tool call.",
+            AgentRunStatus.Failed when run.Verifications.Any(verification => !verification.IsSuccess) =>
+                "At least one verification failed.",
+            AgentRunStatus.Failed => string.IsNullOrWhiteSpace(run.CompletionReason)
+                ? "Run failed final evidence checks."
+                : run.CompletionReason,
+            AgentRunStatus.Cancelled => "Run was cancelled.",
+            _ => status.ToString()
+        };
     }
 
     private static AgentRunContext ApplyExecutionPolicy(

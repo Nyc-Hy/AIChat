@@ -27,6 +27,12 @@ public sealed class AgentRun
     public int ToolApprovalRejectedCount { get; set; }
     public int ToolSessionAllowedCount { get; set; }
     public string FinalValidationSummary { get; set; } = "";
+    public string ExecutionPolicySummary { get; set; } = "";
+    public string FinalStatusReason { get; set; } = "";
+    public string TaskComplexity { get; set; } = "";
+    public bool PlannerUsed { get; set; }
+    public bool ExplorerUsed { get; set; }
+    public string ExplorerDecisionReason { get; set; } = "";
     public string RecoverySuggestion { get; set; } = "";
     public string CheckpointSummary { get; set; } = "";
     public List<string> CheckpointArtifactRefs { get; set; } = [];

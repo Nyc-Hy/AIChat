@@ -16,6 +16,7 @@ public static class AgentRunReviewPacketBuilder
             $"修改护栏：{run.MutationGuardrailText}",
             $"审批：{run.ApprovalSummary}",
             $"工作区：{run.WorkspaceSnapshotText}",
+            $"调试：{run.TaskComplexityText} · Planner {run.PlannerUsageText} · Explorer {run.ExplorerUsageText}",
             $"计划：{run.PlanSummary}",
             $"步骤：{run.StepCount}",
             $"文件变更：{run.FileChangeCount}",
@@ -40,6 +41,10 @@ public static class AgentRunReviewPacketBuilder
             lines.Add("结束校验：");
             lines.Add(run.FinalValidationSummary);
         }
+
+        lines.Add("");
+        lines.Add("调试摘要：");
+        lines.Add(run.DebugSummary);
 
         if (run.HasRecoverySuggestion)
         {
@@ -98,6 +103,9 @@ public static class AgentRunReviewPacketBuilder
             $"- Mutation: {run.MutationGuardrailText}",
             $"- Approval: {run.ApprovalSummary}",
             $"- Workspace: {run.WorkspaceSnapshotText}",
+            "",
+            "## Execution Debug",
+            run.DebugSummary,
             "",
             "## Final Validation",
             run.FinalValidationSummary,
