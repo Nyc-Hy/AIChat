@@ -7,4 +7,5 @@ public sealed class LlmModelCapabilities
     public bool SupportsJsonOutput { get; init; }
     public bool SupportsInterleavedThinking { get; init; }
     public bool SupportsPrefixCompletion { get; init; }
+    public bool SupportsVision { get; init; }
 }

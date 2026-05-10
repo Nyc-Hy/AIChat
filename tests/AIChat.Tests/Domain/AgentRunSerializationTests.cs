@@ -8,6 +8,7 @@ public sealed class AgentRunSerializationTests
 {
     [Theory]
     [InlineData(AgentRunStatus.Completed, "completed")]
+    [InlineData(AgentRunStatus.BudgetExceeded, "waiting_for_user")]
     [InlineData(AgentRunStatus.Cancelled, "cancelled")]
     [InlineData(AgentRunStatus.Failed, "failed")]
     public void Complete_UpdatesStatusPhaseAndCompletionTime(AgentRunStatus status, string expectedPhase)
@@ -40,6 +41,16 @@ public sealed class AgentRunSerializationTests
                     Role = ChatRole.Assistant,
                     AgentRunId = "run-1",
                     Content = "done"
+                },
+                new ChatMessage
+                {
+                    Id = "user-with-image",
+                    Role = ChatRole.User,
+                    Content = "check this screenshot",
+                    ContentParts =
+                    [
+                        ChatContentPart.ImagePart("image/png", "AQIDBA==", "screen.png")
+                    ]
                 }
             ],
             AgentRuns =
@@ -72,6 +83,8 @@ public sealed class AgentRunSerializationTests
                     ToolSessionAllowedCount = 1,
                     FinalValidationSummary = "工具预算：未耗尽",
                     RecoverySuggestion = "继续处理：test",
+                    CheckpointSummary = "目标：test",
+                    CheckpointArtifactRefs = ["read_file:tool_result:artifact-1"],
                     CurrentPhaseSummary = "running tests",
                     Status = AgentRunStatus.Completed,
                     StructuredPlan = new AgentStructuredPlan
@@ -231,6 +244,8 @@ public sealed class AgentRunSerializationTests
 
         Assert.NotNull(roundTripped);
         Assert.Equal("run-1", roundTripped.Messages[0].AgentRunId);
+        Assert.Single(roundTripped.Messages[1].ContentParts);
+        Assert.Equal("image/png", roundTripped.Messages[1].ContentParts[0].MediaType);
         Assert.Single(roundTripped.AgentRuns);
         Assert.Single(roundTripped.AgentRuns[0].Steps);
         Assert.Single(roundTripped.AgentRuns[0].FileChanges);
@@ -257,6 +272,8 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
         Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
+        Assert.Equal("目标：test", roundTripped.AgentRuns[0].CheckpointSummary);
+        Assert.Equal(["read_file:tool_result:artifact-1"], roundTripped.AgentRuns[0].CheckpointArtifactRefs);
         Assert.Equal("running tests", roundTripped.AgentRuns[0].CurrentPhaseSummary);
         Assert.Single(roundTripped.AgentRuns[0].PhaseHistory);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].PhaseHistory[0].Phase);
@@ -464,6 +481,17 @@ public sealed class AgentRunSerializationTests
                 ["write_file"] = "AutoReadOnly",
                 ["run_shell"] = "Disabled"
             },
+            VerificationCommands =
+            [
+                new AIChat.Domain.Projects.ProjectVerificationCommand
+                {
+                    Name = "测试",
+                    Command = "dotnet test",
+                    WorkingDirectory = "AIChat.sln",
+                    TimeoutSeconds = 180,
+                    IsDefault = true
+                }
+            ],
             Memories =
             [
                 new MemoryEntry
@@ -483,6 +511,10 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(2, roundTripped.ProjectToolPermissionModes.Count);
         Assert.Equal("AutoReadOnly", roundTripped.ProjectToolPermissionModes["write_file"]);
         Assert.Equal("Disabled", roundTripped.ProjectToolPermissionModes["run_shell"]);
+        Assert.Single(roundTripped.VerificationCommands);
+        Assert.Equal("dotnet test", roundTripped.VerificationCommands[0].Command);
+        Assert.Equal("AIChat.sln", roundTripped.VerificationCommands[0].WorkingDirectory);
+        Assert.True(roundTripped.VerificationCommands[0].IsDefault);
         Assert.Single(roundTripped.Memories);
         Assert.Equal("Use MVVM.", roundTripped.Memories[0].Content);
     }
@@ -501,5 +533,22 @@ public sealed class AgentRunSerializationTests
 
         Assert.NotNull(roundTripped);
         Assert.Empty(roundTripped.ProjectToolPermissionModes);
+    }
+
+    [Fact]
+    public void ConfiguredProvider_RoundTripsVisionOverride()
+    {
+        var provider = new AIChat.Abstractions.Llm.ConfiguredLlmProvider
+        {
+            TemplateId = "deepseek",
+            ApiKey = "key",
+            SupportsVisionOverride = true
+        };
+
+        var json = JsonSerializer.Serialize(provider, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var roundTripped = JsonSerializer.Deserialize<AIChat.Abstractions.Llm.ConfiguredLlmProvider>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(roundTripped);
+        Assert.True(roundTripped.SupportsVisionOverride);
     }
 }

@@ -15,6 +15,7 @@ public sealed class AppSettings
     // Code-agent workflows benefit from stable, low-variance behavior.
     public double Temperature { get; set; } = 0.3;
     public int ModelContextLimit { get; set; } = 1_000_000;
+    public bool ModelSupportsVision { get; set; }
     public Dictionary<string, string> ModelParameters { get; set; } = [];
     public string ActiveConfiguredProviderId { get; set; } = "";
     // Restore last active project and conversation on next launch.

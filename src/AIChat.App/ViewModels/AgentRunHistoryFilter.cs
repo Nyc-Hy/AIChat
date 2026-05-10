@@ -34,7 +34,7 @@ public static class AgentRunHistoryFilter
         return filterId switch
         {
             "retryable" => items.Where(item => item.CanRetry),
-            "failed" => items.Where(item => item.Run.Status is AgentRunStatus.Failed or AgentRunStatus.Cancelled),
+            "failed" => items.Where(item => item.Run.Status is AgentRunStatus.Failed or AgentRunStatus.Cancelled or AgentRunStatus.BudgetExceeded),
             "completed" => items.Where(item => item.Run.Status is AgentRunStatus.Completed),
             "running" => items.Where(item => item.Run.Status is AgentRunStatus.Running),
             _ => items

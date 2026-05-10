@@ -22,4 +22,8 @@ public sealed class AgentVerificationViewModel : ObservableObject
         : _verification.Output.Length > 1_600 ? _verification.Output[..1_600] + "\n..." : _verification.Output;
     public string Summary => _verification.Summary;
     public bool HasSummary => !string.IsNullOrWhiteSpace(_verification.Summary);
+    public bool HasOutputPreview => !string.IsNullOrWhiteSpace(OutputPreview);
+    public string CreatedAtText => _verification.CreatedAt.ToLocalTime().ToString("HH:mm:ss");
+    public string SummaryOrOutput => HasSummary ? Summary : OutputPreview;
+    public bool HasSummaryOrOutput => !string.IsNullOrWhiteSpace(SummaryOrOutput);
 }

@@ -336,6 +336,7 @@ public sealed class AgentRunner
             ConversationId = message.ConversationId,
             Role = message.Role,
             Content = message.Content,
+            ContentParts = message.ContentParts.Select(CloneContentPart).ToList(),
             ReasoningContent = message.ReasoningContent,
             ToolCallId = message.ToolCallId,
             ToolName = message.ToolName,
@@ -350,6 +351,18 @@ public sealed class AgentRunner
                 .ToList(),
             IsError = message.IsError,
             CreatedAt = message.CreatedAt
+        };
+    }
+
+    private static ChatContentPart CloneContentPart(ChatContentPart part)
+    {
+        return new ChatContentPart
+        {
+            Type = part.Type,
+            Text = part.Text,
+            MediaType = part.MediaType,
+            DataBase64 = part.DataBase64,
+            SourcePath = part.SourcePath
         };
     }
 }

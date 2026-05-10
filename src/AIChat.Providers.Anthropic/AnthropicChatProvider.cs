@@ -198,11 +198,51 @@ public sealed class AnthropicChatProvider : IChatProvider
             result.Add(new
             {
                 role = message.Role == ChatRole.Assistant ? "assistant" : "user",
-                content = message.Content
+                content = ToAnthropicContent(message)
             });
         }
 
         return result;
+    }
+
+    private static object ToAnthropicContent(ChatMessage message)
+    {
+        if (message.ContentParts.Count == 0)
+        {
+            return message.Content;
+        }
+
+        var blocks = new List<object>();
+        if (!string.IsNullOrWhiteSpace(message.Content))
+        {
+            blocks.Add(new { type = "text", text = message.Content });
+        }
+
+        foreach (var part in message.ContentParts)
+        {
+            if (string.Equals(part.Type, "text", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(part.Text))
+            {
+                blocks.Add(new { type = "text", text = part.Text });
+            }
+            else if (string.Equals(part.Type, "image", StringComparison.OrdinalIgnoreCase) &&
+                     !string.IsNullOrWhiteSpace(part.DataBase64) &&
+                     !string.IsNullOrWhiteSpace(part.MediaType))
+            {
+                blocks.Add(new
+                {
+                    type = "image",
+                    source = new
+                    {
+                        type = "base64",
+                        media_type = part.MediaType,
+                        data = part.DataBase64
+                    }
+                });
+            }
+        }
+
+        return blocks.Count == 0 ? message.Content : blocks;
     }
 
     private static object MakeToolResultBlock(ChatMessage message)

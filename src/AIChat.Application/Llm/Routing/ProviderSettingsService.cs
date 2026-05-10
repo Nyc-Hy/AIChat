@@ -29,6 +29,7 @@ public static class ProviderSettingsService
 
         var model = ChatProviderCatalog.ResolveModel(provider.Id, settings.Model);
         settings.Model = model.Id;
+        settings.ModelSupportsVision = model.Capabilities.SupportsVision;
         if (settings.ModelContextLimit <= 0 || settings.ModelContextLimit == provider.DefaultContextLimit)
         {
             settings.ModelContextLimit = model.ContextLimit;
@@ -84,6 +85,8 @@ public static class ProviderSettingsService
         settings.BaseUrl = provider.DefaultBaseUrl;
         settings.Model = provider.DefaultModel;
         settings.ModelContextLimit = provider.DefaultContextLimit;
+        settings.ModelSupportsVision = ChatProviderCatalog.ResolveModel(provider.Id, provider.DefaultModel)
+            .Capabilities.SupportsVision;
     }
 
     public static bool SelectActiveModel(AppSettings settings, string value)
@@ -196,6 +199,7 @@ public static class ProviderSettingsService
             Model = model.Id,
             Temperature = defaultTemperature,
             ModelContextLimit = model.ContextLimit,
+            ModelSupportsVision = model.Capabilities.SupportsVision || configured.SupportsVisionOverride,
             ModelParameters = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters),
             ActiveConfiguredProviderId = configured.Id,
             AgentMaxToolRounds = settings.AgentMaxToolRounds,
@@ -220,6 +224,7 @@ public static class ProviderSettingsService
         settings.ApiKey = configured.ApiKey;
         settings.Model = model.Id;
         settings.ModelContextLimit = model.ContextLimit;
+        settings.ModelSupportsVision = model.Capabilities.SupportsVision || configured.SupportsVisionOverride;
         settings.ModelParameters = NormalizeModelParameterValues(configured.TemplateId, model.Id, configured.ModelParameters);
     }
 

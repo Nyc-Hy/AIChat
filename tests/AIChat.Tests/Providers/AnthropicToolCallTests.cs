@@ -444,6 +444,43 @@ public sealed class AnthropicToolCallTests
     }
 
     [Fact]
+    public async Task SendAsync_UserMessageWithImagePart_SendsAnthropicImageContentBlock()
+    {
+        var handler = new CapturingHandler(MessageStopEvent("end_turn"));
+        var provider = new AnthropicChatProvider(new HttpClient(handler));
+
+        var request = new ChatRequest
+        {
+            Model = "claude-3-5-sonnet-latest",
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Role = ChatRole.User,
+                    Content = "describe this screenshot",
+                    ContentParts =
+                    [
+                        ChatContentPart.ImagePart("image/png", "AQIDBA==", "screen.png")
+                    ]
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request);
+
+        using var captured = System.Text.Json.JsonDocument.Parse(handler.CapturedBody!);
+        var content = captured.RootElement.GetProperty("messages")[0].GetProperty("content");
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, content.ValueKind);
+        Assert.Equal("text", content[0].GetProperty("type").GetString());
+        Assert.Equal("describe this screenshot", content[0].GetProperty("text").GetString());
+        Assert.Equal("image", content[1].GetProperty("type").GetString());
+        var source = content[1].GetProperty("source");
+        Assert.Equal("base64", source.GetProperty("type").GetString());
+        Assert.Equal("image/png", source.GetProperty("media_type").GetString());
+        Assert.Equal("AQIDBA==", source.GetProperty("data").GetString());
+    }
+
+    [Fact]
     public async Task SendAsync_BadToolArguments_FallsBackToEmptyObject()
     {
         var handler = new CapturingHandler(MessageStopEvent("end_turn"));

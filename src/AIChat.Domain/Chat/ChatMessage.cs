@@ -9,6 +9,9 @@ public sealed class ChatMessage
     // System/User/Assistant is the minimal role set used by most chat APIs.
     public ChatRole Role { get; set; }
     public string Content { get; set; } = "";
+    // Optional structured content blocks for providers that support multimodal
+    // messages. Content remains the plain-text fallback.
+    public List<ChatContentPart> ContentParts { get; set; } = [];
     // DeepSeek thinking mode requires reasoning_content to be passed back in
     // subsequent requests. Stored separately from Content.
     public string ReasoningContent { get; set; } = "";

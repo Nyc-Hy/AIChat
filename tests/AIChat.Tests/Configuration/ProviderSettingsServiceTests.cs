@@ -121,4 +121,29 @@ public sealed class ProviderSettingsServiceTests
 
         Assert.Null(effective);
     }
+
+    [Fact]
+    public void CreateEffectiveSettings_CarriesVisionOverride()
+    {
+        var settings = new AppSettings
+        {
+            ActiveConfiguredProviderId = "vision-provider",
+            ConfiguredProviders =
+            [
+                new ConfiguredLlmProvider
+                {
+                    Id = "vision-provider",
+                    TemplateId = "deepseek",
+                    ApiKey = "key-1",
+                    SelectedModelId = "deepseek-v4-pro",
+                    SupportsVisionOverride = true
+                }
+            ]
+        };
+
+        var effective = ProviderSettingsService.CreateEffectiveSettings(settings, defaultTemperature: 0.3);
+
+        Assert.NotNull(effective);
+        Assert.True(effective!.ModelSupportsVision);
+    }
 }

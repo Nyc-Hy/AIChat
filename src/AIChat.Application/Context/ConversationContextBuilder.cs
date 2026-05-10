@@ -62,7 +62,7 @@ public sealed class ConversationContextBuilder
         // sees a complete message sequence (Assistant tool calls + Tool results).
         return message.Role is ChatRole.User or ChatRole.Assistant or ChatRole.System or ChatRole.Tool &&
                !message.IsError &&
-               !string.IsNullOrWhiteSpace(message.Content);
+               (!string.IsNullOrWhiteSpace(message.Content) || message.ContentParts.Count > 0);
     }
 
     private static ChatMessage CloneMessage(ChatMessage message)
@@ -73,6 +73,7 @@ public sealed class ConversationContextBuilder
             ConversationId = message.ConversationId,
             Role = message.Role,
             Content = message.Content,
+            ContentParts = message.ContentParts.Select(CloneContentPart).ToList(),
             ToolCallId = message.ToolCallId,
             ToolName = message.ToolName,
             ToolCalls = message.ToolCalls
@@ -86,6 +87,18 @@ public sealed class ConversationContextBuilder
                 .ToList(),
             IsError = message.IsError,
             CreatedAt = message.CreatedAt
+        };
+    }
+
+    private static ChatContentPart CloneContentPart(ChatContentPart part)
+    {
+        return new ChatContentPart
+        {
+            Type = part.Type,
+            Text = part.Text,
+            MediaType = part.MediaType,
+            DataBase64 = part.DataBase64,
+            SourcePath = part.SourcePath
         };
     }
 }

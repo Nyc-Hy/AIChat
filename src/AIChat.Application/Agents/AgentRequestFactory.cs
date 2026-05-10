@@ -53,7 +53,15 @@ public sealed record AgentRequestSnapshot(
 public sealed record AgentRequestSnapshotMessage(
     string Id,
     string Role,
-    string Content);
+    string Content,
+    IReadOnlyList<AgentRequestSnapshotContentPart> ContentParts);
+
+public sealed record AgentRequestSnapshotContentPart(
+    string Type,
+    string Text,
+    string MediaType,
+    string SourcePath,
+    int DataBytes);
 
 public sealed class AgentRequestFactory
 {
@@ -134,6 +142,10 @@ public sealed class AgentRequestFactory
                 InputArtifactRefs = inputArtifactRefs
             }
         });
+        if (SupportsVision(request.EffectiveSettings))
+        {
+            AttachImageArtifactsToLatestUserMessage(contextMessages, selectedInputArtifacts);
+        }
 
         return new AgentRequestBuildResult(
             new ChatRequest
@@ -178,18 +190,91 @@ public sealed class AgentRequestFactory
             enabledToolIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             new Dictionary<string, ToolPermissionMode>(runtimeSettings.ToolPermissionModes, StringComparer.OrdinalIgnoreCase),
             GetRequestMessages(conversation, assistantMessageId)
-                .Select(message => new AgentRequestSnapshotMessage(
-                    message.Id,
-                    message.Role.ToString().ToLowerInvariant(),
-                    message.Content))
+                .Select(ToSnapshotMessage)
                 .ToList());
+    }
+
+    public static AgentRequestSnapshot CreateSnapshot(
+        ChatRequest chatRequest,
+        AppSettings effectiveSettings,
+        AppSettings runtimeSettings,
+        IEnumerable<string> enabledToolIds)
+    {
+        return new AgentRequestSnapshot(
+            effectiveSettings.ProviderName,
+            effectiveSettings.ProtocolId,
+            effectiveSettings.BaseUrl,
+            effectiveSettings.Model,
+            effectiveSettings.Temperature,
+            new Dictionary<string, string>(effectiveSettings.ModelParameters, StringComparer.OrdinalIgnoreCase),
+            enabledToolIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            new Dictionary<string, ToolPermissionMode>(runtimeSettings.ToolPermissionModes, StringComparer.OrdinalIgnoreCase),
+            chatRequest.Messages.Select(ToSnapshotMessage).ToList());
+    }
+
+    private static AgentRequestSnapshotMessage ToSnapshotMessage(ChatMessage message)
+    {
+        return new AgentRequestSnapshotMessage(
+            message.Id,
+            message.Role.ToString().ToLowerInvariant(),
+            message.Content,
+            message.ContentParts.Select(ToSnapshotContentPart).ToList());
+    }
+
+    private static AgentRequestSnapshotContentPart ToSnapshotContentPart(ChatContentPart part)
+    {
+        return new AgentRequestSnapshotContentPart(
+            part.Type,
+            string.Equals(part.Type, "text", StringComparison.OrdinalIgnoreCase)
+                ? part.Text
+                : "",
+            part.MediaType,
+            part.SourcePath,
+            string.IsNullOrWhiteSpace(part.DataBase64)
+                ? 0
+                : Convert.FromBase64String(part.DataBase64).Length);
     }
 
     private static IReadOnlyList<ChatMessage> GetRequestMessages(Conversation conversation, string assistantMessageId)
     {
         return conversation.Messages
-            .Where(message => message.Id != assistantMessageId && !string.IsNullOrWhiteSpace(message.Content))
+            .Where(message => message.Id != assistantMessageId &&
+                              (!string.IsNullOrWhiteSpace(message.Content) || message.ContentParts.Count > 0))
             .ToList();
+    }
+
+    private static void AttachImageArtifactsToLatestUserMessage(
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<InputArtifact> artifacts)
+    {
+        var latestUser = messages.LastOrDefault(message => message.Role == ChatRole.User);
+        if (latestUser is null)
+        {
+            return;
+        }
+
+        foreach (var part in BuildImageContentParts(artifacts))
+        {
+            latestUser.ContentParts.Add(part);
+        }
+    }
+
+    private static IReadOnlyList<ChatContentPart> BuildImageContentParts(IReadOnlyList<InputArtifact> artifacts)
+    {
+        var parts = new List<ChatContentPart>();
+        foreach (var decision in InputArtifactVisionPolicy.Evaluate(artifacts, modelSupportsVision: true)
+                     .Where(decision => decision.CanSend))
+        {
+            var data = Convert.ToBase64String(File.ReadAllBytes(decision.StoredPath));
+            parts.Add(ChatContentPart.ImagePart(decision.MediaType, data, decision.StoredPath));
+        }
+
+        return parts;
+    }
+
+    private static bool SupportsVision(AppSettings settings)
+    {
+        return settings.ModelSupportsVision;
     }
 
     private static string ResolveProjectPath(string projectPath)

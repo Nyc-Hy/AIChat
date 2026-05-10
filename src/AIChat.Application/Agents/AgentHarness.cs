@@ -309,15 +309,35 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.BudgetExceeded:
+                {
                     run.ToolBudgetExceeded = true;
                     run.CompletionReason = "已达到工具调用轮数上限。";
+                    CompleteMutationGuardrail(run);
+                    CompleteFinalValidation(run);
+                    CompleteRecoverySuggestion(run);
+                    var budgetMessage = CreateBudgetPausedUserMessage(run);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.ContentDelta,
                         Run = run,
-                        Content = agentEvent.Content
+                        Content = budgetMessage
                     };
-                    break;
+                    yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.BudgetExceeded));
+                    var budgetStep = AddCompletedStep(
+                        run,
+                        run.Steps.Count + 1,
+                        AgentStepType.Final,
+                        "预算暂停",
+                        "",
+                        budgetMessage);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.RunCompleted,
+                        Run = run,
+                        Step = budgetStep
+                    };
+                    yield break;
+                }
                 case AgentRunEventType.Completed:
                     // Auto-verify loop: after mutations, run verification commands
                     // and feed failures back to the model for another fix round.
@@ -331,6 +351,35 @@ public sealed class AgentHarness
                                            request.Settings, request.Context, cancellationToken))
                         {
                             yield return verifyEvent;
+                        }
+
+                        if (run.ToolBudgetExceeded)
+                        {
+                            CompleteMutationGuardrail(run);
+                            CompleteFinalValidation(run);
+                            CompleteRecoverySuggestion(run);
+                            var budgetMessage = CreateBudgetPausedUserMessage(run);
+                            yield return new AgentHarnessEvent
+                            {
+                                Type = AgentHarnessEventType.ContentDelta,
+                                Run = run,
+                                Content = budgetMessage
+                            };
+                            yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.BudgetExceeded));
+                            var budgetStep = AddCompletedStep(
+                                run,
+                                run.Steps.Count + 1,
+                                AgentStepType.Final,
+                                "预算暂停",
+                                "",
+                                budgetMessage);
+                            yield return new AgentHarnessEvent
+                            {
+                                Type = AgentHarnessEventType.RunCompleted,
+                                Run = run,
+                                Step = budgetStep
+                            };
+                            yield break;
                         }
                     }
 
@@ -435,10 +484,36 @@ public sealed class AgentHarness
 
     private static void CompleteRecoverySuggestion(AgentRun run)
     {
+        run.CheckpointSummary = BuildCheckpointSummary(run);
+        run.CheckpointArtifactRefs = run.Artifacts
+            .OrderByDescending(artifact => artifact.CreatedAt)
+            .Take(8)
+            .Select(artifact => string.IsNullOrWhiteSpace(artifact.ToolName)
+                ? $"{artifact.Kind}:{artifact.Id}"
+                : $"{artifact.ToolName}:{artifact.Kind}:{artifact.Id}")
+            .ToList();
+
         if (run.ToolBudgetExceeded)
         {
             run.RecoverySuggestion =
-                $"继续完成：{run.Goal}\n请先读取上一轮最后的工具结果和当前工作区状态，缩小范围后继续。必要时把工具轮数预算提高到 {Math.Min(Math.Max(run.MaxToolRounds + 2, 2), 20)}。";
+                $"""
+                继续完成这个已暂停的 Agent 任务。
+
+                原始目标：
+                {run.Goal}
+
+                暂停原因：
+                工具调用预算已耗尽。
+
+                恢复包：
+                {run.CheckpointSummary}
+
+                继续要求：
+                1. 先快速重新检查当前工作区状态和关键文件，避免依据旧状态行动。
+                2. 不要重复已经完成的探索，优先处理未完成计划项。
+                3. 如果这是修改类任务，必须实际调用写入/编辑工具后才能声称完成。
+                4. 如果发生修改，优先运行项目验证命令或合适的测试。
+                """;
             return;
         }
 
@@ -465,6 +540,142 @@ public sealed class AgentHarness
 
         run.RecoverySuggestion =
             $"复查并继续：{run.Goal}\n请先查看上一轮运行摘要、工作区 diff 和验证结果，再决定是否需要继续修改。";
+    }
+
+    private static string CreateBudgetPausedUserMessage(AgentRun run)
+    {
+        var next = GetNextStepSuggestion(run);
+        return string.IsNullOrWhiteSpace(next)
+            ? "工具预算已用完，任务已暂停。当前状态已经保存，可以继续追加预算完成剩余工作。"
+            : $"工具预算已用完，任务已暂停。当前状态已经保存。\n\n下一步建议：{next}";
+    }
+
+    private static string BuildCheckpointSummary(AgentRun run)
+    {
+        var lines = new List<string>
+        {
+            $"目标：{run.Goal}",
+            $"当前阶段：{run.Phase}",
+            $"工具调用：{run.ToolCallCount}/{(run.MaxToolRounds <= 0 ? "未记录" : run.MaxToolRounds.ToString())}",
+            $"文件变更：{run.FileChanges.Count}",
+            $"验证：{FormatVerificationCheckpoint(run)}"
+        };
+
+        if (run.Plan?.Items.Count > 0)
+        {
+            var completed = run.Plan.Items
+                .Where(item => item.Status == AgentPlanItemStatus.Completed)
+                .Take(6)
+                .Select(item => item.Title)
+                .ToList();
+            var remaining = run.Plan.Items
+                .Where(item => item.Status is AgentPlanItemStatus.Pending or AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Blocked)
+                .Take(8)
+                .Select(item => $"{item.Status}: {item.Title}")
+                .ToList();
+
+            if (completed.Count > 0)
+            {
+                lines.Add("已完成计划：" + string.Join("；", completed));
+            }
+
+            if (remaining.Count > 0)
+            {
+                lines.Add("未完成计划：" + string.Join("；", remaining));
+            }
+        }
+
+        var changedFiles = run.FileChanges
+            .Select(change => change.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToList();
+        if (changedFiles.Count > 0)
+        {
+            lines.Add("已修改文件：" + string.Join("；", changedFiles));
+        }
+
+        var recentSteps = run.Steps
+            .OrderByDescending(step => step.Number)
+            .Where(step => !string.IsNullOrWhiteSpace(step.Title))
+            .Take(5)
+            .Select(step => $"{step.Title}: {Truncate(step.Output, 180)}")
+            .Reverse()
+            .ToList();
+        if (recentSteps.Count > 0)
+        {
+            lines.Add("最近关键步骤：" + string.Join(" | ", recentSteps));
+        }
+
+        var artifactRefs = run.Artifacts
+            .OrderByDescending(artifact => artifact.CreatedAt)
+            .Take(5)
+            .Select(artifact => string.IsNullOrWhiteSpace(artifact.Summary)
+                ? $"{artifact.Kind}:{artifact.Id}"
+                : $"{artifact.Kind}:{Truncate(artifact.Summary, 120)}")
+            .ToList();
+        if (artifactRefs.Count > 0)
+        {
+            lines.Add("重要产物：" + string.Join("；", artifactRefs));
+        }
+
+        var next = GetNextStepSuggestion(run);
+        if (!string.IsNullOrWhiteSpace(next))
+        {
+            lines.Add("下一步建议：" + next);
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string FormatVerificationCheckpoint(AgentRun run)
+    {
+        if (run.Verifications.Count == 0)
+        {
+            return "未运行";
+        }
+
+        var passed = run.Verifications.Count(verification => verification.IsSuccess);
+        var failed = run.Verifications
+            .Where(verification => !verification.IsSuccess)
+            .Take(3)
+            .Select(verification => $"{verification.Command} exit {verification.ExitCode}");
+        return $"{passed}/{run.Verifications.Count} 通过" +
+               (failed.Any() ? $"；失败：{string.Join("；", failed)}" : "");
+    }
+
+    private static string GetNextStepSuggestion(AgentRun run)
+    {
+        if (run.Verifications.Any(verification => !verification.IsSuccess))
+        {
+            return "优先修复失败验证，并在修改后重新运行验证。";
+        }
+
+        var nextPlan = run.Plan?.Items.FirstOrDefault(item =>
+            item.Status is AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Pending or AgentPlanItemStatus.Blocked);
+        if (nextPlan is not null)
+        {
+            return $"继续计划项：{nextPlan.Title}";
+        }
+
+        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
+        {
+            return "先确认需要修改的文件，然后实际调用写入或编辑工具。";
+        }
+
+        return "刷新工作区状态后，从最近关键步骤继续。";
+    }
+
+    private static string Truncate(string value, int maxChars)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "";
+        }
+
+        var trimmed = value.ReplaceLineEndings(" ").Trim();
+        return trimmed.Length <= maxChars ? trimmed : trimmed[..maxChars] + "...";
     }
 
     private static bool IsMutationTool(string toolName)
@@ -849,7 +1060,8 @@ public sealed class AgentHarness
     private static bool IsVerificationTool(string toolName)
     {
         return string.Equals(toolName, "run_build", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(toolName, "run_test", StringComparison.OrdinalIgnoreCase);
+               string.Equals(toolName, "run_test", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(toolName, "run_shell", StringComparison.OrdinalIgnoreCase);
     }
 
     private async IAsyncEnumerable<AgentHarnessEvent> RunAutoVerifyLoopAsync(
@@ -876,7 +1088,7 @@ public sealed class AgentHarness
                 }
 
                 var toolCallId = $"auto-verify-{run.Id}-{round}-{cmd.Id}";
-                var argsJson = BuildVerificationArgsJson(cmd);
+                var argsJson = BuildVerificationArgsJson(cmd, toolName);
                 var preview = await tool.PreviewAsync(argsJson, CreateToolContext(context), cancellationToken);
 
                 var step = AddRunningStep(
@@ -1046,6 +1258,10 @@ public sealed class AgentHarness
                             ToolResult = fixEvent.ToolResult
                         };
                         break;
+                    case AgentRunEventType.BudgetExceeded:
+                        run.ToolBudgetExceeded = true;
+                        run.CompletionReason = "自动修复阶段已达到工具调用轮数上限。";
+                        yield break;
                     case AgentRunEventType.Completed:
                         // Inner runner completed — break to continue auto-verify loop
                         goto nextRound;
@@ -1059,12 +1275,17 @@ public sealed class AgentHarness
     private static string GetVerificationToolName(string command)
     {
         var normalized = command.Trim().ToLowerInvariant();
-        if (normalized.Contains("test"))
+        if (string.Equals(normalized, "dotnet test", StringComparison.Ordinal))
         {
             return "run_test";
         }
 
-        return "run_build";
+        if (string.Equals(normalized, "dotnet build", StringComparison.Ordinal))
+        {
+            return "run_build";
+        }
+
+        return ShellCommandTool.IsAllowlisted(command) ? "run_shell" : "";
     }
 
     private static IAgentTool? CreateVerificationTool(string toolName)
@@ -1073,11 +1294,29 @@ public sealed class AgentHarness
         {
             "run_build" => new RunBuildTool(),
             "run_test" => new RunTestTool(),
+            "run_shell" => new ShellCommandTool(),
             _ => null
         };
     }
 
-    private static string BuildVerificationArgsJson(Domain.Projects.ProjectVerificationCommand cmd)
+    private static string BuildVerificationArgsJson(Domain.Projects.ProjectVerificationCommand cmd, string toolName)
+    {
+        if (string.Equals(toolName, "run_shell", StringComparison.OrdinalIgnoreCase))
+        {
+            return JsonSerializer.Serialize(new
+            {
+                command = cmd.Command,
+                shell = "auto",
+                working_directory = cmd.WorkingDirectory,
+                timeout_seconds = cmd.TimeoutSeconds > 0 ? cmd.TimeoutSeconds : 120,
+                max_output_chars = 20_000
+            });
+        }
+
+        return BuildDotnetVerificationArgsJson(cmd);
+    }
+
+    private static string BuildDotnetVerificationArgsJson(Domain.Projects.ProjectVerificationCommand cmd)
     {
         var sb = new System.Text.StringBuilder();
         sb.Append('{');

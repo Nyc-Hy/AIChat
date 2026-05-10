@@ -72,11 +72,11 @@ public sealed class AgentRunViewModel : ObservableObject
         : _run.RecoverySuggestion;
     public bool HasRecoverySuggestion => !string.IsNullOrWhiteSpace(_run.RecoverySuggestion);
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
-    public bool CanContinue => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
+    public bool CanContinue => _run.Status is AgentRunStatus.BudgetExceeded or AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public string ContinuedFromRunId => _run.ContinuedFromRunId;
     public bool HasContinuation => !string.IsNullOrWhiteSpace(_run.ContinuedFromRunId);
     public string ContinuedFromRunText => HasContinuation ? $"从 {ContinuedFromRunId[..Math.Min(8, ContinuedFromRunId.Length)]} 继续" : "";
-    public bool CanResume => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed &&
+    public bool CanResume => _run.Status is AgentRunStatus.BudgetExceeded or AgentRunStatus.Cancelled or AgentRunStatus.Failed &&
                              _run.Plan?.Items.Any(item => item.Status is AgentPlanItemStatus.Pending or AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Blocked) == true;
     public string ShortGoal
     {
@@ -110,6 +110,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public string StatusText => _run.Status switch
     {
         AgentRunStatus.Running => "运行中",
+        AgentRunStatus.BudgetExceeded => "已暂停",
         AgentRunStatus.Cancelled => "已停止",
         AgentRunStatus.Failed => "失败",
         _ => "完成"

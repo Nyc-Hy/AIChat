@@ -308,8 +308,46 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         return new
         {
             role = ToApiRole(message.Role),
-            content = message.Content
+            content = ToOpenAIContent(message)
         };
+    }
+
+    private static object ToOpenAIContent(ChatMessage message)
+    {
+        if (message.ContentParts.Count == 0)
+        {
+            return message.Content;
+        }
+
+        var parts = new List<object>();
+        if (!string.IsNullOrWhiteSpace(message.Content))
+        {
+            parts.Add(new { type = "text", text = message.Content });
+        }
+
+        foreach (var part in message.ContentParts)
+        {
+            if (string.Equals(part.Type, "text", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(part.Text))
+            {
+                parts.Add(new { type = "text", text = part.Text });
+            }
+            else if (string.Equals(part.Type, "image", StringComparison.OrdinalIgnoreCase) &&
+                     !string.IsNullOrWhiteSpace(part.DataBase64) &&
+                     !string.IsNullOrWhiteSpace(part.MediaType))
+            {
+                parts.Add(new
+                {
+                    type = "image_url",
+                    image_url = new
+                    {
+                        url = $"data:{part.MediaType};base64,{part.DataBase64}"
+                    }
+                });
+            }
+        }
+
+        return parts.Count == 0 ? message.Content : parts;
     }
 
     private static IEnumerable<ChatDelta> FlushEventData(StringBuilder eventData)

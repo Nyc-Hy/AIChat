@@ -1,4 +1,7 @@
 using System.Text;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using System.IO.Compression;
 using AIChat.Domain.Artifacts;
 
 namespace AIChat.Application.Artifacts;
@@ -10,7 +13,7 @@ public sealed class InputArtifactService
     public InputArtifact Create(InputArtifactCreateRequest request)
     {
         var kind = DetermineKind(request.FileName, request.MimeType);
-        var rawText = Normalize(request.ContentText);
+        var rawText = Normalize(ExtractText(request, kind));
         var artifact = new InputArtifact
         {
             ProjectId = request.ProjectId,
@@ -34,6 +37,7 @@ public sealed class InputArtifactService
         artifact.Metadata["fileName"] = artifact.FileName;
         artifact.Metadata["mimeType"] = artifact.MimeType;
         artifact.Metadata["charCount"] = rawText.Length.ToString();
+        artifact.Metadata["extraction"] = string.IsNullOrWhiteSpace(rawText) ? "metadata" : "text";
 
         if (!artifact.Metadata.ContainsKey("extension"))
         {
@@ -63,6 +67,11 @@ public sealed class InputArtifactService
     }
 
     public int Prune(ICollection<InputArtifact> artifacts, InputArtifactCleanupOptions? options = null)
+    {
+        return PruneRemoved(artifacts, options).Count;
+    }
+
+    public IReadOnlyList<InputArtifact> PruneRemoved(ICollection<InputArtifact> artifacts, InputArtifactCleanupOptions? options = null)
     {
         options ??= new InputArtifactCleanupOptions();
         var keepIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -95,7 +104,25 @@ public sealed class InputArtifactService
             artifacts.Remove(artifact);
         }
 
-        return removed.Count;
+        return removed;
+    }
+
+    public IReadOnlyList<InputArtifact> RemoveForConversation(ICollection<InputArtifact> artifacts, string conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId))
+        {
+            return [];
+        }
+
+        var removed = artifacts
+            .Where(artifact => string.Equals(artifact.ConversationId, conversationId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var artifact in removed)
+        {
+            artifacts.Remove(artifact);
+        }
+
+        return removed;
     }
 
     public string GetDetail(InputArtifact artifact, int maxChars = 4000)
@@ -205,5 +232,188 @@ public sealed class InputArtifactService
     {
         var trimmed = value.Trim();
         return trimmed.Length <= maxChars ? trimmed : trimmed[..maxChars] + "...";
+    }
+
+    private static string ExtractText(InputArtifactCreateRequest request, InputArtifactKind kind)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ContentText))
+        {
+            return request.ContentText;
+        }
+
+        if (request.FileBytes.Length == 0)
+        {
+            return "";
+        }
+
+        var extension = Path.GetExtension(request.FileName).TrimStart('.').ToLowerInvariant();
+        try
+        {
+            return extension switch
+            {
+                "docx" => ExtractDocxText(request.FileBytes),
+                "xlsx" => ExtractXlsxText(request.FileBytes),
+                "pdf" => ExtractPdfText(request.FileBytes),
+                "csv" or "tsv" => DecodeText(request.FileBytes),
+                _ when kind == InputArtifactKind.Text => DecodeText(request.FileBytes),
+                _ => ""
+            };
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static string ExtractDocxText(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = archive.GetEntry("word/document.xml");
+        if (entry is null)
+        {
+            return "";
+        }
+
+        using var entryStream = entry.Open();
+        var document = XDocument.Load(entryStream);
+        var builder = new StringBuilder();
+        foreach (var paragraph in document.Descendants().Where(element => element.Name.LocalName == "p"))
+        {
+            var text = string.Concat(paragraph
+                .Descendants()
+                .Where(element => element.Name.LocalName == "t")
+                .Select(element => element.Value));
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                builder.AppendLine(text.Trim());
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string ExtractXlsxText(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        var sharedStrings = ReadSharedStrings(archive);
+        var builder = new StringBuilder();
+        foreach (var entry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase) &&
+                                     entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(entry => entry.FullName, StringComparer.OrdinalIgnoreCase))
+        {
+            using var entryStream = entry.Open();
+            var document = XDocument.Load(entryStream);
+            foreach (var row in document.Descendants().Where(element => element.Name.LocalName == "row"))
+            {
+                var cells = row
+                    .Descendants()
+                    .Where(element => element.Name.LocalName == "c")
+                    .Select(cell => ReadCellValue(cell, sharedStrings))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToList();
+                if (cells.Count > 0)
+                {
+                    builder.AppendLine(string.Join('\t', cells));
+                }
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static IReadOnlyList<string> ReadSharedStrings(ZipArchive archive)
+    {
+        var entry = archive.GetEntry("xl/sharedStrings.xml");
+        if (entry is null)
+        {
+            return [];
+        }
+
+        using var stream = entry.Open();
+        var document = XDocument.Load(stream);
+        return document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "si")
+            .Select(item => string.Concat(item
+                .Descendants()
+                .Where(element => element.Name.LocalName == "t")
+                .Select(element => element.Value)))
+            .ToList();
+    }
+
+    private static string ReadCellValue(XElement cell, IReadOnlyList<string> sharedStrings)
+    {
+        var type = cell.Attribute("t")?.Value ?? "";
+        var value = cell.Descendants().FirstOrDefault(element => element.Name.LocalName == "v")?.Value ?? "";
+        if (string.Equals(type, "s", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(value, out var index) &&
+            index >= 0 &&
+            index < sharedStrings.Count)
+        {
+            return sharedStrings[index];
+        }
+
+        if (string.Equals(type, "inlineStr", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Concat(cell
+                .Descendants()
+                .Where(element => element.Name.LocalName == "t")
+                .Select(element => element.Value));
+        }
+
+        return value;
+    }
+
+    private static string ExtractPdfText(byte[] bytes)
+    {
+        var text = Encoding.Latin1.GetString(bytes);
+        var matches = Regex.Matches(text, @"\((?:\\.|[^\\)])*\)\s*Tj|\[(?<array>.*?)\]\s*TJ", RegexOptions.Singleline);
+        var builder = new StringBuilder();
+        foreach (Match match in matches)
+        {
+            if (match.Value.EndsWith("Tj", StringComparison.Ordinal))
+            {
+                var literal = match.Value[..^2].Trim();
+                builder.AppendLine(UnescapePdfLiteral(literal));
+                continue;
+            }
+
+            var array = match.Groups["array"].Value;
+            foreach (Match literalMatch in Regex.Matches(array, @"\((?:\\.|[^\\)])*\)", RegexOptions.Singleline))
+            {
+                builder.Append(UnescapePdfLiteral(literalMatch.Value));
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string UnescapePdfLiteral(string literal)
+    {
+        var trimmed = literal.Trim();
+        if (trimmed.StartsWith('(') && trimmed.EndsWith(')'))
+        {
+            trimmed = trimmed[1..^1];
+        }
+
+        return trimmed
+            .Replace("\\n", "\n", StringComparison.Ordinal)
+            .Replace("\\r", "\r", StringComparison.Ordinal)
+            .Replace("\\t", "\t", StringComparison.Ordinal)
+            .Replace("\\(", "(", StringComparison.Ordinal)
+            .Replace("\\)", ")", StringComparison.Ordinal)
+            .Replace("\\\\", "\\", StringComparison.Ordinal);
+    }
+
+    private static string DecodeText(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 }

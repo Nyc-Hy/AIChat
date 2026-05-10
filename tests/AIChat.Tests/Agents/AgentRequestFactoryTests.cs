@@ -50,6 +50,41 @@ public sealed class AgentRequestFactoryTests : IDisposable
     }
 
     [Fact]
+    public void CreateSnapshot_FromChatRequestIncludesContentPartMetadataWithoutBase64Payload()
+    {
+        var request = new ChatRequest
+        {
+            Model = "deepseek-v4-pro",
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Role = ChatRole.User,
+                    Content = "inspect screenshot",
+                    ContentParts =
+                    [
+                        ChatContentPart.ImagePart("image/png", "AQIDBA==", "screen.png")
+                    ]
+                }
+            ]
+        };
+
+        var snapshot = AgentRequestFactory.CreateSnapshot(
+            request,
+            CreateEffectiveSettings(),
+            CreateRuntimeSettings(),
+            ["read_file"]);
+
+        var message = Assert.Single(snapshot.Messages);
+        var part = Assert.Single(message.ContentParts);
+        Assert.Equal("image", part.Type);
+        Assert.Equal("image/png", part.MediaType);
+        Assert.Equal("screen.png", part.SourcePath);
+        Assert.Equal(4, part.DataBytes);
+        Assert.Equal("", part.Text);
+    }
+
+    [Fact]
     public void Build_CreatesChatRequestWithSystemContextAndConversationMessages()
     {
         var conversation = CreateConversation();
@@ -163,6 +198,82 @@ public sealed class AgentRequestFactoryTests : IDisposable
         });
 
         Assert.Equal(["current", "global"], result.AgentContext.InputArtifacts.Select(item => item.Id));
+    }
+
+    [Fact]
+    public void Build_DoesNotAttachStoredImageArtifactsWhenModelDoesNotSupportVision()
+    {
+        var imagePath = Path.Combine(_tempDir, "screen.png");
+        File.WriteAllBytes(imagePath, [1, 2, 3, 4]);
+        var conversation = CreateConversation();
+        var assistant = AddMessage(conversation, ChatRole.Assistant, "placeholder");
+        var factory = CreateFactory();
+
+        var result = factory.Build(new AgentRequestBuildRequest
+        {
+            Conversation = conversation,
+            AssistantMessageId = assistant.Id,
+            EffectiveSettings = CreateEffectiveSettings(),
+            RuntimeSettings = CreateRuntimeSettings(),
+            ProjectPath = _tempDir,
+            InputArtifacts =
+            [
+                new InputArtifact
+                {
+                    Id = "image-1",
+                    ConversationId = conversation.Id,
+                    Kind = InputArtifactKind.Screenshot,
+                    FileName = "screen.png",
+                    MimeType = "image/png",
+                    CreatedAt = DateTimeOffset.Parse("2026-01-02T00:00:00Z"),
+                    Metadata = { ["storedPath"] = imagePath }
+                }
+            ]
+        });
+
+        var userMessage = result.ChatRequest.Messages.Last(message => message.Role == ChatRole.User);
+        Assert.Empty(userMessage.ContentParts);
+    }
+
+    [Fact]
+    public void Build_AttachesStoredImageArtifactsWhenEffectiveSettingsSupportVision()
+    {
+        var imagePath = Path.Combine(_tempDir, "vision-screen.png");
+        File.WriteAllBytes(imagePath, [1, 2, 3, 4]);
+        var conversation = CreateConversation();
+        var assistant = AddMessage(conversation, ChatRole.Assistant, "placeholder");
+        var factory = CreateFactory();
+        var effectiveSettings = CreateEffectiveSettings();
+        effectiveSettings.ModelSupportsVision = true;
+
+        var result = factory.Build(new AgentRequestBuildRequest
+        {
+            Conversation = conversation,
+            AssistantMessageId = assistant.Id,
+            EffectiveSettings = effectiveSettings,
+            RuntimeSettings = CreateRuntimeSettings(),
+            ProjectPath = _tempDir,
+            InputArtifacts =
+            [
+                new InputArtifact
+                {
+                    Id = "image-1",
+                    ConversationId = conversation.Id,
+                    Kind = InputArtifactKind.Screenshot,
+                    FileName = "screen.png",
+                    MimeType = "image/png",
+                    CreatedAt = DateTimeOffset.Parse("2026-01-02T00:00:00Z"),
+                    Metadata = { ["storedPath"] = imagePath }
+                }
+            ]
+        });
+
+        var userMessage = result.ChatRequest.Messages.Last(message => message.Role == ChatRole.User);
+        var imagePart = Assert.Single(userMessage.ContentParts);
+        Assert.Equal("image", imagePart.Type);
+        Assert.Equal("image/png", imagePart.MediaType);
+        Assert.Equal(Convert.ToBase64String([1, 2, 3, 4]), imagePart.DataBase64);
+        Assert.Equal(imagePath, imagePart.SourcePath);
     }
 
     private static AgentRequestFactory CreateFactory()

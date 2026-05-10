@@ -158,6 +158,39 @@ public sealed class OpenAICompatibleToolCallTests
         Assert.Equal("tool-0", toolCalls[0].Id);
     }
 
+    [Fact]
+    public async Task SendAsync_UserMessageWithImagePart_SendsOpenAIImageContentBlock()
+    {
+        var handler = new CapturingHandler(ContentDeltaChunk("ok") + DoneChunk());
+        var provider = new OpenAICompatibleChatProvider(new HttpClient(handler));
+        var request = new ChatRequest
+        {
+            Model = "gpt-4.1-mini",
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Role = ChatRole.User,
+                    Content = "describe this screenshot",
+                    ContentParts =
+                    [
+                        ChatContentPart.ImagePart("image/png", "AQIDBA==", "screen.png")
+                    ]
+                }
+            ]
+        };
+
+        await CollectDeltasAsync(provider, request, CreateSettings());
+
+        using var captured = JsonDocument.Parse(handler.CapturedBody!);
+        var content = captured.RootElement.GetProperty("messages")[0].GetProperty("content");
+        Assert.Equal(JsonValueKind.Array, content.ValueKind);
+        Assert.Equal("text", content[0].GetProperty("type").GetString());
+        Assert.Equal("describe this screenshot", content[0].GetProperty("text").GetString());
+        Assert.Equal("image_url", content[1].GetProperty("type").GetString());
+        Assert.Equal("data:image/png;base64,AQIDBA==", content[1].GetProperty("image_url").GetProperty("url").GetString());
+    }
+
     // --- helpers ---
 
     private static OpenAICompatibleChatProvider CreateProvider(HttpMessageHandler handler)

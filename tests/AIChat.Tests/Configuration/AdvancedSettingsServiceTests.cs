@@ -11,6 +11,7 @@ public sealed class AdvancedSettingsServiceTests
         var settings = new AppSettings
         {
             AgentMaxToolRounds = 0,
+            MaxAutoFixRounds = 99,
             RetryMaxAttempts = 99,
             MaxOutputTokens = 12,
             ConversationContextRatio = 2.0,
@@ -21,6 +22,7 @@ public sealed class AdvancedSettingsServiceTests
         AdvancedSettingsService.Normalize(settings);
 
         Assert.Equal(1, settings.AgentMaxToolRounds);
+        Assert.Equal(10, settings.MaxAutoFixRounds);
         Assert.Equal(10, settings.RetryMaxAttempts);
         Assert.Equal(256, settings.MaxOutputTokens);
         Assert.Equal(1.0, settings.ConversationContextRatio);
@@ -34,6 +36,7 @@ public sealed class AdvancedSettingsServiceTests
         var settings = new AppSettings
         {
             AgentMaxToolRounds = 25,
+            MaxAutoFixRounds = 3,
             RetryMaxAttempts = 4,
             MaxOutputTokens = 8192,
             ConversationContextRatio = 0.6,
@@ -44,6 +47,7 @@ public sealed class AdvancedSettingsServiceTests
         AdvancedSettingsService.Normalize(settings);
 
         Assert.Equal(25, settings.AgentMaxToolRounds);
+        Assert.Equal(3, settings.MaxAutoFixRounds);
         Assert.Equal(4, settings.RetryMaxAttempts);
         Assert.Equal(8192, settings.MaxOutputTokens);
         Assert.Equal(0.6, settings.ConversationContextRatio);

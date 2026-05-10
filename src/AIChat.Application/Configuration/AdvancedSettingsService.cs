@@ -6,6 +6,8 @@ public static class AdvancedSettingsService
 {
     public const int MinAgentMaxToolRounds = 1;
     public const int MaxAgentMaxToolRounds = 100;
+    public const int MinAutoFixRounds = 1;
+    public const int MaxAutoFixRounds = 10;
     public const int MinRetryMaxAttempts = 0;
     public const int MaxRetryMaxAttempts = 10;
     public const int MinOutputTokens = 256;
@@ -20,6 +22,7 @@ public static class AdvancedSettingsService
     public static void Normalize(AppSettings settings)
     {
         settings.AgentMaxToolRounds = NormalizeAgentMaxToolRounds(settings.AgentMaxToolRounds);
+        settings.MaxAutoFixRounds = NormalizeMaxAutoFixRounds(settings.MaxAutoFixRounds);
         settings.RetryMaxAttempts = NormalizeRetryMaxAttempts(settings.RetryMaxAttempts);
         settings.MaxOutputTokens = NormalizeMaxOutputTokens(settings.MaxOutputTokens);
         settings.ConversationContextRatio = NormalizeConversationContextRatio(settings.ConversationContextRatio);
@@ -30,6 +33,11 @@ public static class AdvancedSettingsService
     public static int NormalizeAgentMaxToolRounds(int value)
     {
         return Math.Clamp(value, MinAgentMaxToolRounds, MaxAgentMaxToolRounds);
+    }
+
+    public static int NormalizeMaxAutoFixRounds(int value)
+    {
+        return Math.Clamp(value, MinAutoFixRounds, MaxAutoFixRounds);
     }
 
     public static int NormalizeRetryMaxAttempts(int value)

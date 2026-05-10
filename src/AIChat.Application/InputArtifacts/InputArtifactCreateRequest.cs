@@ -8,6 +8,7 @@ public sealed class InputArtifactCreateRequest
     public string FileName { get; init; } = "";
     public string MimeType { get; init; } = "";
     public string ContentText { get; init; } = "";
+    public byte[] FileBytes { get; init; } = [];
     public IReadOnlyDictionary<string, string> Metadata { get; init; } =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 }

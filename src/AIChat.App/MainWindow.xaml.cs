@@ -5,6 +5,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using AIChat.App.ViewModels;
 using AIChat.Application.Agents;
 using AIChat.Application.Agents.Planning;
@@ -85,6 +86,17 @@ public partial class MainWindow : Window
 
     private async void ComposerBox_KeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.V && Keyboard.Modifiers == ModifierKeys.Control && Clipboard.ContainsImage())
+        {
+            var image = Clipboard.GetImage();
+            if (image is not null)
+            {
+                e.Handled = true;
+                await _viewModel.AttachClipboardImageAsync(EncodeClipboardImage(image));
+                return;
+            }
+        }
+
         // Ctrl+Enter sends the current draft, matching common chat/editor behavior.
         if (e.Key != Key.Enter || Keyboard.Modifiers != ModifierKeys.Control)
         {
@@ -97,6 +109,15 @@ public partial class MainWindow : Window
             _viewModel.SendCommand.Execute(null);
             await Dispatcher.InvokeAsync(ScrollMessagesToEnd);
         }
+    }
+
+    private static byte[] EncodeClipboardImage(BitmapSource image)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(image));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
     }
 
     private void HookMessageCollection()

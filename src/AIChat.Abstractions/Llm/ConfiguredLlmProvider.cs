@@ -11,6 +11,7 @@ public sealed class ConfiguredLlmProvider
     public string BaseUrl { get; set; } = "";
     public string ApiKey { get; set; } = "";
     public string SelectedModelId { get; set; } = "";
+    public bool SupportsVisionOverride { get; set; }
     public Dictionary<string, string> ModelParameters { get; set; } = [];
     // Shows enough of the key to identify an entry without exposing the secret.
     public string DisplayName => string.IsNullOrWhiteSpace(ApiKey) || ApiKey.Length < 8

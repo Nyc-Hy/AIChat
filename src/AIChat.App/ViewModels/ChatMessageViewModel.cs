@@ -75,6 +75,7 @@ public sealed class ChatMessageViewModel : ObservableObject
     public string AgentRunStatusText => (_agentRunSource ?? _agentRun?.Run)?.Status switch
     {
         AgentRunStatus.Running => "Agent 正在执行",
+        AgentRunStatus.BudgetExceeded => "Agent 已暂停，可继续",
         AgentRunStatus.Cancelled => "Agent 已停止",
         AgentRunStatus.Failed => "Agent 执行失败",
         AgentRunStatus.Completed => "Agent 已完成",

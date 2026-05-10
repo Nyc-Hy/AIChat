@@ -153,12 +153,14 @@ public sealed class AgentCoordinator
     {
         var phase = status switch
         {
+            AgentRunStatus.BudgetExceeded => AgentRunPhase.WaitingForUser,
             AgentRunStatus.Cancelled => AgentRunPhase.Cancelled,
             AgentRunStatus.Failed => AgentRunPhase.Failed,
             _ => AgentRunPhase.Completed
         };
         var terminalStatus = status switch
         {
+            AgentRunStatus.BudgetExceeded => "paused",
             AgentRunStatus.Cancelled => "cancelled",
             AgentRunStatus.Failed => "failed",
             _ => "completed"

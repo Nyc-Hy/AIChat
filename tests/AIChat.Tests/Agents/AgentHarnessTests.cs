@@ -838,6 +838,129 @@ public sealed class AgentHarnessTests
         Assert.Contains(events, e => e.Type == AgentHarnessEventType.ToolCall);
     }
 
+    [Fact]
+    public async Task RunAsync_AutoVerifiesAllowlistedShellCommandWithArguments()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var targetPath = Path.Combine(workspace.Path, "file.txt");
+        await File.WriteAllTextAsync(targetPath, "old content");
+
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "apply_patch",
+            ArgumentsJson = """
+            {
+              "changes": [
+                { "path": "file.txt", "old_text": "old content", "new_text": "new content" }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new ApplyPatchTool()])));
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "update file",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update file" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = workspace.Path,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve()),
+                               AutoVerifyAgentRuns = true,
+                               MaxAutoFixRounds = 1,
+                               VerificationCommands =
+                               [
+                                   new ProjectVerificationCommand
+                                   {
+                                       Name = "custom check",
+                                       Command = "echo auto verify",
+                                       TimeoutSeconds = 10
+                                   }
+                               ]
+                           }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        var verification = Assert.Single(run.Verifications);
+        Assert.Equal("echo auto verify", verification.Command);
+        Assert.True(verification.IsSuccess);
+        Assert.Contains("auto verify", verification.Output);
+        Assert.Contains(events, e => e.ToolCall?.Name == "run_shell" && e.ToolCall.ArgumentsJson.Contains("echo auto verify"));
+    }
+
+    [Fact]
+    public async Task RunAsync_BudgetExceededPausesRunWithCheckpointAndContinuationPrompt()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var first = new ChatToolCall { Id = "tool-call-1", Name = "read_file", ArgumentsJson = "{}" };
+        var second = new ChatToolCall { Id = "tool-call-2", Name = "read_file", ArgumentsJson = "{}" };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [first, second] }]
+            ]),
+            new AgentToolCatalog([new FakeReadTool()])));
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "inspect files",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "inspect files" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 1,
+                               ToolPermissionModes = new Dictionary<string, ToolPermissionMode>
+                               {
+                                   ["read_file"] = ToolPermissionMode.AutoReadOnly
+                               }
+                           }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.BudgetExceeded, run.Status);
+        Assert.Equal("waiting_for_user", run.Phase);
+        Assert.True(run.ToolBudgetExceeded);
+        Assert.Contains("工具调用：1/1", run.CheckpointSummary);
+        Assert.Contains("恢复包", run.RecoverySuggestion);
+        Assert.Contains("先快速重新检查当前工作区状态", run.RecoverySuggestion);
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
+                                       item.Content.Contains("任务已暂停", StringComparison.Ordinal));
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunCompleted &&
+                                       item.Run?.Status == AgentRunStatus.BudgetExceeded);
+        Assert.Contains(run.Steps, step => step.Title == "预算暂停");
+    }
+
     private sealed class FakeChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;
@@ -911,6 +1034,43 @@ public sealed class AgentHarnessTests
                   "output": "Passed"
                 }
                 """
+            });
+        }
+    }
+
+    private sealed class FakeReadTool : IAgentTool
+    {
+        public string Id => "read_file";
+        public AgentToolRisk Risk => AgentToolRisk.ReadOnly;
+        public ChatToolDefinition Definition { get; } = new()
+        {
+            Name = "read_file",
+            Description = "fake read",
+            ParametersJson = "{}"
+        };
+
+        public Task<AgentToolPreview> PreviewAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "read"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolResult
+            {
+                ToolName = Id,
+                Content = "file content"
             });
         }
     }

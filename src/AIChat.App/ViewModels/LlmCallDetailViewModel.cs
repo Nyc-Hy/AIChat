@@ -24,9 +24,95 @@ public sealed class LlmCallDetailViewModel : ObservableObject
     public LlmCallDetail Detail { get; }
     public string Title => $"{Detail.CreatedAt.ToLocalTime():MM/dd HH:mm:ss} · {Detail.Model}";
     public string Subtitle => $"{Detail.ProviderName} · {Detail.Status}";
+    public string RequestSummary => BuildRequestSummary(Detail.RequestJson);
+    public bool HasRequestSummary => !string.IsNullOrWhiteSpace(RequestSummary);
+    public string ResponseSummary => BuildResponseSummary();
     public string RequestJson => NormalizeJsonText(Detail.RequestJson, includeRawEvents: true);
     public string ResponseJson => NormalizeJsonText(Detail.ResponseJson, includeRawEvents: false);
     public string ResponseJsonWithRawEvents => NormalizeJsonText(Detail.ResponseJson, includeRawEvents: true);
+
+    private string BuildResponseSummary()
+    {
+        var duration = Detail.CompletedAt is null
+            ? "进行中"
+            : FormatDuration(Detail.CompletedAt.Value - Detail.CreatedAt);
+        return $"{Detail.Status} · {duration}";
+    }
+
+    private static string BuildRequestSummary(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return "";
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var messageCount = root.TryGetProperty("messages", out var messages) && messages.ValueKind == JsonValueKind.Array
+                ? messages.GetArrayLength()
+                : 0;
+            var toolCount = root.TryGetProperty("enabledTools", out var tools) && tools.ValueKind == JsonValueKind.Array
+                ? tools.GetArrayLength()
+                : 0;
+            var imageCount = CountContentParts(root, "image");
+            var textPartCount = CountContentParts(root, "text");
+            var parts = new List<string>();
+            if (messageCount > 0)
+            {
+                parts.Add($"{messageCount} 条消息");
+            }
+
+            parts.Add($"{toolCount} 个工具");
+            if (imageCount > 0)
+            {
+                parts.Add($"{imageCount} 张图片");
+            }
+
+            if (textPartCount > 0)
+            {
+                parts.Add($"{textPartCount} 个文本片段");
+            }
+
+            return string.Join(" · ", parts);
+        }
+        catch (JsonException)
+        {
+            return "";
+        }
+    }
+
+    private static int CountContentParts(JsonElement root, string type)
+    {
+        if (!root.TryGetProperty("messages", out var messages) || messages.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        var count = 0;
+        foreach (var message in messages.EnumerateArray())
+        {
+            if (!message.TryGetProperty("contentParts", out var contentParts) ||
+                contentParts.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            count += contentParts.EnumerateArray().Count(part =>
+                part.TryGetProperty("type", out var partType) &&
+                string.Equals(partType.GetString(), type, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return count;
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalSeconds < 1
+            ? "<1s"
+            : $"{duration.TotalSeconds:0.0}s";
+    }
 
     private static string NormalizeJsonText(string json, bool includeRawEvents)
     {

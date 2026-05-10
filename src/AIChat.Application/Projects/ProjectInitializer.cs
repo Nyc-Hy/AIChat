@@ -1,4 +1,5 @@
 using System.Text;
+using AIChat.Domain.Projects;
 
 namespace AIChat.Application.Projects;
 
@@ -8,6 +9,40 @@ namespace AIChat.Application.Projects;
 /// </summary>
 public sealed class ProjectInitializer
 {
+    public IReadOnlyList<ProjectVerificationCommand> SuggestVerificationCommands(string projectPath)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath) || !Directory.Exists(projectPath))
+        {
+            return [];
+        }
+
+        var detection = DetectProject(projectPath);
+        var commands = new List<ProjectVerificationCommand>();
+        var dotnetTarget = FindDotnetVerificationTarget(projectPath);
+        if (detection.TechStack.Contains("C# / .NET", StringComparer.Ordinal))
+        {
+            commands.Add(new ProjectVerificationCommand
+            {
+                Name = "构建",
+                Command = "dotnet build",
+                WorkingDirectory = dotnetTarget,
+                TimeoutSeconds = 120,
+                IsDefault = true
+            });
+
+            commands.Add(new ProjectVerificationCommand
+            {
+                Name = "测试",
+                Command = "dotnet test",
+                WorkingDirectory = dotnetTarget,
+                TimeoutSeconds = 180,
+                IsDefault = true
+            });
+        }
+
+        return commands;
+    }
+
     public async Task InitializeProjectAsync(string projectPath, CancellationToken cancellationToken = default)
     {
         var agentsPath = Path.Combine(projectPath, "AGENTS.md");
@@ -91,6 +126,23 @@ public sealed class ProjectInitializer
         }
 
         return detection;
+    }
+
+    private static string FindDotnetVerificationTarget(string root)
+    {
+        var solution = Directory.GetFiles(root, "*.sln", SearchOption.TopDirectoryOnly)
+            .Concat(Directory.GetFiles(root, "*.slnx", SearchOption.TopDirectoryOnly))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(solution))
+        {
+            return Path.GetFileName(solution);
+        }
+
+        var project = Directory.GetFiles(root, "*.csproj", SearchOption.TopDirectoryOnly)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        return string.IsNullOrWhiteSpace(project) ? "" : Path.GetFileName(project);
     }
 
     private static string GenerateAgentsMd(string projectPath, ProjectDetection detection)

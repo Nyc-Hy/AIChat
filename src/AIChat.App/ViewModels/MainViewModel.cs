@@ -7,6 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Windows;
 using AIChat.App.Controls;
+using AIChat.App.Services;
 using AIChat.Application.Artifacts;
 using AIChat.Domain.Audit;
 using AIChat.Domain.Artifacts;
@@ -53,6 +54,7 @@ public sealed class MainViewModel : ObservableObject
     private readonly WorkspaceChangeService _workspaceChangeService;
     private readonly AgentRunAuditService? _auditService;
     private readonly InputArtifactService _inputArtifactService = new();
+    private readonly InputArtifactFileStore _inputArtifactFileStore = new();
     private AgentHarness? _agentHarness;
     private AgentToolRegistry? _toolRegistry;
     private readonly AgentRunQueue _agentRunQueue = new();
@@ -78,7 +80,9 @@ public sealed class MainViewModel : ObservableObject
     private bool _isAgentRunHistoryOpen;
     private bool _isAgentRunDetailsOpen;
     private bool _isRemoveProjectConfirmationOpen;
+    private bool _isInputArtifactPreviewOpen;
     private ProjectViewModel? _projectPendingRemoval;
+    private InputArtifactViewModel? _selectedInputArtifactPreview;
     private bool _isNewProviderApiKeyVisible;
     private bool _isTestingProviderConnection;
     private PendingToolApprovalViewModel? _pendingToolApproval;
@@ -125,6 +129,8 @@ public sealed class MainViewModel : ObservableObject
         SendCommand = new RelayCommand(async _ => await SendAsync(), _ => CanSend);
         AttachInputArtifactCommand = new RelayCommand(async _ => await AttachInputArtifactAsync(), _ => SelectedProject is not null && SelectedConversation is not null && !IsSending);
         RemoveInputArtifactCommand = new RelayCommand(async parameter => await RemoveInputArtifactAsync((InputArtifactViewModel)parameter!), parameter => parameter is InputArtifactViewModel && !IsSending);
+        OpenInputArtifactPreviewCommand = new RelayCommand(parameter => OpenInputArtifactPreview(parameter as InputArtifactViewModel), parameter => parameter is InputArtifactViewModel { IsImagePreview: true });
+        CloseInputArtifactPreviewCommand = new RelayCommand(_ => CloseInputArtifactPreview());
         SelectProjectCommand = new RelayCommand(parameter => SelectProject((ProjectViewModel)parameter!));
         SelectConversationCommand = new RelayCommand(parameter => SelectConversation((ConversationViewModel)parameter!));
         LoadEarlierMessagesCommand = new RelayCommand(_ => LoadEarlierMessages(), _ => SelectedConversation?.HasHiddenMessages == true);
@@ -180,6 +186,9 @@ public sealed class MainViewModel : ObservableObject
         RejectToolCommand = new RelayCommand(_ => ResolvePendingToolApproval(allow: false, allowForSession: false), _ => PendingToolApproval is not null);
         AddProjectToolOverrideCommand = new RelayCommand(_ => AddProjectToolOverride());
         RemoveProjectToolOverrideCommand = new RelayCommand(param => RemoveProjectToolOverride(param as string));
+        AddProjectVerificationCommandCommand = new RelayCommand(_ => AddProjectVerificationCommand(), _ => SelectedProject is not null);
+        RemoveProjectVerificationCommandCommand = new RelayCommand(param => RemoveProjectVerificationCommand(param as ProjectVerificationCommandViewModel), param => param is ProjectVerificationCommandViewModel);
+        InferProjectVerificationCommandsCommand = new RelayCommand(_ => InferProjectVerificationCommands(), _ => SelectedProject is not null && Directory.Exists(SelectedProject.Path));
         AddProjectCommand = new RelayCommand(async _ => await AddProjectAsync());
         RemoveProjectCommand = new RelayCommand(param => OpenRemoveProjectConfirmation(param as ProjectViewModel), param => param is ProjectViewModel && Projects.Count > 1);
         ConfirmRemoveProjectCommand = new RelayCommand(async _ => await ConfirmRemoveProjectAsync(), _ => ProjectPendingRemoval is not null && Projects.Count > 1);
@@ -197,6 +206,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<AgentRunHistoryItemViewModel> AgentRunHistory { get; } = [];
     public ObservableCollection<AuditEventViewModel> AuditEvents { get; } = [];
     public ObservableCollection<InputArtifactViewModel> CurrentInputArtifacts { get; } = [];
+    public ObservableCollection<ProjectVerificationCommandViewModel> ProjectVerificationCommands { get; } = [];
     public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions => AgentRunHistoryFilter.Options;
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
@@ -210,6 +220,8 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand SendCommand { get; }
     public RelayCommand AttachInputArtifactCommand { get; }
     public RelayCommand RemoveInputArtifactCommand { get; }
+    public RelayCommand OpenInputArtifactPreviewCommand { get; }
+    public RelayCommand CloseInputArtifactPreviewCommand { get; }
     public RelayCommand SelectProjectCommand { get; }
     public RelayCommand SelectConversationCommand { get; }
     public RelayCommand LoadEarlierMessagesCommand { get; }
@@ -261,6 +273,9 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand RejectToolCommand { get; }
     public RelayCommand AddProjectToolOverrideCommand { get; }
     public RelayCommand RemoveProjectToolOverrideCommand { get; }
+    public RelayCommand AddProjectVerificationCommandCommand { get; }
+    public RelayCommand RemoveProjectVerificationCommandCommand { get; }
+    public RelayCommand InferProjectVerificationCommandsCommand { get; }
     public RelayCommand AddProjectCommand { get; }
     public RelayCommand RemoveProjectCommand { get; }
     public RelayCommand ConfirmRemoveProjectCommand { get; }
@@ -299,12 +314,15 @@ public sealed class MainViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedConfiguredProvider));
                 OnPropertyChanged(nameof(ActiveModelOptions));
                 OnPropertyChanged(nameof(AgentMaxToolRounds));
+                OnPropertyChanged(nameof(AutoVerifyAgentRuns));
+                OnPropertyChanged(nameof(MaxAutoFixRounds));
                 OnPropertyChanged(nameof(RetryMaxAttempts));
                 OnPropertyChanged(nameof(MaxOutputTokens));
                 OnPropertyChanged(nameof(ConversationContextRatio));
                 OnPropertyChanged(nameof(UseTokenizerEstimation));
                 OnPropertyChanged(nameof(AuditLogMaxFileSizeMB));
                 OnPropertyChanged(nameof(AuditLogRetentionDays));
+                OnPropertyChanged(nameof(ActiveModelSupportsVision));
             }
         }
     }
@@ -320,8 +338,11 @@ public sealed class MainViewModel : ObservableObject
                 NewChatCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
+                AddProjectVerificationCommandCommand.RaiseCanExecuteChanged();
+                InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
                 RebuildCurrentInputArtifacts();
                 LoadProjectToolPermissionOverrides();
+                LoadProjectVerificationCommands();
             }
         }
     }
@@ -371,15 +392,8 @@ public sealed class MainViewModel : ObservableObject
     {
         get
         {
-            if (SelectedProject is null || SelectedConversation is null)
-            {
-                return "";
-            }
-
-            var count = SelectedProject.Project.InputArtifacts.Count(artifact =>
-                string.IsNullOrWhiteSpace(artifact.ConversationId) ||
-                string.Equals(artifact.ConversationId, SelectedConversation.Conversation.Id, StringComparison.OrdinalIgnoreCase));
-            return count == 0 ? "" : $"{count} 个输入附件已加入上下文";
+            var summary = BuildCurrentInputArtifactDeliverySummary(ActiveModelSupportsVision);
+            return summary.TotalCount == 0 ? "" : summary.SummaryText;
         }
     }
     public string ModelName => SelectedConfiguredProvider is null
@@ -430,9 +444,12 @@ public sealed class MainViewModel : ObservableObject
             }
 
             var model = ChatProviderCatalog.ResolveModel(configured.TemplateId, configured.SelectedModelId);
-            return string.IsNullOrWhiteSpace(model.CapabilityLabel)
+            var label = string.IsNullOrWhiteSpace(model.CapabilityLabel)
                 ? "标准聊天能力"
                 : model.CapabilityLabel;
+            return configured.SupportsVisionOverride && model.Capabilities.SupportsVision == false
+                ? label + " · vision override"
+                : label;
         }
     }
     public bool ActiveModelSupportsTools
@@ -443,6 +460,36 @@ public sealed class MainViewModel : ObservableObject
             if (configured is null) return false;
             var model = ChatProviderCatalog.ResolveModel(configured.TemplateId, configured.SelectedModelId);
             return model.Capabilities?.SupportsTools == true;
+        }
+    }
+    public bool ActiveModelSupportsVision
+    {
+        get
+        {
+            var configured = SelectedConfiguredProvider;
+            if (configured is null) return false;
+            var model = ChatProviderCatalog.ResolveModel(configured.TemplateId, configured.SelectedModelId);
+            return model.Capabilities?.SupportsVision == true || configured.SupportsVisionOverride;
+        }
+    }
+    public bool SelectedConfiguredProviderSupportsVisionOverride
+    {
+        get => SelectedConfiguredProvider?.SupportsVisionOverride == true;
+        set
+        {
+            var configured = SelectedConfiguredProvider;
+            if (configured is null || configured.SupportsVisionOverride == value)
+            {
+                return;
+            }
+
+            configured.SupportsVisionOverride = value;
+            ApplySelectedConfiguredProvider();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ActiveModelSupportsVision));
+            OnPropertyChanged(nameof(ActiveModelCapabilitySummary));
+            RebuildCurrentInputArtifacts();
+            _ = PersistSettingsQuietlyAsync();
         }
     }
     public bool HasApiKey => SelectedConfiguredProvider is not null && !string.IsNullOrWhiteSpace(SelectedConfiguredProvider.ApiKey);
@@ -578,7 +625,9 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(Settings));
             OnPropertyChanged(nameof(ModelName));
             OnPropertyChanged(nameof(SelectedConfiguredProvider));
+            OnPropertyChanged(nameof(SelectedConfiguredProviderSupportsVisionOverride));
             RebuildModelParameterOptions();
+            RebuildCurrentInputArtifacts();
             UpdateContextUsage();
             _ = PersistSettingsQuietlyAsync();
         }
@@ -668,6 +717,18 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _isRemoveProjectConfirmationOpen;
         private set => SetProperty(ref _isRemoveProjectConfirmationOpen, value);
+    }
+
+    public bool IsInputArtifactPreviewOpen
+    {
+        get => _isInputArtifactPreviewOpen;
+        private set => SetProperty(ref _isInputArtifactPreviewOpen, value);
+    }
+
+    public InputArtifactViewModel? SelectedInputArtifactPreview
+    {
+        get => _selectedInputArtifactPreview;
+        private set => SetProperty(ref _selectedInputArtifactPreview, value);
     }
 
     public ProjectViewModel? ProjectPendingRemoval
@@ -965,6 +1026,42 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    public bool AutoVerifyAgentRuns
+    {
+        get => Settings.AutoVerifyAgentRuns;
+        set
+        {
+            if (Settings.AutoVerifyAgentRuns == value)
+            {
+                return;
+            }
+
+            Settings.AutoVerifyAgentRuns = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public int MaxAutoFixRounds
+    {
+        get => Settings.MaxAutoFixRounds;
+        set
+        {
+            var normalized = AdvancedSettingsService.NormalizeMaxAutoFixRounds(value);
+            if (Settings.MaxAutoFixRounds == normalized)
+            {
+                return;
+            }
+
+            Settings.MaxAutoFixRounds = normalized;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool HasProjectVerificationCommands => ProjectVerificationCommands.Count > 0;
+    public string ProjectVerificationCommandSummary => HasProjectVerificationCommands
+        ? $"{ProjectVerificationCommands.Count} 个项目验证命令"
+        : "当前项目还没有验证命令";
+
     public int RetryMaxAttempts
     {
         get => Settings.RetryMaxAttempts;
@@ -1124,7 +1221,9 @@ public sealed class MainViewModel : ObservableObject
         RebuildToolOptions();
         RebuildModelParameterOptions();
         SaveProjectToolPermissionOverrides();
+        SaveProjectVerificationCommands();
         await _repository.SaveSettingsAsync(Settings);
+        await SaveProjectsAsync();
         UpdateContextUsage();
         OnPropertyChanged(nameof(ModelName));
         OnPropertyChanged(nameof(HasApiKey));
@@ -1176,8 +1275,11 @@ public sealed class MainViewModel : ObservableObject
         if (dialog.ShowDialog() == true && Directory.Exists(dialog.SelectedPath))
         {
             SelectedProject.Project.Path = dialog.SelectedPath;
+            EnsureDefaultVerificationCommands(SelectedProject.Project);
             _ = _repository.SaveProjectsAsync(Projects.Select(p => p.Project).ToList());
             OnPropertyChanged(nameof(SelectedProject));
+            LoadProjectVerificationCommands();
+            InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
             StatusText = $"项目路径已设置为：{dialog.SelectedPath}";
         }
         else
@@ -1221,6 +1323,7 @@ public sealed class MainViewModel : ObservableObject
             Path = folderPath,
             UpdatedAt = DateTimeOffset.Now
         };
+        EnsureDefaultVerificationCommands(workspace);
 
         var projectVm = new ProjectViewModel(workspace);
         Projects.Add(projectVm);
@@ -1265,6 +1368,8 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var wasSelected = project.IsSelected;
+        _inputArtifactFileStore.DeleteStoredFiles(project.Project.InputArtifacts);
+        _inputArtifactFileStore.DeleteProjectStore(project.Project.Id);
         Projects.Remove(project);
         CloseRemoveProjectConfirmation();
 
@@ -1434,36 +1539,20 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var added = 0;
+        var optimized = 0;
         foreach (var fileName in dialog.FileNames)
         {
             try
             {
-                var fileInfo = new FileInfo(fileName);
-                if (!fileInfo.Exists)
+                var result = await AttachInputArtifactFileAsync(fileName);
+                if (result.Added)
                 {
-                    continue;
-                }
-
-                var mimeType = GuessMimeType(fileInfo.Extension);
-                var contentText = ShouldReadText(fileInfo.Extension, mimeType)
-                    ? await ReadTextPreviewAsync(fileInfo.FullName, 200_000)
-                    : "";
-                var artifact = _inputArtifactService.Create(new InputArtifactCreateRequest
-                {
-                    ProjectId = SelectedProject.Project.Id,
-                    ConversationId = SelectedConversation.Conversation.Id,
-                    FileName = fileInfo.Name,
-                    MimeType = mimeType,
-                    ContentText = contentText,
-                    Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    added++;
+                    if (result.Optimized)
                     {
-                        ["sourcePath"] = fileInfo.FullName,
-                        ["sizeBytes"] = fileInfo.Length.ToString()
+                        optimized++;
                     }
-                });
-
-                SelectedProject.Project.InputArtifacts.Add(artifact);
-                added++;
+                }
             }
             catch (Exception ex)
             {
@@ -1473,15 +1562,148 @@ public sealed class MainViewModel : ObservableObject
 
         if (added > 0)
         {
-            var pruned = _inputArtifactService.Prune(SelectedProject.Project.InputArtifacts);
+            var prunedArtifacts = _inputArtifactService.PruneRemoved(SelectedProject.Project.InputArtifacts);
+            _inputArtifactFileStore.DeleteStoredFiles(prunedArtifacts);
             SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
             await SaveProjectsAsync();
-            StatusText = pruned == 0
-                ? $"已加入 {added} 个输入附件"
-                : $"已加入 {added} 个输入附件，清理 {pruned} 个旧附件";
+            var optimizedText = optimized == 0 ? "" : $"，优化 {optimized} 张图片";
+            StatusText = prunedArtifacts.Count == 0
+                ? $"已加入 {added} 个输入附件{optimizedText}"
+                : $"已加入 {added} 个输入附件{optimizedText}，清理 {prunedArtifacts.Count} 个旧附件";
             OnPropertyChanged(nameof(CurrentInputArtifactSummary));
             RebuildCurrentInputArtifacts();
             UpdateContextUsage();
+        }
+    }
+
+    public async Task AttachClipboardImageAsync(byte[] imageBytes)
+    {
+        if (SelectedProject is null || SelectedConversation is null || imageBytes.Length == 0)
+        {
+            return;
+        }
+
+        var tempPath = Path.Combine(Path.GetTempPath(), $"AIChat-clipboard-{Guid.NewGuid():N}.png");
+        try
+        {
+            await File.WriteAllBytesAsync(tempPath, imageBytes);
+            var displayName = $"clipboard-{DateTime.Now:yyyyMMdd-HHmmss}.png";
+            var result = await AttachInputArtifactFileAsync(tempPath, displayName, "clipboard");
+            if (!result.Added)
+            {
+                return;
+            }
+
+            var prunedArtifacts = _inputArtifactService.PruneRemoved(SelectedProject.Project.InputArtifacts);
+            _inputArtifactFileStore.DeleteStoredFiles(prunedArtifacts);
+            SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
+            await SaveProjectsAsync();
+            StatusText = result.Optimized
+                ? "已从剪贴板加入截图附件并优化"
+                : "已从剪贴板加入截图附件";
+            OnPropertyChanged(nameof(CurrentInputArtifactSummary));
+            RebuildCurrentInputArtifacts();
+            UpdateContextUsage();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"剪贴板图片读取失败：{ex.Message}";
+        }
+        finally
+        {
+            TryDeleteTempFile(tempPath);
+        }
+    }
+
+    private async Task<(bool Added, bool Optimized)> AttachInputArtifactFileAsync(
+        string fileName,
+        string? displayFileName = null,
+        string? sourcePathOverride = null)
+    {
+        if (SelectedProject is null || SelectedConversation is null)
+        {
+            return (false, false);
+        }
+
+        var fileInfo = new FileInfo(fileName);
+        if (!fileInfo.Exists)
+        {
+            return (false, false);
+        }
+
+        var mimeType = GuessMimeType(fileInfo.Extension);
+        var preparedImage = InputImageAttachmentOptimizer.Prepare(fileInfo, mimeType);
+        var originalDisplayName = string.IsNullOrWhiteSpace(displayFileName)
+            ? fileInfo.Name
+            : displayFileName.Trim();
+        var attachmentFileName = preparedImage.WasOptimized
+            ? Path.GetFileNameWithoutExtension(originalDisplayName) + ".jpg"
+            : originalDisplayName;
+        var attachmentMimeType = preparedImage.MimeType;
+        var attachmentSizeBytes = preparedImage.SizeBytes;
+        var contentText = ShouldReadText(fileInfo.Extension, mimeType)
+            ? await ReadTextPreviewAsync(fileInfo.FullName, 200_000)
+            : "";
+        var fileBytes = string.IsNullOrWhiteSpace(contentText) && ShouldReadBinaryArtifact(fileInfo.Extension, mimeType, fileInfo.Length)
+            ? await File.ReadAllBytesAsync(fileInfo.FullName)
+            : [];
+        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["sourcePath"] = string.IsNullOrWhiteSpace(sourcePathOverride) ? fileInfo.FullName : sourcePathOverride,
+            ["sizeBytes"] = attachmentSizeBytes.ToString()
+        };
+        if (preparedImage.PixelWidth > 0 && preparedImage.PixelHeight > 0)
+        {
+            metadata["imageWidth"] = preparedImage.PixelWidth.ToString();
+            metadata["imageHeight"] = preparedImage.PixelHeight.ToString();
+        }
+
+        if (preparedImage.WasOptimized)
+        {
+            metadata["optimized"] = "true";
+            metadata["originalFileName"] = originalDisplayName;
+            metadata["originalSizeBytes"] = preparedImage.OriginalSizeBytes.ToString();
+        }
+
+        var artifact = _inputArtifactService.Create(new InputArtifactCreateRequest
+        {
+            ProjectId = SelectedProject.Project.Id,
+            ConversationId = SelectedConversation.Conversation.Id,
+            FileName = attachmentFileName,
+            MimeType = attachmentMimeType,
+            ContentText = contentText,
+            FileBytes = fileBytes,
+            Metadata = metadata
+        });
+
+        if (preparedImage.WasOptimized)
+        {
+            await _inputArtifactFileStore.StoreBytesAsync(
+                artifact,
+                preparedImage.OptimizedBytes,
+                preparedImage.OptimizedExtension);
+        }
+        else
+        {
+            await _inputArtifactFileStore.StoreAsync(artifact, fileInfo.FullName);
+        }
+
+        SelectedProject.Project.InputArtifacts.Add(artifact);
+        return (true, preparedImage.WasOptimized);
+    }
+
+    private static void TryDeleteTempFile(string path)
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // Clipboard image temp cleanup should not hide attachment failures.
         }
     }
 
@@ -1508,11 +1730,34 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
+        _inputArtifactFileStore.DeleteStoredFile(artifactViewModel.Artifact);
+        if (SelectedInputArtifactPreview?.Id == artifactViewModel.Id)
+        {
+            CloseInputArtifactPreview();
+        }
+
         SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
         await SaveProjectsAsync();
         StatusText = $"已移除输入附件：{artifactViewModel.FileName}";
         RebuildCurrentInputArtifacts();
         UpdateContextUsage();
+    }
+
+    private void OpenInputArtifactPreview(InputArtifactViewModel? artifact)
+    {
+        if (artifact?.IsImagePreview != true)
+        {
+            return;
+        }
+
+        SelectedInputArtifactPreview = artifact;
+        IsInputArtifactPreviewOpen = true;
+    }
+
+    private void CloseInputArtifactPreview()
+    {
+        IsInputArtifactPreviewOpen = false;
+        SelectedInputArtifactPreview = null;
     }
 
     private void RebuildCurrentInputArtifacts()
@@ -1524,15 +1769,16 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var conversationId = SelectedConversation.Conversation.Id;
-        var artifacts = SelectedProject.Project.InputArtifacts
-            .Where(artifact => string.IsNullOrWhiteSpace(artifact.ConversationId) ||
-                               string.Equals(artifact.ConversationId, conversationId, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(artifact => artifact.CreatedAt)
-            .Take(8);
+        var artifacts = GetCurrentConversationInputArtifacts()
+            .Take(8)
+            .ToList();
+        var visionDecisions = InputArtifactVisionPolicy.Evaluate(artifacts, ActiveModelSupportsVision)
+            .ToDictionary(decision => decision.Artifact.Id, StringComparer.OrdinalIgnoreCase);
         foreach (var artifact in artifacts)
         {
-            CurrentInputArtifacts.Add(new InputArtifactViewModel(artifact));
+            CurrentInputArtifacts.Add(visionDecisions.TryGetValue(artifact.Id, out var decision)
+                ? new InputArtifactViewModel(artifact, decision)
+                : new InputArtifactViewModel(artifact, ActiveModelSupportsVision));
         }
 
         RaiseInputArtifactProperties();
@@ -1543,6 +1789,69 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CurrentInputArtifactSummary));
         OnPropertyChanged(nameof(HasCurrentInputArtifacts));
         RemoveInputArtifactCommand.RaiseCanExecuteChanged();
+    }
+
+    private InputArtifactDeliverySummary BuildCurrentInputArtifactDeliverySummary(bool modelSupportsVision)
+    {
+        if (SelectedProject is null || SelectedConversation is null)
+        {
+            return InputArtifactDeliverySummary.Empty;
+        }
+
+        var artifacts = GetCurrentConversationInputArtifacts().ToList();
+        if (artifacts.Count == 0)
+        {
+            return InputArtifactDeliverySummary.Empty;
+        }
+
+        var decisions = InputArtifactVisionPolicy.Evaluate(artifacts, modelSupportsVision);
+        var imageCount = decisions.Count(decision => decision.IsImage);
+        var sendableImageCount = decisions.Count(decision => decision.CanSend);
+        var referencedImageCount = imageCount - sendableImageCount;
+        var nonImageCount = artifacts.Count - imageCount;
+
+        var parts = new List<string> { $"{artifacts.Count} 个输入附件" };
+        if (sendableImageCount > 0)
+        {
+            parts.Add($"{sendableImageCount} 张图片将发送");
+        }
+
+        if (referencedImageCount > 0)
+        {
+            parts.Add($"{referencedImageCount} 张图片仅引用");
+        }
+
+        if (nonImageCount > 0 && imageCount > 0)
+        {
+            parts.Add($"{nonImageCount} 个文本/文件引用");
+        }
+
+        if (imageCount == 0)
+        {
+            parts.Add("已加入上下文");
+        }
+
+        return new InputArtifactDeliverySummary(
+            artifacts.Count,
+            imageCount,
+            sendableImageCount,
+            referencedImageCount,
+            string.Join(" · ", parts));
+    }
+
+    private IReadOnlyList<InputArtifact> GetCurrentConversationInputArtifacts()
+    {
+        if (SelectedProject is null || SelectedConversation is null)
+        {
+            return [];
+        }
+
+        var conversationId = SelectedConversation.Conversation.Id;
+        return SelectedProject.Project.InputArtifacts
+            .Where(artifact => string.IsNullOrWhiteSpace(artifact.ConversationId) ||
+                               string.Equals(artifact.ConversationId, conversationId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(artifact => artifact.CreatedAt)
+            .ToList();
     }
 
     private async Task RenameConversationAsync(ConversationViewModel conversation)
@@ -1566,6 +1875,20 @@ public sealed class MainViewModel : ObservableObject
         return mimeType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) ||
                ext is "txt" or "md" or "json" or "xml" or "yaml" or "yml" or "csv" or "tsv" or "log" or
                    "cs" or "xaml" or "csproj" or "sln" or "props" or "targets";
+    }
+
+    private static bool ShouldReadBinaryArtifact(string extension, string mimeType, long sizeBytes)
+    {
+        const long maxExtractBytes = 8 * 1024 * 1024;
+        if (sizeBytes <= 0 || sizeBytes > maxExtractBytes)
+        {
+            return false;
+        }
+
+        var ext = extension.TrimStart('.').ToLowerInvariant();
+        return ext is "pdf" or "docx" or "xlsx" ||
+               mimeType.Contains("pdf", StringComparison.OrdinalIgnoreCase) ||
+               mimeType.Contains("officedocument", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<string> ReadTextPreviewAsync(string path, int maxChars)
@@ -1725,11 +2048,16 @@ public sealed class MainViewModel : ObservableObject
         project.Conversations.Remove(conversation);
         project.VisibleConversations.Remove(conversation);
         project.Project.Conversations.Remove(conversation.Conversation);
+        var removedArtifacts = _inputArtifactService.RemoveForConversation(
+            project.Project.InputArtifacts,
+            conversation.Conversation.Id);
+        _inputArtifactFileStore.DeleteStoredFiles(removedArtifacts);
         if (SelectedConversation == conversation)
         {
             SelectConversation(project.Conversations.First());
         }
 
+        RebuildCurrentInputArtifacts();
         await SaveProjectsAsync();
         StatusText = "对话已删除";
     }
@@ -2434,6 +2762,7 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
+        var inputArtifactDelivery = BuildCurrentInputArtifactDeliverySummary(effectiveSettings.ModelSupportsVision);
         var text = DraftMessage.Trim();
         DraftMessage = "";
         var continuedFromRunId = _pendingContinuedFromRunId;
@@ -2478,14 +2807,7 @@ public sealed class MainViewModel : ObservableObject
             Model = effectiveSettings.Model,
             CreatedAt = DateTimeOffset.Now,
             Status = "进行中",
-            RequestJson = SerializeJson(AgentRequestFactory.CreateSnapshot(
-                SelectedConversation.Conversation,
-                assistantMessage.Id,
-                effectiveSettings,
-                Settings,
-                ToolOptions
-                    .Where(tool => tool.IsEnabled)
-                    .Select(tool => tool.Id)))
+            RequestJson = "请求正在构建..."
         };
         SelectedConversation.AddCallDetail(callDetail);
 
@@ -2497,7 +2819,9 @@ public sealed class MainViewModel : ObservableObject
 
         IsSending = true;
         IsStopping = false;
-        StatusText = "正在连接模型...";
+        StatusText = inputArtifactDelivery.TotalCount > 0
+            ? $"正在连接模型... {inputArtifactDelivery.SummaryText}"
+            : "正在连接模型...";
         _sendCts = new CancellationTokenSource();
         var workspaceSnapshot = await CaptureWorkspaceSnapshotAsync(_sendCts.Token);
         var rawResponseEvents = new List<string>();
@@ -2522,6 +2846,14 @@ public sealed class MainViewModel : ObservableObject
             RequestToolApprovalAsync = RequestToolApprovalAsync
         });
         var request = requestBuild.ChatRequest;
+        callDetail.RequestJson = SerializeJson(AgentRequestFactory.CreateSnapshot(
+            request,
+            effectiveSettings,
+            Settings,
+            ToolOptions
+                .Where(tool => tool.IsEnabled)
+                .Select(tool => tool.Id)));
+        SelectedConversation.RefreshCallDetail(callDetail);
 
         try
         {
@@ -2811,7 +3143,12 @@ public sealed class MainViewModel : ObservableObject
                                     RebuildAgentRunHistoryIfOpen();
                                 }
 
-                                AgentStatusPhase = agentEvent.Run?.Status == AgentRunStatus.Completed ? "已完成" : "已结束";
+                                AgentStatusPhase = agentEvent.Run?.Status switch
+                                {
+                                    AgentRunStatus.Completed => "已完成",
+                                    AgentRunStatus.BudgetExceeded => "已暂停",
+                                    _ => "已结束"
+                                };
                                 AgentStatusTool = "";
                                 OnPropertyChanged(nameof(HasAgentStatus));
                             });
@@ -2820,6 +3157,7 @@ public sealed class MainViewModel : ObservableObject
                                 var auditType = runStatus switch
                                 {
                                     AgentRunStatus.Completed => AuditEventType.AgentRunCompleted,
+                                    AgentRunStatus.BudgetExceeded => AuditEventType.AgentRunCancelled,
                                     AgentRunStatus.Failed => AuditEventType.AgentRunFailed,
                                     AgentRunStatus.Cancelled => AuditEventType.AgentRunCancelled,
                                     _ => AuditEventType.AgentRunCompleted
@@ -3220,6 +3558,8 @@ public sealed class MainViewModel : ObservableObject
     {
         AdvancedSettingsService.Normalize(Settings);
         OnPropertyChanged(nameof(AgentMaxToolRounds));
+        OnPropertyChanged(nameof(AutoVerifyAgentRuns));
+        OnPropertyChanged(nameof(MaxAutoFixRounds));
         OnPropertyChanged(nameof(RetryMaxAttempts));
         OnPropertyChanged(nameof(MaxOutputTokens));
         OnPropertyChanged(nameof(ConversationContextRatio));
@@ -3302,6 +3642,151 @@ public sealed class MainViewModel : ObservableObject
 
         project.ProjectToolPermissionModes = ToolSettingsService.CreateProjectOverrides(
             ProjectToolPermissionOverrides.Select(o => (o.ToolId, o.PermissionMode)));
+    }
+
+    private void LoadProjectVerificationCommands()
+    {
+        foreach (var command in ProjectVerificationCommands)
+        {
+            command.PropertyChanged -= ProjectVerificationCommand_PropertyChanged;
+        }
+
+        ProjectVerificationCommands.Clear();
+        var project = SelectedProject?.Project;
+        if (project is null)
+        {
+            RaiseProjectVerificationCommandChanges();
+            return;
+        }
+
+        if (EnsureDefaultVerificationCommands(project))
+        {
+            _ = SaveProjectsAsync();
+        }
+        foreach (var command in project.VerificationCommands)
+        {
+            var vm = new ProjectVerificationCommandViewModel(command);
+            vm.PropertyChanged += ProjectVerificationCommand_PropertyChanged;
+            ProjectVerificationCommands.Add(vm);
+        }
+
+        RaiseProjectVerificationCommandChanges();
+    }
+
+    private void ProjectVerificationCommand_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        SaveProjectVerificationCommands();
+        RaiseProjectVerificationCommandChanges();
+    }
+
+    private void SaveProjectVerificationCommands()
+    {
+        var project = SelectedProject?.Project;
+        if (project is null)
+        {
+            return;
+        }
+
+        project.VerificationCommands = ProjectVerificationCommands
+            .Select(command => command.Command)
+            .Where(command => !string.IsNullOrWhiteSpace(command.Name) ||
+                              !string.IsNullOrWhiteSpace(command.Command) ||
+                              !string.IsNullOrWhiteSpace(command.WorkingDirectory))
+            .ToList();
+        project.UpdatedAt = DateTimeOffset.Now;
+    }
+
+    private void AddProjectVerificationCommand()
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        var command = new ProjectVerificationCommand
+        {
+            Name = "验证",
+            Command = "dotnet test",
+            WorkingDirectory = FindDefaultVerificationTarget(SelectedProject.Path),
+            TimeoutSeconds = 180
+        };
+        var vm = new ProjectVerificationCommandViewModel(command);
+        vm.PropertyChanged += ProjectVerificationCommand_PropertyChanged;
+        ProjectVerificationCommands.Add(vm);
+        SaveProjectVerificationCommands();
+        RaiseProjectVerificationCommandChanges();
+    }
+
+    private void RemoveProjectVerificationCommand(ProjectVerificationCommandViewModel? command)
+    {
+        if (command is null)
+        {
+            return;
+        }
+
+        command.PropertyChanged -= ProjectVerificationCommand_PropertyChanged;
+        ProjectVerificationCommands.Remove(command);
+        SaveProjectVerificationCommands();
+        RaiseProjectVerificationCommandChanges();
+    }
+
+    private void InferProjectVerificationCommands()
+    {
+        var project = SelectedProject?.Project;
+        if (project is null)
+        {
+            return;
+        }
+
+        var suggestions = new ProjectInitializer().SuggestVerificationCommands(project.Path);
+        if (suggestions.Count == 0)
+        {
+            StatusText = "没有从当前项目识别到可用验证命令";
+            return;
+        }
+
+        project.VerificationCommands = suggestions.ToList();
+        LoadProjectVerificationCommands();
+        StatusText = $"已推断 {suggestions.Count} 个验证命令";
+    }
+
+    private static bool EnsureDefaultVerificationCommands(ProjectWorkspace project)
+    {
+        if (project.VerificationCommands.Count > 0 ||
+            string.IsNullOrWhiteSpace(project.Path) ||
+            !Directory.Exists(project.Path))
+        {
+            return false;
+        }
+
+        project.VerificationCommands = new ProjectInitializer()
+            .SuggestVerificationCommands(project.Path)
+            .ToList();
+        return project.VerificationCommands.Count > 0;
+    }
+
+    private static string FindDefaultVerificationTarget(string projectPath)
+    {
+        if (string.IsNullOrWhiteSpace(projectPath) || !Directory.Exists(projectPath))
+        {
+            return "";
+        }
+
+        var target = Directory.GetFiles(projectPath, "*.sln", SearchOption.TopDirectoryOnly)
+            .Concat(Directory.GetFiles(projectPath, "*.slnx", SearchOption.TopDirectoryOnly))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        return string.IsNullOrWhiteSpace(target) ? "" : Path.GetFileName(target);
+    }
+
+    private void RaiseProjectVerificationCommandChanges()
+    {
+        OnPropertyChanged(nameof(ProjectVerificationCommands));
+        OnPropertyChanged(nameof(HasProjectVerificationCommands));
+        OnPropertyChanged(nameof(ProjectVerificationCommandSummary));
+        AddProjectVerificationCommandCommand.RaiseCanExecuteChanged();
+        RemoveProjectVerificationCommandCommand.RaiseCanExecuteChanged();
+        InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
     }
 
     private void AddProjectToolOverride()
@@ -3392,6 +3877,8 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasModelParameterOptions));
         OnPropertyChanged(nameof(ActiveModelCapabilitySummary));
         OnPropertyChanged(nameof(ActiveModelSupportsTools));
+        OnPropertyChanged(nameof(ActiveModelSupportsVision));
+        OnPropertyChanged(nameof(SelectedConfiguredProviderSupportsVisionOverride));
     }
 
     private async Task AddConfiguredProviderAsync()
@@ -3471,7 +3958,9 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectedConfiguredProviderId));
         OnPropertyChanged(nameof(ActiveModelOptions));
         OnPropertyChanged(nameof(SelectedActiveModelId));
+        OnPropertyChanged(nameof(SelectedConfiguredProviderSupportsVisionOverride));
         RebuildModelParameterOptions();
+        RebuildCurrentInputArtifacts();
         OnPropertyChanged(nameof(ModelName));
         OnPropertyChanged(nameof(HasApiKey));
         RemoveConfiguredProviderCommand.RaiseCanExecuteChanged();
@@ -3493,4 +3982,14 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+}
+
+internal sealed record InputArtifactDeliverySummary(
+    int TotalCount,
+    int ImageCount,
+    int SendableImageCount,
+    int ReferencedImageCount,
+    string SummaryText)
+{
+    public static InputArtifactDeliverySummary Empty { get; } = new(0, 0, 0, 0, "");
 }
