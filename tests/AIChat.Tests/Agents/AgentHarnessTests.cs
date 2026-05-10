@@ -99,7 +99,8 @@ public sealed class AgentHarnessTests
             new AgentRunner(runnerService, new AgentToolCatalog([])),
             new AgentPlanner(plannerService));
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -141,7 +142,8 @@ public sealed class AgentHarnessTests
             new AgentRunner(runnerService, new AgentToolCatalog([])),
             new AgentPlanner(plannerService));
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -199,7 +201,8 @@ public sealed class AgentHarnessTests
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -388,7 +391,7 @@ public sealed class AgentHarnessTests
         }
 
         var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Equal(AgentRunStatus.Failed, run.Status);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.SubAgentCompleted &&
                                        item.SubAgentRun?.Status == "Failed");
         var subAgentRun = Assert.Single(run.SubAgentRuns);
@@ -603,7 +606,8 @@ public sealed class AgentHarnessTests
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
             new AgentToolCatalog([])));
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -618,14 +622,18 @@ public sealed class AgentHarnessTests
                            Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
                        }))
         {
+            events.Add(item);
         }
 
         var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Failed, run.Status);
         Assert.True(run.RequiresProjectMutation);
         Assert.False(run.MutationToolSucceeded);
         Assert.Equal("任务看起来需要修改项目，但本轮没有记录到成功的修改工具。", run.CompletionReason);
         Assert.Contains("项目修改：未记录修改工具", run.FinalValidationSummary);
         Assert.Contains("实际调用写入或编辑工具", run.RecoverySuggestion);
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
+                                       item.Content.Contains("任务未完成", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -677,6 +685,54 @@ public sealed class AgentHarnessTests
         Assert.Contains("工具审批：无拒绝", run.FinalValidationSummary);
         Assert.Contains("验证：1/1 通过", run.FinalValidationSummary);
         Assert.Contains("复查并继续", run.RecoverySuggestion);
+    }
+
+    [Fact]
+    public async Task RunAsync_FailsRunWhenVerificationToolFails()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "run_test",
+            ArgumentsJson = "{}"
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new FakeFailingVerificationTool()])));
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "verify",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Failed, run.Status);
+        Assert.Contains("验证：0/1 通过", run.FinalValidationSummary);
+        Assert.Contains("上一轮验证未全部通过", run.RecoverySuggestion);
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
+                                       item.Content.Contains("验证未通过", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1073,6 +1129,52 @@ public sealed class AgentHarnessTests
                   "exitCode": 0,
                   "timedOut": false,
                   "output": "Passed"
+                }
+                """
+            });
+        }
+    }
+
+    private sealed class FakeFailingVerificationTool : IAgentTool
+    {
+        public string Id => "run_test";
+        public AgentToolRisk Risk => AgentToolRisk.Shell;
+        public ChatToolDefinition Definition { get; } = new()
+        {
+            Name = "run_test",
+            Description = "fake failing test",
+            ParametersJson = "{}"
+        };
+
+        public Task<AgentToolPreview> PreviewAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "run fake failing tests",
+                PreviewText = "dotnet test"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolResult
+            {
+                ToolName = Id,
+                IsError = true,
+                Content = """
+                {
+                  "command": "dotnet test",
+                  "exitCode": 1,
+                  "timedOut": false,
+                  "output": "Failed"
                 }
                 """
             });

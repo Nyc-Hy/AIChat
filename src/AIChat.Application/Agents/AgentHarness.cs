@@ -398,8 +398,23 @@ public sealed class AgentHarness
                     CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
+                    var finalStatus = DetermineFinalStatus(run);
+                    var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
-                    yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
+                    if (!string.Equals(finalContent, assistantContent, StringComparison.Ordinal))
+                    {
+                        var correction = CreateIncompleteRunUserMessage(run);
+                        yield return new AgentHarnessEvent
+                        {
+                            Type = AgentHarnessEventType.ContentDelta,
+                            Run = run,
+                            Content = string.IsNullOrWhiteSpace(assistantContent)
+                                ? correction
+                                : Environment.NewLine + Environment.NewLine + correction
+                        };
+                    }
+
+                    yield return CreatePhaseChanged(run, CompleteRun(run, finalStatus));
                     // Use steps count to derive the final step number; the auto-verify
                     // loop may have added intermediate steps that overflow stepNumber.
                     var finalStep = AddCompletedStep(
@@ -408,7 +423,7 @@ public sealed class AgentHarness
                         AgentStepType.Final,
                         "生成最终回复",
                         "",
-                        assistantContent);
+                        finalContent);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.RunCompleted,
@@ -420,6 +435,57 @@ public sealed class AgentHarness
         }
 
         yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
+    }
+
+    private static AgentRunStatus DetermineFinalStatus(AgentRun run)
+    {
+        if (run.ToolBudgetExceeded)
+        {
+            return AgentRunStatus.BudgetExceeded;
+        }
+
+        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
+        {
+            return AgentRunStatus.Failed;
+        }
+
+        if (run.Verifications.Any(verification => !verification.IsSuccess))
+        {
+            return AgentRunStatus.Failed;
+        }
+
+        return AgentRunStatus.Completed;
+    }
+
+    private static string BuildFinalContent(string assistantContent, AgentRun run, AgentRunStatus status)
+    {
+        if (status == AgentRunStatus.Completed)
+        {
+            return assistantContent;
+        }
+
+        var correction = CreateIncompleteRunUserMessage(run);
+        return string.IsNullOrWhiteSpace(assistantContent)
+            ? correction
+            : assistantContent.TrimEnd() + Environment.NewLine + Environment.NewLine + correction;
+    }
+
+    private static string CreateIncompleteRunUserMessage(AgentRun run)
+    {
+        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
+        {
+            return "任务未完成：这看起来是修改类任务，但本轮没有记录到成功的写入或编辑工具调用。";
+        }
+
+        if (run.Verifications.Any(verification => !verification.IsSuccess))
+        {
+            var failed = run.Verifications.First(verification => !verification.IsSuccess);
+            return $"任务未完成：验证未通过（{failed.Command}，退出码 {failed.ExitCode}）。";
+        }
+
+        return string.IsNullOrWhiteSpace(run.CompletionReason)
+            ? "任务未完成，需要继续处理。"
+            : $"任务未完成：{run.CompletionReason}";
     }
 
     private static bool RequiresProjectMutation(string goal)
