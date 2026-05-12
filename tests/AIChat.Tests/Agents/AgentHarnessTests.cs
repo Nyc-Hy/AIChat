@@ -763,6 +763,40 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public async Task RunAsync_CompletesReadOnlyGoalWithNegatedMutationInstruction()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var goal = "请阅读当前项目的目录结构，简要说明 src 和 tests 目录分别负责什么。不需要修改文件。";
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([new ChatDelta { Content = "src 包含应用代码，tests 包含测试代码。" }]),
+            new AgentToolCatalog([])));
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = goal,
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = goal }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.False(run.RequiresProjectMutation);
+        Assert.DoesNotContain("任务未完成", events.Select(item => item.Content));
+    }
+
+    [Fact]
     public async Task RunAsync_RecordsApprovalGuardrailsAndFinalValidation()
     {
         var conversation = new Conversation { Id = "conversation-1" };

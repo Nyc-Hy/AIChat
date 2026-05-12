@@ -62,7 +62,7 @@ public sealed class AgentHarness
             WorkspaceChangeCountAtStart = request.WorkspaceChangeCountAtStart,
             WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
             MaxToolRounds = request.Context.MaxToolRounds,
-            RequiresProjectMutation = RequiresProjectMutation(request.Goal),
+            RequiresProjectMutation = AgentTaskIntent.RequiresProjectMutation(request.Goal),
             ContinuedFromRunId = request.ContinuedFromRunId,
             StartedAt = DateTimeOffset.Now
         };
@@ -573,22 +573,6 @@ public sealed class AgentHarness
         return string.IsNullOrWhiteSpace(run.CompletionReason)
             ? "任务未完成，需要继续处理。"
             : $"任务未完成：{run.CompletionReason}";
-    }
-
-    private static bool RequiresProjectMutation(string goal)
-    {
-        if (string.IsNullOrWhiteSpace(goal))
-        {
-            return false;
-        }
-
-        var mutationWords = new[]
-        {
-            "创建", "新建", "生成", "实现", "写一个", "做一个", "加一个", "新增",
-            "修改", "改成", "改为", "替换", "删除", "修复", "优化", "重构",
-            "create", "implement", "write", "modify", "change", "replace", "fix", "update", "add"
-        };
-        return mutationWords.Any(word => goal.Contains(word, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void RecordMutationGuardrail(

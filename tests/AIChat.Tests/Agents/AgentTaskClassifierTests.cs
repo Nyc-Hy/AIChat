@@ -15,6 +15,16 @@ public sealed class AgentTaskClassifierTests
     }
 
     [Fact]
+    public void Classify_TreatsNegatedMutationInstructionAsReadOnly()
+    {
+        var result = new AgentTaskClassifier().Classify(
+            "请阅读当前项目的目录结构，简要说明 src 和 tests 目录分别负责什么。不需要修改文件。",
+            new AgentRunContext { ProjectPath = Environment.CurrentDirectory });
+
+        Assert.Equal(AgentTaskComplexity.Simple, result);
+    }
+
+    [Fact]
     public void Classify_TreatsMutationAsStandard()
     {
         var result = new AgentTaskClassifier().Classify(

@@ -20,7 +20,7 @@ public sealed class AgentTaskClassifier
             return AgentTaskComplexity.Simple;
         }
 
-        if (RequiresProjectMutation(normalized))
+        if (AgentTaskIntent.RequiresProjectMutation(normalized))
         {
             return AgentTaskComplexity.Standard;
         }
@@ -46,17 +46,6 @@ public sealed class AgentTaskClassifier
             "explain", "describe", "what is", "why", "summarize"
         };
         return readOnlyHints.Any(hint => goal.Contains(hint, StringComparison.OrdinalIgnoreCase)) &&
-               !RequiresProjectMutation(goal);
-    }
-
-    private static bool RequiresProjectMutation(string goal)
-    {
-        var mutationWords = new[]
-        {
-            "创建", "新建", "生成", "实现", "写一个", "做一个", "加一个", "新增",
-            "修改", "改成", "改为", "替换", "删除", "修复", "优化", "重构",
-            "create", "implement", "write", "modify", "change", "replace", "fix", "update", "add"
-        };
-        return mutationWords.Any(word => goal.Contains(word, StringComparison.OrdinalIgnoreCase));
+               !AgentTaskIntent.RequiresProjectMutation(goal);
     }
 }

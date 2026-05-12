@@ -319,13 +319,7 @@ public sealed class AgentRunner
             return false;
         }
 
-        var mutationWords = new[]
-        {
-            "创建", "新建", "生成", "实现", "写一个", "做一个", "加一个", "新增",
-            "修改", "改成", "改为", "替换", "删除", "修复", "优化", "重构",
-            "create", "implement", "write", "modify", "change", "replace", "fix", "update", "add"
-        };
-        return mutationWords.Any(word => latestUser.Contains(word, StringComparison.OrdinalIgnoreCase));
+        return AgentTaskIntent.RequiresProjectMutation(latestUser);
     }
 
     private static ChatMessage CloneMessage(ChatMessage message)
