@@ -56,6 +56,8 @@ public sealed partial class MainViewModel
         CopyAgentRunChangeSummaryCommand = new RelayCommand(parameter => CopyAgentRunChangeSummary((ChatMessageViewModel)parameter!), CanOperateAgentRunChanges);
         CopySelectedAgentRunSummaryCommand = new RelayCommand(_ => CopySelectedAgentRunSummary(), _ => SelectedAgentRunDetails is not null);
         CopySelectedAgentRunReviewPacketCommand = new RelayCommand(_ => CopySelectedAgentRunReviewPacket(), _ => SelectedAgentRunDetails is not null);
+        AcceptSelectedAgentRunCommand = new RelayCommand(async _ => await AcceptSelectedAgentRunAsync(), _ => SelectedAgentRunDetails is not null && !IsSending);
+        RequestChangesSelectedAgentRunCommand = new RelayCommand(async _ => await RequestChangesSelectedAgentRunAsync(), _ => SelectedAgentRunDetails is not null && !IsSending);
         RetrySelectedAgentRunCommand = new RelayCommand(_ => RetrySelectedAgentRun(), _ => SelectedAgentRunDetails?.CanRetry == true && !IsSending);
         ContinueAgentRunCommand = new RelayCommand(async parameter => await ContinueAgentRunAsync((AgentRunHistoryItemViewModel)parameter!), parameter => parameter is AgentRunHistoryItemViewModel { CanContinue: true } && !IsSending);
         ContinueSelectedAgentRunCommand = new RelayCommand(async _ => await ContinueSelectedAgentRunAsync(), _ => SelectedAgentRunDetails?.CanContinue == true && !IsSending);

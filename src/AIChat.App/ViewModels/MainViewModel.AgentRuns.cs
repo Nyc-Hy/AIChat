@@ -55,6 +55,8 @@ public sealed partial class MainViewModel
                 OnPropertyChanged(nameof(AgentRunDetailsTitle));
                 CopySelectedAgentRunSummaryCommand.RaiseCanExecuteChanged();
                 CopySelectedAgentRunReviewPacketCommand.RaiseCanExecuteChanged();
+                AcceptSelectedAgentRunCommand.RaiseCanExecuteChanged();
+                RequestChangesSelectedAgentRunCommand.RaiseCanExecuteChanged();
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
                 ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
                 _ = LoadAuditEventsAsync(value);
@@ -473,6 +475,41 @@ public sealed partial class MainViewModel
 
         System.Windows.Clipboard.SetText(SelectedAgentRunDetails.ReviewPacket);
         StatusText = "Agent Run 复盘包已复制";
+    }
+
+    private async Task AcceptSelectedAgentRunAsync()
+    {
+        if (SelectedAgentRunDetails is null)
+        {
+            return;
+        }
+
+        SelectedAgentRunDetails.MarkAcceptance(AIChat.Domain.Chat.AgentRunAcceptanceStatus.Accepted, "用户确认验收通过");
+        StatusText = "已标记本轮 Agent Run 验收通过";
+        RebuildAgentRunHistoryIfOpen();
+        await SaveProjectsAsync();
+    }
+
+    private async Task RequestChangesSelectedAgentRunAsync()
+    {
+        if (SelectedAgentRunDetails is null)
+        {
+            return;
+        }
+
+        var note = TextPromptDialog.Show(
+            System.Windows.Application.Current.MainWindow,
+            "需要修改",
+            "请根据验收清单继续修复未满足项");
+        if (note is null)
+        {
+            return;
+        }
+
+        SelectedAgentRunDetails.MarkAcceptance(AIChat.Domain.Chat.AgentRunAcceptanceStatus.NeedsChanges, note);
+        StatusText = "已标记本轮 Agent Run 需要修改";
+        RebuildAgentRunHistoryIfOpen();
+        await SaveProjectsAsync();
     }
 
     private static bool CanOperateAgentRunChanges(object? parameter)

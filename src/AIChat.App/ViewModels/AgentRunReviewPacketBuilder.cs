@@ -20,6 +20,7 @@ public static class AgentRunReviewPacketBuilder
             $"质量：{run.QualityScoreText} · {run.QualitySummary}",
             $"策略建议：{run.StrategySuggestion}",
             $"验收：{run.SmokeTestSummary}",
+            $"用户验收：{run.AcceptanceStatusText} · {run.AcceptanceNote}",
             $"调试：{run.ExecutionModeText} · {run.TaskComplexityText} · Planner {run.PlannerUsageText} · Explorer {run.ExplorerUsageText}",
             $"计划：{run.PlanSummary}",
             $"步骤：{run.StepCount}",
@@ -138,6 +139,10 @@ public static class AgentRunReviewPacketBuilder
         lines.AddRange(run.SmokeTests.Select(item => $"- [{item.StatusText}] {item.Title}: {item.Detail}"));
 
         lines.AddRange([
+            "",
+            "## User Acceptance",
+            $"{run.AcceptanceStatusText} at {run.AcceptanceReviewedAtText}",
+            run.AcceptanceNote,
             "",
             run.DebugSummary,
             "",

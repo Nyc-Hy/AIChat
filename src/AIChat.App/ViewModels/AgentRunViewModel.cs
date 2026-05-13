@@ -186,6 +186,18 @@ public sealed class AgentRunViewModel : ObservableObject
                 : $"验收：{needsReview} 项待确认";
         }
     }
+    public AgentRunAcceptanceStatus AcceptanceStatus => _run.AcceptanceStatus;
+    public string AcceptanceStatusText => _run.AcceptanceStatus switch
+    {
+        AgentRunAcceptanceStatus.Accepted => "验收通过",
+        AgentRunAcceptanceStatus.NeedsChanges => "需要修改",
+        _ => "未验收"
+    };
+    public string AcceptanceNote => string.IsNullOrWhiteSpace(_run.AcceptanceNote) ? "无备注" : _run.AcceptanceNote;
+    public bool HasAcceptanceNote => !string.IsNullOrWhiteSpace(_run.AcceptanceNote);
+    public string AcceptanceReviewedAtText => _run.AcceptanceReviewedAt is null
+        ? "未记录"
+        : _run.AcceptanceReviewedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
     public string CompactOutcomeText => _run.Status switch
     {
         AgentRunStatus.Running => string.IsNullOrWhiteSpace(CurrentPhaseSummary) ? "正在处理" : CurrentPhaseSummary,
@@ -286,6 +298,20 @@ public sealed class AgentRunViewModel : ObservableObject
         : string.Join(Environment.NewLine, ChangedPaths.Select(path => $"- {path}"));
     public string RunSummary => AgentRunReviewPacketBuilder.BuildRunSummary(this);
     public string ReviewPacket => AgentRunReviewPacketBuilder.BuildReviewPacket(this);
+
+    public void MarkAcceptance(AgentRunAcceptanceStatus status, string note = "")
+    {
+        _run.AcceptanceStatus = status;
+        _run.AcceptanceNote = note.Trim();
+        _run.AcceptanceReviewedAt = DateTimeOffset.Now;
+        OnPropertyChanged(nameof(AcceptanceStatus));
+        OnPropertyChanged(nameof(AcceptanceStatusText));
+        OnPropertyChanged(nameof(AcceptanceNote));
+        OnPropertyChanged(nameof(HasAcceptanceNote));
+        OnPropertyChanged(nameof(AcceptanceReviewedAtText));
+        OnPropertyChanged(nameof(RunSummary));
+        OnPropertyChanged(nameof(ReviewPacket));
+    }
 
     public AgentStepViewModel AddStep(AgentStep step)
     {

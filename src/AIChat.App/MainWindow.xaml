@@ -1522,6 +1522,20 @@
                                     Margin="0,0,10,0"
                                     Style="{StaticResource SubtleButtonStyle}" />
                             <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.AcceptSelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="验收通过"
+                                    Width="88"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.RequestChangesSelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="需要修改"
+                                    Width="88"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource SubtleButtonStyle}" />
+                            <Button DockPanel.Dock="Right"
                                     Command="{Binding DataContext.ContinueSelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                     Content="继续任务"
                                     Width="86"
@@ -1632,6 +1646,12 @@
                                             <TextBox Text="{Binding SmokeTestSummary, Mode=OneWay}"
                                                      Style="{StaticResource SelectableTextBoxStyle}"
                                                      Margin="0,5,0,0" />
+                                            <TextBox Text="{Binding AcceptanceStatusText, StringFormat=用户验收：{0}, Mode=OneWay}"
+                                                     Style="{StaticResource SelectableTextBoxStyle}"
+                                                     Margin="0,3,0,0" />
+                                            <TextBox Text="{Binding AcceptanceNote, StringFormat=备注：{0}, Mode=OneWay}"
+                                                     Style="{StaticResource SelectableTextBoxStyle}"
+                                                     Margin="0,3,0,0" />
                                             <ItemsControl ItemsSource="{Binding SmokeTests}"
                                                           Margin="0,8,0,0">
                                                 <ItemsControl.ItemTemplate>

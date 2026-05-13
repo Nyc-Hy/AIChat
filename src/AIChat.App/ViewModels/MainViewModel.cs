@@ -179,6 +179,8 @@ public sealed partial class MainViewModel : ObservableObject
     public RelayCommand CopyAgentRunChangeSummaryCommand { get; private set; } = null!;
     public RelayCommand CopySelectedAgentRunSummaryCommand { get; private set; } = null!;
     public RelayCommand CopySelectedAgentRunReviewPacketCommand { get; private set; } = null!;
+    public RelayCommand AcceptSelectedAgentRunCommand { get; private set; } = null!;
+    public RelayCommand RequestChangesSelectedAgentRunCommand { get; private set; } = null!;
     public RelayCommand RetrySelectedAgentRunCommand { get; private set; } = null!;
     public RelayCommand ContinueAgentRunCommand { get; private set; } = null!;
     public RelayCommand ContinueSelectedAgentRunCommand { get; private set; } = null!;

@@ -97,6 +97,9 @@ public sealed class AgentRunSerializationTests
                     RecoverySuggestion = "继续处理：test",
                     CheckpointSummary = "目标：test",
                     CheckpointArtifactRefs = ["read_file:tool_result:artifact-1"],
+                    AcceptanceStatus = AgentRunAcceptanceStatus.Accepted,
+                    AcceptanceNote = "用户确认通过",
+                    AcceptanceReviewedAt = new DateTimeOffset(2026, 5, 1, 9, 2, 0, TimeSpan.Zero),
                     CurrentPhaseSummary = "running tests",
                     Status = AgentRunStatus.Completed,
                     StructuredPlan = new AgentStructuredPlan
@@ -298,6 +301,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
         Assert.Equal("目标：test", roundTripped.AgentRuns[0].CheckpointSummary);
         Assert.Equal(["read_file:tool_result:artifact-1"], roundTripped.AgentRuns[0].CheckpointArtifactRefs);
+        Assert.Equal(AgentRunAcceptanceStatus.Accepted, roundTripped.AgentRuns[0].AcceptanceStatus);
+        Assert.Equal("用户确认通过", roundTripped.AgentRuns[0].AcceptanceNote);
+        Assert.Equal(new DateTimeOffset(2026, 5, 1, 9, 2, 0, TimeSpan.Zero), roundTripped.AgentRuns[0].AcceptanceReviewedAt);
         Assert.Equal("running tests", roundTripped.AgentRuns[0].CurrentPhaseSummary);
         Assert.Single(roundTripped.AgentRuns[0].PhaseHistory);
         Assert.Equal("verifying", roundTripped.AgentRuns[0].PhaseHistory[0].Phase);

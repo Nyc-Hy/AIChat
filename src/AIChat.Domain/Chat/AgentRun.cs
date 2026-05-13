@@ -44,6 +44,9 @@ public sealed class AgentRun
     public List<string> CheckpointArtifactRefs { get; set; } = [];
     public string ContinuedFromRunId { get; set; } = "";
     public string RetriedFromRunId { get; set; } = "";
+    public AgentRunAcceptanceStatus AcceptanceStatus { get; set; } = AgentRunAcceptanceStatus.Unreviewed;
+    public string AcceptanceNote { get; set; } = "";
+    public DateTimeOffset? AcceptanceReviewedAt { get; set; }
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;
     public DateTimeOffset? CompletedAt { get; set; }
