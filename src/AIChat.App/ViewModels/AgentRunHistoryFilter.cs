@@ -8,6 +8,7 @@ public static class AgentRunHistoryFilter
     [
         new() { Id = "all", Name = "全部" },
         new() { Id = "retryable", Name = "可重试" },
+        new() { Id = "needs_changes", Name = "需修改" },
         new() { Id = "failed", Name = "失败/停止" },
         new() { Id = "completed", Name = "已完成" },
         new() { Id = "running", Name = "运行中" }
@@ -34,6 +35,7 @@ public static class AgentRunHistoryFilter
         return filterId switch
         {
             "retryable" => items.Where(item => item.CanRetry),
+            "needs_changes" => items.Where(item => item.Run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges),
             "failed" => items.Where(item => item.Run.Status is AgentRunStatus.Failed or AgentRunStatus.Cancelled or AgentRunStatus.BudgetExceeded),
             "completed" => items.Where(item => item.Run.Status is AgentRunStatus.Completed),
             "running" => items.Where(item => item.Run.Status is AgentRunStatus.Running),

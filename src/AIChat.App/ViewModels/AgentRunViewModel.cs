@@ -106,11 +106,14 @@ public sealed class AgentRunViewModel : ObservableObject
         $"Explorer：{ExplorerUsageText} · {ExplorerDecisionReason}{Environment.NewLine}" +
         $"最终状态原因：{FinalStatusReason}";
     public string RecoverySuggestion => string.IsNullOrWhiteSpace(_run.RecoverySuggestion)
-        ? $"继续处理：{Goal}"
+        ? BuildAcceptanceRecoverySuggestion()
+        : _run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges
+            ? BuildAcceptanceRecoverySuggestion()
         : _run.RecoverySuggestion;
-    public bool HasRecoverySuggestion => !string.IsNullOrWhiteSpace(_run.RecoverySuggestion);
+    public bool HasRecoverySuggestion => !string.IsNullOrWhiteSpace(RecoverySuggestion);
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
-    public bool CanContinue => _run.Status is AgentRunStatus.BudgetExceeded or AgentRunStatus.Cancelled or AgentRunStatus.Failed;
+    public bool CanContinue => _run.Status is AgentRunStatus.BudgetExceeded or AgentRunStatus.Cancelled or AgentRunStatus.Failed ||
+                               _run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges;
     public string ContinuedFromRunId => _run.ContinuedFromRunId;
     public bool HasContinuation => !string.IsNullOrWhiteSpace(_run.ContinuedFromRunId);
     public string ContinuedFromRunText => HasContinuation ? $"从 {ContinuedFromRunId[..Math.Min(8, ContinuedFromRunId.Length)]} 继续" : "";
@@ -309,6 +312,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(AcceptanceNote));
         OnPropertyChanged(nameof(HasAcceptanceNote));
         OnPropertyChanged(nameof(AcceptanceReviewedAtText));
+        OnPropertyChanged(nameof(CanContinue));
+        OnPropertyChanged(nameof(RecoverySuggestion));
+        OnPropertyChanged(nameof(HasRecoverySuggestion));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -544,6 +550,47 @@ public sealed class AgentRunViewModel : ObservableObject
 
         var suffix = ChangedPaths.Count > paths.Count ? $" 等 {ChangedPaths.Count} 个" : "";
         return string.Join(", ", paths) + suffix;
+    }
+
+    private string BuildAcceptanceRecoverySuggestion()
+    {
+        if (_run.AcceptanceStatus != AgentRunAcceptanceStatus.NeedsChanges)
+        {
+            return $"继续处理：{Goal}";
+        }
+
+        var checklist = SmokeTests.Count == 0
+            ? "无验收清单。"
+            : string.Join(Environment.NewLine, SmokeTests.Select(item => $"- [{item.StatusText}] {item.Title}: {item.Detail}"));
+        var changedPaths = ChangedPaths.Count == 0
+            ? "无记录文件变更。"
+            : string.Join(Environment.NewLine, ChangedPaths.Select(path => $"- {path}"));
+        var note = string.IsNullOrWhiteSpace(_run.AcceptanceNote)
+            ? "用户未填写额外备注。"
+            : _run.AcceptanceNote;
+
+        return $"""
+               继续修复这个用户验收未通过的 Agent 任务。
+
+               原始目标：
+               {Goal}
+
+               用户验收备注：
+               {note}
+
+               验收清单：
+               {checklist}
+
+               已记录变更：
+               {changedPaths}
+
+               继续要求：
+               1. 优先处理用户验收备注中指出的问题。
+               2. 先核对当前工作区状态和相关文件，不要盲目重做已完成部分。
+               3. 只做满足验收所需的最小修改。
+               4. 修改后运行项目验证命令或最小相关测试。
+               5. 最终回复说明修复了哪条验收问题，以及验证结果。
+               """;
     }
 
     private void RebuildSmokeTests()

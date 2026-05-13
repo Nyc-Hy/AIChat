@@ -485,6 +485,7 @@ public sealed partial class MainViewModel
         }
 
         SelectedAgentRunDetails.MarkAcceptance(AIChat.Domain.Chat.AgentRunAcceptanceStatus.Accepted, "用户确认验收通过");
+        ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
         StatusText = "已标记本轮 Agent Run 验收通过";
         RebuildAgentRunHistoryIfOpen();
         await SaveProjectsAsync();
@@ -507,6 +508,7 @@ public sealed partial class MainViewModel
         }
 
         SelectedAgentRunDetails.MarkAcceptance(AIChat.Domain.Chat.AgentRunAcceptanceStatus.NeedsChanges, note);
+        ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
         StatusText = "已标记本轮 Agent Run 需要修改";
         RebuildAgentRunHistoryIfOpen();
         await SaveProjectsAsync();
