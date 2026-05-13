@@ -175,10 +175,11 @@ public sealed class AgentHarnessTests
         Assert.Null(run.StructuredPlan);
         Assert.Null(run.Plan);
         Assert.Equal("Simple", run.TaskComplexity);
+        Assert.Contains("mode=Fast Path", run.ExecutionPolicySummary);
         Assert.Contains("planner=False", run.ExecutionPolicySummary);
         Assert.False(run.PlannerUsed);
         Assert.False(run.ExplorerUsed);
-        Assert.Equal(12, run.MaxToolRounds);
+        Assert.Equal(4, run.MaxToolRounds);
         Assert.Contains("Explorer skipped", run.ExplorerDecisionReason);
         Assert.Empty(plannerService.Requests);
         Assert.Single(runnerService.Requests);
@@ -242,7 +243,8 @@ public sealed class AgentHarnessTests
         Assert.Equal("Standard", run.TaskComplexity);
         Assert.True(run.PlannerUsed);
         Assert.False(run.ExplorerUsed);
-        Assert.Equal(35, run.MaxToolRounds);
+        Assert.Contains("mode=Standard Agent Loop", run.ExecutionPolicySummary);
+        Assert.Equal(24, run.MaxToolRounds);
         Assert.Contains("Explorer skipped", run.ExplorerDecisionReason);
         Assert.Empty(run.SubAgentRuns);
         Assert.Empty(subAgentService.Requests);
@@ -287,8 +289,9 @@ public sealed class AgentHarnessTests
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal("previous-run", run.ContinuedFromRunId);
         Assert.False(run.PlannerUsed);
+        Assert.Contains("mode=Continuation", run.ExecutionPolicySummary);
         Assert.Contains("planner=False", run.ExecutionPolicySummary);
-        Assert.Equal(35, run.MaxToolRounds);
+        Assert.Equal(24, run.MaxToolRounds);
         Assert.Empty(plannerService.Requests);
     }
 

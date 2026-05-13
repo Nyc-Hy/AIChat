@@ -68,6 +68,7 @@ public sealed class AgentRunViewModel : ObservableObject
     public string ExecutionPolicySummary => string.IsNullOrWhiteSpace(_run.ExecutionPolicySummary)
         ? "未记录执行策略。"
         : _run.ExecutionPolicySummary;
+    public string ExecutionModeText => ExtractExecutionMode();
     public string FinalStatusReason => string.IsNullOrWhiteSpace(_run.FinalStatusReason)
         ? "未记录最终状态原因。"
         : _run.FinalStatusReason;
@@ -80,6 +81,7 @@ public sealed class AgentRunViewModel : ObservableObject
         ? "未记录 Explorer 决策。"
         : _run.ExplorerDecisionReason;
     public string DebugSummary =>
+        $"模式：{ExecutionModeText}{Environment.NewLine}" +
         $"复杂度：{TaskComplexityText}{Environment.NewLine}" +
         $"执行策略：{ExecutionPolicySummary}{Environment.NewLine}" +
         $"Planner：{PlannerUsageText}{Environment.NewLine}" +
@@ -294,6 +296,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(PhaseHistoryCount));
         OnPropertyChanged(nameof(FinalValidationSummary));
         OnPropertyChanged(nameof(ExecutionPolicySummary));
+        OnPropertyChanged(nameof(ExecutionModeText));
         OnPropertyChanged(nameof(FinalStatusReason));
         OnPropertyChanged(nameof(DebugSummary));
         OnPropertyChanged(nameof(RecoverySuggestion));
@@ -471,5 +474,29 @@ public sealed class AgentRunViewModel : ObservableObject
 
         var suffix = ChangedPaths.Count > paths.Count ? $" 等 {ChangedPaths.Count} 个" : "";
         return string.Join(", ", paths) + suffix;
+    }
+
+    private string ExtractExecutionMode()
+    {
+        if (string.IsNullOrWhiteSpace(_run.ExecutionPolicySummary))
+        {
+            return "未记录";
+        }
+
+        const string prefix = "mode=";
+        var start = _run.ExecutionPolicySummary.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return _run.TaskComplexity switch
+            {
+                "Simple" => "Fast Path",
+                "Complex" => "Full Agent Loop",
+                _ => "Standard Agent Loop"
+            };
+        }
+
+        start += prefix.Length;
+        var end = _run.ExecutionPolicySummary.IndexOf(';', start);
+        return (end < 0 ? _run.ExecutionPolicySummary[start..] : _run.ExecutionPolicySummary[start..end]).Trim();
     }
 }

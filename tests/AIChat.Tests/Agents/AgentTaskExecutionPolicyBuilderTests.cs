@@ -14,7 +14,9 @@ public sealed class AgentTaskExecutionPolicyBuilderTests
             new TaskContextPack(),
             isContinuation: false);
 
-        Assert.Equal(12, policy.MaxToolRounds);
+        Assert.Equal(4, policy.MaxToolRounds);
+        Assert.Equal("Fast Path", policy.Mode);
+        Assert.Equal(0, policy.SubAgentMaxToolCalls);
         Assert.False(policy.UsePlanner);
         Assert.False(policy.AllowExplorer);
     }
@@ -37,6 +39,8 @@ public sealed class AgentTaskExecutionPolicyBuilderTests
 
         Assert.False(withContext.AllowExplorer);
         Assert.True(withoutContext.AllowExplorer);
+        Assert.Equal(24, withContext.MaxToolRounds);
+        Assert.Equal("Standard Agent Loop", withContext.Mode);
     }
 
     [Fact]
@@ -49,7 +53,22 @@ public sealed class AgentTaskExecutionPolicyBuilderTests
             isContinuation: false);
 
         Assert.Equal(50, policy.MaxToolRounds);
+        Assert.Equal("Full Agent Loop", policy.Mode);
         Assert.True(policy.UsePlanner);
         Assert.True(policy.AllowExplorer);
+    }
+
+    [Fact]
+    public void Build_UsesContinuationModeWithoutPlanner()
+    {
+        var policy = new AgentTaskExecutionPolicyBuilder().Build(
+            AgentTaskComplexity.Standard,
+            new AgentRunContext { ProjectPath = Environment.CurrentDirectory, MaxToolRounds = 50 },
+            new TaskContextPack(),
+            isContinuation: true);
+
+        Assert.Equal("Continuation", policy.Mode);
+        Assert.Equal(24, policy.MaxToolRounds);
+        Assert.False(policy.UsePlanner);
     }
 }

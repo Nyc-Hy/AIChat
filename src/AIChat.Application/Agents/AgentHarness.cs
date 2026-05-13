@@ -469,7 +469,7 @@ public sealed class AgentHarness
 
     private static string CreateExecutionPolicySummary(AgentTaskExecutionPolicy policy)
     {
-        return $"complexity={policy.Complexity}; maxToolRounds={policy.MaxToolRounds}; planner={policy.UsePlanner}; explorer={policy.AllowExplorer}; subAgentMaxToolCalls={policy.SubAgentMaxToolCalls}";
+        return $"mode={policy.Mode}; complexity={policy.Complexity}; maxToolRounds={policy.MaxToolRounds}; planner={policy.UsePlanner}; explorer={policy.AllowExplorer}; subAgentMaxToolCalls={policy.SubAgentMaxToolCalls}";
     }
 
     private static string CreateExplorerDecisionReason(

@@ -70,19 +70,22 @@ public sealed class AgentRequestFactory
     private readonly ContextRouter _contextRouter;
     private readonly MemoryRetriever _memoryRetriever;
     private readonly InputArtifactService _inputArtifactService;
+    private readonly AgentTaskClassifier _taskClassifier;
 
     public AgentRequestFactory(
         ConversationContextBuilder contextBuilder,
         ProjectFileIndexBuilder? fileIndexBuilder = null,
         ContextRouter? contextRouter = null,
         MemoryRetriever? memoryRetriever = null,
-        InputArtifactService? inputArtifactService = null)
+        InputArtifactService? inputArtifactService = null,
+        AgentTaskClassifier? taskClassifier = null)
     {
         _contextBuilder = contextBuilder;
         _fileIndexBuilder = fileIndexBuilder ?? new ProjectFileIndexBuilder();
         _contextRouter = contextRouter ?? new ContextRouter();
         _memoryRetriever = memoryRetriever ?? new MemoryRetriever();
         _inputArtifactService = inputArtifactService ?? new InputArtifactService();
+        _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
     }
 
     public AgentRequestBuildResult Build(AgentRequestBuildRequest request)
@@ -94,12 +97,19 @@ public sealed class AgentRequestFactory
             : "";
         var requestMessages = GetRequestMessages(request.Conversation, request.AssistantMessageId);
         var goal = requestMessages.LastOrDefault(message => message.Role == ChatRole.User)?.Content ?? "";
+        var taskComplexity = _taskClassifier.Classify(goal, new AgentRunContext
+        {
+            ProjectPath = projectPath,
+            EnabledToolIds = request.RuntimeSettings.EnabledToolIds,
+            ToolPermissionModes = request.RuntimeSettings.ToolPermissionModes,
+            MaxToolRounds = request.RuntimeSettings.AgentMaxToolRounds
+        });
         var memorySnippets = _memoryRetriever.RetrieveSnippets(
             request.MemoryEntries,
             new MemoryRetrievalRequest
             {
                 Query = goal,
-                MaxResults = 6
+                MaxResults = taskComplexity == AgentTaskComplexity.Simple ? 2 : 6
             });
         var selectedInputArtifacts = request.InputArtifacts
             .Where(artifact => string.IsNullOrWhiteSpace(artifact.ConversationId) ||
@@ -120,7 +130,16 @@ public sealed class AgentRequestFactory
                 .OrderByDescending(artifact => artifact.CreatedAt)
                 .Take(12)
                 .ToList(),
-            InputArtifacts = selectedInputArtifacts
+            InputArtifacts = selectedInputArtifacts,
+            MaxTokens = taskComplexity switch
+            {
+                AgentTaskComplexity.Simple => 350,
+                AgentTaskComplexity.Standard => 900,
+                _ => 1600
+            },
+            MaxFileSizeBytes = taskComplexity == AgentTaskComplexity.Simple
+                ? 96 * 1024
+                : 256 * 1024
         });
         var inputArtifactRefs = _inputArtifactService.BuildPromptRefs(selectedInputArtifacts, 8);
 

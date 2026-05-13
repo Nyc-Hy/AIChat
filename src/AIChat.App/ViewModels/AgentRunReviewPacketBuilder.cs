@@ -16,7 +16,7 @@ public static class AgentRunReviewPacketBuilder
             $"修改记录：{run.MutationGuardrailText}",
             $"审批：{run.ApprovalSummary}",
             $"工作区：{run.WorkspaceSnapshotText}",
-            $"调试：{run.TaskComplexityText} · Planner {run.PlannerUsageText} · Explorer {run.ExplorerUsageText}",
+            $"调试：{run.ExecutionModeText} · {run.TaskComplexityText} · Planner {run.PlannerUsageText} · Explorer {run.ExplorerUsageText}",
             $"计划：{run.PlanSummary}",
             $"步骤：{run.StepCount}",
             $"文件变更：{run.FileChangeCount}",

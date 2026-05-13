@@ -176,6 +176,36 @@ public sealed class AgentRequestFactoryTests : IDisposable
     }
 
     [Fact]
+    public void Build_UsesSmallContextPackForSimpleFastPathTasks()
+    {
+        var conversation = new Conversation { Title = "Test" };
+        AddMessage(conversation, ChatRole.User, "解释这个项目结构");
+        var assistant = AddMessage(conversation, ChatRole.Assistant, "placeholder");
+        var factory = CreateFactory();
+
+        var result = factory.Build(new AgentRequestBuildRequest
+        {
+            Conversation = conversation,
+            AssistantMessageId = assistant.Id,
+            EffectiveSettings = CreateEffectiveSettings(),
+            RuntimeSettings = CreateRuntimeSettings(),
+            ProjectPath = _tempDir,
+            MemoryEntries = Enumerable.Range(1, 8)
+                .Select(i => new MemoryEntry
+                {
+                    ProjectId = "project-1",
+                    Category = MemoryCategory.Project,
+                    Content = $"memory item {i} for Program.cs and project structure",
+                    Source = "test"
+                })
+                .ToList()
+        });
+
+        Assert.True(result.ContextPack.EstimatedTokens <= 350);
+        Assert.True(result.ContextPack.IncludedSnippets.Count(item => item.StartsWith("memory:", StringComparison.Ordinal)) <= 2);
+    }
+
+    [Fact]
     public void Build_PassesCurrentConversationInputArtifactsToAgentContext()
     {
         var conversation = CreateConversation();

@@ -4,6 +4,7 @@ namespace AIChat.Application.Agents;
 
 public sealed record AgentTaskExecutionPolicy(
     AgentTaskComplexity Complexity,
+    string Mode,
     int MaxToolRounds,
     int SubAgentMaxToolCalls,
     bool UsePlanner,
@@ -20,8 +21,8 @@ public sealed class AgentTaskExecutionPolicyBuilder
         var baseLimit = Math.Max(1, context.MaxToolRounds);
         var maxToolRounds = complexity switch
         {
-            AgentTaskComplexity.Simple => Math.Min(baseLimit, 12),
-            AgentTaskComplexity.Standard => Math.Min(baseLimit, 35),
+            AgentTaskComplexity.Simple => Math.Min(baseLimit, 4),
+            AgentTaskComplexity.Standard => Math.Min(baseLimit, 24),
             AgentTaskComplexity.Complex => baseLimit,
             _ => baseLimit
         };
@@ -34,13 +35,20 @@ public sealed class AgentTaskExecutionPolicyBuilder
         var hasContext = (contextPack?.IncludedFiles.Count ?? 0) > 0 ||
                          (contextPack?.IncludedSnippets.Count ?? 0) > 0 ||
                          (contextPack?.ArtifactRefs.Count ?? 0) > 0;
+        var mode = complexity switch
+        {
+            AgentTaskComplexity.Simple when !isContinuation => "Fast Path",
+            AgentTaskComplexity.Complex => "Full Agent Loop",
+            _ => isContinuation ? "Continuation" : "Standard Agent Loop"
+        };
         var allowExplorer = complexity == AgentTaskComplexity.Complex ||
                             (complexity == AgentTaskComplexity.Standard && !hasContext);
 
         return new AgentTaskExecutionPolicy(
             complexity,
+            mode,
             maxToolRounds,
-            complexity == AgentTaskComplexity.Complex ? 6 : 3,
+            complexity == AgentTaskComplexity.Simple ? 0 : complexity == AgentTaskComplexity.Complex ? 6 : 3,
             complexity != AgentTaskComplexity.Simple && !isContinuation,
             allowExplorer);
     }
