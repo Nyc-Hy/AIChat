@@ -1406,6 +1406,11 @@
                                                                    FontSize="11"
                                                                    Foreground="#98A2B0"
                                                                    TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding AcceptanceSummary}"
+                                                                   Margin="0,4,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#6B7280"
+                                                                   TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
                                                     <Button Grid.Column="1"
                                                             Command="{Binding DataContext.SelectAgentRunHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"

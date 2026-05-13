@@ -13,6 +13,13 @@ public sealed class AgentRunHistoryItemViewModel : ObservableObject
     public string PhaseText => Run.PhaseText;
     public string StartedText => Run.StartedText;
     public string Summary => Run.Summary;
+    public string AcceptanceStatusText => Run.AcceptanceStatusText;
+    public string AcceptanceNote => Run.AcceptanceNote;
+    public bool HasAcceptanceNote => Run.HasAcceptanceNote;
+    public bool NeedsChanges => Run.AcceptanceStatus == AIChat.Domain.Chat.AgentRunAcceptanceStatus.NeedsChanges;
+    public string AcceptanceSummary => HasAcceptanceNote
+        ? $"{AcceptanceStatusText} · {AcceptanceNote}"
+        : AcceptanceStatusText;
     public bool CanRetry => Run.CanRetry;
     public bool CanContinue => Run.CanContinue;
     public bool CanResume => Run.CanResume;

@@ -42,7 +42,7 @@ public sealed partial class MainViewModel
         ? _agentRunHistoryTotalCount == 0
             ? "暂无 Agent 运行记录"
             : $"当前筛选无匹配 · 总计 {_agentRunHistoryTotalCount} 次运行"
-        : $"显示 {AgentRunHistory.Count} / {_agentRunHistoryTotalCount} 次运行 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
+        : $"显示 {AgentRunHistory.Count} / {_agentRunHistoryTotalCount} 次运行 · {AgentRunHistory.Count(item => item.CanContinue)} 个可继续 · {AgentRunHistory.Count(item => item.NeedsChanges)} 个需修改 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
     public string AgentRunHistoryInsight => AgentRunHistoryInsights.Build(AgentRunHistory.ToList());
 
     public AgentRunViewModel? SelectedAgentRunDetails
