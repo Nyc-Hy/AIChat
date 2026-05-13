@@ -29,6 +29,7 @@ public sealed partial class MainViewModel
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
                 AddProjectVerificationCommandCommand.RaiseCanExecuteChanged();
                 InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
+                FixProjectHealthCommand.RaiseCanExecuteChanged();
                 RefreshProjectSnapshotCommand.RaiseCanExecuteChanged();
                 GenerateProjectAgentsCommand.RaiseCanExecuteChanged();
                 RebuildCurrentInputArtifacts();
@@ -153,6 +154,63 @@ public sealed partial class MainViewModel
         StatusText = "项目快照已刷新";
     }
 
+    private async Task FixProjectHealthAsync()
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SelectedProject.Path) || !Directory.Exists(SelectedProject.Path))
+        {
+            StatusText = "请先设置有效项目路径";
+            return;
+        }
+
+        var fixedItems = new List<string>();
+        var initializer = new ProjectInitializer();
+        var project = SelectedProject.Project;
+
+        try
+        {
+            var agentsPath = Path.Combine(project.Path, "AGENTS.md");
+            if (!File.Exists(agentsPath))
+            {
+                await initializer.InitializeProjectAsync(project.Path);
+                if (File.Exists(agentsPath))
+                {
+                    fixedItems.Add("AGENTS.md");
+                }
+            }
+
+            if (project.VerificationCommands.Count == 0)
+            {
+                var suggestions = initializer.SuggestVerificationCommands(project.Path);
+                if (suggestions.Count > 0)
+                {
+                    project.VerificationCommands = suggestions.ToList();
+                    LoadProjectVerificationCommands();
+                    fixedItems.Add($"{suggestions.Count} 个验证命令");
+                }
+            }
+
+            if (fixedItems.Count > 0)
+            {
+                project.UpdatedAt = DateTimeOffset.Now;
+                await SaveProjectsAsync();
+            }
+
+            RaiseProjectLoadSnapshotProperties();
+            StatusText = fixedItems.Count == 0
+                ? "项目健康项已就绪"
+                : $"已修复：{string.Join("、", fixedItems)}";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"修复项目健康失败：{ex.Message}";
+        }
+    }
+
     private async Task GenerateProjectAgentsAsync()
     {
         if (SelectedProject is null || string.IsNullOrWhiteSpace(SelectedProject.Path) || !Directory.Exists(SelectedProject.Path))
@@ -233,6 +291,7 @@ public sealed partial class MainViewModel
             RaiseProjectLoadSnapshotProperties();
             LoadProjectVerificationCommands();
             InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
+            FixProjectHealthCommand.RaiseCanExecuteChanged();
             RefreshProjectSnapshotCommand.RaiseCanExecuteChanged();
             GenerateProjectAgentsCommand.RaiseCanExecuteChanged();
             StatusText = $"项目路径已设置为：{dialog.SelectedPath}";
