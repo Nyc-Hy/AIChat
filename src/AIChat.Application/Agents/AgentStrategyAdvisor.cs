@@ -81,6 +81,7 @@ public sealed class AgentStrategyAdvisor
         var continuedRuns = history.Count(run => !string.IsNullOrWhiteSpace(run.ContinuedFromRunId));
         var retriedRuns = history.Count(run => !string.IsNullOrWhiteSpace(run.RetriedFromRunId));
         var rejectedApprovals = history.Sum(run => run.ToolApprovalRejectedCount);
+        var needsChanges = history.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges);
         var mutationRuns = history.Where(run => run.MutationToolSucceeded || run.FileChanges.Count > 0).ToList();
         var unverifiedMutationRuns = mutationRuns.Count(run => run.Verifications.Count == 0);
 
@@ -107,6 +108,14 @@ public sealed class AgentStrategyAdvisor
         {
             policy = policy with { CautiousToolApproval = true };
             notes.Add("user approval preference: explain high-risk tools first");
+        }
+
+        if (context.AdaptiveRecoveryEnabled &&
+            needsChanges >= 2 &&
+            !policy.PreferContinuationRecovery)
+        {
+            policy = policy with { PreferContinuationRecovery = true };
+            notes.Add("user acceptance feedback: prioritize follow-up fixes");
         }
 
         if (context.AdaptiveAutoVerifyEnabled &&

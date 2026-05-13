@@ -54,12 +54,26 @@ public sealed class AgentRunHistoryInsightBuilderTests
         Assert.Contains("写入任务缺少验证偏多", insight);
     }
 
+    [Fact]
+    public void Build_ReportsAcceptanceFeedback()
+    {
+        var insight = AgentRunHistoryInsightBuilder.Build(
+        [
+            CompletedRun("run-2", acceptanceStatus: AgentRunAcceptanceStatus.NeedsChanges),
+            CompletedRun("run-1", acceptanceStatus: AgentRunAcceptanceStatus.Accepted)
+        ]);
+
+        Assert.Contains("用户验收：通过 1 次 · 需修改 1 次", insight);
+        Assert.Contains("用户验收需修改偏多", insight);
+    }
+
     private static AgentRun CompletedRun(
         string id,
         string continuedFrom = "",
         string retriedFrom = "",
         int rejectedApprovals = 0,
-        bool mutationSucceeded = false)
+        bool mutationSucceeded = false,
+        AgentRunAcceptanceStatus acceptanceStatus = AgentRunAcceptanceStatus.Unreviewed)
     {
         return new AgentRun
         {
@@ -70,6 +84,7 @@ public sealed class AgentRunHistoryInsightBuilderTests
             RetriedFromRunId = retriedFrom,
             ToolApprovalRejectedCount = rejectedApprovals,
             MutationToolSucceeded = mutationSucceeded,
+            AcceptanceStatus = acceptanceStatus,
             StartedAt = DateTimeOffset.Now
         };
     }

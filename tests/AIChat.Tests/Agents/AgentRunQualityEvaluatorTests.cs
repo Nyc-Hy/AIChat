@@ -45,4 +45,21 @@ public sealed class AgentRunQualityEvaluatorTests
         Assert.Contains("验证失败", result.Summary);
         Assert.Contains("一致性风险", result.Summary);
     }
+
+    [Fact]
+    public void Evaluate_PenalizesUserRequestedChanges()
+    {
+        var run = new AgentRun
+        {
+            Status = AgentRunStatus.Completed,
+            AcceptanceStatus = AgentRunAcceptanceStatus.NeedsChanges,
+            AcceptanceNote = "缺少 smoke test"
+        };
+
+        var result = new AgentRunQualityEvaluator().Evaluate(run);
+
+        Assert.True(result.Score < 85);
+        Assert.Contains("用户验收要求修改", result.Summary);
+        Assert.Contains("验收", result.StrategySuggestion);
+    }
 }

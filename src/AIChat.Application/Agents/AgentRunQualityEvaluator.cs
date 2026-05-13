@@ -25,6 +25,16 @@ public sealed class AgentRunQualityEvaluator
             findings.Add("工具预算耗尽");
         }
 
+        if (run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges)
+        {
+            score -= 25;
+            findings.Add("用户验收要求修改");
+        }
+        else if (run.AcceptanceStatus == AgentRunAcceptanceStatus.Accepted)
+        {
+            findings.Add("用户验收通过");
+        }
+
         var failedVerificationCount = run.Verifications.Count(item => !item.IsSuccess);
         if (failedVerificationCount > 0)
         {
@@ -79,6 +89,11 @@ public sealed class AgentRunQualityEvaluator
         if (run.ToolBudgetExceeded)
         {
             return "同类任务建议提高工具预算，或使用继续任务从 checkpoint 接着执行。";
+        }
+
+        if (run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges)
+        {
+            return "用户验收要求修改，同类任务建议保留验收备注并优先补齐用户指出的问题。";
         }
 
         if (run.Verifications.Any(item => !item.IsSuccess))

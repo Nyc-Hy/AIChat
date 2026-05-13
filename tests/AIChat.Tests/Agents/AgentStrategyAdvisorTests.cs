@@ -215,4 +215,27 @@ public sealed class AgentStrategyAdvisorTests
 
         Assert.False(adjusted.ForceAutoVerifyAfterMutation);
     }
+
+    [Fact]
+    public void Adjust_PrioritizesFollowUpFixesAfterRepeatedAcceptanceFailures()
+    {
+        var policy = new AgentTaskExecutionPolicy(
+            AgentTaskComplexity.Standard,
+            "Standard Agent Loop",
+            MaxToolRounds: 24,
+            SubAgentMaxToolCalls: 3,
+            UsePlanner: true,
+            AllowExplorer: true);
+
+        var adjusted = new AgentStrategyAdvisor().Adjust(
+            policy,
+            new AgentRunContext { ProjectPath = Environment.CurrentDirectory, MaxToolRounds = 40 },
+            [
+                new AgentRun { TaskComplexity = "Standard", AcceptanceStatus = AgentRunAcceptanceStatus.NeedsChanges },
+                new AgentRun { TaskComplexity = "Simple", AcceptanceStatus = AgentRunAcceptanceStatus.NeedsChanges }
+            ]);
+
+        Assert.True(adjusted.PreferContinuationRecovery);
+        Assert.Contains("acceptance feedback", adjusted.StrategyAdjustment);
+    }
 }

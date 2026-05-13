@@ -19,6 +19,8 @@ public static class AgentRunHistoryInsightBuilder
         var budgetExceeded = recent.Count(run => run.ToolBudgetExceeded);
         var failedVerification = recent.Count(run => run.Verifications.Any(verification => !verification.IsSuccess));
         var consistencyRisk = recent.Count(HasConsistencyRisk);
+        var needsChanges = recent.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges);
+        var accepted = recent.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.Accepted);
         var averageScore = recent.Where(run => run.QualityScore > 0).Select(run => run.QualityScore).DefaultIfEmpty(0).Average();
         var fastPathRuns = recent.Where(IsFastPathRun).ToList();
         var fastPathSuccess = fastPathRuns.Count == 0
@@ -34,6 +36,11 @@ public static class AgentRunHistoryInsightBuilder
         {
             $"最近 {recent.Count} 次 · 完成 {completed} 次 · 平均评分 {averageScore:0}"
         };
+
+        if (accepted > 0 || needsChanges > 0)
+        {
+            suggestions.Add($"用户验收：通过 {accepted} 次 · 需修改 {needsChanges} 次。");
+        }
 
         if (fastPathRuns.Count >= 3 && fastPathSuccess == fastPathRuns.Count)
         {
@@ -72,6 +79,11 @@ public static class AgentRunHistoryInsightBuilder
         if (consistencyRisk > 0)
         {
             suggestions.Add("存在一致性风险，建议要求最终回复引用真实工具记录。");
+        }
+
+        if (needsChanges >= Math.Max(1, recent.Count / 5))
+        {
+            suggestions.Add("用户验收需修改偏多，建议任务结束前生成更具体的验收清单并优先响应用户备注。");
         }
 
         if (suggestions.Count == 1)
