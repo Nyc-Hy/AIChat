@@ -30,6 +30,10 @@ public sealed class AppSettings
     public int MaxOutputTokens { get; set; } = 4096;
     public bool AutoVerifyAgentRuns { get; set; }
     public int MaxAutoFixRounds { get; set; } = 3;
+    public bool AgentAdaptiveStrategiesEnabled { get; set; } = true;
+    public bool AgentAdaptiveBudgetAndExplorerEnabled { get; set; } = true;
+    public bool AgentAdaptiveRecoveryEnabled { get; set; } = true;
+    public bool AgentAdaptiveAutoVerifyEnabled { get; set; } = true;
     // Multiple configured providers lets the user keep more than one API key or
     // model setup while the rest of the app only reads the active one.
     public List<ConfiguredLlmProvider> ConfiguredProviders { get; set; } = [];

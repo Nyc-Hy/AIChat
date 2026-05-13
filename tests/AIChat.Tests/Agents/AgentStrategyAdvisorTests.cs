@@ -155,4 +155,64 @@ public sealed class AgentStrategyAdvisorTests
         Assert.True(adjusted.CautiousToolApproval);
         Assert.Contains("explain high-risk tools", adjusted.StrategyAdjustment);
     }
+
+    [Fact]
+    public void Adjust_LeavesPolicyAloneWhenAdaptiveStrategiesAreDisabled()
+    {
+        var policy = new AgentTaskExecutionPolicy(
+            AgentTaskComplexity.Standard,
+            "Standard Agent Loop",
+            MaxToolRounds: 24,
+            SubAgentMaxToolCalls: 3,
+            UsePlanner: true,
+            AllowExplorer: true);
+
+        var adjusted = new AgentStrategyAdvisor().Adjust(
+            policy,
+            new AgentRunContext
+            {
+                ProjectPath = Environment.CurrentDirectory,
+                MaxToolRounds = 40,
+                AdaptiveStrategiesEnabled = false
+            },
+            [
+                new AgentRun { TaskComplexity = "Standard", ToolBudgetExceeded = true, Status = AgentRunStatus.BudgetExceeded },
+                new AgentRun { TaskComplexity = "Standard", ToolBudgetExceeded = true, Status = AgentRunStatus.BudgetExceeded },
+                new AgentRun { TaskComplexity = "Simple", ContinuedFromRunId = "run-1" },
+                new AgentRun { TaskComplexity = "Complex", ContinuedFromRunId = "run-2" }
+            ]);
+
+        Assert.Equal(policy, adjusted);
+    }
+
+    [Fact]
+    public void Adjust_RespectsAdaptiveAutoVerifySwitch()
+    {
+        var policy = new AgentTaskExecutionPolicy(
+            AgentTaskComplexity.Standard,
+            "Standard Agent Loop",
+            MaxToolRounds: 24,
+            SubAgentMaxToolCalls: 3,
+            UsePlanner: true,
+            AllowExplorer: true);
+
+        var adjusted = new AgentStrategyAdvisor().Adjust(
+            policy,
+            new AgentRunContext
+            {
+                ProjectPath = Environment.CurrentDirectory,
+                MaxToolRounds = 40,
+                AdaptiveAutoVerifyEnabled = false,
+                VerificationCommands =
+                [
+                    new ProjectVerificationCommand { Name = "test", Command = "dotnet test" }
+                ]
+            },
+            [
+                new AgentRun { TaskComplexity = "Standard", MutationToolSucceeded = true },
+                new AgentRun { TaskComplexity = "Simple", FileChanges = [new AgentFileChange { Path = "src/App.cs" }] }
+            ]);
+
+        Assert.False(adjusted.ForceAutoVerifyAfterMutation);
+    }
 }

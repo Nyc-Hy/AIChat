@@ -184,6 +184,10 @@ public sealed class AgentRequestFactory
                 RequestToolApprovalAsync = request.RequestToolApprovalAsync,
                 AutoVerifyAgentRuns = request.RuntimeSettings.AutoVerifyAgentRuns,
                 MaxAutoFixRounds = request.RuntimeSettings.MaxAutoFixRounds,
+                AdaptiveStrategiesEnabled = request.RuntimeSettings.AgentAdaptiveStrategiesEnabled,
+                AdaptiveBudgetAndExplorerEnabled = request.RuntimeSettings.AgentAdaptiveBudgetAndExplorerEnabled,
+                AdaptiveRecoveryEnabled = request.RuntimeSettings.AgentAdaptiveRecoveryEnabled,
+                AdaptiveAutoVerifyEnabled = request.RuntimeSettings.AgentAdaptiveAutoVerifyEnabled,
                 VerificationCommands = request.VerificationCommands,
                 InputArtifacts = selectedInputArtifacts
             },

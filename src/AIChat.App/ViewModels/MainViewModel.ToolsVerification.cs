@@ -153,6 +153,66 @@ public sealed partial class MainViewModel
         }
     }
 
+    public bool AgentAdaptiveStrategiesEnabled
+    {
+        get => Settings.AgentAdaptiveStrategiesEnabled;
+        set
+        {
+            if (Settings.AgentAdaptiveStrategiesEnabled == value)
+            {
+                return;
+            }
+
+            Settings.AgentAdaptiveStrategiesEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AgentAdaptiveBudgetAndExplorerEnabled
+    {
+        get => Settings.AgentAdaptiveBudgetAndExplorerEnabled;
+        set
+        {
+            if (Settings.AgentAdaptiveBudgetAndExplorerEnabled == value)
+            {
+                return;
+            }
+
+            Settings.AgentAdaptiveBudgetAndExplorerEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AgentAdaptiveRecoveryEnabled
+    {
+        get => Settings.AgentAdaptiveRecoveryEnabled;
+        set
+        {
+            if (Settings.AgentAdaptiveRecoveryEnabled == value)
+            {
+                return;
+            }
+
+            Settings.AgentAdaptiveRecoveryEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public bool AgentAdaptiveAutoVerifyEnabled
+    {
+        get => Settings.AgentAdaptiveAutoVerifyEnabled;
+        set
+        {
+            if (Settings.AgentAdaptiveAutoVerifyEnabled == value)
+            {
+                return;
+            }
+
+            Settings.AgentAdaptiveAutoVerifyEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
     public void ConfigureAgent(AgentHarness agentHarness, AgentToolRegistry toolRegistry)
     {
         _agentHarness = agentHarness;
@@ -231,6 +291,10 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(AgentMaxToolRounds));
         OnPropertyChanged(nameof(AutoVerifyAgentRuns));
         OnPropertyChanged(nameof(MaxAutoFixRounds));
+        OnPropertyChanged(nameof(AgentAdaptiveStrategiesEnabled));
+        OnPropertyChanged(nameof(AgentAdaptiveBudgetAndExplorerEnabled));
+        OnPropertyChanged(nameof(AgentAdaptiveRecoveryEnabled));
+        OnPropertyChanged(nameof(AgentAdaptiveAutoVerifyEnabled));
         OnPropertyChanged(nameof(RetryMaxAttempts));
         OnPropertyChanged(nameof(MaxOutputTokens));
         OnPropertyChanged(nameof(ConversationContextRatio));

@@ -172,6 +172,10 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Equal(12, result.AgentContext.MaxToolRounds);
         Assert.True(result.AgentContext.AutoVerifyAgentRuns);
         Assert.Equal(2, result.AgentContext.MaxAutoFixRounds);
+        Assert.True(result.AgentContext.AdaptiveStrategiesEnabled);
+        Assert.True(result.AgentContext.AdaptiveBudgetAndExplorerEnabled);
+        Assert.True(result.AgentContext.AdaptiveRecoveryEnabled);
+        Assert.True(result.AgentContext.AdaptiveAutoVerifyEnabled);
         Assert.Single(result.AgentContext.VerificationCommands);
     }
 
@@ -363,7 +367,11 @@ public sealed class AgentRequestFactoryTests : IDisposable
             },
             AgentMaxToolRounds = 12,
             AutoVerifyAgentRuns = true,
-            MaxAutoFixRounds = 2
+            MaxAutoFixRounds = 2,
+            AgentAdaptiveStrategiesEnabled = true,
+            AgentAdaptiveBudgetAndExplorerEnabled = true,
+            AgentAdaptiveRecoveryEnabled = true,
+            AgentAdaptiveAutoVerifyEnabled = true
         };
     }
 }

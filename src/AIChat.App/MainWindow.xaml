@@ -1612,6 +1612,9 @@
                                         <TextBox Text="{Binding StrategySuggestion, StringFormat=策略：{0}, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding ExecutionPolicySummary, StringFormat=原因：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
                                         <TextBlock Text="当前阶段"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
@@ -2810,6 +2813,45 @@
                                                          VerticalContentAlignment="Center"
                                                          Style="{StaticResource SettingsTextBoxStyle}" />
                                             </Grid>
+                                        </Border>
+
+                                        <Border Padding="14"
+                                                CornerRadius="8"
+                                                Background="#FFFFFF"
+                                                BorderBrush="#E2E8F0"
+                                                BorderThickness="1"
+                                                Margin="0,0,0,14">
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel>
+                                                        <TextBlock Text="历史自适应策略"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="#1E252E" />
+                                                        <TextBlock Text="根据最近 Agent 运行记录自动微调预算、Explorer、恢复偏好和写入后验证。"
+                                                                   Margin="0,4,12,0"
+                                                                   Foreground="#667386"
+                                                                   TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <CheckBox Grid.Column="1"
+                                                              IsChecked="{Binding AgentAdaptiveStrategiesEnabled, Mode=TwoWay}"
+                                                              VerticalAlignment="Center" />
+                                                </Grid>
+                                                <UniformGrid Columns="3"
+                                                             Margin="0,12,0,0">
+                                                    <CheckBox Content="预算 / Explorer"
+                                                              IsChecked="{Binding AgentAdaptiveBudgetAndExplorerEnabled, Mode=TwoWay}"
+                                                              Margin="0,0,12,0" />
+                                                    <CheckBox Content="继续 / 重试偏好"
+                                                              IsChecked="{Binding AgentAdaptiveRecoveryEnabled, Mode=TwoWay}"
+                                                              Margin="0,0,12,0" />
+                                                    <CheckBox Content="写入后验证"
+                                                              IsChecked="{Binding AgentAdaptiveAutoVerifyEnabled, Mode=TwoWay}" />
+                                                </UniformGrid>
+                                            </StackPanel>
                                         </Border>
 
                                         <Border Padding="14"

@@ -23,6 +23,11 @@ public sealed class AgentStrategyAdvisor
             return policy;
         }
 
+        if (!context.AdaptiveStrategiesEnabled)
+        {
+            return policy;
+        }
+
         var baseLimit = Math.Max(1, context.MaxToolRounds);
         var budgetExceededCount = recent.Count(run => run.ToolBudgetExceeded || run.Status == AgentRunStatus.BudgetExceeded);
         var lowExplorerYield = policy.AllowExplorer &&
@@ -33,7 +38,9 @@ public sealed class AgentStrategyAdvisor
         var adjusted = policy;
         var notes = new List<string>();
 
-        if (budgetExceededCount >= 2 && policy.MaxToolRounds < baseLimit)
+        if (context.AdaptiveBudgetAndExplorerEnabled &&
+            budgetExceededCount >= 2 &&
+            policy.MaxToolRounds < baseLimit)
         {
             var extraBudget = policy.Complexity == AgentTaskComplexity.Simple ? 2 : 6;
             var newBudget = Math.Min(baseLimit, policy.MaxToolRounds + extraBudget);
@@ -44,7 +51,7 @@ public sealed class AgentStrategyAdvisor
             }
         }
 
-        if (lowExplorerYield)
+        if (context.AdaptiveBudgetAndExplorerEnabled && lowExplorerYield)
         {
             adjusted = adjusted with { AllowExplorer = false };
             notes.Add("standard explorer disabled after low-yield history");
@@ -77,24 +84,33 @@ public sealed class AgentStrategyAdvisor
         var mutationRuns = history.Where(run => run.MutationToolSucceeded || run.FileChanges.Count > 0).ToList();
         var unverifiedMutationRuns = mutationRuns.Count(run => run.Verifications.Count == 0);
 
-        if (continuedRuns >= 2 && continuedRuns > retriedRuns && !policy.PreferContinuationRecovery)
+        if (context.AdaptiveRecoveryEnabled &&
+            continuedRuns >= 2 &&
+            continuedRuns > retriedRuns &&
+            !policy.PreferContinuationRecovery)
         {
             policy = policy with { PreferContinuationRecovery = true };
             notes.Add("user recovery preference: continue from checkpoint");
         }
-        else if (retriedRuns >= 2 && retriedRuns > continuedRuns && !policy.PreferCleanRetryRecovery)
+        else if (context.AdaptiveRecoveryEnabled &&
+                 retriedRuns >= 2 &&
+                 retriedRuns > continuedRuns &&
+                 !policy.PreferCleanRetryRecovery)
         {
             policy = policy with { PreferCleanRetryRecovery = true };
             notes.Add("user recovery preference: clean retry");
         }
 
-        if (rejectedApprovals >= 2 && !policy.CautiousToolApproval)
+        if (context.AdaptiveRecoveryEnabled &&
+            rejectedApprovals >= 2 &&
+            !policy.CautiousToolApproval)
         {
             policy = policy with { CautiousToolApproval = true };
             notes.Add("user approval preference: explain high-risk tools first");
         }
 
-        if (context.VerificationCommands.Count > 0 &&
+        if (context.AdaptiveAutoVerifyEnabled &&
+            context.VerificationCommands.Count > 0 &&
             mutationRuns.Count >= 2 &&
             unverifiedMutationRuns >= Math.Max(1, mutationRuns.Count / 2) &&
             !policy.ForceAutoVerifyAfterMutation)
