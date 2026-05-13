@@ -825,8 +825,8 @@
                                        FontSize="12"
                                        TextWrapping="Wrap" />
                             <WrapPanel Margin="0,8,0,0">
-                                <Button Command="{Binding FixProjectHealthCommand}"
-                                        Content="一键修复"
+                                <Button Command="{Binding ProjectNextActionCommand}"
+                                        Content="{Binding ProjectNextActionText}"
                                         Width="82"
                                         Height="28"
                                         Margin="0,0,8,0"

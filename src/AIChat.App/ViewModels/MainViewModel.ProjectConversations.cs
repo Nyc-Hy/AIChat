@@ -29,6 +29,7 @@ public sealed partial class MainViewModel
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
                 AddProjectVerificationCommandCommand.RaiseCanExecuteChanged();
                 InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
+                ProjectNextActionCommand.RaiseCanExecuteChanged();
                 FixProjectHealthCommand.RaiseCanExecuteChanged();
                 RefreshProjectSnapshotCommand.RaiseCanExecuteChanged();
                 GenerateProjectAgentsCommand.RaiseCanExecuteChanged();
@@ -83,6 +84,7 @@ public sealed partial class MainViewModel
     public string CurrentProjectProfileText => _projectLoadSnapshot.ProfileText;
     public string CurrentProjectActivityText => _projectLoadSnapshot.ActivityText;
     public string CurrentProjectRecommendationText => _projectLoadSnapshot.RecommendationText;
+    public string ProjectNextActionText => GetProjectNextActionText();
     public bool HasCurrentInputArtifacts => CurrentInputArtifacts.Count > 0;
     public string CurrentInputArtifactSummary
     {
@@ -152,6 +154,61 @@ public sealed partial class MainViewModel
 
         RaiseProjectLoadSnapshotProperties();
         StatusText = "项目快照已刷新";
+    }
+
+    private async Task RunProjectNextActionAsync()
+    {
+        if (SelectedProject is null)
+        {
+            await AddProjectAsync();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(SelectedProject.Path) || !Directory.Exists(SelectedProject.Path))
+        {
+            PromptForProjectPath();
+            return;
+        }
+
+        if (NeedsProjectHealthFix())
+        {
+            await FixProjectHealthAsync();
+            return;
+        }
+
+        await RefreshWorkspaceChangesAsync();
+        StatusText = "项目已就绪，已刷新文件变更";
+    }
+
+    private string GetProjectNextActionText()
+    {
+        if (SelectedProject is null)
+        {
+            return "添加项目";
+        }
+
+        if (string.IsNullOrWhiteSpace(SelectedProject.Path))
+        {
+            return "设置路径";
+        }
+
+        if (!Directory.Exists(SelectedProject.Path))
+        {
+            return "重选路径";
+        }
+
+        return NeedsProjectHealthFix() ? "一键修复" : "刷新变更";
+    }
+
+    private bool NeedsProjectHealthFix()
+    {
+        if (SelectedProject is null || string.IsNullOrWhiteSpace(SelectedProject.Path) || !Directory.Exists(SelectedProject.Path))
+        {
+            return false;
+        }
+
+        return !File.Exists(Path.Combine(SelectedProject.Path, "AGENTS.md")) ||
+               SelectedProject.Project.VerificationCommands.Count == 0;
     }
 
     private async Task FixProjectHealthAsync()
@@ -291,6 +348,7 @@ public sealed partial class MainViewModel
             RaiseProjectLoadSnapshotProperties();
             LoadProjectVerificationCommands();
             InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
+            ProjectNextActionCommand.RaiseCanExecuteChanged();
             FixProjectHealthCommand.RaiseCanExecuteChanged();
             RefreshProjectSnapshotCommand.RaiseCanExecuteChanged();
             GenerateProjectAgentsCommand.RaiseCanExecuteChanged();
@@ -948,6 +1006,8 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(CurrentProjectProfileText));
         OnPropertyChanged(nameof(CurrentProjectActivityText));
         OnPropertyChanged(nameof(CurrentProjectRecommendationText));
+        OnPropertyChanged(nameof(ProjectNextActionText));
+        ProjectNextActionCommand.RaiseCanExecuteChanged();
     }
 
 }
