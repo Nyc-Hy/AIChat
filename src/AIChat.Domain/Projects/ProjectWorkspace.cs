@@ -17,6 +17,7 @@ public sealed class ProjectWorkspace
     public List<PinnedContextItem> PinnedContext { get; set; } = [];
     public List<InputArtifact> InputArtifacts { get; set; } = [];
     public List<MemoryEntry> Memories { get; set; } = [];
+    public List<MemoryEntry> PendingMemories { get; set; } = [];
     public List<ProjectVerificationCommand> VerificationCommands { get; set; } = [];
     // Per-project tool permission overrides (tool ID -> mode name).
     // Merged with global AppSettings.ToolPermissionModes; project values take precedence.

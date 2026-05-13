@@ -533,6 +533,16 @@ public sealed class AgentRunSerializationTests
                     Content = "Use MVVM.",
                     Source = "test"
                 }
+            ],
+            PendingMemories =
+            [
+                new MemoryEntry
+                {
+                    ProjectId = "project-1",
+                    Category = MemoryCategory.User,
+                    Content = "Prefers concise replies.",
+                    Source = "candidate"
+                }
             ]
         };
 
@@ -549,6 +559,8 @@ public sealed class AgentRunSerializationTests
         Assert.True(roundTripped.VerificationCommands[0].IsDefault);
         Assert.Single(roundTripped.Memories);
         Assert.Equal("Use MVVM.", roundTripped.Memories[0].Content);
+        Assert.Single(roundTripped.PendingMemories);
+        Assert.Equal("Prefers concise replies.", roundTripped.PendingMemories[0].Content);
     }
 
     [Fact]

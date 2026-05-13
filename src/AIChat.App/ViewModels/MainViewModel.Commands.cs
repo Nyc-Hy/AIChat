@@ -77,6 +77,10 @@ public sealed partial class MainViewModel
         FixProjectHealthCommand = new RelayCommand(async _ => await FixProjectHealthAsync(), _ => SelectedProject is not null && Directory.Exists(SelectedProject.Path));
         RefreshProjectSnapshotCommand = new RelayCommand(_ => RefreshProjectSnapshot(), _ => SelectedProject is not null);
         GenerateProjectAgentsCommand = new RelayCommand(async _ => await GenerateProjectAgentsAsync(), _ => SelectedProject is not null && Directory.Exists(SelectedProject.Path));
+        RemoveProjectMemoryCommand = new RelayCommand(async param => await RemoveProjectMemoryAsync(param as ProjectMemoryViewModel), param => param is ProjectMemoryViewModel);
+        AcceptProjectMemoryCommand = new RelayCommand(async param => await AcceptProjectMemoryAsync(param as ProjectMemoryViewModel), param => param is ProjectMemoryViewModel { IsPending: true });
+        DeduplicateProjectMemoriesCommand = new RelayCommand(async _ => await DeduplicateProjectMemoriesAsync(), _ => SelectedProject is not null && SelectedProject.Project.Memories.Count > 1);
+        ClearProjectMemoriesCommand = new RelayCommand(async _ => await ClearProjectMemoriesAsync(), _ => SelectedProject is not null && (SelectedProject.Project.Memories.Count > 0 || SelectedProject.Project.PendingMemories.Count > 0));
         AddProjectCommand = new RelayCommand(async _ => await AddProjectAsync());
         RemoveProjectCommand = new RelayCommand(param => OpenRemoveProjectConfirmation(param as ProjectViewModel), param => param is ProjectViewModel && Projects.Count > 1);
         ConfirmRemoveProjectCommand = new RelayCommand(async _ => await ConfirmRemoveProjectAsync(), _ => ProjectPendingRemoval is not null && Projects.Count > 1);

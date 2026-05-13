@@ -83,6 +83,9 @@ public sealed partial class MainViewModel : ObservableObject
     private AgentRunHistoryItemViewModel? _selectedAgentRunHistoryItem;
     private AgentRunViewModel? _selectedAgentRunDetails;
     private int _agentRunHistoryTotalCount;
+    private string _projectMemorySearchText = "";
+    private string _projectMemoryFilterId = "all";
+    private bool _projectMemoryClearArmed;
     private string _selectedCallRequestJson = "请选择左侧调用记录。";
     private string _selectedCallResponseJson = "请选择左侧调用记录。";
     private bool _showSelectedCallRawEvents;
@@ -134,7 +137,17 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<AuditEventViewModel> AuditEvents { get; } = [];
     public ObservableCollection<InputArtifactViewModel> CurrentInputArtifacts { get; } = [];
     public ObservableCollection<ProjectVerificationCommandViewModel> ProjectVerificationCommands { get; } = [];
+    public ObservableCollection<ProjectMemoryViewModel> ProjectMemories { get; } = [];
     public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions => AgentRunHistoryFilter.Options;
+    public IReadOnlyList<SelectionOptionViewModel> ProjectMemoryFilterOptions { get; } =
+    [
+        new() { Id = "all", Name = "全部" },
+        new() { Id = "pending", Name = "待确认" },
+        new() { Id = "project", Name = "项目" },
+        new() { Id = "task", Name = "任务" },
+        new() { Id = "tool", Name = "工具" },
+        new() { Id = "user", Name = "用户" }
+    ];
     public IReadOnlyList<SelectionOptionViewModel> ToolPermissionModeOptions { get; } =
     [
         new() { Id = nameof(ToolPermissionMode.AutoReadOnly), Name = "只读自动" },
@@ -209,6 +222,10 @@ public sealed partial class MainViewModel : ObservableObject
     public RelayCommand FixProjectHealthCommand { get; private set; } = null!;
     public RelayCommand RefreshProjectSnapshotCommand { get; private set; } = null!;
     public RelayCommand GenerateProjectAgentsCommand { get; private set; } = null!;
+    public RelayCommand RemoveProjectMemoryCommand { get; private set; } = null!;
+    public RelayCommand AcceptProjectMemoryCommand { get; private set; } = null!;
+    public RelayCommand DeduplicateProjectMemoriesCommand { get; private set; } = null!;
+    public RelayCommand ClearProjectMemoriesCommand { get; private set; } = null!;
     public RelayCommand AddProjectCommand { get; private set; } = null!;
     public RelayCommand RemoveProjectCommand { get; private set; } = null!;
     public RelayCommand ConfirmRemoveProjectCommand { get; private set; } = null!;

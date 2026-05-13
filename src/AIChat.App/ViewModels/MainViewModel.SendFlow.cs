@@ -512,10 +512,7 @@ public sealed partial class MainViewModel
             return;
         }
 
-        var candidates = _memoryExtractor.Extract(SelectedConversation.Conversation, run)
-            .Where(candidate => !candidate.RequiresUserConfirmation)
-            .Take(5)
-            .ToList();
+        var candidates = _memoryExtractor.Extract(SelectedConversation.Conversation, run).Take(8).ToList();
         if (candidates.Count == 0)
         {
             return;
@@ -523,35 +520,48 @@ public sealed partial class MainViewModel
 
         var project = SelectedProject.Project;
         var added = 0;
+        var pending = 0;
         foreach (var candidate in candidates)
         {
-            if (HasSimilarMemory(project.Memories, candidate.Category, candidate.Content))
+            var target = candidate.RequiresUserConfirmation ? project.PendingMemories : project.Memories;
+            if (HasSimilarMemory(project.Memories, candidate.Category, candidate.Content) ||
+                HasSimilarMemory(project.PendingMemories, candidate.Category, candidate.Content))
             {
                 continue;
             }
 
-            var result = _memoryService.Add(project.Memories, new MemoryWriteRequest
+            var result = _memoryService.Add(target, new MemoryWriteRequest
             {
                 ProjectId = project.Id,
                 Category = candidate.Category,
                 Content = candidate.Content,
                 Source = candidate.Source,
+                UserConfirmed = true,
                 Metadata = candidate.Metadata
             });
             if (result.IsStored)
             {
-                added++;
+                if (candidate.RequiresUserConfirmation)
+                {
+                    pending++;
+                }
+                else
+                {
+                    added++;
+                }
             }
         }
 
-        if (added == 0)
+        if (added == 0 && pending == 0)
         {
             return;
         }
 
         TrimProjectMemories(project.Memories, 80);
+        TrimProjectMemories(project.PendingMemories, 20);
         project.UpdatedAt = DateTimeOffset.Now;
         RaiseProjectLoadSnapshotProperties();
+        LoadProjectMemories();
         await SaveProjectsAsync();
     }
 

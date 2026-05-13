@@ -3234,6 +3234,187 @@
                                 </ScrollViewer>
                             </TabItem>
 
+                            <TabItem Header="记忆">
+                                <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
+                                              VerticalAlignment="Stretch"
+                                              VerticalScrollBarVisibility="Auto"
+                                              PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
+                                    <StackPanel>
+                                        <Border Padding="14"
+                                                CornerRadius="8"
+                                                Background="#F5F8FA"
+                                                BorderBrush="#E1E8EF"
+                                                BorderThickness="1"
+                                                Margin="0,0,0,14">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock Text="项目长期记忆"
+                                                               FontSize="15"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="#1E252E" />
+                                                    <TextBlock Text="{Binding ProjectMemorySummary}"
+                                                               Margin="0,6,12,0"
+                                                               Foreground="#667386"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        Command="{Binding DeduplicateProjectMemoriesCommand}"
+                                                        Content="去重"
+                                                        Width="72"
+                                                        Height="30"
+                                                        Margin="8,0,0,0"
+                                                        Style="{StaticResource SubtleButtonStyle}" />
+                                                <Button Grid.Column="2"
+                                                        Command="{Binding ClearProjectMemoriesCommand}"
+                                                        Content="清空"
+                                                        Width="72"
+                                                        Height="30"
+                                                        Margin="8,0,0,0"
+                                                        Style="{StaticResource SubtleButtonStyle}" />
+                                            </Grid>
+                                        </Border>
+
+                                        <Grid Margin="0,0,0,12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="170" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox ItemsSource="{Binding ProjectMemoryFilterOptions}"
+                                                      SelectedValue="{Binding ProjectMemoryFilterId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      SelectedValuePath="Id"
+                                                      DisplayMemberPath="Name"
+                                                      Padding="10,0" />
+                                            <TextBox Grid.Column="2"
+                                                     Text="{Binding ProjectMemorySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     VerticalContentAlignment="Center"
+                                                     Style="{StaticResource SettingsTextBoxStyle}" />
+                                        </Grid>
+
+                                        <Border Padding="18"
+                                                CornerRadius="8"
+                                                Background="#FFFFFF"
+                                                BorderBrush="#E2E8F0"
+                                                BorderThickness="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasProjectMemories}" Value="False">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="当前筛选下没有记忆。Agent Run 完成后会自动沉淀项目、任务和工具记忆；用户偏好会先进入待确认。"
+                                                       Foreground="#748092"
+                                                       TextWrapping="Wrap" />
+                                        </Border>
+
+                                        <ItemsControl ItemsSource="{Binding ProjectMemories}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,10"
+                                                            Padding="14"
+                                                            CornerRadius="8"
+                                                            Background="#FFFFFF"
+                                                            BorderBrush="#E2E8F0"
+                                                            BorderThickness="1">
+                                                        <Grid>
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="Auto" />
+                                                            </Grid.RowDefinitions>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Border Padding="7,3"
+                                                                        CornerRadius="6"
+                                                                        Background="#EEF5F3"
+                                                                        BorderBrush="#D9E9E5"
+                                                                        BorderThickness="1">
+                                                                    <TextBlock Text="{Binding CategoryText}"
+                                                                               FontSize="11"
+                                                                               Foreground="#3E6F68" />
+                                                                </Border>
+                                                                <Border Padding="7,3"
+                                                                        Margin="8,0,0,0"
+                                                                        CornerRadius="6"
+                                                                        Background="#F4F6F8"
+                                                                        BorderBrush="#E1E6EC"
+                                                                        BorderThickness="1">
+                                                                    <TextBlock Text="{Binding StateText}"
+                                                                               FontSize="11"
+                                                                               Foreground="#596473" />
+                                                                </Border>
+                                                                <TextBlock Text="{Binding CreatedAtText}"
+                                                                           Margin="10,2,0,0"
+                                                                           FontSize="12"
+                                                                           Foreground="#8B96A6" />
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="1"
+                                                                        Orientation="Horizontal">
+                                                                <Button Command="{Binding DataContext.AcceptProjectMemoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Content="确认"
+                                                                        Width="64"
+                                                                        Height="28"
+                                                                        Margin="0,0,8,0">
+                                                                    <Button.Style>
+                                                                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsPending}" Value="True">
+                                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Button.Style>
+                                                                </Button>
+                                                                <Button Command="{Binding DataContext.RemoveProjectMemoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                        CommandParameter="{Binding}"
+                                                                        Content="删除"
+                                                                        Width="64"
+                                                                        Height="28"
+                                                                        Style="{StaticResource SubtleButtonStyle}" />
+                                                            </StackPanel>
+                                                            <TextBlock Grid.Row="1"
+                                                                       Grid.ColumnSpan="2"
+                                                                       Text="{Binding Content}"
+                                                                       Margin="0,10,0,0"
+                                                                       Foreground="#1E252E"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Grid.Row="2"
+                                                                       Grid.ColumnSpan="2"
+                                                                       Text="{Binding Source, StringFormat=来源：{0}}"
+                                                                       Margin="0,8,0,0"
+                                                                       Foreground="#748092"
+                                                                       FontSize="12"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Grid.Row="2"
+                                                                       Grid.ColumnSpan="2"
+                                                                       Text="{Binding MetadataText}"
+                                                                       Margin="0,26,0,0"
+                                                                       Foreground="#8B96A6"
+                                                                       FontSize="12"
+                                                                       TextWrapping="Wrap" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+
                             <!-- Advanced settings tab -->
                             <TabItem Header="高级">
                                 <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">

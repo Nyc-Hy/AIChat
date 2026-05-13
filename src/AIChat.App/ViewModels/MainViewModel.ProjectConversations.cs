@@ -36,6 +36,7 @@ public sealed partial class MainViewModel
                 RebuildCurrentInputArtifacts();
                 LoadProjectToolPermissionOverrides();
                 LoadProjectVerificationCommands();
+                LoadProjectMemories();
             }
         }
     }
