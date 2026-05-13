@@ -120,6 +120,12 @@ public sealed partial class MainViewModel
             ProjectPath = SelectedProject?.Path ?? "",
             WorkspaceBranch = workspaceSnapshot.Branch,
             WorkspaceChangeCount = workspaceSnapshot.ChangeCount,
+            ProjectLoadSnapshot = string.Join(Environment.NewLine, [
+                CurrentProjectHealthText,
+                CurrentProjectProfileText,
+                CurrentProjectActivityText,
+                CurrentProjectRecommendationText
+            ]),
             PinnedContextItems = SelectedProject?.Project.PinnedContext ?? [],
             InputArtifacts = SelectedProject?.Project.InputArtifacts ?? [],
             MemoryEntries = SelectedProject?.Project.Memories ?? [],

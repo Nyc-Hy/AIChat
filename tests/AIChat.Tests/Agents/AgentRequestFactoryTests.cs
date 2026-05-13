@@ -135,8 +135,39 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Contains("input-artifact:", result.ChatRequest.Messages[0].Content);
         Assert.Contains("bug-report.pdf", result.ChatRequest.Messages[0].Content);
         Assert.Contains("memory:", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("加载快照", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("路径可用", result.ChatRequest.Messages[0].Content);
         Assert.Contains(result.ChatRequest.Messages, message => message.Role == ChatRole.User && message.Content == "fix bug");
         Assert.DoesNotContain(result.ChatRequest.Messages, message => message.Id == assistant.Id);
+    }
+
+    [Fact]
+    public void Build_UsesProvidedProjectLoadSnapshotInSystemPrompt()
+    {
+        var conversation = CreateConversation();
+        var assistant = AddMessage(conversation, ChatRole.Assistant, "placeholder");
+        var factory = CreateFactory();
+
+        var result = factory.Build(new AgentRequestBuildRequest
+        {
+            Conversation = conversation,
+            AssistantMessageId = assistant.Id,
+            EffectiveSettings = CreateEffectiveSettings(),
+            RuntimeSettings = CreateRuntimeSettings(),
+            ProjectName = "Sample",
+            ProjectPath = _tempDir,
+            ProjectLoadSnapshot = """
+                                  健康：路径可用 · AGENTS.md 已就绪
+                                  画像：.NET · 目录：src, tests
+                                  活动：1 个需修改
+                                  建议：优先处理验收反馈
+                                  """
+        });
+
+        var system = result.ChatRequest.Messages[0].Content;
+        Assert.Contains("健康：路径可用", system);
+        Assert.Contains("画像：.NET", system);
+        Assert.Contains("优先处理验收反馈", system);
     }
 
     [Fact]

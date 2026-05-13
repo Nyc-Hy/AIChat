@@ -4,6 +4,7 @@ using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
 using AIChat.Application.Memory;
 using AIChat.Application.Prompting;
+using AIChat.Application.Projects;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Domain.Chat;
@@ -24,6 +25,7 @@ public sealed record AgentRequestBuildRequest
     public string ProjectPath { get; init; } = "";
     public string WorkspaceBranch { get; init; } = "";
     public int WorkspaceChangeCount { get; init; }
+    public string ProjectLoadSnapshot { get; init; } = "";
     public IReadOnlyList<PinnedContextItem> PinnedContextItems { get; init; } = [];
     public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
     public IReadOnlyList<MemoryEntry> MemoryEntries { get; init; } = [];
@@ -152,6 +154,9 @@ public sealed class AgentRequestFactory
                 ProviderId = request.EffectiveSettings.ProviderId,
                 ProjectName = string.IsNullOrWhiteSpace(request.ProjectName) ? "AIChat" : request.ProjectName,
                 ProjectPath = projectPath,
+                ProjectLoadSnapshot = string.IsNullOrWhiteSpace(request.ProjectLoadSnapshot)
+                    ? BuildProjectLoadSnapshotFallback(request, projectPath)
+                    : request.ProjectLoadSnapshot,
                 EnabledToolIds = request.RuntimeSettings.EnabledToolIds,
                 ToolPermissionModes = request.RuntimeSettings.ToolPermissionModes,
                 FileIndex = fileIndex,
@@ -298,6 +303,23 @@ public sealed class AgentRequestFactory
     private static bool SupportsVision(AppSettings settings)
     {
         return settings.ModelSupportsVision;
+    }
+
+    private static string BuildProjectLoadSnapshotFallback(AgentRequestBuildRequest request, string projectPath)
+    {
+        var snapshot = ProjectLoadSnapshotBuilder.Build(new ProjectWorkspace
+        {
+            Name = string.IsNullOrWhiteSpace(request.ProjectName) ? "AIChat" : request.ProjectName,
+            Path = projectPath,
+            Conversations = [request.Conversation],
+            VerificationCommands = request.VerificationCommands.ToList()
+        });
+        return string.Join(Environment.NewLine, [
+            snapshot.HealthText,
+            snapshot.ProfileText,
+            snapshot.ActivityText,
+            snapshot.RecommendationText
+        ]);
     }
 
     private static string ResolveProjectPath(string projectPath)

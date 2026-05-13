@@ -9,6 +9,7 @@ public sealed class SystemPromptContext
     public string ProviderId { get; init; } = "tokenplan-mimo";
     public string ProjectName { get; init; } = "AIChat";
     public string ProjectPath { get; init; } = "";
+    public string ProjectLoadSnapshot { get; init; } = "";
     public IReadOnlyList<string> EnabledToolIds { get; init; } = [];
     public IReadOnlyDictionary<string, ToolPermissionMode> ToolPermissionModes { get; init; } =
         new Dictionary<string, ToolPermissionMode>(StringComparer.OrdinalIgnoreCase);

@@ -42,6 +42,16 @@ public sealed class SystemPromptBuilder
         builder.AppendLine("当前项目：");
         builder.AppendLine($"- 名称：{Normalize(context.ProjectName, "AIChat")}");
         builder.AppendLine($"- 路径：{Normalize(context.ProjectPath, "(未设置)")}");
+        if (!string.IsNullOrWhiteSpace(context.ProjectLoadSnapshot))
+        {
+            builder.AppendLine("- 加载快照：");
+            foreach (var line in context.ProjectLoadSnapshot.Split(
+                         ['\r', '\n'],
+                         StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                builder.AppendLine($"  - {line}");
+            }
+        }
         builder.AppendLine();
 
         // Inject AGENTS.md content if it exists
