@@ -1342,6 +1342,10 @@
                                     <TextBlock Text="{Binding AgentRunHistorySummary}"
                                                Margin="0,6,0,0"
                                                Foreground="#748092" />
+                                    <TextBlock Text="{Binding AgentRunHistoryPerformanceSummary}"
+                                               Margin="0,6,0,0"
+                                               Foreground="#536172"
+                                               TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding AgentRunHistoryInsight}"
                                                Margin="0,6,0,0"
                                                Foreground="#596473"

@@ -44,6 +44,8 @@ public sealed partial class MainViewModel
             : $"当前筛选无匹配 · 总计 {_agentRunHistoryTotalCount} 次运行"
         : $"显示 {AgentRunHistory.Count} / {_agentRunHistoryTotalCount} 次运行 · {AgentRunHistory.Count(item => item.CanContinue)} 个可继续 · {AgentRunHistory.Count(item => item.NeedsChanges)} 个需修改 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
     public string AgentRunHistoryInsight => AgentRunHistoryInsights.Build(AgentRunHistory.ToList());
+    public string AgentRunHistoryPerformanceSummary => AIChat.Application.Agents.AgentRunPerformanceSummaryBuilder.Build(
+        AgentRunHistory.Select(item => item.Run.Run).ToList());
 
     public AgentRunViewModel? SelectedAgentRunDetails
     {
@@ -146,6 +148,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(HasAgentRunHistory));
         OnPropertyChanged(nameof(AgentRunHistorySummary));
         OnPropertyChanged(nameof(AgentRunHistoryInsight));
+        OnPropertyChanged(nameof(AgentRunHistoryPerformanceSummary));
         RetryAgentRunCommand.RaiseCanExecuteChanged();
         ContinueAgentRunCommand.RaiseCanExecuteChanged();
     }
