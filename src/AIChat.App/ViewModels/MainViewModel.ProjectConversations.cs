@@ -29,6 +29,8 @@ public sealed partial class MainViewModel
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
                 AddProjectVerificationCommandCommand.RaiseCanExecuteChanged();
                 InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
+                RefreshProjectSnapshotCommand.RaiseCanExecuteChanged();
+                GenerateProjectAgentsCommand.RaiseCanExecuteChanged();
                 RebuildCurrentInputArtifacts();
                 LoadProjectToolPermissionOverrides();
                 LoadProjectVerificationCommands();
@@ -140,6 +142,46 @@ public sealed partial class MainViewModel
         ? "未设置项目路径"
         : ProjectPendingRemoval.Path;
 
+    private void RefreshProjectSnapshot()
+    {
+        if (SelectedProject is null)
+        {
+            return;
+        }
+
+        RaiseProjectLoadSnapshotProperties();
+        StatusText = "项目快照已刷新";
+    }
+
+    private async Task GenerateProjectAgentsAsync()
+    {
+        if (SelectedProject is null || string.IsNullOrWhiteSpace(SelectedProject.Path) || !Directory.Exists(SelectedProject.Path))
+        {
+            return;
+        }
+
+        var agentsPath = Path.Combine(SelectedProject.Path, "AGENTS.md");
+        var alreadyExists = File.Exists(agentsPath);
+
+        try
+        {
+            await new ProjectInitializer().InitializeProjectAsync(SelectedProject.Path);
+            SelectedProject.Project.UpdatedAt = DateTimeOffset.Now;
+            await SaveProjectsAsync();
+            RaiseProjectLoadSnapshotProperties();
+
+            StatusText = alreadyExists
+                ? "AGENTS.md 已存在，未覆盖"
+                : File.Exists(agentsPath)
+                    ? "已生成 AGENTS.md"
+                    : "未生成 AGENTS.md";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"生成 AGENTS.md 失败：{ex.Message}";
+        }
+    }
+
     private void SelectProject(ProjectViewModel? project)
     {
         if (project is null)
@@ -191,6 +233,8 @@ public sealed partial class MainViewModel
             RaiseProjectLoadSnapshotProperties();
             LoadProjectVerificationCommands();
             InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
+            RefreshProjectSnapshotCommand.RaiseCanExecuteChanged();
+            GenerateProjectAgentsCommand.RaiseCanExecuteChanged();
             StatusText = $"项目路径已设置为：{dialog.SelectedPath}";
         }
         else

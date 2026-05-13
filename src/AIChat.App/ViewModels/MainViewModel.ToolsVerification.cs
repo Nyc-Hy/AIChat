@@ -477,6 +477,7 @@ public sealed partial class MainViewModel
 
         project.VerificationCommands = suggestions.ToList();
         LoadProjectVerificationCommands();
+        _ = SaveProjectsAsync();
         StatusText = $"已推断 {suggestions.Count} 个验证命令";
     }
 

@@ -73,6 +73,8 @@ public sealed partial class MainViewModel
         AddProjectVerificationCommandCommand = new RelayCommand(_ => AddProjectVerificationCommand(), _ => SelectedProject is not null);
         RemoveProjectVerificationCommandCommand = new RelayCommand(param => RemoveProjectVerificationCommand(param as ProjectVerificationCommandViewModel), param => param is ProjectVerificationCommandViewModel);
         InferProjectVerificationCommandsCommand = new RelayCommand(_ => InferProjectVerificationCommands(), _ => SelectedProject is not null && Directory.Exists(SelectedProject.Path));
+        RefreshProjectSnapshotCommand = new RelayCommand(_ => RefreshProjectSnapshot(), _ => SelectedProject is not null);
+        GenerateProjectAgentsCommand = new RelayCommand(async _ => await GenerateProjectAgentsAsync(), _ => SelectedProject is not null && Directory.Exists(SelectedProject.Path));
         AddProjectCommand = new RelayCommand(async _ => await AddProjectAsync());
         RemoveProjectCommand = new RelayCommand(param => OpenRemoveProjectConfirmation(param as ProjectViewModel), param => param is ProjectViewModel && Projects.Count > 1);
         ConfirmRemoveProjectCommand = new RelayCommand(async _ => await ConfirmRemoveProjectAsync(), _ => ProjectPendingRemoval is not null && Projects.Count > 1);

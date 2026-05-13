@@ -202,6 +202,8 @@ public sealed partial class MainViewModel : ObservableObject
     public RelayCommand AddProjectVerificationCommandCommand { get; private set; } = null!;
     public RelayCommand RemoveProjectVerificationCommandCommand { get; private set; } = null!;
     public RelayCommand InferProjectVerificationCommandsCommand { get; private set; } = null!;
+    public RelayCommand RefreshProjectSnapshotCommand { get; private set; } = null!;
+    public RelayCommand GenerateProjectAgentsCommand { get; private set; } = null!;
     public RelayCommand AddProjectCommand { get; private set; } = null!;
     public RelayCommand RemoveProjectCommand { get; private set; } = null!;
     public RelayCommand ConfirmRemoveProjectCommand { get; private set; } = null!;
