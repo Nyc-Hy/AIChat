@@ -17,6 +17,7 @@ public sealed class AgentTaskExecutionPolicyBuilderTests
         Assert.Equal(4, policy.MaxToolRounds);
         Assert.Equal("Fast Path", policy.Mode);
         Assert.Equal(0, policy.SubAgentMaxToolCalls);
+        Assert.Equal("", policy.StrategyAdjustment);
         Assert.False(policy.UsePlanner);
         Assert.False(policy.AllowExplorer);
     }

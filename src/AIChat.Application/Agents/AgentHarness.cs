@@ -24,6 +24,7 @@ public sealed class AgentHarness
     private readonly AgentTaskExecutionPolicyBuilder _executionPolicyBuilder;
     private readonly AgentCompletionEvidenceChecker _completionEvidenceChecker;
     private readonly AgentRunQualityEvaluator _qualityEvaluator;
+    private readonly AgentStrategyAdvisor _strategyAdvisor;
 
     public AgentHarness(
         AgentRunner agentRunner,
@@ -34,7 +35,8 @@ public sealed class AgentHarness
         AgentTaskClassifier? taskClassifier = null,
         AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null,
         AgentCompletionEvidenceChecker? completionEvidenceChecker = null,
-        AgentRunQualityEvaluator? qualityEvaluator = null)
+        AgentRunQualityEvaluator? qualityEvaluator = null,
+        AgentStrategyAdvisor? strategyAdvisor = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
@@ -45,6 +47,7 @@ public sealed class AgentHarness
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
         _completionEvidenceChecker = completionEvidenceChecker ?? new AgentCompletionEvidenceChecker();
         _qualityEvaluator = qualityEvaluator ?? new AgentRunQualityEvaluator();
+        _strategyAdvisor = strategyAdvisor ?? new AgentStrategyAdvisor();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -81,6 +84,10 @@ public sealed class AgentHarness
             request.Context,
             request.ContextPack,
             !string.IsNullOrWhiteSpace(request.ContinuedFromRunId));
+        executionPolicy = _strategyAdvisor.Adjust(
+            executionPolicy,
+            request.Context,
+            request.Conversation.AgentRuns.Where(item => item.Id != run.Id).ToList());
         run.MaxToolRounds = executionPolicy.MaxToolRounds;
         run.TaskComplexity = executionPolicy.Complexity.ToString();
         run.ExecutionPolicySummary = CreateExecutionPolicySummary(executionPolicy);
@@ -481,7 +488,10 @@ public sealed class AgentHarness
 
     private static string CreateExecutionPolicySummary(AgentTaskExecutionPolicy policy)
     {
-        return $"mode={policy.Mode}; complexity={policy.Complexity}; maxToolRounds={policy.MaxToolRounds}; planner={policy.UsePlanner}; explorer={policy.AllowExplorer}; subAgentMaxToolCalls={policy.SubAgentMaxToolCalls}";
+        var summary = $"mode={policy.Mode}; complexity={policy.Complexity}; maxToolRounds={policy.MaxToolRounds}; planner={policy.UsePlanner}; explorer={policy.AllowExplorer}; subAgentMaxToolCalls={policy.SubAgentMaxToolCalls}";
+        return string.IsNullOrWhiteSpace(policy.StrategyAdjustment)
+            ? summary
+            : summary + $"; strategy={policy.StrategyAdjustment}";
     }
 
     private static string CreateExplorerDecisionReason(

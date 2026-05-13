@@ -264,6 +264,57 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public async Task RunAsync_AppliesHistoricalBudgetAdjustment()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        conversation.AgentRuns.Add(new AgentRun
+        {
+            Id = "old-1",
+            TaskComplexity = "Standard",
+            ToolBudgetExceeded = true,
+            Status = AgentRunStatus.BudgetExceeded,
+            StartedAt = DateTimeOffset.Now.AddMinutes(-2)
+        });
+        conversation.AgentRuns.Add(new AgentRun
+        {
+            Id = "old-2",
+            TaskComplexity = "Standard",
+            ToolBudgetExceeded = true,
+            Status = AgentRunStatus.BudgetExceeded,
+            StartedAt = DateTimeOffset.Now.AddMinutes(-1)
+        });
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
+            new AgentToolCatalog([])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "fix login",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "fix login" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = ["read_file"],
+                               MaxToolRounds = 40
+                           }
+                       }))
+        {
+        }
+
+        var run = conversation.AgentRuns.Last();
+        Assert.Equal(30, run.MaxToolRounds);
+        Assert.Contains("strategy=recent budget pressure", run.ExecutionPolicySummary);
+    }
+
+    [Fact]
     public async Task RunAsync_SkipsPlannerWhenContinuingPausedRun()
     {
         var conversation = new Conversation { Id = "conversation-1" };

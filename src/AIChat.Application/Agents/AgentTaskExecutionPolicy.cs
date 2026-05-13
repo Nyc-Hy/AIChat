@@ -8,7 +8,8 @@ public sealed record AgentTaskExecutionPolicy(
     int MaxToolRounds,
     int SubAgentMaxToolCalls,
     bool UsePlanner,
-    bool AllowExplorer);
+    bool AllowExplorer,
+    string StrategyAdjustment = "");
 
 public sealed class AgentTaskExecutionPolicyBuilder
 {
