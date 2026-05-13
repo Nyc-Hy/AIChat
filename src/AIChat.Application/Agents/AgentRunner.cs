@@ -72,6 +72,7 @@ public sealed class AgentRunner
 
             for (var retryAttempt = 0; retryAttempt <= _retryPolicy.MaxRetries && !chatSucceeded; retryAttempt++)
             {
+                yield return new AgentRunEvent { Type = AgentRunEventType.ModelRequestStarted };
                 assistantContent = "";
                 assistantReasoningContent = "";
                 rawEvents.Clear();

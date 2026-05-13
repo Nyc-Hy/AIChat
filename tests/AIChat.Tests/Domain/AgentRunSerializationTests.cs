@@ -75,6 +75,9 @@ public sealed class AgentRunSerializationTests
                     WorkspaceChangesWereTruncated = true,
                     MaxToolRounds = 4,
                     ToolCallCount = 2,
+                    ModelCallCount = 3,
+                    ContextEstimatedTokens = 420,
+                    ContextRefCount = 6,
                     ToolBudgetExceeded = true,
                     RequiresProjectMutation = true,
                     MutationToolSucceeded = true,
@@ -270,6 +273,9 @@ public sealed class AgentRunSerializationTests
         Assert.True(roundTripped.AgentRuns[0].WorkspaceChangesWereTruncated);
         Assert.Equal(4, roundTripped.AgentRuns[0].MaxToolRounds);
         Assert.Equal(2, roundTripped.AgentRuns[0].ToolCallCount);
+        Assert.Equal(3, roundTripped.AgentRuns[0].ModelCallCount);
+        Assert.Equal(420, roundTripped.AgentRuns[0].ContextEstimatedTokens);
+        Assert.Equal(6, roundTripped.AgentRuns[0].ContextRefCount);
         Assert.True(roundTripped.AgentRuns[0].ToolBudgetExceeded);
         Assert.True(roundTripped.AgentRuns[0].RequiresProjectMutation);
         Assert.True(roundTripped.AgentRuns[0].MutationToolSucceeded);

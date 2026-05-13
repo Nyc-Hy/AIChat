@@ -65,6 +65,8 @@ public sealed class AgentHarness
             WorkspaceChangeCountAtStart = request.WorkspaceChangeCountAtStart,
             WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
             MaxToolRounds = request.Context.MaxToolRounds,
+            ContextEstimatedTokens = request.ContextPack?.EstimatedTokens ?? 0,
+            ContextRefCount = request.ContextPack?.ToPromptRefs().Count ?? 0,
             RequiresProjectMutation = false,
             ContinuedFromRunId = request.ContinuedFromRunId,
             StartedAt = DateTimeOffset.Now
@@ -91,6 +93,7 @@ public sealed class AgentHarness
         if (shouldPlan)
         {
             run.PlannerUsed = true;
+            run.ModelCallCount++;
             yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
             var structuredPlan = await planner!.PlanAsync(
                 new AgentPlanningRequest(
@@ -211,6 +214,9 @@ public sealed class AgentHarness
         {
             switch (agentEvent.Type)
             {
+                case AgentRunEventType.ModelRequestStarted:
+                    run.ModelCallCount++;
+                    break;
                 case AgentRunEventType.RawProviderEvent:
                     yield return new AgentHarnessEvent
                     {
@@ -1361,6 +1367,9 @@ public sealed class AgentHarness
             {
                 switch (fixEvent.Type)
                 {
+                    case AgentRunEventType.ModelRequestStarted:
+                        run.ModelCallCount++;
+                        break;
                     case AgentRunEventType.RawProviderEvent:
                         yield return new AgentHarnessEvent
                         {

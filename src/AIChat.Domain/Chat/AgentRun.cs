@@ -20,6 +20,9 @@ public sealed class AgentRun
     public bool WorkspaceChangesWereTruncated { get; set; }
     public int MaxToolRounds { get; set; }
     public int ToolCallCount { get; set; }
+    public int ModelCallCount { get; set; }
+    public int ContextEstimatedTokens { get; set; }
+    public int ContextRefCount { get; set; }
     public bool ToolBudgetExceeded { get; set; }
     public bool RequiresProjectMutation { get; set; }
     public bool MutationToolSucceeded { get; set; }

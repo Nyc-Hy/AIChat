@@ -2,6 +2,7 @@ namespace AIChat.Application.Agents;
 
 public enum AgentRunEventType
 {
+    ModelRequestStarted,
     ContentDelta,
     RawProviderEvent,
     ToolCall,

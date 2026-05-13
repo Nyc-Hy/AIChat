@@ -56,6 +56,14 @@ public sealed class AgentRunViewModel : ObservableObject
             return $"最多 {rounds} 轮工具调用 · 已调用 {_run.ToolCallCount} 次{exhausted}";
         }
     }
+    public string MetricsSummary =>
+        $"模式：{ExecutionModeText}{Environment.NewLine}" +
+        $"模型调用：{_run.ModelCallCount} 次{Environment.NewLine}" +
+        $"工具调用：{_run.ToolCallCount}/{(_run.MaxToolRounds <= 0 ? "未记录" : _run.MaxToolRounds.ToString())}{Environment.NewLine}" +
+        $"Context：约 {_run.ContextEstimatedTokens} tokens · {_run.ContextRefCount} refs{Environment.NewLine}" +
+        $"Planner：{PlannerUsageText} · Explorer：{ExplorerUsageText}{Environment.NewLine}" +
+        $"耗时：{DurationText}{Environment.NewLine}" +
+        $"质量风险：{RiskSummaryText}";
     public string MutationGuardrailText => _run.MutationToolSucceeded
         ? "已记录修改工具"
         : "未记录修改工具";
@@ -299,12 +307,14 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(ExecutionModeText));
         OnPropertyChanged(nameof(FinalStatusReason));
         OnPropertyChanged(nameof(DebugSummary));
+        OnPropertyChanged(nameof(MetricsSummary));
         OnPropertyChanged(nameof(RecoverySuggestion));
         OnPropertyChanged(nameof(HasRecoverySuggestion));
         OnPropertyChanged(nameof(CompletionReasonText));
         OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(MetricsSummary));
         OnPropertyChanged(nameof(CompactOutcomeText));
         OnPropertyChanged(nameof(FileChangeSummaryText));
         OnPropertyChanged(nameof(VerificationSummaryText));

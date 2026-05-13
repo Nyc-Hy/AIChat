@@ -68,6 +68,9 @@ public sealed class AgentHarnessTests
         Assert.Equal(2, run.WorkspaceChangeCountAtStart);
         Assert.True(run.WorkspaceChangesWereTruncated);
         Assert.Equal(4, run.MaxToolRounds);
+        Assert.Equal(1, run.ModelCallCount);
+        Assert.Equal(0, run.ContextEstimatedTokens);
+        Assert.Equal(0, run.ContextRefCount);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunStarted);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta && item.Content == "done");
         Assert.Equal(2, run.Steps.Count);
@@ -129,6 +132,7 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.NotNull(run.StructuredPlan);
+        Assert.Equal(2, run.ModelCallCount);
         Assert.Equal("Plan first", run.StructuredPlan!.Summary);
         Assert.NotNull(run.Plan);
         Assert.Contains(run.Steps, step => step.Title == "生成结构化计划");
@@ -161,6 +165,12 @@ public sealed class AgentHarnessTests
                                Messages = [new ChatMessage { Role = ChatRole.User, Content = "解释这个项目的 Agent loop" }]
                            },
                            Settings = new AppSettings { Model = "test" },
+                           ContextPack = new TaskContextPack
+                           {
+                               Summary = "Context pack: 1 files, ~123 tokens",
+                               IncludedFiles = [new TaskContextFileRef { Path = "src/App.cs", Reason = "test", Score = 1 }],
+                               EstimatedTokens = 123
+                           },
                            Context = new AgentRunContext
                            {
                                ProjectPath = Environment.CurrentDirectory,
@@ -180,6 +190,9 @@ public sealed class AgentHarnessTests
         Assert.False(run.PlannerUsed);
         Assert.False(run.ExplorerUsed);
         Assert.Equal(4, run.MaxToolRounds);
+        Assert.Equal(1, run.ModelCallCount);
+        Assert.Equal(123, run.ContextEstimatedTokens);
+        Assert.True(run.ContextRefCount >= 2);
         Assert.Contains("Explorer skipped", run.ExplorerDecisionReason);
         Assert.Empty(plannerService.Requests);
         Assert.Single(runnerService.Requests);
