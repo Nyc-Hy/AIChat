@@ -14,7 +14,11 @@ public sealed class AgentStrategyAdvisor
             .OrderByDescending(run => run.StartedAt)
             .Take(12)
             .ToList();
-        if (recent.Count == 0)
+        var allRecent = history
+            .OrderByDescending(run => run.StartedAt)
+            .Take(20)
+            .ToList();
+        if (recent.Count == 0 && allRecent.Count == 0)
         {
             return policy;
         }
@@ -46,11 +50,57 @@ public sealed class AgentStrategyAdvisor
             notes.Add("standard explorer disabled after low-yield history");
         }
 
+        ApplyUserPreferenceSignals(context, allRecent, ref adjusted, notes);
+
         if (notes.Count == 0)
         {
             return policy;
         }
 
         return adjusted with { StrategyAdjustment = string.Join("; ", notes) };
+    }
+
+    private static void ApplyUserPreferenceSignals(
+        AgentRunContext context,
+        IReadOnlyList<AgentRun> history,
+        ref AgentTaskExecutionPolicy policy,
+        List<string> notes)
+    {
+        if (history.Count == 0)
+        {
+            return;
+        }
+
+        var continuedRuns = history.Count(run => !string.IsNullOrWhiteSpace(run.ContinuedFromRunId));
+        var retriedRuns = history.Count(run => !string.IsNullOrWhiteSpace(run.RetriedFromRunId));
+        var rejectedApprovals = history.Sum(run => run.ToolApprovalRejectedCount);
+        var mutationRuns = history.Where(run => run.MutationToolSucceeded || run.FileChanges.Count > 0).ToList();
+        var unverifiedMutationRuns = mutationRuns.Count(run => run.Verifications.Count == 0);
+
+        if (continuedRuns >= 2 && continuedRuns > retriedRuns && !policy.PreferContinuationRecovery)
+        {
+            policy = policy with { PreferContinuationRecovery = true };
+            notes.Add("user recovery preference: continue from checkpoint");
+        }
+        else if (retriedRuns >= 2 && retriedRuns > continuedRuns && !policy.PreferCleanRetryRecovery)
+        {
+            policy = policy with { PreferCleanRetryRecovery = true };
+            notes.Add("user recovery preference: clean retry");
+        }
+
+        if (rejectedApprovals >= 2 && !policy.CautiousToolApproval)
+        {
+            policy = policy with { CautiousToolApproval = true };
+            notes.Add("user approval preference: explain high-risk tools first");
+        }
+
+        if (context.VerificationCommands.Count > 0 &&
+            mutationRuns.Count >= 2 &&
+            unverifiedMutationRuns >= Math.Max(1, mutationRuns.Count / 2) &&
+            !policy.ForceAutoVerifyAfterMutation)
+        {
+            policy = policy with { ForceAutoVerifyAfterMutation = true };
+            notes.Add("user quality preference: force auto-verify after mutation");
+        }
     }
 }

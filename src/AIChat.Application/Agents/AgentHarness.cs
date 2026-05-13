@@ -140,7 +140,7 @@ public sealed class AgentHarness
             AgentStepType.Model,
             "准备上下文",
             request.Goal,
-            CreateContextStepOutput(run));
+            CreateContextStepOutput(run, executionPolicy));
         yield return new AgentHarnessEvent
         {
             Type = AgentHarnessEventType.StepAdded,
@@ -359,7 +359,7 @@ public sealed class AgentHarness
                     CompleteFinalValidation(run, assistantContent);
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                     CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
-                    CompleteRecoverySuggestion(run);
+                    CompleteRecoverySuggestion(run, executionPolicy);
                     var budgetMessage = CreateBudgetPausedUserMessage(run);
                     yield return new AgentHarnessEvent
                     {
@@ -403,7 +403,7 @@ public sealed class AgentHarness
                             CompleteFinalValidation(run, assistantContent);
                             run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                             CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
-                            CompleteRecoverySuggestion(run);
+                            CompleteRecoverySuggestion(run, executionPolicy);
                             var budgetMessage = CreateBudgetPausedUserMessage(run);
                             yield return new AgentHarnessEvent
                             {
@@ -433,7 +433,7 @@ public sealed class AgentHarness
                     var finalStatus = DetermineFinalStatus(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
                     CompleteQualityAssessment(run, finalStatus);
-                    CompleteRecoverySuggestion(run);
+                    CompleteRecoverySuggestion(run, executionPolicy);
                     var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
                     if (!string.Equals(finalContent, assistantContent, StringComparison.Ordinal))
@@ -490,9 +490,41 @@ public sealed class AgentHarness
     private static string CreateExecutionPolicySummary(AgentTaskExecutionPolicy policy)
     {
         var summary = $"mode={policy.Mode}; complexity={policy.Complexity}; maxToolRounds={policy.MaxToolRounds}; planner={policy.UsePlanner}; explorer={policy.AllowExplorer}; subAgentMaxToolCalls={policy.SubAgentMaxToolCalls}";
+        var preferences = FormatPolicyPreferences(policy);
+        if (!string.IsNullOrWhiteSpace(preferences))
+        {
+            summary += $"; preferences={preferences}";
+        }
+
         return string.IsNullOrWhiteSpace(policy.StrategyAdjustment)
             ? summary
             : summary + $"; strategy={policy.StrategyAdjustment}";
+    }
+
+    private static string FormatPolicyPreferences(AgentTaskExecutionPolicy policy)
+    {
+        var preferences = new List<string>();
+        if (policy.PreferContinuationRecovery)
+        {
+            preferences.Add("continue");
+        }
+
+        if (policy.PreferCleanRetryRecovery)
+        {
+            preferences.Add("clean-retry");
+        }
+
+        if (policy.ForceAutoVerifyAfterMutation)
+        {
+            preferences.Add("auto-verify");
+        }
+
+        if (policy.CautiousToolApproval)
+        {
+            preferences.Add("cautious-approval");
+        }
+
+        return string.Join(",", preferences);
     }
 
     private static string CreateExplorerDecisionReason(
@@ -541,7 +573,9 @@ public sealed class AgentHarness
         AgentRunContext context,
         AgentTaskExecutionPolicy policy)
     {
-        if (context.MaxToolRounds == policy.MaxToolRounds)
+        var autoVerify = context.AutoVerifyAgentRuns || policy.ForceAutoVerifyAfterMutation;
+        if (context.MaxToolRounds == policy.MaxToolRounds &&
+            context.AutoVerifyAgentRuns == autoVerify)
         {
             return context;
         }
@@ -553,7 +587,7 @@ public sealed class AgentHarness
             ToolPermissionModes = context.ToolPermissionModes,
             RequestToolApprovalAsync = context.RequestToolApprovalAsync,
             MaxToolRounds = policy.MaxToolRounds,
-            AutoVerifyAgentRuns = context.AutoVerifyAgentRuns,
+            AutoVerifyAgentRuns = autoVerify,
             MaxAutoFixRounds = context.MaxAutoFixRounds,
             VerificationCommands = context.VerificationCommands,
             InputArtifacts = context.InputArtifacts
@@ -647,7 +681,7 @@ public sealed class AgentHarness
         run.Status = originalStatus;
     }
 
-    private static void CompleteRecoverySuggestion(AgentRun run)
+    private static void CompleteRecoverySuggestion(AgentRun run, AgentTaskExecutionPolicy policy)
     {
         run.CheckpointSummary = BuildCheckpointSummary(run);
         run.CheckpointArtifactRefs = run.Artifacts
@@ -660,6 +694,9 @@ public sealed class AgentHarness
 
         if (run.ToolBudgetExceeded)
         {
+            var recoveryStyle = policy.PreferCleanRetryRecovery
+                ? "如果恢复包显示当前状态不可信，优先用重试入口从原始目标重新开始。"
+                : "优先沿用 checkpoint 继续，避免重复已经完成的探索或计划项。";
             run.RecoverySuggestion =
                 $"""
                 继续完成这个已暂停的 Agent 任务。
@@ -679,6 +716,7 @@ public sealed class AgentHarness
                 3. 优先继续“未完成计划/下一步建议”里的事项。
                 4. 如果需要修改，实际调用写入/编辑工具后再声称完成。
                 5. 如果发生修改，优先运行项目验证命令或合适的测试。
+                6. {recoveryStyle}
                 """;
             return;
         }
@@ -702,6 +740,7 @@ public sealed class AgentHarness
                 1. 先说明接下来需要哪些工具、为什么需要。
                 2. 如果用户没有重新授权，不要重复调用刚被拒绝的高风险工具。
                 3. 优先用只读工具确认当前状态，再选择最小必要动作。
+                4. {FormatApprovalRecoveryPreference(policy)}
                 """;
             return;
         }
@@ -906,7 +945,14 @@ public sealed class AgentHarness
         return toolName is "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit";
     }
 
-    private static string CreateContextStepOutput(AgentRun run)
+    private static string FormatApprovalRecoveryPreference(AgentTaskExecutionPolicy policy)
+    {
+        return policy.CautiousToolApproval
+            ? "保持高风险工具说明优先，等用户确认后再执行写入或提交。"
+            : "保持工具调用最小化。";
+    }
+
+    private static string CreateContextStepOutput(AgentRun run, AgentTaskExecutionPolicy policy)
     {
         var lines = new List<string>
         {
@@ -926,6 +972,17 @@ public sealed class AgentHarness
         if (!string.IsNullOrWhiteSpace(run.ContinuedFromRunId))
         {
             lines.Add($"继续运行：{run.ContinuedFromRunId}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(run.RetriedFromRunId))
+        {
+            lines.Add($"重试来源：{run.RetriedFromRunId}");
+        }
+
+        var preferences = FormatPolicyPreferences(policy);
+        if (!string.IsNullOrWhiteSpace(preferences))
+        {
+            lines.Add($"历史偏好：{preferences}");
         }
 
         return string.Join(Environment.NewLine, lines);

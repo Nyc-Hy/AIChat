@@ -9,6 +9,10 @@ public sealed record AgentTaskExecutionPolicy(
     int SubAgentMaxToolCalls,
     bool UsePlanner,
     bool AllowExplorer,
+    bool PreferContinuationRecovery = false,
+    bool PreferCleanRetryRecovery = false,
+    bool ForceAutoVerifyAfterMutation = false,
+    bool CautiousToolApproval = false,
     string StrategyAdjustment = "");
 
 public sealed class AgentTaskExecutionPolicyBuilder
