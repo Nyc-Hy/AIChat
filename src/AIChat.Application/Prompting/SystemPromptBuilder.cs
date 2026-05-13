@@ -23,6 +23,7 @@ public sealed class SystemPromptBuilder
         builder.AppendLine("9. 如果用户要求撤销某个文件的未提交改动，优先用 git_restore_file；未跟踪文件只有在用户明确同意删除时才设置 delete_untracked=true。");
         builder.AppendLine("10. 如果用户要求提交代码，先用 git_status/git_diff 审阅，再用 git_commit 提交用户明确指定或本轮实际修改的文件；不要用 run_shell 执行 git add/commit。");
         builder.AppendLine("11. 如果用户明确说不要修改、无需修改、只读检查或只总结，完成读取/分析后直接给结论，不要要求用户提供修改目标。");
+        builder.AppendLine("12. 不要根据关键词强行猜测任务类型；以用户目标、工具权限和实际工具结果为准。写入、提交、危险命令会由工具权限拦截。");
         builder.AppendLine();
         builder.AppendLine("工具优先级：");
         builder.AppendLine("- 理解项目：list_files、search_text、read_file。");

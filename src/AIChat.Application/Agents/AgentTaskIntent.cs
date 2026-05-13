@@ -4,7 +4,7 @@ namespace AIChat.Application.Agents;
 
 public static class AgentTaskIntent
 {
-    private static readonly string[] MutationWords =
+    private static readonly string[] ExplicitWriteIntentWords =
     [
         "创建", "新建", "生成", "实现", "写一个", "做一个", "加一个", "新增",
         "修改", "改成", "改为", "替换", "删除", "修复", "优化", "重构",
@@ -19,7 +19,7 @@ public static class AgentTaskIntent
         "\\b(do not|don't|dont|without|no need to|need not|never|avoid)\\b[^.!?;\\r\\n]*(create|implement|write|modify|change|edit|replace|delete|fix|update|add|commit)[^.!?;\\r\\n]*",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
-    public static bool RequiresProjectMutation(string goal)
+    public static bool HasExplicitWriteIntent(string goal)
     {
         if (string.IsNullOrWhiteSpace(goal))
         {
@@ -27,7 +27,7 @@ public static class AgentTaskIntent
         }
 
         var normalized = RemoveNegatedMutationClauses(goal);
-        return MutationWords.Any(word => normalized.Contains(word, StringComparison.OrdinalIgnoreCase));
+        return ExplicitWriteIntentWords.Any(word => normalized.Contains(word, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string RemoveNegatedMutationClauses(string goal)

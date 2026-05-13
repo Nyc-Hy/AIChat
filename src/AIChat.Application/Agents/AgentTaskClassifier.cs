@@ -20,11 +20,6 @@ public sealed class AgentTaskClassifier
             return AgentTaskComplexity.Simple;
         }
 
-        if (AgentTaskIntent.RequiresProjectMutation(normalized))
-        {
-            return AgentTaskComplexity.Standard;
-        }
-
         return AgentTaskComplexity.Standard;
     }
 
@@ -46,6 +41,6 @@ public sealed class AgentTaskClassifier
             "explain", "describe", "what is", "why", "summarize"
         };
         return readOnlyHints.Any(hint => goal.Contains(hint, StringComparison.OrdinalIgnoreCase)) &&
-               !AgentTaskIntent.RequiresProjectMutation(goal);
+               !AgentTaskIntent.HasExplicitWriteIntent(goal);
     }
 }

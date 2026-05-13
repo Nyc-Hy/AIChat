@@ -1565,7 +1565,7 @@
                                         <TextBox Text="{Binding BudgetText, StringFormat=预算：{0}, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,3,0,0" />
-                                        <TextBox Text="{Binding MutationGuardrailText, StringFormat=修改护栏：{0}, Mode=OneWay}"
+                                        <TextBox Text="{Binding MutationGuardrailText, StringFormat=修改记录：{0}, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,3,0,0" />
                                         <TextBox Text="{Binding ApprovalSummary, StringFormat=审批：{0}, Mode=OneWay}"

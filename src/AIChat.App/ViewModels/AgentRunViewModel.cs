@@ -56,11 +56,9 @@ public sealed class AgentRunViewModel : ObservableObject
             return $"最多 {rounds} 轮工具调用 · 已调用 {_run.ToolCallCount} 次{exhausted}";
         }
     }
-    public string MutationGuardrailText => _run.RequiresProjectMutation
-        ? _run.MutationToolSucceeded
-            ? "需要项目修改 · 已记录修改工具"
-            : "需要项目修改 · 未记录修改工具"
-        : "未识别为项目修改任务";
+    public string MutationGuardrailText => _run.MutationToolSucceeded
+        ? "已记录修改工具"
+        : "未记录修改工具";
     public string ApprovalSummary =>
         $"需确认 {_run.ToolApprovalRequiredCount} 次 · 拒绝 {_run.ToolApprovalRejectedCount} 次 · 本会话允许 {_run.ToolSessionAllowedCount} 次";
     public string FinalValidationSummary => string.IsNullOrWhiteSpace(_run.FinalValidationSummary)

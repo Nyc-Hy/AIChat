@@ -62,7 +62,7 @@ public sealed class AgentHarness
             WorkspaceChangeCountAtStart = request.WorkspaceChangeCountAtStart,
             WorkspaceChangesWereTruncated = request.WorkspaceChangesWereTruncated,
             MaxToolRounds = request.Context.MaxToolRounds,
-            RequiresProjectMutation = AgentTaskIntent.RequiresProjectMutation(request.Goal),
+            RequiresProjectMutation = false,
             ContinuedFromRunId = request.ContinuedFromRunId,
             StartedAt = DateTimeOffset.Now
         };
@@ -137,7 +137,7 @@ public sealed class AgentHarness
             run.StructuredPlan,
             request.ContextPack,
             request.Goal,
-            run.RequiresProjectMutation);
+            run.MutationToolSucceeded);
         if (!executionPolicy.AllowExplorer)
         {
             subAgentSchedule = [];
@@ -336,7 +336,6 @@ public sealed class AgentHarness
                 {
                     run.ToolBudgetExceeded = true;
                     run.CompletionReason = "已达到工具调用轮数上限。";
-                    CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
@@ -380,7 +379,6 @@ public sealed class AgentHarness
 
                         if (run.ToolBudgetExceeded)
                         {
-                            CompleteMutationGuardrail(run);
                             CompleteFinalValidation(run);
                             CompleteRecoverySuggestion(run);
                             run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
@@ -409,7 +407,6 @@ public sealed class AgentHarness
                         }
                     }
 
-                    CompleteMutationGuardrail(run);
                     CompleteFinalValidation(run);
                     CompleteRecoverySuggestion(run);
                     var finalStatus = DetermineFinalStatus(run);
@@ -459,11 +456,6 @@ public sealed class AgentHarness
             return AgentRunStatus.BudgetExceeded;
         }
 
-        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
-        {
-            return AgentRunStatus.Failed;
-        }
-
         if (run.Verifications.Any(verification => !verification.IsSuccess))
         {
             return AgentRunStatus.Failed;
@@ -509,8 +501,6 @@ public sealed class AgentHarness
         {
             AgentRunStatus.Completed => "Completion evidence satisfied.",
             AgentRunStatus.BudgetExceeded => "Tool budget exhausted; checkpoint created.",
-            AgentRunStatus.Failed when run.RequiresProjectMutation && !run.MutationToolSucceeded =>
-                "Mutation task had no successful mutation tool call.",
             AgentRunStatus.Failed when run.Verifications.Any(verification => !verification.IsSuccess) =>
                 "At least one verification failed.",
             AgentRunStatus.Failed => string.IsNullOrWhiteSpace(run.CompletionReason)
@@ -559,11 +549,6 @@ public sealed class AgentHarness
 
     private static string CreateIncompleteRunUserMessage(AgentRun run)
     {
-        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
-        {
-            return "任务未完成：这看起来是修改类任务，但本轮没有记录到成功的写入或编辑工具调用。";
-        }
-
         if (run.Verifications.Any(verification => !verification.IsSuccess))
         {
             var failed = run.Verifications.First(verification => !verification.IsSuccess);
@@ -592,17 +577,6 @@ public sealed class AgentHarness
         run.MutationToolSucceeded = true;
     }
 
-    private static void CompleteMutationGuardrail(AgentRun run)
-    {
-        if (run.RequiresProjectMutation &&
-            !run.MutationToolSucceeded &&
-            !run.ToolBudgetExceeded &&
-            string.IsNullOrWhiteSpace(run.CompletionReason))
-        {
-            run.CompletionReason = "任务看起来需要修改项目，但本轮没有记录到成功的修改工具。";
-        }
-    }
-
     private static void CompleteFinalValidation(AgentRun run)
     {
         var checks = new List<string>
@@ -611,11 +585,9 @@ public sealed class AgentHarness
             run.ToolApprovalRejectedCount > 0
                 ? $"工具审批：{run.ToolApprovalRejectedCount} 次拒绝"
                 : "工具审批：无拒绝",
-            run.RequiresProjectMutation
-                ? run.MutationToolSucceeded
-                    ? "项目修改：已记录修改工具"
-                    : "项目修改：未记录修改工具"
-                : "项目修改：非修改类任务"
+            run.MutationToolSucceeded
+                ? "项目修改：已记录修改工具"
+                : "项目修改：未记录修改工具"
         };
 
         if (run.Verifications.Count > 0)
@@ -660,7 +632,7 @@ public sealed class AgentHarness
                 继续要求：
                 1. 先快速重新检查当前工作区状态和关键文件，避免依据旧状态行动。
                 2. 不要重复已经完成的探索，优先处理未完成计划项。
-                3. 如果这是修改类任务，必须实际调用写入/编辑工具后才能声称完成。
+                3. 如果需要修改，实际调用写入/编辑工具后再声称完成。
                 4. 如果发生修改，优先运行项目验证命令或合适的测试。
                 """;
             return;
@@ -670,13 +642,6 @@ public sealed class AgentHarness
         {
             run.RecoverySuggestion =
                 $"继续完成：{run.Goal}\n上一轮有工具被拒绝。请先说明需要哪些工具、为什么需要，再等待确认后继续。";
-            return;
-        }
-
-        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
-        {
-            run.RecoverySuggestion =
-                $"继续完成：{run.Goal}\n上一轮没有记录到成功的修改工具。请先检查相关文件，再实际调用写入或编辑工具完成修改。";
             return;
         }
 
@@ -806,11 +771,6 @@ public sealed class AgentHarness
         if (nextPlan is not null)
         {
             return $"继续计划项：{nextPlan.Title}";
-        }
-
-        if (run.RequiresProjectMutation && !run.MutationToolSucceeded)
-        {
-            return "先确认需要修改的文件，然后实际调用写入或编辑工具。";
         }
 
         return "刷新工作区状态后，从最近关键步骤继续。";

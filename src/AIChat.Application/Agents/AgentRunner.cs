@@ -47,8 +47,6 @@ public sealed class AgentRunner
             PauseBeforeHighRiskMutation = false,
             ToolCheckpointInterval = 0
         });
-        var requiresProjectMutation = RequiresProjectMutation(initialRequest.Messages);
-        var hasMutationToolResult = false;
         var sessionAllowedTools = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var transcript = initialRequest.Messages
             .Select(CloneMessage)
@@ -149,24 +147,6 @@ public sealed class AgentRunner
 
             if (requestedToolCalls.Count == 0)
             {
-                if (requiresProjectMutation && !hasMutationToolResult && enabledTools.Any(tool => tool.Risk != AgentToolRisk.ReadOnly))
-                {
-                    transcript.Add(new ChatMessage
-                    {
-                        Role = ChatRole.Assistant,
-                        Content = assistantContent,
-                        ReasoningContent = assistantReasoningContent,
-                        CreatedAt = DateTimeOffset.Now
-                    });
-                    transcript.Add(new ChatMessage
-                    {
-                        Role = ChatRole.User,
-                        Content = "你刚才没有调用任何工具，但用户要求创建或修改当前项目。不要声称已经完成。请先用 read_file/list_files/search_text 检查项目，再调用 write_file 或 edit_file 实际修改文件；如果需要执行命令，再调用 run_shell。",
-                        CreatedAt = DateTimeOffset.Now
-                    });
-                    continue;
-                }
-
                 if (!string.IsNullOrEmpty(assistantContent))
                 {
                     yield return new AgentRunEvent
@@ -266,10 +246,6 @@ public sealed class AgentRunner
                             break;
                         case ToolExecutionEventType.Result:
                             result = toolEvent.Result;
-                            if (toolEvent.IsMutation)
-                            {
-                                hasMutationToolResult = true;
-                            }
                             yield return new AgentRunEvent
                             {
                                 Type = AgentRunEventType.ToolResult,
@@ -309,17 +285,6 @@ public sealed class AgentRunner
                 });
             }
         }
-    }
-
-    private static bool RequiresProjectMutation(IReadOnlyList<ChatMessage> messages)
-    {
-        var latestUser = messages.LastOrDefault(message => message.Role == ChatRole.User)?.Content ?? "";
-        if (string.IsNullOrWhiteSpace(latestUser))
-        {
-            return false;
-        }
-
-        return AgentTaskIntent.RequiresProjectMutation(latestUser);
     }
 
     private static ChatMessage CloneMessage(ChatMessage message)

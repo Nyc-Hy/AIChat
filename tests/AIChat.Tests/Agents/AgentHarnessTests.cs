@@ -516,7 +516,7 @@ public sealed class AgentHarnessTests
         }
 
         var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(AgentRunStatus.Failed, run.Status);
+        Assert.Equal(AgentRunStatus.Completed, run.Status);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.SubAgentCompleted &&
                                        item.SubAgentRun?.Status == "Failed");
         var subAgentRun = Assert.Single(run.SubAgentRuns);
@@ -724,7 +724,7 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
-    public async Task RunAsync_FlagsMutationGoalWithoutSuccessfulMutationTool()
+    public async Task RunAsync_CompletesPlainResponseWithoutKeywordMutationFailure()
     {
         var conversation = new Conversation { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
@@ -751,15 +751,12 @@ public sealed class AgentHarnessTests
         }
 
         var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(AgentRunStatus.Failed, run.Status);
-        Assert.Equal("Mutation task had no successful mutation tool call.", run.FinalStatusReason);
-        Assert.True(run.RequiresProjectMutation);
+        Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Equal("Completion evidence satisfied.", run.FinalStatusReason);
+        Assert.False(run.RequiresProjectMutation);
         Assert.False(run.MutationToolSucceeded);
-        Assert.Equal("任务看起来需要修改项目，但本轮没有记录到成功的修改工具。", run.CompletionReason);
         Assert.Contains("项目修改：未记录修改工具", run.FinalValidationSummary);
-        Assert.Contains("实际调用写入或编辑工具", run.RecoverySuggestion);
-        Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
-                                       item.Content.Contains("任务未完成", StringComparison.Ordinal));
+        Assert.DoesNotContain("任务未完成", events.Select(item => item.Content));
     }
 
     [Fact]
