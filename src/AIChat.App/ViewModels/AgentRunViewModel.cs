@@ -152,6 +152,63 @@ public sealed class AgentRunViewModel : ObservableObject
     public int PhaseHistoryCount => _run.PhaseHistory.Count;
     public string CurrentPhaseSummary => string.IsNullOrWhiteSpace(_run.CurrentPhaseSummary) ? PhaseText : _run.CurrentPhaseSummary;
     public string Summary => $"{StatusText} · {PhaseText} · {StepCount} 个步骤 · {SubAgentRunCount} 个子 Agent · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {ArtifactCount} 个产物 · {DurationText}";
+    public string CompactOutcomeText => _run.Status switch
+    {
+        AgentRunStatus.Running => string.IsNullOrWhiteSpace(CurrentPhaseSummary) ? "正在处理" : CurrentPhaseSummary,
+        AgentRunStatus.BudgetExceeded => "已暂停，可继续任务",
+        AgentRunStatus.Cancelled => "已停止，可重来或继续",
+        AgentRunStatus.Failed => "失败，需要处理风险或验证错误",
+        _ => "完成"
+    };
+    public string FileChangeSummaryText => FileChangeCount == 0
+        ? "文件变更：无"
+        : $"文件变更：{FileChangeCount} 个 · {FormatChangedPaths()}";
+    public string VerificationSummaryText
+    {
+        get
+        {
+            if (_run.Verifications.Count == 0)
+            {
+                return "验证：未运行";
+            }
+
+            var passed = _run.Verifications.Count(item => item.IsSuccess);
+            var failed = _run.Verifications.Count - passed;
+            return failed == 0
+                ? $"验证：{passed}/{_run.Verifications.Count} 通过"
+                : $"验证：{passed}/{_run.Verifications.Count} 通过 · {failed} 个失败";
+        }
+    }
+    public bool HasAgentRisk =>
+        _run.ToolApprovalRejectedCount > 0 ||
+        _run.Verifications.Any(item => !item.IsSuccess) ||
+        _run.FinalValidationSummary.Contains("一致性风险", StringComparison.OrdinalIgnoreCase) ||
+        _run.FinalValidationSummary.Contains("存在风险", StringComparison.OrdinalIgnoreCase);
+    public string RiskSummaryText
+    {
+        get
+        {
+            var risks = new List<string>();
+            if (_run.ToolApprovalRejectedCount > 0)
+            {
+                risks.Add($"工具被拒绝 {_run.ToolApprovalRejectedCount} 次");
+            }
+
+            var failedVerifications = _run.Verifications.Count(item => !item.IsSuccess);
+            if (failedVerifications > 0)
+            {
+                risks.Add($"验证失败 {failedVerifications} 个");
+            }
+
+            if (_run.FinalValidationSummary.Contains("一致性风险", StringComparison.OrdinalIgnoreCase) ||
+                _run.FinalValidationSummary.Contains("存在风险", StringComparison.OrdinalIgnoreCase))
+            {
+                risks.Add("结果一致性风险");
+            }
+
+            return risks.Count == 0 ? "风险：无" : "风险：" + string.Join(" · ", risks);
+        }
+    }
     public ObservableCollection<AgentStepViewModel> Steps => _steps ??= new ObservableCollection<AgentStepViewModel>(
         _run.Steps.OrderBy(step => step.Number).Select(step => new AgentStepViewModel(step)));
     public ObservableCollection<AgentFileChangeViewModel> FileChanges => _fileChanges ??= new ObservableCollection<AgentFileChangeViewModel>(
@@ -213,6 +270,11 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(StepCount));
         OnPropertyChanged(nameof(PhaseText));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(CompactOutcomeText));
+        OnPropertyChanged(nameof(FileChangeSummaryText));
+        OnPropertyChanged(nameof(VerificationSummaryText));
+        OnPropertyChanged(nameof(HasAgentRisk));
+        OnPropertyChanged(nameof(RiskSummaryText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
         return viewModel;
@@ -240,6 +302,11 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(CompactOutcomeText));
+        OnPropertyChanged(nameof(FileChangeSummaryText));
+        OnPropertyChanged(nameof(VerificationSummaryText));
+        OnPropertyChanged(nameof(HasAgentRisk));
+        OnPropertyChanged(nameof(RiskSummaryText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
         OnPropertyChanged(nameof(PlanSummary));
@@ -262,6 +329,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(ChangedPaths));
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(FileChangeSummaryText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -281,6 +349,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasVerifications));
         OnPropertyChanged(nameof(VerificationCount));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(VerificationSummaryText));
+        OnPropertyChanged(nameof(HasAgentRisk));
+        OnPropertyChanged(nameof(RiskSummaryText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -348,6 +419,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasPhaseHistory));
         OnPropertyChanged(nameof(PhaseHistoryCount));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(CompactOutcomeText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -387,5 +459,17 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
+    }
+
+    private string FormatChangedPaths()
+    {
+        var paths = ChangedPaths.Take(3).ToList();
+        if (paths.Count == 0)
+        {
+            return "已记录修改工具";
+        }
+
+        var suffix = ChangedPaths.Count > paths.Count ? $" 等 {ChangedPaths.Count} 个" : "";
+        return string.Join(", ", paths) + suffix;
     }
 }
