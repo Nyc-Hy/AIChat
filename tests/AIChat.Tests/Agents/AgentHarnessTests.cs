@@ -954,8 +954,63 @@ public sealed class AgentHarnessTests
         Assert.Equal("At least one verification failed.", run.FinalStatusReason);
         Assert.Contains("验证：0/1 通过", run.FinalValidationSummary);
         Assert.Contains("上一轮验证未全部通过", run.RecoverySuggestion);
+        Assert.Contains("恢复包", run.RecoverySuggestion);
+        Assert.Contains("最近错误", run.CheckpointSummary);
+        Assert.Contains("只修复导致验证失败的最小问题", run.RecoverySuggestion);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
                                        item.Content.Contains("验证未通过", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunAsync_BuildsStructuredRecoveryPromptForRejectedToolApproval()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "apply_patch",
+            ArgumentsJson = """
+            {
+              "changes": [
+                { "path": "file.txt", "old_text": "old", "new_text": "new" }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "blocked" }]
+            ]),
+            new AgentToolCatalog([new ApplyPatchTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "update file",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update file" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Reject("not now"))
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(1, run.ToolApprovalRejectedCount);
+        Assert.Contains("工具审批：需要 1 次，拒绝 1 次", run.CheckpointSummary);
+        Assert.Contains("被工具审批中断", run.RecoverySuggestion);
+        Assert.Contains("如果用户没有重新授权", run.RecoverySuggestion);
+        Assert.Contains("恢复包", run.RecoverySuggestion);
     }
 
     [Fact]
@@ -1273,8 +1328,11 @@ public sealed class AgentHarnessTests
         Assert.Equal("waiting_for_user", run.Phase);
         Assert.True(run.ToolBudgetExceeded);
         Assert.Contains("工具调用：1/1", run.CheckpointSummary);
+        Assert.Contains("工具审批：需要 0 次，拒绝 0 次", run.CheckpointSummary);
+        Assert.Contains("最终状态：Tool budget exhausted; checkpoint created.", run.CheckpointSummary);
         Assert.Contains("恢复包", run.RecoverySuggestion);
-        Assert.Contains("先快速重新检查当前工作区状态", run.RecoverySuggestion);
+        Assert.Contains("先用 git_status", run.RecoverySuggestion);
+        Assert.Contains("不要重复恢复包里已经完成", run.RecoverySuggestion);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
                                        item.Content.Contains("任务已暂停", StringComparison.Ordinal));
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunCompleted &&

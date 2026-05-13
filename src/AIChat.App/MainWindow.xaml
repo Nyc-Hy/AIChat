@@ -1401,21 +1401,21 @@
                                                     <Button Grid.Column="2"
                                                             Command="{Binding DataContext.ContinueAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                             CommandParameter="{Binding}"
-                                                            Content="继续"
+                                                            Content="继续任务"
+                                                            Width="72"
+                                                            Height="30"
+                                                            Margin="8,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            Style="{StaticResource PrimaryButtonStyle}" />
+                                                    <Button Grid.Column="3"
+                                                            Command="{Binding DataContext.RetryAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="重来"
                                                             Width="54"
                                                             Height="30"
                                                             Margin="8,0,0,0"
                                                             VerticalAlignment="Center"
                                                             Style="{StaticResource SubtleButtonStyle}" />
-                                                    <Button Grid.Column="3"
-                                                            Command="{Binding DataContext.RetryAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}"
-                                                            Content="重试"
-                                                            Width="54"
-                                                            Height="30"
-                                                            Margin="8,0,0,0"
-                                                            VerticalAlignment="Center"
-                                                            Style="{StaticResource PrimaryButtonStyle}" />
                                                 </Grid>
                                             </Border>
                                         </DataTemplate>
@@ -1505,18 +1505,18 @@
                                     Style="{StaticResource SubtleButtonStyle}" />
                             <Button DockPanel.Dock="Right"
                                     Command="{Binding DataContext.ContinueSelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Content="继续"
+                                    Content="继续任务"
+                                    Width="86"
+                                    Height="34"
+                                    Margin="0,0,10,0"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                            <Button DockPanel.Dock="Right"
+                                    Command="{Binding DataContext.RetrySelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    Content="重来"
                                     Width="64"
                                     Height="34"
                                     Margin="0,0,10,0"
                                     Style="{StaticResource SubtleButtonStyle}" />
-                            <Button DockPanel.Dock="Right"
-                                    Command="{Binding DataContext.RetrySelectedAgentRunCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    Content="重试"
-                                    Width="64"
-                                    Height="34"
-                                    Margin="0,0,10,0"
-                                    Style="{StaticResource PrimaryButtonStyle}" />
                         </DockPanel>
 
                         <Grid Grid.Row="1">

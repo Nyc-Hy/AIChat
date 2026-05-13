@@ -340,8 +340,8 @@ public sealed class AgentHarness
                     run.ToolBudgetExceeded = true;
                     run.CompletionReason = "已达到工具调用轮数上限。";
                     CompleteFinalValidation(run, assistantContent);
-                    CompleteRecoverySuggestion(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
+                    CompleteRecoverySuggestion(run);
                     var budgetMessage = CreateBudgetPausedUserMessage(run);
                     yield return new AgentHarnessEvent
                     {
@@ -383,8 +383,8 @@ public sealed class AgentHarness
                         if (run.ToolBudgetExceeded)
                         {
                             CompleteFinalValidation(run, assistantContent);
-                            CompleteRecoverySuggestion(run);
                             run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
+                            CompleteRecoverySuggestion(run);
                             var budgetMessage = CreateBudgetPausedUserMessage(run);
                             yield return new AgentHarnessEvent
                             {
@@ -640,10 +640,11 @@ public sealed class AgentHarness
                 {run.CheckpointSummary}
 
                 继续要求：
-                1. 先快速重新检查当前工作区状态和关键文件，避免依据旧状态行动。
-                2. 不要重复已经完成的探索，优先处理未完成计划项。
-                3. 如果需要修改，实际调用写入/编辑工具后再声称完成。
-                4. 如果发生修改，优先运行项目验证命令或合适的测试。
+                1. 先用 git_status 和必要的只读工具快速确认当前状态。
+                2. 不要重复恢复包里已经完成的探索或计划项。
+                3. 优先继续“未完成计划/下一步建议”里的事项。
+                4. 如果需要修改，实际调用写入/编辑工具后再声称完成。
+                5. 如果发生修改，优先运行项目验证命令或合适的测试。
                 """;
             return;
         }
@@ -651,19 +652,64 @@ public sealed class AgentHarness
         if (run.ToolApprovalRejectedCount > 0)
         {
             run.RecoverySuggestion =
-                $"继续完成：{run.Goal}\n上一轮有工具被拒绝。请先说明需要哪些工具、为什么需要，再等待确认后继续。";
+                $"""
+                继续完成这个被工具审批中断的 Agent 任务。
+
+                原始目标：
+                {run.Goal}
+
+                暂停原因：
+                上一轮有工具被拒绝。
+
+                恢复包：
+                {run.CheckpointSummary}
+
+                继续要求：
+                1. 先说明接下来需要哪些工具、为什么需要。
+                2. 如果用户没有重新授权，不要重复调用刚被拒绝的高风险工具。
+                3. 优先用只读工具确认当前状态，再选择最小必要动作。
+                """;
             return;
         }
 
         if (run.Verifications.Any(verification => !verification.IsSuccess))
         {
             run.RecoverySuggestion =
-                $"继续修复：{run.Goal}\n上一轮验证未全部通过。请优先查看失败验证输出，修复后重新运行验证。";
+                $"""
+                继续修复这个验证失败的 Agent 任务。
+
+                原始目标：
+                {run.Goal}
+
+                暂停原因：
+                上一轮验证未全部通过。
+
+                恢复包：
+                {run.CheckpointSummary}
+
+                继续要求：
+                1. 优先查看失败验证输出和最近修改文件。
+                2. 只修复导致验证失败的最小问题，不扩大范围。
+                3. 修复后重新运行失败验证或合适的验证命令。
+                """;
             return;
         }
 
         run.RecoverySuggestion =
-            $"复查并继续：{run.Goal}\n请先查看上一轮运行摘要、工作区 diff 和验证结果，再决定是否需要继续修改。";
+            $"""
+            复查并继续这个 Agent 任务。
+
+            原始目标：
+            {run.Goal}
+
+            恢复包：
+            {run.CheckpointSummary}
+
+            继续要求：
+            1. 先查看当前工作区状态和恢复包。
+            2. 不要重复已完成步骤。
+            3. 从下一步建议继续，或明确说明无需继续。
+            """;
     }
 
     private static string CreateBudgetPausedUserMessage(AgentRun run)
@@ -682,8 +728,20 @@ public sealed class AgentHarness
             $"当前阶段：{run.Phase}",
             $"工具调用：{run.ToolCallCount}/{(run.MaxToolRounds <= 0 ? "未记录" : run.MaxToolRounds.ToString())}",
             $"文件变更：{run.FileChanges.Count}",
-            $"验证：{FormatVerificationCheckpoint(run)}"
+            $"验证：{FormatVerificationCheckpoint(run)}",
+            $"工具审批：需要 {run.ToolApprovalRequiredCount} 次，拒绝 {run.ToolApprovalRejectedCount} 次，本会话允许 {run.ToolSessionAllowedCount} 次",
+            $"最终状态：{(string.IsNullOrWhiteSpace(run.FinalStatusReason) ? run.Status.ToString() : run.FinalStatusReason)}"
         };
+
+        if (!string.IsNullOrWhiteSpace(run.CompletionReason))
+        {
+            lines.Add("结束原因：" + run.CompletionReason);
+        }
+
+        if (!string.IsNullOrWhiteSpace(run.FinalValidationSummary))
+        {
+            lines.Add("结束校验：" + Truncate(run.FinalValidationSummary, 300));
+        }
 
         if (run.Plan?.Items.Count > 0)
         {
@@ -730,6 +788,18 @@ public sealed class AgentHarness
         if (recentSteps.Count > 0)
         {
             lines.Add("最近关键步骤：" + string.Join(" | ", recentSteps));
+        }
+
+        var recentErrors = run.Steps
+            .OrderByDescending(step => step.Number)
+            .Where(step => step.IsError || step.Output.Contains("失败", StringComparison.OrdinalIgnoreCase) || step.Output.Contains("error", StringComparison.OrdinalIgnoreCase))
+            .Take(4)
+            .Select(step => $"{step.Title}: {Truncate(step.Output, 220)}")
+            .Reverse()
+            .ToList();
+        if (recentErrors.Count > 0)
+        {
+            lines.Add("最近错误：" + string.Join(" | ", recentErrors));
         }
 
         var artifactRefs = run.Artifacts
