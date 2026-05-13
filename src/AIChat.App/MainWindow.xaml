@@ -1342,6 +1342,10 @@
                                     <TextBlock Text="{Binding AgentRunHistorySummary}"
                                                Margin="0,6,0,0"
                                                Foreground="#748092" />
+                                    <TextBlock Text="{Binding AgentRunHistoryInsight}"
+                                               Margin="0,6,0,0"
+                                               Foreground="#596473"
+                                               TextWrapping="Wrap" />
                                 </StackPanel>
                                 <ComboBox ItemsSource="{Binding AgentRunHistoryFilterOptions}"
                                           SelectedValue="{Binding AgentRunHistoryFilterId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -1595,6 +1599,19 @@
                                         <TextBox Text="{Binding MetricsSummary, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,5,0,0" />
+                                        <TextBlock Text="质量与策略"
+                                                   Margin="0,14,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBox Text="{Binding QualityScoreText, StringFormat=评分：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
+                                        <TextBox Text="{Binding QualitySummary, StringFormat=摘要：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding StrategySuggestion, StringFormat=策略：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
                                         <TextBlock Text="当前阶段"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

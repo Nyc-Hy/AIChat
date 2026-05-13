@@ -32,6 +32,9 @@ public sealed class AgentRun
     public string FinalValidationSummary { get; set; } = "";
     public string ExecutionPolicySummary { get; set; } = "";
     public string FinalStatusReason { get; set; } = "";
+    public int QualityScore { get; set; }
+    public string QualitySummary { get; set; } = "";
+    public string StrategySuggestion { get; set; } = "";
     public string TaskComplexity { get; set; } = "";
     public bool PlannerUsed { get; set; }
     public bool ExplorerUsed { get; set; }

@@ -87,6 +87,9 @@ public sealed class AgentRunSerializationTests
                     FinalValidationSummary = "工具预算：未耗尽",
                     ExecutionPolicySummary = "complexity=Complex; maxToolRounds=4",
                     FinalStatusReason = "Completion evidence satisfied.",
+                    QualityScore = 91,
+                    QualitySummary = "任务完成；验证通过 1 个",
+                    StrategySuggestion = "策略表现良好，保持当前执行模式。",
                     TaskComplexity = "Complex",
                     PlannerUsed = true,
                     ExplorerUsed = true,
@@ -285,6 +288,9 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
         Assert.Equal("complexity=Complex; maxToolRounds=4", roundTripped.AgentRuns[0].ExecutionPolicySummary);
         Assert.Equal("Completion evidence satisfied.", roundTripped.AgentRuns[0].FinalStatusReason);
+        Assert.Equal(91, roundTripped.AgentRuns[0].QualityScore);
+        Assert.Equal("任务完成；验证通过 1 个", roundTripped.AgentRuns[0].QualitySummary);
+        Assert.Equal("策略表现良好，保持当前执行模式。", roundTripped.AgentRuns[0].StrategySuggestion);
         Assert.Equal("Complex", roundTripped.AgentRuns[0].TaskComplexity);
         Assert.True(roundTripped.AgentRuns[0].PlannerUsed);
         Assert.True(roundTripped.AgentRuns[0].ExplorerUsed);

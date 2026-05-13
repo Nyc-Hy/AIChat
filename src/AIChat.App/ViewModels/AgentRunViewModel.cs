@@ -63,7 +63,15 @@ public sealed class AgentRunViewModel : ObservableObject
         $"Context：约 {_run.ContextEstimatedTokens} tokens · {_run.ContextRefCount} refs{Environment.NewLine}" +
         $"Planner：{PlannerUsageText} · Explorer：{ExplorerUsageText}{Environment.NewLine}" +
         $"耗时：{DurationText}{Environment.NewLine}" +
+        $"质量评分：{QualityScoreText}{Environment.NewLine}" +
         $"质量风险：{RiskSummaryText}";
+    public string QualityScoreText => _run.QualityScore <= 0 ? "未评分" : $"{_run.QualityScore}/100";
+    public string QualitySummary => string.IsNullOrWhiteSpace(_run.QualitySummary)
+        ? "尚未生成质量摘要。"
+        : _run.QualitySummary;
+    public string StrategySuggestion => string.IsNullOrWhiteSpace(_run.StrategySuggestion)
+        ? "暂无策略建议。"
+        : _run.StrategySuggestion;
     public string MutationGuardrailText => _run.MutationToolSucceeded
         ? "已记录修改工具"
         : "未记录修改工具";
@@ -308,6 +316,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(FinalStatusReason));
         OnPropertyChanged(nameof(DebugSummary));
         OnPropertyChanged(nameof(MetricsSummary));
+        OnPropertyChanged(nameof(QualityScoreText));
+        OnPropertyChanged(nameof(QualitySummary));
+        OnPropertyChanged(nameof(StrategySuggestion));
         OnPropertyChanged(nameof(RecoverySuggestion));
         OnPropertyChanged(nameof(HasRecoverySuggestion));
         OnPropertyChanged(nameof(CompletionReasonText));

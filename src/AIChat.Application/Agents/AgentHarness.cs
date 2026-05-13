@@ -23,6 +23,7 @@ public sealed class AgentHarness
     private readonly AgentTaskClassifier _taskClassifier;
     private readonly AgentTaskExecutionPolicyBuilder _executionPolicyBuilder;
     private readonly AgentCompletionEvidenceChecker _completionEvidenceChecker;
+    private readonly AgentRunQualityEvaluator _qualityEvaluator;
 
     public AgentHarness(
         AgentRunner agentRunner,
@@ -32,7 +33,8 @@ public sealed class AgentHarness
         SubAgentScheduler? subAgentScheduler = null,
         AgentTaskClassifier? taskClassifier = null,
         AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null,
-        AgentCompletionEvidenceChecker? completionEvidenceChecker = null)
+        AgentCompletionEvidenceChecker? completionEvidenceChecker = null,
+        AgentRunQualityEvaluator? qualityEvaluator = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
@@ -42,6 +44,7 @@ public sealed class AgentHarness
         _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
         _completionEvidenceChecker = completionEvidenceChecker ?? new AgentCompletionEvidenceChecker();
+        _qualityEvaluator = qualityEvaluator ?? new AgentRunQualityEvaluator();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -347,6 +350,7 @@ public sealed class AgentHarness
                     run.CompletionReason = "已达到工具调用轮数上限。";
                     CompleteFinalValidation(run, assistantContent);
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
+                    CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
                     CompleteRecoverySuggestion(run);
                     var budgetMessage = CreateBudgetPausedUserMessage(run);
                     yield return new AgentHarnessEvent
@@ -390,6 +394,7 @@ public sealed class AgentHarness
                         {
                             CompleteFinalValidation(run, assistantContent);
                             run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
+                            CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
                             CompleteRecoverySuggestion(run);
                             var budgetMessage = CreateBudgetPausedUserMessage(run);
                             yield return new AgentHarnessEvent
@@ -417,9 +422,10 @@ public sealed class AgentHarness
                     }
 
                     CompleteFinalValidation(run, assistantContent);
-                    CompleteRecoverySuggestion(run);
                     var finalStatus = DetermineFinalStatus(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
+                    CompleteQualityAssessment(run, finalStatus);
+                    CompleteRecoverySuggestion(run);
                     var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
                     if (!string.Equals(finalContent, assistantContent, StringComparison.Ordinal))
@@ -617,6 +623,17 @@ public sealed class AgentHarness
         }
 
         run.FinalValidationSummary = string.Join(Environment.NewLine, checks);
+    }
+
+    private void CompleteQualityAssessment(AgentRun run, AgentRunStatus status)
+    {
+        var originalStatus = run.Status;
+        run.Status = status;
+        var evaluation = _qualityEvaluator.Evaluate(run);
+        run.QualityScore = evaluation.Score;
+        run.QualitySummary = evaluation.Summary;
+        run.StrategySuggestion = evaluation.StrategySuggestion;
+        run.Status = originalStatus;
     }
 
     private static void CompleteRecoverySuggestion(AgentRun run)
