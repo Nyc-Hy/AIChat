@@ -566,7 +566,7 @@ public sealed class AgentHarnessTests
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([
                 [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "done" }]
+                [new ChatDelta { Content = "已修改 notes.txt 和 todo.txt。" }]
             ]),
             new AgentToolCatalog([new ApplyPatchTool()])));
 
@@ -594,6 +594,7 @@ public sealed class AgentHarnessTests
         Assert.Equal("new value", await File.ReadAllTextAsync(targetPath));
         Assert.Equal("todo new", await File.ReadAllTextAsync(secondTargetPath));
         var run = Assert.Single(conversation.AgentRuns);
+        Assert.Contains("结果一致性：声明与工具记录一致", run.FinalValidationSummary);
         Assert.Equal(2, run.FileChanges.Count);
         var fileChange = run.FileChanges.Single(change => change.Path == "notes.txt");
         Assert.Equal("notes.txt", fileChange.Path);
@@ -624,7 +625,7 @@ public sealed class AgentHarnessTests
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([
                 [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "done" }]
+                [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
             new AgentToolCatalog([new FakeVerificationTool()])));
 
@@ -692,7 +693,7 @@ public sealed class AgentHarnessTests
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([
                 [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "done" }]
+                [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
             new AgentToolCatalog([new ApplyPatchTool()])));
 
@@ -791,6 +792,69 @@ public sealed class AgentHarnessTests
         Assert.Equal(AgentRunStatus.Completed, run.Status);
         Assert.False(run.RequiresProjectMutation);
         Assert.DoesNotContain("任务未完成", events.Select(item => item.Content));
+        Assert.Contains("结果一致性：未检测到需校验", run.FinalValidationSummary);
+    }
+
+    [Fact]
+    public async Task RunAsync_FlagsRiskWhenFinalAnswerClaimsMutationWithoutMutationTool()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([new ChatDelta { Content = "已修改 README.md。" }]),
+            new AgentToolCatalog([])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "update readme",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update readme" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Contains("结果一致性：存在风险", run.FinalValidationSummary);
+        Assert.Contains("没有成功的写入或提交工具记录", run.FinalValidationSummary);
+    }
+
+    [Fact]
+    public async Task RunAsync_FlagsRiskWhenFinalAnswerClaimsVerificationWithoutVerificationTool()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([new ChatDelta { Content = "已运行测试，全部通过。" }]),
+            new AgentToolCatalog([])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "check tests",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "check tests" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Contains("结果一致性：存在风险", run.FinalValidationSummary);
+        Assert.Contains("没有成功的验证工具记录", run.FinalValidationSummary);
     }
 
     [Fact]
@@ -806,7 +870,7 @@ public sealed class AgentHarnessTests
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([
                 [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "done" }]
+                [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
             new AgentToolCatalog([new FakeVerificationTool()])));
 
@@ -841,6 +905,7 @@ public sealed class AgentHarnessTests
         Assert.Equal(1, run.ToolSessionAllowedCount);
         Assert.Contains("工具审批：无拒绝", run.FinalValidationSummary);
         Assert.Contains("验证：1/1 通过", run.FinalValidationSummary);
+        Assert.Contains("结果一致性：声明与工具记录一致", run.FinalValidationSummary);
         Assert.Contains("复查并继续", run.RecoverySuggestion);
     }
 

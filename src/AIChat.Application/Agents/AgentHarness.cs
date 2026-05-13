@@ -22,6 +22,7 @@ public sealed class AgentHarness
     private readonly SubAgentScheduler? _subAgentScheduler;
     private readonly AgentTaskClassifier _taskClassifier;
     private readonly AgentTaskExecutionPolicyBuilder _executionPolicyBuilder;
+    private readonly AgentCompletionEvidenceChecker _completionEvidenceChecker;
 
     public AgentHarness(
         AgentRunner agentRunner,
@@ -30,7 +31,8 @@ public sealed class AgentHarness
         AgentPromptComposer? promptComposer = null,
         SubAgentScheduler? subAgentScheduler = null,
         AgentTaskClassifier? taskClassifier = null,
-        AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null)
+        AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null,
+        AgentCompletionEvidenceChecker? completionEvidenceChecker = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
@@ -39,6 +41,7 @@ public sealed class AgentHarness
         _subAgentScheduler = subAgentScheduler ?? new SubAgentScheduler(agentRunner);
         _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
+        _completionEvidenceChecker = completionEvidenceChecker ?? new AgentCompletionEvidenceChecker();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -336,7 +339,7 @@ public sealed class AgentHarness
                 {
                     run.ToolBudgetExceeded = true;
                     run.CompletionReason = "已达到工具调用轮数上限。";
-                    CompleteFinalValidation(run);
+                    CompleteFinalValidation(run, assistantContent);
                     CompleteRecoverySuggestion(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                     var budgetMessage = CreateBudgetPausedUserMessage(run);
@@ -379,7 +382,7 @@ public sealed class AgentHarness
 
                         if (run.ToolBudgetExceeded)
                         {
-                            CompleteFinalValidation(run);
+                            CompleteFinalValidation(run, assistantContent);
                             CompleteRecoverySuggestion(run);
                             run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                             var budgetMessage = CreateBudgetPausedUserMessage(run);
@@ -407,7 +410,7 @@ public sealed class AgentHarness
                         }
                     }
 
-                    CompleteFinalValidation(run);
+                    CompleteFinalValidation(run, assistantContent);
                     CompleteRecoverySuggestion(run);
                     var finalStatus = DetermineFinalStatus(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
@@ -577,8 +580,9 @@ public sealed class AgentHarness
         run.MutationToolSucceeded = true;
     }
 
-    private static void CompleteFinalValidation(AgentRun run)
+    private void CompleteFinalValidation(AgentRun run, string assistantContent)
     {
+        var evidence = _completionEvidenceChecker.Check(assistantContent, run);
         var checks = new List<string>
         {
             run.ToolBudgetExceeded ? "工具预算：已耗尽" : "工具预算：未耗尽",
@@ -598,6 +602,12 @@ public sealed class AgentHarness
         else
         {
             checks.Add("验证：未运行");
+        }
+
+        checks.Add(evidence.Summary);
+        foreach (var risk in evidence.Risks)
+        {
+            checks.Add($"一致性风险：{risk}");
         }
 
         run.FinalValidationSummary = string.Join(Environment.NewLine, checks);
