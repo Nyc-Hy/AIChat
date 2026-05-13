@@ -112,6 +112,9 @@ public sealed class AgentRunViewModel : ObservableObject
     public string ContinuedFromRunId => _run.ContinuedFromRunId;
     public bool HasContinuation => !string.IsNullOrWhiteSpace(_run.ContinuedFromRunId);
     public string ContinuedFromRunText => HasContinuation ? $"从 {ContinuedFromRunId[..Math.Min(8, ContinuedFromRunId.Length)]} 继续" : "";
+    public string RetriedFromRunId => _run.RetriedFromRunId;
+    public bool HasRetrySource => !string.IsNullOrWhiteSpace(_run.RetriedFromRunId);
+    public string RetriedFromRunText => HasRetrySource ? $"重试自 {RetriedFromRunId[..Math.Min(8, RetriedFromRunId.Length)]}" : "";
     public bool CanResume => _run.Status is AgentRunStatus.BudgetExceeded or AgentRunStatus.Cancelled or AgentRunStatus.Failed &&
                              _run.Plan?.Items.Any(item => item.Status is AgentPlanItemStatus.Pending or AgentPlanItemStatus.InProgress or AgentPlanItemStatus.Blocked) == true;
     public string ShortGoal

@@ -51,7 +51,9 @@ public sealed partial class MainViewModel
         var text = DraftMessage.Trim();
         DraftMessage = "";
         var continuedFromRunId = _pendingContinuedFromRunId;
+        var retriedFromRunId = _pendingRetriedFromRunId;
         _pendingContinuedFromRunId = "";
+        _pendingRetriedFromRunId = "";
         // Add the user message before building the provider request so the latest
         // turn is included in context.
         var userMessage = new ChatMessage
@@ -150,6 +152,7 @@ public sealed partial class MainViewModel
                 assistantMessage.Id,
                 text,
                 continuedFromRunId,
+                retriedFromRunId,
                 assistantViewModel,
                 agentUiState,
                 reasoningContentBuilder,
@@ -265,6 +268,7 @@ public sealed partial class MainViewModel
         string assistantMessageId,
         string goal,
         string continuedFromRunId,
+        string retriedFromRunId,
         ChatMessageViewModel assistantViewModel,
         AgentUiEventState agentUiState,
         StringBuilder reasoningContentBuilder,
@@ -309,6 +313,7 @@ public sealed partial class MainViewModel
                 assistantMessageId,
                 goal,
                 continuedFromRunId,
+                retriedFromRunId,
                 assistantViewModel,
                 agentUiState,
                 rawResponseEvents,
@@ -365,6 +370,7 @@ public sealed partial class MainViewModel
         string assistantMessageId,
         string goal,
         string continuedFromRunId,
+        string retriedFromRunId,
         ChatMessageViewModel assistantViewModel,
         AgentUiEventState agentUiState,
         List<string> rawResponseEvents,
@@ -389,6 +395,7 @@ public sealed partial class MainViewModel
                                WorkspaceChangeCountAtStart = workspaceSnapshot.ChangeCount,
                                WorkspaceChangesWereTruncated = workspaceSnapshot.IsTruncated,
                                ContinuedFromRunId = continuedFromRunId,
+                               RetriedFromRunId = retriedFromRunId,
                                Context = requestBuild.AgentContext
                            },
                            cancellationToken))

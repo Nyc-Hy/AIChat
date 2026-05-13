@@ -33,6 +33,11 @@ public static class AgentRunReviewPacketBuilder
             lines.Add($"继续自：{run.ContinuedFromRunId}");
         }
 
+        if (run.HasRetrySource)
+        {
+            lines.Add($"重试自：{run.RetriedFromRunId}");
+        }
+
         if (run.HasCompletionReason)
         {
             lines.Add($"原因：{run.CompletionReasonText}");
@@ -97,6 +102,11 @@ public static class AgentRunReviewPacketBuilder
         if (run.HasContinuation)
         {
             lines.Add($"ContinuedFrom: {run.ContinuedFromRunId}");
+        }
+
+        if (run.HasRetrySource)
+        {
+            lines.Add($"RetriedFrom: {run.RetriedFromRunId}");
         }
 
         lines.AddRange([

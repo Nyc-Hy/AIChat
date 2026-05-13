@@ -186,6 +186,8 @@ public sealed partial class MainViewModel
 
         SelectConversation(item.Conversation);
         DraftMessage = item.Run.RecoverySuggestion;
+        _pendingRetriedFromRunId = item.Run.Id;
+        _pendingContinuedFromRunId = "";
         IsAgentRunHistoryOpen = false;
         IsAgentRunDetailsOpen = false;
         StatusText = "已把恢复建议放回输入框，可检查后重新发送";
@@ -207,6 +209,8 @@ public sealed partial class MainViewModel
         }
 
         DraftMessage = selected.RecoverySuggestion;
+        _pendingRetriedFromRunId = selected.Id;
+        _pendingContinuedFromRunId = "";
         IsAgentRunDetailsOpen = false;
         StatusText = "已把恢复建议放回输入框，可检查后重新发送";
     }
@@ -223,6 +227,7 @@ public sealed partial class MainViewModel
         IsAgentRunDetailsOpen = false;
         DraftMessage = item.Run.RecoverySuggestion;
         _pendingContinuedFromRunId = item.Run.Id;
+        _pendingRetriedFromRunId = "";
         await SendAsync();
     }
 
@@ -244,10 +249,12 @@ public sealed partial class MainViewModel
         IsAgentRunDetailsOpen = false;
         DraftMessage = selected.RecoverySuggestion;
         _pendingContinuedFromRunId = selected.Id;
+        _pendingRetriedFromRunId = "";
         await SendAsync();
     }
 
     private string _pendingContinuedFromRunId = "";
+    private string _pendingRetriedFromRunId = "";
 
     private void OpenAgentFileChange(AgentFileChangeViewModel change)
     {

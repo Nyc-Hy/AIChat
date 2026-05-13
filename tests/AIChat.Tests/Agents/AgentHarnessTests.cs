@@ -360,6 +360,40 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public async Task RunAsync_RecordsRetriedFromRunId()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "retried" }]);
+        var harness = new AgentHarness(new AgentRunner(runnerService, new AgentToolCatalog([])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "retry failed task",
+                           RetriedFromRunId = "failed-run",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "retry" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = [],
+                               MaxToolRounds = 50
+                           }
+                       }))
+        {
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal("failed-run", run.RetriedFromRunId);
+    }
+
+    [Fact]
     public async Task RunAsync_RunsExplorerSubAgentAndRecordsResultArtifact()
     {
         var conversation = new Conversation { Id = "conversation-1" };

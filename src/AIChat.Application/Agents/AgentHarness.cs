@@ -75,6 +75,7 @@ public sealed class AgentHarness
             ContextRefCount = request.ContextPack?.ToPromptRefs().Count ?? 0,
             RequiresProjectMutation = false,
             ContinuedFromRunId = request.ContinuedFromRunId,
+            RetriedFromRunId = request.RetriedFromRunId,
             StartedAt = DateTimeOffset.Now
         };
         request.Conversation.AgentRuns.Add(run);

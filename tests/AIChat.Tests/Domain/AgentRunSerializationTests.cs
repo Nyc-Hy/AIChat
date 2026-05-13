@@ -322,7 +322,7 @@ public sealed class AgentRunSerializationTests
     }
 
     [Fact]
-    public void Conversation_RoundTripsContinuedFromRunId()
+    public void Conversation_RoundTripsRunSourceIds()
     {
         var conversation = new Conversation
         {
@@ -334,7 +334,8 @@ public sealed class AgentRunSerializationTests
                 {
                     Id = "run-2",
                     Status = AgentRunStatus.Completed,
-                    ContinuedFromRunId = "run-1"
+                    ContinuedFromRunId = "run-1",
+                    RetriedFromRunId = "run-0"
                 }
             ]
         };
@@ -344,6 +345,7 @@ public sealed class AgentRunSerializationTests
 
         Assert.NotNull(roundTripped);
         Assert.Equal("run-1", roundTripped.AgentRuns[0].ContinuedFromRunId);
+        Assert.Equal("run-0", roundTripped.AgentRuns[0].RetriedFromRunId);
     }
 
     [Fact]
