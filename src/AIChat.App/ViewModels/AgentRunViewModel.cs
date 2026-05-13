@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AIChat.Application.Agents;
 using AIChat.Domain.Chat;
 
 namespace AIChat.App.ViewModels;
@@ -13,6 +14,7 @@ public sealed class AgentRunViewModel : ObservableObject
     private ObservableCollection<AgentSubAgentScheduleDecisionViewModel>? _subAgentScheduleDecisions;
     private ObservableCollection<AgentSubAgentRunViewModel>? _subAgentRuns;
     private ObservableCollection<AgentRunPhaseRecordViewModel>? _phaseHistory;
+    private ObservableCollection<AgentSmokeTestItemViewModel>? _smokeTests;
     private AgentPlanViewModel? _plan;
 
     public AgentRunViewModel(AgentRun run)
@@ -173,6 +175,17 @@ public sealed class AgentRunViewModel : ObservableObject
     public int PhaseHistoryCount => _run.PhaseHistory.Count;
     public string CurrentPhaseSummary => string.IsNullOrWhiteSpace(_run.CurrentPhaseSummary) ? PhaseText : _run.CurrentPhaseSummary;
     public string Summary => $"{StatusText} · {PhaseText} · {StepCount} 个步骤 · {SubAgentRunCount} 个子 Agent · {FileChangeCount} 个文件变更 · {VerificationCount} 个验证 · {ArtifactCount} 个产物 · {DurationText}";
+    public string SmokeTestSummary
+    {
+        get
+        {
+            var blocked = SmokeTests.Count(item => item.IsBlocked);
+            var needsReview = SmokeTests.Count(item => item.Status == AgentSmokeTestStatus.NeedsReview);
+            return blocked > 0
+                ? $"验收：{blocked} 项需处理 · {needsReview} 项待确认"
+                : $"验收：{needsReview} 项待确认";
+        }
+    }
     public string CompactOutcomeText => _run.Status switch
     {
         AgentRunStatus.Running => string.IsNullOrWhiteSpace(CurrentPhaseSummary) ? "正在处理" : CurrentPhaseSummary,
@@ -244,6 +257,9 @@ public sealed class AgentRunViewModel : ObservableObject
         _run.SubAgentRuns.Select(subAgentRun => new AgentSubAgentRunViewModel(subAgentRun)));
     public ObservableCollection<AgentRunPhaseRecordViewModel> PhaseHistory => _phaseHistory ??= new ObservableCollection<AgentRunPhaseRecordViewModel>(
         _run.PhaseHistory.Select(record => new AgentRunPhaseRecordViewModel(record)));
+    public ObservableCollection<AgentSmokeTestItemViewModel> SmokeTests => _smokeTests ??= new ObservableCollection<AgentSmokeTestItemViewModel>(
+        AgentSmokeTestChecklistBuilder.Build(_run).Select(item => new AgentSmokeTestItemViewModel(item)));
+    public bool HasSmokeTests => SmokeTests.Count > 0;
     public AgentPlanViewModel? Plan
     {
         get => _run.Plan is null ? null : _plan ??= new AgentPlanViewModel(_run.Plan);
@@ -328,6 +344,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));
         OnPropertyChanged(nameof(Summary));
+        RebuildSmokeTests();
         OnPropertyChanged(nameof(MetricsSummary));
         OnPropertyChanged(nameof(CompactOutcomeText));
         OnPropertyChanged(nameof(FileChangeSummaryText));
@@ -357,6 +374,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(FileChangeSummaryText));
+        RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -379,6 +397,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(VerificationSummaryText));
         OnPropertyChanged(nameof(HasAgentRisk));
         OnPropertyChanged(nameof(RiskSummaryText));
+        RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -398,6 +417,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasArtifacts));
         OnPropertyChanged(nameof(ArtifactCount));
         OnPropertyChanged(nameof(Summary));
+        RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
     }
@@ -498,6 +518,27 @@ public sealed class AgentRunViewModel : ObservableObject
 
         var suffix = ChangedPaths.Count > paths.Count ? $" 等 {ChangedPaths.Count} 个" : "";
         return string.Join(", ", paths) + suffix;
+    }
+
+    private void RebuildSmokeTests()
+    {
+        if (_smokeTests is null)
+        {
+            OnPropertyChanged(nameof(SmokeTests));
+            OnPropertyChanged(nameof(HasSmokeTests));
+            OnPropertyChanged(nameof(SmokeTestSummary));
+            return;
+        }
+
+        _smokeTests.Clear();
+        foreach (var item in AgentSmokeTestChecklistBuilder.Build(_run))
+        {
+            _smokeTests.Add(new AgentSmokeTestItemViewModel(item));
+        }
+
+        OnPropertyChanged(nameof(SmokeTests));
+        OnPropertyChanged(nameof(HasSmokeTests));
+        OnPropertyChanged(nameof(SmokeTestSummary));
     }
 
     private string ExtractExecutionMode()

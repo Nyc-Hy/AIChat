@@ -1615,6 +1615,63 @@
                                         <TextBox Text="{Binding ExecutionPolicySummary, StringFormat=原因：{0}, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,3,0,0" />
+                                        <StackPanel Margin="0,14,0,0">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasSmokeTests}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <TextBlock Text="验收清单"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#303A47" />
+                                            <TextBox Text="{Binding SmokeTestSummary, Mode=OneWay}"
+                                                     Style="{StaticResource SelectableTextBoxStyle}"
+                                                     Margin="0,5,0,0" />
+                                            <ItemsControl ItemsSource="{Binding SmokeTests}"
+                                                          Margin="0,8,0,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Padding="9"
+                                                                Margin="0,0,0,7"
+                                                                CornerRadius="6"
+                                                                Background="#FFFFFF"
+                                                                BorderBrush="#E2E8F0"
+                                                                BorderThickness="1">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                                                          VerticalAlignment="Top"
+                                                                          Margin="0,2,8,0" />
+                                                                <StackPanel Grid.Column="1">
+                                                                    <TextBlock Text="{Binding Title}"
+                                                                               Foreground="#1F2937"
+                                                                               FontWeight="SemiBold"
+                                                                               TextWrapping="Wrap" />
+                                                                    <TextBlock Text="{Binding Detail}"
+                                                                               Margin="0,3,0,0"
+                                                                               Foreground="#667386"
+                                                                               TextWrapping="Wrap" />
+                                                                </StackPanel>
+                                                                <TextBlock Grid.Column="2"
+                                                                           Text="{Binding StatusText}"
+                                                                           Foreground="#536172"
+                                                                           FontSize="11"
+                                                                           Margin="10,1,0,0" />
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
                                         <TextBlock Text="当前阶段"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

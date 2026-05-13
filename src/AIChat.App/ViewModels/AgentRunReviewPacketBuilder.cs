@@ -19,6 +19,7 @@ public static class AgentRunReviewPacketBuilder
             $"指标：{run.MetricsSummary.ReplaceLineEndings(" · ")}",
             $"质量：{run.QualityScoreText} · {run.QualitySummary}",
             $"策略建议：{run.StrategySuggestion}",
+            $"验收：{run.SmokeTestSummary}",
             $"调试：{run.ExecutionModeText} · {run.TaskComplexityText} · Planner {run.PlannerUsageText} · Explorer {run.ExplorerUsageText}",
             $"计划：{run.PlanSummary}",
             $"步骤：{run.StepCount}",
@@ -75,6 +76,13 @@ public static class AgentRunReviewPacketBuilder
             lines.AddRange(run.Verifications.Select(item => $"- {item.Command}: {item.StatusText} ({item.ExitCodeText})"));
         }
 
+        if (run.SmokeTests.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("验收清单：");
+            lines.AddRange(run.SmokeTests.Select(item => $"- [{item.StatusText}] {item.Title}: {item.Detail}"));
+        }
+
         if (run.Artifacts.Count > 0)
         {
             lines.Add("");
@@ -123,6 +131,13 @@ public static class AgentRunReviewPacketBuilder
             "## Quality",
             $"{run.QualityScoreText}: {run.QualitySummary}",
             run.StrategySuggestion,
+            "",
+            "## Smoke Test Checklist"
+        ]);
+
+        lines.AddRange(run.SmokeTests.Select(item => $"- [{item.StatusText}] {item.Title}: {item.Detail}"));
+
+        lines.AddRange([
             "",
             run.DebugSummary,
             "",
