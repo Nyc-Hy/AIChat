@@ -514,6 +514,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(ProjectVerificationCommands));
         OnPropertyChanged(nameof(HasProjectVerificationCommands));
         OnPropertyChanged(nameof(ProjectVerificationCommandSummary));
+        RaiseProjectLoadSnapshotProperties();
         AddProjectVerificationCommandCommand.RaiseCanExecuteChanged();
         RemoveProjectVerificationCommandCommand.RaiseCanExecuteChanged();
         InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();

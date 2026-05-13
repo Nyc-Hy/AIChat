@@ -797,6 +797,36 @@
                                 Style="{StaticResource PrimaryButtonStyle}" />
                     </Grid>
 
+                    <Border Grid.Row="0"
+                            Margin="290,42,0,0"
+                            Padding="12"
+                            Background="#F8FAFC"
+                            BorderBrush="#D8E2EA"
+                            BorderThickness="1"
+                            CornerRadius="8">
+                        <StackPanel>
+                            <TextBlock Text="{Binding CurrentProjectHealthText}"
+                                       Foreground="#1E252E"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding CurrentProjectProfileText}"
+                                       Margin="0,4,0,0"
+                                       Foreground="#596473"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding CurrentProjectActivityText}"
+                                       Margin="0,3,0,0"
+                                       Foreground="#596473"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding CurrentProjectRecommendationText}"
+                                       Margin="0,3,0,0"
+                                       Foreground="#748092"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
                     <Border Grid.Row="1" Margin="0,0,0,8" Background="#FFFFFF" CornerRadius="10" BorderBrush="#CFD9E4" BorderThickness="1.5">
                         <Grid>
                             <ScrollViewer x:Name="MessagesScrollViewer"

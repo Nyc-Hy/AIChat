@@ -23,6 +23,7 @@ public sealed partial class MainViewModel
             if (SetProperty(ref _selectedProject, value))
             {
                 OnPropertyChanged(nameof(CurrentProjectName));
+                RaiseProjectLoadSnapshotProperties();
                 NewChatCommand.RaiseCanExecuteChanged();
                 RefreshWorkspaceChangesCommand.RaiseCanExecuteChanged();
                 AttachInputArtifactCommand.RaiseCanExecuteChanged();
@@ -75,6 +76,10 @@ public sealed partial class MainViewModel
         }
     }
     public string CurrentConversationTitle => SelectedConversation?.Title ?? "新对话";
+    public string CurrentProjectHealthText => _projectLoadSnapshot.HealthText;
+    public string CurrentProjectProfileText => _projectLoadSnapshot.ProfileText;
+    public string CurrentProjectActivityText => _projectLoadSnapshot.ActivityText;
+    public string CurrentProjectRecommendationText => _projectLoadSnapshot.RecommendationText;
     public bool HasCurrentInputArtifacts => CurrentInputArtifacts.Count > 0;
     public string CurrentInputArtifactSummary
     {
@@ -183,6 +188,7 @@ public sealed partial class MainViewModel
             EnsureDefaultVerificationCommands(SelectedProject.Project);
             _ = _repository.SaveProjectsAsync(Projects.Select(p => p.Project).ToList());
             OnPropertyChanged(nameof(SelectedProject));
+            RaiseProjectLoadSnapshotProperties();
             LoadProjectVerificationCommands();
             InferProjectVerificationCommandsCommand.RaiseCanExecuteChanged();
             StatusText = $"项目路径已设置为：{dialog.SelectedPath}";
@@ -828,6 +834,17 @@ public sealed partial class MainViewModel
         {
             ApplyConversationFilters();
         }
+    }
+
+    private void RaiseProjectLoadSnapshotProperties()
+    {
+        _projectLoadSnapshot = SelectedProject is null
+            ? new ProjectLoadSnapshot("健康：未选择项目", "画像：无", "活动：无", "建议：先添加或选择一个项目。")
+            : ProjectLoadSnapshotBuilder.Build(SelectedProject.Project);
+        OnPropertyChanged(nameof(CurrentProjectHealthText));
+        OnPropertyChanged(nameof(CurrentProjectProfileText));
+        OnPropertyChanged(nameof(CurrentProjectActivityText));
+        OnPropertyChanged(nameof(CurrentProjectRecommendationText));
     }
 
 }

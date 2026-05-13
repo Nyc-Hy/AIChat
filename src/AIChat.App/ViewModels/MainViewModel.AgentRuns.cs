@@ -491,6 +491,7 @@ public sealed partial class MainViewModel
         ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
         StatusText = "已标记本轮 Agent Run 验收通过";
         RebuildAgentRunHistoryIfOpen();
+        RaiseProjectLoadSnapshotProperties();
         await SaveProjectsAsync();
     }
 
@@ -514,6 +515,7 @@ public sealed partial class MainViewModel
         ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
         StatusText = "已标记本轮 Agent Run 需要修改";
         RebuildAgentRunHistoryIfOpen();
+        RaiseProjectLoadSnapshotProperties();
         await SaveProjectsAsync();
     }
 

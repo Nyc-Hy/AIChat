@@ -11,6 +11,7 @@ using AIChat.Application.Audit;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
+using AIChat.Application.Projects;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Application.Artifacts;
@@ -88,6 +89,11 @@ public sealed partial class MainViewModel : ObservableObject
     private string _workspaceStatusText = "尚未刷新";
     private string _workspaceDiffText = "选择一个变更文件查看 diff。";
     private IReadOnlyList<DiffLineViewModel> _workspaceDiffLines = [];
+    private ProjectLoadSnapshot _projectLoadSnapshot = new(
+        "健康：未选择项目",
+        "画像：无",
+        "活动：无",
+        "建议：先添加或选择一个项目。");
     private bool _isRefreshingWorkspaceChanges;
     // Tracks the provider template selected in the Settings "add provider" dropdown.
     // Separate from Settings.ProviderId to avoid async normalization races.
