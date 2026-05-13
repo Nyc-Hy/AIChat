@@ -63,11 +63,12 @@ public static class ProjectLoadSnapshotBuilder
         var runs = project.Conversations.SelectMany(conversation => conversation.AgentRuns).ToList();
         var needsChanges = runs.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges);
         var unreviewed = runs.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.Unreviewed && run.Status == AgentRunStatus.Completed);
+        var memoryCount = project.Memories.Count;
         var lastRun = runs.OrderByDescending(run => run.StartedAt).FirstOrDefault();
         var lastRunText = lastRun is null
             ? "暂无 Agent Run"
             : $"最近：{FormatStatus(lastRun.Status)} · {Trim(lastRun.Goal, 42)}";
-        return $"活动：{project.Conversations.Count} 个对话 · {runs.Count} 次运行 · {needsChanges} 个需修改 · {unreviewed} 个未验收 · {lastRunText}";
+        return $"活动：{project.Conversations.Count} 个对话 · {runs.Count} 次运行 · {memoryCount} 条记忆 · {needsChanges} 个需修改 · {unreviewed} 个未验收 · {lastRunText}";
     }
 
     private static string BuildRecommendation(bool agentsExists, int verificationCount)

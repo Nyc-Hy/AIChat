@@ -163,6 +163,7 @@ public sealed class AgentRequestFactory
                 WorkspaceSummary = workspaceSummary,
                 PinnedContextItems = request.PinnedContextItems,
                 ContextRefs = contextPack.ToPromptRefs(),
+                MemorySnippets = memorySnippets,
                 InputArtifactRefs = inputArtifactRefs
             }
         });

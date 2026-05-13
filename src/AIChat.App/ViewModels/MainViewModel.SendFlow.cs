@@ -1,9 +1,11 @@
 using AIChat.Application.Agents;
 using AIChat.Application.Llm.Routing;
+using AIChat.Application.Memory;
 using AIChat.Application.Prompting;
 using AIChat.Abstractions.Configuration;
 using AIChat.Domain.Audit;
 using AIChat.Domain.Chat;
+using AIChat.Domain.Memory;
 using System.Text;
 
 namespace AIChat.App.ViewModels;
@@ -485,6 +487,7 @@ public sealed partial class MainViewModel
                     break;
                 case AgentHarnessEventType.RunCompleted:
                     await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
+                    await PersistAgentRunMemoriesAsync(agentEvent.Run);
                     var runStatus = agentEvent.Run?.Status;
                     var auditType = runStatus switch
                     {
@@ -500,6 +503,84 @@ public sealed partial class MainViewModel
                     break;
             }
         }
+    }
+
+    private async Task PersistAgentRunMemoriesAsync(AgentRun? run)
+    {
+        if (run is null || SelectedProject is null || SelectedConversation is null)
+        {
+            return;
+        }
+
+        var candidates = _memoryExtractor.Extract(SelectedConversation.Conversation, run)
+            .Where(candidate => !candidate.RequiresUserConfirmation)
+            .Take(5)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        var project = SelectedProject.Project;
+        var added = 0;
+        foreach (var candidate in candidates)
+        {
+            if (HasSimilarMemory(project.Memories, candidate.Category, candidate.Content))
+            {
+                continue;
+            }
+
+            var result = _memoryService.Add(project.Memories, new MemoryWriteRequest
+            {
+                ProjectId = project.Id,
+                Category = candidate.Category,
+                Content = candidate.Content,
+                Source = candidate.Source,
+                Metadata = candidate.Metadata
+            });
+            if (result.IsStored)
+            {
+                added++;
+            }
+        }
+
+        if (added == 0)
+        {
+            return;
+        }
+
+        TrimProjectMemories(project.Memories, 80);
+        project.UpdatedAt = DateTimeOffset.Now;
+        RaiseProjectLoadSnapshotProperties();
+        await SaveProjectsAsync();
+    }
+
+    private static bool HasSimilarMemory(IEnumerable<MemoryEntry> entries, MemoryCategory category, string content)
+    {
+        var key = NormalizeMemoryContent(content);
+        return entries.Any(entry => entry.Category == category &&
+                                    NormalizeMemoryContent(entry.Content) == key);
+    }
+
+    private static void TrimProjectMemories(List<MemoryEntry> memories, int maxCount)
+    {
+        if (memories.Count <= maxCount)
+        {
+            return;
+        }
+
+        var keep = memories
+            .OrderByDescending(memory => memory.UpdatedAt)
+            .Take(maxCount)
+            .ToHashSet();
+        memories.RemoveAll(memory => !keep.Contains(memory));
+    }
+
+    private static string NormalizeMemoryContent(string content)
+    {
+        return string.Join(' ', content.ReplaceLineEndings(" ").Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Trim()
+            .ToLowerInvariant();
     }
 
 }

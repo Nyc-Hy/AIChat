@@ -43,6 +43,7 @@ public sealed class AgentPromptComposer
             Plan = plan,
             AllowedTools = context.EnabledToolIds,
             ContextRefs = context.ContextRefs,
+            MemorySnippets = context.MemorySnippets,
             InputArtifactRefs = context.InputArtifactRefs
         }).Messages[0];
     }

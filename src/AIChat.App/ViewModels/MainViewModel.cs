@@ -9,6 +9,7 @@ using AIChat.Abstractions.Persistence;
 using AIChat.Application.Agents;
 using AIChat.Application.Audit;
 using AIChat.Application.Context;
+using AIChat.Application.Memory;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Prompting;
 using AIChat.Application.Projects;
@@ -42,6 +43,8 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly AgentRunAuditService? _auditService;
     private readonly InputArtifactService _inputArtifactService = new();
     private readonly InputArtifactFileStore _inputArtifactFileStore = new();
+    private readonly AgentRunMemoryExtractor _memoryExtractor = new();
+    private readonly MemoryService _memoryService = new();
     private AgentHarness? _agentHarness;
     private AgentToolRegistry? _toolRegistry;
     private readonly AgentRunQueue _agentRunQueue = new();

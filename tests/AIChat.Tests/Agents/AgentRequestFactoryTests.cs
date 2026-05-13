@@ -135,6 +135,8 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Contains("input-artifact:", result.ChatRequest.Messages[0].Content);
         Assert.Contains("bug-report.pdf", result.ChatRequest.Messages[0].Content);
         Assert.Contains("memory:", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("相关长期记忆", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("Program.cs is the sample entry point.", result.ChatRequest.Messages[0].Content);
         Assert.Contains("加载快照", result.ChatRequest.Messages[0].Content);
         Assert.Contains("路径可用", result.ChatRequest.Messages[0].Content);
         Assert.Contains(result.ChatRequest.Messages, message => message.Role == ChatRole.User && message.Content == "fix bug");

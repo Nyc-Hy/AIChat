@@ -104,6 +104,7 @@ public sealed class SystemPromptBuilder
             builder.AppendLine(contextPack);
         }
 
+        AppendMemorySnippets(builder, context.MemorySnippets);
         AppendInputArtifacts(builder, context.InputArtifactRefs);
 
         AppendProviderSpecificInstructions(builder, context.ProviderId);
@@ -140,6 +141,22 @@ public sealed class SystemPromptBuilder
         foreach (var artifactRef in inputArtifactRefs.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             builder.AppendLine($"- {artifactRef.Trim()}");
+        }
+    }
+
+    private static void AppendMemorySnippets(StringBuilder builder, IReadOnlyList<string> memorySnippets)
+    {
+        if (memorySnippets.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("相关长期记忆：");
+        builder.AppendLine("- 这些记忆来自本项目历史对话和 Agent Run；把它们当作可复用线索，若与当前文件冲突，以实际文件为准。");
+        foreach (var memory in memorySnippets.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase).Take(8))
+        {
+            builder.AppendLine($"- {memory.Trim()}");
         }
     }
 
