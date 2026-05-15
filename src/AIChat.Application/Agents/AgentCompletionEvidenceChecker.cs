@@ -33,7 +33,7 @@ public sealed class AgentCompletionEvidenceChecker
         var verificationClaim = HasClaim(normalized, VerificationClaim, NegatedVerificationClaim);
         var risks = new List<string>();
         var canClaimModified = run.MutationToolSucceeded;
-        var canClaimVerified = run.Verifications.Any(verification => verification.IsSuccess);
+        var canClaimVerified = run.Verifications.Count > 0 && run.Verifications.All(verification => verification.IsSuccess);
 
         if (mutationClaim && !canClaimModified)
         {
@@ -42,7 +42,9 @@ public sealed class AgentCompletionEvidenceChecker
 
         if (verificationClaim && !canClaimVerified)
         {
-            risks.Add("最终回复声称已运行测试/构建/验证，但本轮没有成功的验证工具记录。");
+            risks.Add(run.Verifications.Count == 0
+                ? "最终回复声称已运行测试/构建/验证，但本轮没有成功的验证工具记录。"
+                : "最终回复声称测试/构建/验证已通过，但本轮仍有失败的验证记录。");
         }
 
         if (risks.Count == 0)

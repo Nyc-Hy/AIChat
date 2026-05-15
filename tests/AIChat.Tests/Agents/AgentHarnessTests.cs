@@ -969,6 +969,24 @@ public sealed class AgentHarnessTests
     }
 
     [Fact]
+    public void CompletionEvidence_FlagsRiskWhenFinalAnswerClaimsVerificationButOneVerificationFailed()
+    {
+        var run = new AgentRun
+        {
+            Verifications =
+            [
+                new AgentVerification { Command = "dotnet build", IsSuccess = true },
+                new AgentVerification { Command = "dotnet test", IsSuccess = false, ExitCode = 1 }
+            ]
+        };
+        var report = new AgentCompletionEvidenceChecker().Check("已运行测试，全部通过。", run);
+
+        Assert.Equal("risk", report.Status);
+        Assert.False(report.CanClaimVerified);
+        Assert.Contains("仍有失败的验证记录", report.Risks.Single());
+    }
+
+    [Fact]
     public async Task RunAsync_RecordsApprovalGuardrailsAndFinalValidation()
     {
         var conversation = new Conversation { Id = "conversation-1" };
