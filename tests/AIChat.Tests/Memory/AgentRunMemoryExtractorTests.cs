@@ -73,6 +73,39 @@ public sealed class AgentRunMemoryExtractorTests
     }
 
     [Fact]
+    public void Extract_CreatesToolMemoryForFailedVerificationRun()
+    {
+        var conversation = new Conversation { Id = "c1", Title = "Test" };
+        var run = new AgentRun
+        {
+            Id = "r1",
+            ConversationId = conversation.Id,
+            Goal = "修复测试",
+            Status = AgentRunStatus.Failed,
+            FileChanges = [new AgentFileChange { Path = "src/App.cs" }],
+            Verifications =
+            [
+                new AgentVerification
+                {
+                    Command = "dotnet test",
+                    ExitCode = 1,
+                    IsSuccess = false,
+                    Summary = "AppTests.cs(12): error CS1002"
+                }
+            ]
+        };
+
+        var candidates = new AgentRunMemoryExtractor().Extract(conversation, run);
+
+        var memory = Assert.Single(candidates, candidate => candidate.Metadata["kind"] == "verification-failure");
+        Assert.Equal(MemoryCategory.Tool, memory.Category);
+        Assert.Contains("dotnet test", memory.Content);
+        Assert.Contains("exit 1", memory.Content);
+        Assert.Contains("AppTests.cs", memory.Content);
+        Assert.Contains("src/App.cs", memory.Content);
+    }
+
+    [Fact]
     public void Extract_SkipsIncompleteRunsAndSecrets()
     {
         var conversation = new Conversation { Id = "c1", Title = "Test" };

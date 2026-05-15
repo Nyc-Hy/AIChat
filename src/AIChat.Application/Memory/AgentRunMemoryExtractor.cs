@@ -7,7 +7,11 @@ public sealed class AgentRunMemoryExtractor
 {
     public IReadOnlyList<MemoryCandidate> Extract(Conversation conversation, AgentRun run)
     {
-        if (run.Status != AgentRunStatus.Completed)
+        var failedVerifications = run.Verifications
+            .Where(verification => !verification.IsSuccess)
+            .Take(3)
+            .ToList();
+        if (run.Status != AgentRunStatus.Completed && failedVerifications.Count == 0)
         {
             return [];
         }
@@ -23,7 +27,9 @@ public sealed class AgentRunMemoryExtractor
             .Take(8)
             .ToList();
 
-        if (!string.IsNullOrWhiteSpace(shortGoal) && changedPaths.Count > 0)
+        if (run.Status == AgentRunStatus.Completed &&
+            !string.IsNullOrWhiteSpace(shortGoal) &&
+            changedPaths.Count > 0)
         {
             candidates.Add(new MemoryCandidate
             {
@@ -61,6 +67,26 @@ public sealed class AgentRunMemoryExtractor
             });
         }
 
+        foreach (var verification in failedVerifications)
+        {
+            if (string.IsNullOrWhiteSpace(verification.Command))
+            {
+                continue;
+            }
+
+            var summary = string.IsNullOrWhiteSpace(verification.Summary)
+                ? Truncate(NormalizeWhitespace(verification.Output), 160)
+                : Truncate(NormalizeWhitespace(verification.Summary), 160);
+            var related = changedPaths.Count == 0 ? "" : $" Related files: {string.Join(", ", changedPaths.Take(5))}.";
+            candidates.Add(new MemoryCandidate
+            {
+                Category = MemoryCategory.Tool,
+                Source = source,
+                Content = $"Verification failure for \"{shortGoal}\": \"{verification.Command}\" exit {verification.ExitCode}.{(verification.TimedOut ? " Timed out." : "")} Summary: {summary}.{related}",
+                Metadata = CreateMetadata(run, "verification-failure")
+            });
+        }
+
         foreach (var step in run.Steps.Where(step => step.IsError && !string.IsNullOrWhiteSpace(step.ToolName)).Take(3))
         {
             candidates.Add(new MemoryCandidate
@@ -72,7 +98,10 @@ public sealed class AgentRunMemoryExtractor
             });
         }
 
-        candidates.AddRange(ExtractUserPreferenceCandidates(conversation, run, source));
+        if (run.Status == AgentRunStatus.Completed)
+        {
+            candidates.AddRange(ExtractUserPreferenceCandidates(conversation, run, source));
+        }
         return candidates
             .Where(candidate => !MemoryService.ContainsSecret(candidate.Content))
             .GroupBy(candidate => NormalizeKey(candidate.Category, candidate.Content), StringComparer.OrdinalIgnoreCase)
