@@ -1992,6 +1992,23 @@
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
                                                    Foreground="#303A47" />
+                                        <Border Margin="0,5,0,0"
+                                                Padding="10"
+                                                CornerRadius="8"
+                                                Background="#F7FAFC"
+                                                BorderBrush="#DDE6EE"
+                                                BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding CompletionEvidenceSummary}"
+                                                           Foreground="#303A47"
+                                                           TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding ClaimPermissionSummary}"
+                                                           Margin="0,4,0,0"
+                                                           FontSize="12"
+                                                           Foreground="#748092"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
                                         <TextBox Text="{Binding FinalValidationSummary, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,5,0,0" />

@@ -903,8 +903,9 @@ public sealed class AgentHarnessTests
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "已修改 README.md。" }]),
             new AgentToolCatalog([])));
+        var events = new List<AgentHarnessEvent>();
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -919,12 +920,16 @@ public sealed class AgentHarnessTests
                            Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
                        }))
         {
+            events.Add(item);
         }
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Equal("risk", run.CompletionEvidenceStatus);
+        Assert.False(run.CanClaimModified);
         Assert.Contains("结果一致性：存在风险", run.FinalValidationSummary);
         Assert.Contains("没有成功的写入或提交工具记录", run.FinalValidationSummary);
+        Assert.Contains(events, item => item.Content.Contains("完成声明已降级", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -934,8 +939,9 @@ public sealed class AgentHarnessTests
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "已运行测试，全部通过。" }]),
             new AgentToolCatalog([])));
+        var events = new List<AgentHarnessEvent>();
 
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
                        {
                            Conversation = conversation,
                            UserMessageId = "user-1",
@@ -950,12 +956,16 @@ public sealed class AgentHarnessTests
                            Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
                        }))
         {
+            events.Add(item);
         }
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Completed, run.Status);
+        Assert.Equal("risk", run.CompletionEvidenceStatus);
+        Assert.False(run.CanClaimVerified);
         Assert.Contains("结果一致性：存在风险", run.FinalValidationSummary);
         Assert.Contains("没有成功的验证工具记录", run.FinalValidationSummary);
+        Assert.Contains(events, item => item.Content.Contains("完成声明已降级", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

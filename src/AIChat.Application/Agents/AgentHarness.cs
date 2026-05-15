@@ -440,16 +440,16 @@ public sealed class AgentHarness
                     CompleteRecoverySuggestion(run, executionPolicy);
                     var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
-                    if (!string.Equals(finalContent, assistantContent, StringComparison.Ordinal))
+                    var finalAppendix = CreateFinalContentAppendix(run, finalStatus);
+                    if (!string.IsNullOrWhiteSpace(finalAppendix))
                     {
-                        var correction = CreateIncompleteRunUserMessage(run);
                         yield return new AgentHarnessEvent
                         {
                             Type = AgentHarnessEventType.ContentDelta,
                             Run = run,
                             Content = string.IsNullOrWhiteSpace(assistantContent)
-                                ? correction
-                                : Environment.NewLine + Environment.NewLine + correction
+                                ? finalAppendix
+                                : Environment.NewLine + Environment.NewLine + finalAppendix
                         };
                     }
 
@@ -591,6 +591,10 @@ public sealed class AgentHarness
             ToolPermissionModes = context.ToolPermissionModes,
             RequestToolApprovalAsync = context.RequestToolApprovalAsync,
             MaxToolRounds = policy.MaxToolRounds,
+            ProjectPreparationSucceeded = context.ProjectPreparationSucceeded,
+            ProjectPreparationSummary = context.ProjectPreparationSummary,
+            ProjectAgentsAvailable = context.ProjectAgentsAvailable,
+            ProjectVerificationCommandCount = context.ProjectVerificationCommandCount,
             AutoVerifyAgentRuns = autoVerify,
             MaxAutoFixRounds = context.MaxAutoFixRounds,
             AdaptiveStrategiesEnabled = context.AdaptiveStrategiesEnabled,
@@ -604,15 +608,38 @@ public sealed class AgentHarness
 
     private static string BuildFinalContent(string assistantContent, AgentRun run, AgentRunStatus status)
     {
-        if (status == AgentRunStatus.Completed)
+        var appendix = CreateFinalContentAppendix(run, status);
+        return string.IsNullOrWhiteSpace(appendix)
+            ? assistantContent
+            : string.IsNullOrWhiteSpace(assistantContent)
+                ? appendix
+                : assistantContent.TrimEnd() + Environment.NewLine + Environment.NewLine + appendix;
+    }
+
+    private static string CreateFinalContentAppendix(AgentRun run, AgentRunStatus status)
+    {
+        if (status != AgentRunStatus.Completed)
         {
-            return assistantContent;
+            return CreateIncompleteRunUserMessage(run);
         }
 
-        var correction = CreateIncompleteRunUserMessage(run);
-        return string.IsNullOrWhiteSpace(assistantContent)
-            ? correction
-            : assistantContent.TrimEnd() + Environment.NewLine + Environment.NewLine + correction;
+        var notes = new List<string>();
+        if (string.Equals(run.CompletionEvidenceStatus, "risk", StringComparison.OrdinalIgnoreCase))
+        {
+            notes.Add("完成声明已降级：最终回复中的完成/验证声明缺少对应工具证据，请以本条证据说明为准。");
+        }
+
+        if (run.MutationToolSucceeded && run.Verifications.Count == 0)
+        {
+            notes.Add("完成证据：已记录文件修改；未运行验证。");
+        }
+        else if (run.Verifications.Any(verification => !verification.IsSuccess))
+        {
+            var passed = run.Verifications.Count(verification => verification.IsSuccess);
+            notes.Add($"完成证据：验证未全部通过（{passed}/{run.Verifications.Count} 通过）。");
+        }
+
+        return string.Join(Environment.NewLine, notes);
     }
 
     private static string CreateIncompleteRunUserMessage(AgentRun run)
@@ -648,6 +675,10 @@ public sealed class AgentHarness
     private void CompleteFinalValidation(AgentRun run, string assistantContent)
     {
         var evidence = _completionEvidenceChecker.Check(assistantContent, run);
+        run.CompletionEvidenceStatus = evidence.Status;
+        run.CompletionEvidenceSummary = evidence.Summary;
+        run.CanClaimModified = evidence.CanClaimModified;
+        run.CanClaimVerified = evidence.CanClaimVerified;
         var checks = new List<string>
         {
             run.ToolBudgetExceeded ? "工具预算：已耗尽" : "工具预算：未耗尽",

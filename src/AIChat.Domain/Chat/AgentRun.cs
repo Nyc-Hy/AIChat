@@ -34,6 +34,10 @@ public sealed class AgentRun
     public int ToolApprovalRejectedCount { get; set; }
     public int ToolSessionAllowedCount { get; set; }
     public string FinalValidationSummary { get; set; } = "";
+    public string CompletionEvidenceStatus { get; set; } = "";
+    public string CompletionEvidenceSummary { get; set; } = "";
+    public bool CanClaimVerified { get; set; }
+    public bool CanClaimModified { get; set; }
     public string ExecutionPolicySummary { get; set; } = "";
     public string FinalStatusReason { get; set; } = "";
     public int QualityScore { get; set; }

@@ -32,13 +32,15 @@ public sealed class AgentCompletionEvidenceChecker
         var mutationClaim = HasClaim(normalized, MutationClaim, NegatedMutationClaim);
         var verificationClaim = HasClaim(normalized, VerificationClaim, NegatedVerificationClaim);
         var risks = new List<string>();
+        var canClaimModified = run.MutationToolSucceeded;
+        var canClaimVerified = run.Verifications.Any(verification => verification.IsSuccess);
 
-        if (mutationClaim && !run.MutationToolSucceeded)
+        if (mutationClaim && !canClaimModified)
         {
             risks.Add("最终回复声称已修改/创建/删除/提交文件，但本轮没有成功的写入或提交工具记录。");
         }
 
-        if (verificationClaim && !run.Verifications.Any(verification => verification.IsSuccess))
+        if (verificationClaim && !canClaimVerified)
         {
             risks.Add("最终回复声称已运行测试/构建/验证，但本轮没有成功的验证工具记录。");
         }
@@ -46,11 +48,18 @@ public sealed class AgentCompletionEvidenceChecker
         if (risks.Count == 0)
         {
             return mutationClaim || verificationClaim
-                ? AgentCompletionEvidenceReport.ClaimsSatisfied()
-                : AgentCompletionEvidenceReport.NoClaims();
+                ? AgentCompletionEvidenceReport.ClaimsSatisfied(mutationClaim, verificationClaim, canClaimModified, canClaimVerified)
+                : AgentCompletionEvidenceReport.NoClaims(canClaimModified, canClaimVerified);
         }
 
-        return new AgentCompletionEvidenceReport(risks);
+        return new AgentCompletionEvidenceReport(
+            risks,
+            mutationClaim,
+            verificationClaim,
+            canClaimModified,
+            canClaimVerified,
+            "risk",
+            "结果一致性：存在风险");
     }
 
     private static bool HasClaim(string content, Regex positive, Regex negative)
@@ -62,35 +71,58 @@ public sealed class AgentCompletionEvidenceChecker
 
 public sealed class AgentCompletionEvidenceReport
 {
-    public AgentCompletionEvidenceReport(IReadOnlyList<string> risks)
+    public AgentCompletionEvidenceReport(
+        IReadOnlyList<string> risks,
+        bool mutationClaim,
+        bool verificationClaim,
+        bool canClaimModified,
+        bool canClaimVerified,
+        string status,
+        string summary)
     {
         Risks = risks;
+        MutationClaim = mutationClaim;
+        VerificationClaim = verificationClaim;
+        CanClaimModified = canClaimModified;
+        CanClaimVerified = canClaimVerified;
+        Status = status;
+        _summary = summary;
     }
 
     public IReadOnlyList<string> Risks { get; }
+    public bool MutationClaim { get; }
+    public bool VerificationClaim { get; }
+    public bool CanClaimModified { get; }
+    public bool CanClaimVerified { get; }
+    public string Status { get; }
     public bool HasRisk => Risks.Count > 0;
     public bool HasClaims => !string.Equals(Summary, NoClaimSummary, StringComparison.Ordinal);
     public string Summary => HasRisk
         ? "结果一致性：存在风险"
         : _summary;
 
-    private string _summary { get; init; } = NoClaimSummary;
+    private readonly string _summary = NoClaimSummary;
 
     private const string NoClaimSummary = "结果一致性：未检测到需校验的修改或验证声明";
 
-    public static AgentCompletionEvidenceReport NoClaims()
+    public static AgentCompletionEvidenceReport NoClaims(bool canClaimModified = false, bool canClaimVerified = false)
     {
-        return new AgentCompletionEvidenceReport([])
-        {
-            _summary = NoClaimSummary
-        };
+        return new AgentCompletionEvidenceReport([], false, false, canClaimModified, canClaimVerified, "no_claims", NoClaimSummary);
     }
 
-    public static AgentCompletionEvidenceReport ClaimsSatisfied()
+    public static AgentCompletionEvidenceReport ClaimsSatisfied(
+        bool mutationClaim,
+        bool verificationClaim,
+        bool canClaimModified,
+        bool canClaimVerified)
     {
-        return new AgentCompletionEvidenceReport([])
-        {
-            _summary = "结果一致性：声明与工具记录一致"
-        };
+        return new AgentCompletionEvidenceReport(
+            [],
+            mutationClaim,
+            verificationClaim,
+            canClaimModified,
+            canClaimVerified,
+            "satisfied",
+            "结果一致性：声明与工具记录一致");
     }
 }

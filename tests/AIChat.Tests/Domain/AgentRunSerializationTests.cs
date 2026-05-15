@@ -89,6 +89,10 @@ public sealed class AgentRunSerializationTests
                     ToolApprovalRejectedCount = 1,
                     ToolSessionAllowedCount = 1,
                     FinalValidationSummary = "工具预算：未耗尽",
+                    CompletionEvidenceStatus = "satisfied",
+                    CompletionEvidenceSummary = "结果一致性：声明与工具记录一致",
+                    CanClaimModified = true,
+                    CanClaimVerified = true,
                     ExecutionPolicySummary = "complexity=Complex; maxToolRounds=4",
                     FinalStatusReason = "Completion evidence satisfied.",
                     QualityScore = 91,
@@ -297,6 +301,10 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolApprovalRejectedCount);
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
         Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
+        Assert.Equal("satisfied", roundTripped.AgentRuns[0].CompletionEvidenceStatus);
+        Assert.Equal("结果一致性：声明与工具记录一致", roundTripped.AgentRuns[0].CompletionEvidenceSummary);
+        Assert.True(roundTripped.AgentRuns[0].CanClaimModified);
+        Assert.True(roundTripped.AgentRuns[0].CanClaimVerified);
         Assert.Equal("complexity=Complex; maxToolRounds=4", roundTripped.AgentRuns[0].ExecutionPolicySummary);
         Assert.Equal("Completion evidence satisfied.", roundTripped.AgentRuns[0].FinalStatusReason);
         Assert.Equal(91, roundTripped.AgentRuns[0].QualityScore);

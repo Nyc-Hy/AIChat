@@ -83,6 +83,11 @@ public sealed class AgentRunViewModel : ObservableObject
         ? "尚未生成结束校验。"
         : _run.FinalValidationSummary;
     public bool HasFinalValidationSummary => !string.IsNullOrWhiteSpace(_run.FinalValidationSummary);
+    public string CompletionEvidenceSummary => string.IsNullOrWhiteSpace(_run.CompletionEvidenceSummary)
+        ? "完成证据：未记录"
+        : _run.CompletionEvidenceSummary;
+    public string ClaimPermissionSummary =>
+        $"可声称修改：{FormatBoolean(_run.CanClaimModified)} · 可声称验证：{FormatBoolean(_run.CanClaimVerified)}";
     public string ExecutionPolicySummary => string.IsNullOrWhiteSpace(_run.ExecutionPolicySummary)
         ? "未记录执行策略。"
         : _run.ExecutionPolicySummary;
@@ -362,6 +367,8 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(HasPhaseHistory));
         OnPropertyChanged(nameof(PhaseHistoryCount));
         OnPropertyChanged(nameof(FinalValidationSummary));
+        OnPropertyChanged(nameof(CompletionEvidenceSummary));
+        OnPropertyChanged(nameof(ClaimPermissionSummary));
         OnPropertyChanged(nameof(ExecutionPolicySummary));
         OnPropertyChanged(nameof(ExecutionModeText));
         OnPropertyChanged(nameof(FinalStatusReason));
@@ -636,5 +643,10 @@ public sealed class AgentRunViewModel : ObservableObject
         start += prefix.Length;
         var end = _run.ExecutionPolicySummary.IndexOf(';', start);
         return (end < 0 ? _run.ExecutionPolicySummary[start..] : _run.ExecutionPolicySummary[start..end]).Trim();
+    }
+
+    private static string FormatBoolean(bool value)
+    {
+        return value ? "是" : "否";
     }
 }
