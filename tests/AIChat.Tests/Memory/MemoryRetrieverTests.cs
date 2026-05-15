@@ -51,4 +51,40 @@ public sealed class MemoryRetrieverTests
         Assert.Contains("Use apply_patch", snippet);
         Assert.Contains("policy", snippet);
     }
+
+    [Fact]
+    public void Retrieve_BoostsFailedVerificationMemoryForChineseRepairQuery()
+    {
+        var entries = new List<MemoryEntry>
+        {
+            new()
+            {
+                ProjectId = "p1",
+                Category = MemoryCategory.Tool,
+                Content = "Verification failure for \"修复测试\": \"dotnet test\" exit 1. Summary: AppTests.cs(12): error CS1002. Related files: src/App.cs.",
+                Source = "agent-run:r1",
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["kind"] = "verification-failure"
+                }
+            },
+            new()
+            {
+                ProjectId = "p1",
+                Category = MemoryCategory.Project,
+                Content = "Use MVVM patterns for view models.",
+                Source = "arch"
+            }
+        };
+
+        var results = new MemoryRetriever().Retrieve(entries, new MemoryRetrievalRequest
+        {
+            ProjectId = "p1",
+            Query = "继续修复测试失败，重跑 dotnet test",
+            MaxResults = 2
+        });
+
+        Assert.Equal("verification-failure", results[0].Entry.Metadata["kind"]);
+        Assert.Contains("verification-failure", results[0].Reason);
+    }
 }

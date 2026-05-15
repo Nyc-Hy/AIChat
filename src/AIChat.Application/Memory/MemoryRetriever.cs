@@ -42,13 +42,26 @@ public sealed class MemoryRetriever
         };
         var reasons = new List<string> { entry.Category.ToString().ToLowerInvariant() };
         var haystack = $"{entry.Content} {entry.Source} {string.Join(' ', entry.Metadata.Values)}".ToLowerInvariant();
+        var matchedTerms = 0;
         foreach (var term in terms)
         {
             if (haystack.Contains(term, StringComparison.OrdinalIgnoreCase))
             {
                 score += 3;
+                matchedTerms++;
                 reasons.Add($"match:{term}");
             }
+        }
+
+        if (IsVerificationFailureMemory(entry) && LooksLikeVerificationOrRepairQuery(terms))
+        {
+            score += 4;
+            reasons.Add("verification-failure");
+        }
+
+        if (matchedTerms >= 2)
+        {
+            score += Math.Min(4, matchedTerms - 1);
         }
 
         if (terms.Count == 0)
@@ -61,11 +74,63 @@ public sealed class MemoryRetriever
 
     private static IReadOnlyList<string> ExtractTerms(string text)
     {
-        return text
-            .ToLowerInvariant()
-            .Split([' ', '\r', '\n', '\t', '.', ',', ';', ':', '/', '\\', '-', '_', '(', ')', '[', ']'], StringSplitOptions.RemoveEmptyEntries)
+        var normalized = text.ToLowerInvariant();
+        var splitTerms = normalized
+            .Split([' ', '\r', '\n', '\t', '.', ',', ';', ':', '/', '\\', '(', ')', '[', ']'], StringSplitOptions.RemoveEmptyEntries)
             .Where(term => term.Length >= 3)
+            .ToList();
+        var compact = new string(normalized.Where(ch => !char.IsWhiteSpace(ch)).ToArray());
+        var cjkTerms = ExtractCjkNgrams(compact);
+        return splitTerms
+            .Concat(cjkTerms)
+            .Select(term => term.Trim('-', '_'))
+            .Where(term => term.Length >= 2)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static IEnumerable<string> ExtractCjkNgrams(string text)
+    {
+        var cjk = new string(text.Where(IsCjk).ToArray());
+        if (cjk.Length < 2)
+        {
+            return [];
+        }
+
+        var terms = new List<string>();
+        for (var size = 2; size <= Math.Min(4, cjk.Length); size++)
+        {
+            for (var i = 0; i <= cjk.Length - size; i++)
+            {
+                terms.Add(cjk.Substring(i, size));
+            }
+        }
+
+        return terms;
+    }
+
+    private static bool IsCjk(char ch)
+    {
+        return ch is >= '\u4e00' and <= '\u9fff';
+    }
+
+    private static bool IsVerificationFailureMemory(MemoryEntry entry)
+    {
+        return entry.Category == MemoryCategory.Tool &&
+               entry.Metadata.TryGetValue("kind", out var kind) &&
+               string.Equals(kind, "verification-failure", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeVerificationOrRepairQuery(IReadOnlyList<string> terms)
+    {
+        var joined = string.Join(' ', terms);
+        return joined.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("build", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("verify", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("修复", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("验证", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("测试", StringComparison.OrdinalIgnoreCase) ||
+               joined.Contains("失败", StringComparison.OrdinalIgnoreCase);
     }
 }
