@@ -49,6 +49,7 @@ public sealed class AgentRun
     public string ExplorerDecisionReason { get; set; } = "";
     public string RecoverySuggestion { get; set; } = "";
     public string CheckpointSummary { get; set; } = "";
+    public string VerificationRecoveryPacket { get; set; } = "";
     public List<string> CheckpointArtifactRefs { get; set; } = [];
     public string ContinuedFromRunId { get; set; } = "";
     public string RetriedFromRunId { get; set; } = "";

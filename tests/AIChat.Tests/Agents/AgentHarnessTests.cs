@@ -1084,6 +1084,11 @@ public sealed class AgentHarnessTests
         Assert.Contains("验证：0/1 通过", run.FinalValidationSummary);
         Assert.Contains("上一轮验证未全部通过", run.RecoverySuggestion);
         Assert.Contains("恢复包", run.RecoverySuggestion);
+        Assert.Contains("失败验证恢复包", run.RecoverySuggestion);
+        Assert.Contains("失败验证：1/1", run.VerificationRecoveryPacket);
+        Assert.Contains("dotnet test", run.VerificationRecoveryPacket);
+        Assert.Contains("Failed", run.VerificationRecoveryPacket);
+        Assert.Contains("恢复动作：先复现失败命令", run.VerificationRecoveryPacket);
         Assert.Contains("最近错误", run.CheckpointSummary);
         Assert.Contains("只修复导致验证失败的最小问题", run.RecoverySuggestion);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&

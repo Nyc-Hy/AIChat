@@ -722,6 +722,7 @@ public sealed class AgentHarness
 
     private static void CompleteRecoverySuggestion(AgentRun run, AgentTaskExecutionPolicy policy)
     {
+        run.VerificationRecoveryPacket = BuildVerificationRecoveryPacket(run);
         run.CheckpointSummary = BuildCheckpointSummary(run);
         run.CheckpointArtifactRefs = run.Artifacts
             .OrderByDescending(artifact => artifact.CreatedAt)
@@ -799,10 +800,13 @@ public sealed class AgentHarness
                 恢复包：
                 {run.CheckpointSummary}
 
+                失败验证恢复包：
+                {run.VerificationRecoveryPacket}
+
                 继续要求：
-                1. 优先查看失败验证输出和最近修改文件。
+                1. 优先查看失败验证恢复包中的命令、错误摘要和相关文件。
                 2. 只修复导致验证失败的最小问题，不扩大范围。
-                3. 修复后重新运行失败验证或合适的验证命令。
+                3. 修复后重新运行失败验证命令。
                 """;
             return;
         }
@@ -932,6 +936,50 @@ public sealed class AgentHarness
             lines.Add("下一步建议：" + next);
         }
 
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string BuildVerificationRecoveryPacket(AgentRun run)
+    {
+        var failed = run.Verifications
+            .Where(verification => !verification.IsSuccess)
+            .Take(5)
+            .ToList();
+        if (failed.Count == 0)
+        {
+            return "";
+        }
+
+        var changedFiles = run.FileChanges
+            .Select(change => change.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToList();
+        var lines = new List<string>
+        {
+            $"失败验证：{failed.Count}/{run.Verifications.Count}",
+            "失败命令："
+        };
+
+        foreach (var verification in failed)
+        {
+            lines.Add($"- {verification.Command} (exit {verification.ExitCode}{(verification.TimedOut ? ", timeout" : "")})");
+            var summary = string.IsNullOrWhiteSpace(verification.Summary)
+                ? VerificationResultParser.Summarize(verification.Output, maxLines: 6)
+                : verification.Summary;
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                lines.Add("  错误摘要：" + Truncate(summary, 500));
+            }
+        }
+
+        if (changedFiles.Count > 0)
+        {
+            lines.Add("优先检查最近修改文件：" + string.Join("；", changedFiles));
+        }
+
+        lines.Add("恢复动作：先复现失败命令，只做最小修复，修复后重跑同一失败命令。");
         return string.Join(Environment.NewLine, lines);
     }
 

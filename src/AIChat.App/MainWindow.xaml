@@ -2012,6 +2012,24 @@
                                         <TextBox Text="{Binding FinalValidationSummary, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,5,0,0" />
+                                        <StackPanel Margin="0,14,0,0">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasVerificationRecoveryPacket}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <TextBlock Text="失败验证恢复包"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#303A47" />
+                                            <TextBox Text="{Binding VerificationRecoveryPacket, Mode=OneWay}"
+                                                     Style="{StaticResource SelectableTextBoxStyle}"
+                                                     Margin="0,5,0,0" />
+                                        </StackPanel>
                                         <TextBlock Text="恢复建议"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"

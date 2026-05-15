@@ -104,6 +104,7 @@ public sealed class AgentRunSerializationTests
                     ExplorerDecisionReason = "Explorer scheduled: 1.",
                     RecoverySuggestion = "继续处理：test",
                     CheckpointSummary = "目标：test",
+                    VerificationRecoveryPacket = "失败验证：1/2",
                     CheckpointArtifactRefs = ["read_file:tool_result:artifact-1"],
                     AcceptanceStatus = AgentRunAcceptanceStatus.Accepted,
                     AcceptanceNote = "用户确认通过",
@@ -316,6 +317,7 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("Explorer scheduled: 1.", roundTripped.AgentRuns[0].ExplorerDecisionReason);
         Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
         Assert.Equal("目标：test", roundTripped.AgentRuns[0].CheckpointSummary);
+        Assert.Equal("失败验证：1/2", roundTripped.AgentRuns[0].VerificationRecoveryPacket);
         Assert.Equal(["read_file:tool_result:artifact-1"], roundTripped.AgentRuns[0].CheckpointArtifactRefs);
         Assert.Equal(AgentRunAcceptanceStatus.Accepted, roundTripped.AgentRuns[0].AcceptanceStatus);
         Assert.Equal("用户确认通过", roundTripped.AgentRuns[0].AcceptanceNote);

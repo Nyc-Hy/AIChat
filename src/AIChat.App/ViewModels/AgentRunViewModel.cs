@@ -116,6 +116,10 @@ public sealed class AgentRunViewModel : ObservableObject
             ? BuildAcceptanceRecoverySuggestion()
         : _run.RecoverySuggestion;
     public bool HasRecoverySuggestion => !string.IsNullOrWhiteSpace(RecoverySuggestion);
+    public string VerificationRecoveryPacket => string.IsNullOrWhiteSpace(_run.VerificationRecoveryPacket)
+        ? "无失败验证恢复包。"
+        : _run.VerificationRecoveryPacket;
+    public bool HasVerificationRecoveryPacket => !string.IsNullOrWhiteSpace(_run.VerificationRecoveryPacket);
     public bool CanRetry => _run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed;
     public bool CanContinue => _run.Status is AgentRunStatus.BudgetExceeded or AgentRunStatus.Cancelled or AgentRunStatus.Failed ||
                                _run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges;
@@ -379,6 +383,8 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(StrategySuggestion));
         OnPropertyChanged(nameof(RecoverySuggestion));
         OnPropertyChanged(nameof(HasRecoverySuggestion));
+        OnPropertyChanged(nameof(VerificationRecoveryPacket));
+        OnPropertyChanged(nameof(HasVerificationRecoveryPacket));
         OnPropertyChanged(nameof(CompletionReasonText));
         OnPropertyChanged(nameof(HasCompletionReason));
         OnPropertyChanged(nameof(DurationText));
