@@ -26,6 +26,7 @@ public sealed record AgentRequestBuildRequest
     public string WorkspaceBranch { get; init; } = "";
     public int WorkspaceChangeCount { get; init; }
     public string ProjectLoadSnapshot { get; init; } = "";
+    public string ProjectPreparationSummary { get; init; } = "";
     public IReadOnlyList<PinnedContextItem> PinnedContextItems { get; init; } = [];
     public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
     public IReadOnlyList<MemoryEntry> MemoryEntries { get; init; } = [];
@@ -157,6 +158,7 @@ public sealed class AgentRequestFactory
                 ProjectLoadSnapshot = string.IsNullOrWhiteSpace(request.ProjectLoadSnapshot)
                     ? BuildProjectLoadSnapshotFallback(request, projectPath)
                     : request.ProjectLoadSnapshot,
+                ProjectPreparationSummary = request.ProjectPreparationSummary,
                 EnabledToolIds = request.RuntimeSettings.EnabledToolIds,
                 ToolPermissionModes = request.RuntimeSettings.ToolPermissionModes,
                 FileIndex = fileIndex,
@@ -187,6 +189,11 @@ public sealed class AgentRequestFactory
                     request.RuntimeSettings.ToolPermissionModes,
                     request.ProjectToolPermissionModes),
                 MaxToolRounds = request.RuntimeSettings.AgentMaxToolRounds,
+                ProjectPreparationSucceeded = !string.IsNullOrWhiteSpace(projectPath),
+                ProjectPreparationSummary = request.ProjectPreparationSummary,
+                ProjectAgentsAvailable = !string.IsNullOrWhiteSpace(projectPath) &&
+                                         File.Exists(Path.Combine(projectPath, "AGENTS.md")),
+                ProjectVerificationCommandCount = request.VerificationCommands.Count,
                 RequestToolApprovalAsync = request.RequestToolApprovalAsync,
                 AutoVerifyAgentRuns = request.RuntimeSettings.AutoVerifyAgentRuns,
                 MaxAutoFixRounds = request.RuntimeSettings.MaxAutoFixRounds,

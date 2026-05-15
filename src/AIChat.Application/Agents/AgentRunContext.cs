@@ -12,6 +12,10 @@ public sealed class AgentRunContext
         new Dictionary<string, ToolPermissionMode>(StringComparer.OrdinalIgnoreCase);
     public Func<ToolApprovalRequest, CancellationToken, Task<ToolApprovalDecision>>? RequestToolApprovalAsync { get; init; }
     public int MaxToolRounds { get; init; } = 4;
+    public bool ProjectPreparationSucceeded { get; init; } = true;
+    public string ProjectPreparationSummary { get; init; } = "";
+    public bool ProjectAgentsAvailable { get; init; }
+    public int ProjectVerificationCommandCount { get; init; }
     public bool AutoVerifyAgentRuns { get; init; }
     public int MaxAutoFixRounds { get; init; } = 3;
     public bool AdaptiveStrategiesEnabled { get; init; } = true;

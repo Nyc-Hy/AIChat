@@ -18,6 +18,10 @@ public sealed class AgentRun
     public string WorkspaceBranch { get; set; } = "";
     public int WorkspaceChangeCountAtStart { get; set; }
     public bool WorkspaceChangesWereTruncated { get; set; }
+    public bool ProjectPreparationSucceeded { get; set; } = true;
+    public string ProjectPreparationSummary { get; set; } = "";
+    public bool ProjectAgentsAvailableAtStart { get; set; }
+    public int ProjectVerificationCommandCountAtStart { get; set; }
     public int MaxToolRounds { get; set; }
     public int ToolCallCount { get; set; }
     public int ModelCallCount { get; set; }

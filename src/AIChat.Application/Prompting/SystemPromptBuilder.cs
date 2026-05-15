@@ -52,6 +52,10 @@ public sealed class SystemPromptBuilder
                 builder.AppendLine($"  - {line}");
             }
         }
+        if (!string.IsNullOrWhiteSpace(context.ProjectPreparationSummary))
+        {
+            builder.AppendLine($"- 启动准备：{context.ProjectPreparationSummary.Trim()}");
+        }
         builder.AppendLine();
 
         // Inject AGENTS.md content if it exists

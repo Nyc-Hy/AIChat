@@ -39,14 +39,11 @@ public sealed partial class MainViewModel
             return;
         }
 
-        // Ensure project path is configured before sending.
-        if (SelectedProject is not null && string.IsNullOrWhiteSpace(SelectedProject.Path))
+        var preparation = await PrepareProjectForAgentRunAsync();
+        if (!preparation.CanStart)
         {
-            PromptForProjectPath();
-            if (string.IsNullOrWhiteSpace(SelectedProject.Path))
-            {
-                return;
-            }
+            StatusText = preparation.Summary;
+            return;
         }
 
         var inputArtifactDelivery = BuildCurrentInputArtifactDeliverySummary(effectiveSettings.ModelSupportsVision);
@@ -122,6 +119,7 @@ public sealed partial class MainViewModel
             ProjectPath = SelectedProject?.Path ?? "",
             WorkspaceBranch = workspaceSnapshot.Branch,
             WorkspaceChangeCount = workspaceSnapshot.ChangeCount,
+            ProjectPreparationSummary = preparation.Summary,
             ProjectLoadSnapshot = string.Join(Environment.NewLine, [
                 CurrentProjectHealthText,
                 CurrentProjectProfileText,

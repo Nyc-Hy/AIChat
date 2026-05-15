@@ -99,6 +99,7 @@ public sealed class AgentRequestFactoryTests : IDisposable
             RuntimeSettings = CreateRuntimeSettings(),
             ProjectName = "Sample",
             ProjectPath = _tempDir,
+            ProjectPreparationSummary = "路径可用 · AGENTS.md 已就绪 · 1 个验证命令",
             WorkspaceBranch = "main",
             WorkspaceChangeCount = 2,
             InputArtifacts =
@@ -138,7 +139,11 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Contains("相关长期记忆", result.ChatRequest.Messages[0].Content);
         Assert.Contains("Program.cs is the sample entry point.", result.ChatRequest.Messages[0].Content);
         Assert.Contains("加载快照", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("启动准备", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("AGENTS.md 已就绪", result.ChatRequest.Messages[0].Content);
         Assert.Contains("路径可用", result.ChatRequest.Messages[0].Content);
+        Assert.Contains("1 个验证命令", result.AgentContext.ProjectPreparationSummary);
+        Assert.True(result.AgentContext.ProjectPreparationSucceeded);
         Assert.Contains(result.ChatRequest.Messages, message => message.Role == ChatRole.User && message.Content == "fix bug");
         Assert.DoesNotContain(result.ChatRequest.Messages, message => message.Id == assistant.Id);
     }

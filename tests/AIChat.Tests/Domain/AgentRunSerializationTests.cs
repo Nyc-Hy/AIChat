@@ -73,6 +73,10 @@ public sealed class AgentRunSerializationTests
                     WorkspaceBranch = "## main",
                     WorkspaceChangeCountAtStart = 3,
                     WorkspaceChangesWereTruncated = true,
+                    ProjectPreparationSucceeded = true,
+                    ProjectPreparationSummary = "路径可用 · AGENTS.md 已就绪 · 2 个验证命令",
+                    ProjectAgentsAvailableAtStart = true,
+                    ProjectVerificationCommandCountAtStart = 2,
                     MaxToolRounds = 4,
                     ToolCallCount = 2,
                     ModelCallCount = 3,
@@ -277,6 +281,10 @@ public sealed class AgentRunSerializationTests
         Assert.Equal("## main", roundTripped.AgentRuns[0].WorkspaceBranch);
         Assert.Equal(3, roundTripped.AgentRuns[0].WorkspaceChangeCountAtStart);
         Assert.True(roundTripped.AgentRuns[0].WorkspaceChangesWereTruncated);
+        Assert.True(roundTripped.AgentRuns[0].ProjectPreparationSucceeded);
+        Assert.Equal("路径可用 · AGENTS.md 已就绪 · 2 个验证命令", roundTripped.AgentRuns[0].ProjectPreparationSummary);
+        Assert.True(roundTripped.AgentRuns[0].ProjectAgentsAvailableAtStart);
+        Assert.Equal(2, roundTripped.AgentRuns[0].ProjectVerificationCommandCountAtStart);
         Assert.Equal(4, roundTripped.AgentRuns[0].MaxToolRounds);
         Assert.Equal(2, roundTripped.AgentRuns[0].ToolCallCount);
         Assert.Equal(3, roundTripped.AgentRuns[0].ModelCallCount);
