@@ -2,6 +2,8 @@
 
 AIChat is managed through GitHub issues, pull requests, and CI checks.
 
+By contributing, you agree that your contributions are licensed under the Apache License 2.0.
+
 ## Workflow
 
 1. Open or pick a GitHub issue for the work.
@@ -73,3 +75,7 @@ Reviews should focus on:
 - Clear user-facing error messages
 
 Avoid mixing large refactors with feature work unless the refactor is necessary for the change.
+
+## Security
+
+Do not report vulnerabilities with exploit details in public issues. Follow [SECURITY.md](SECURITY.md).

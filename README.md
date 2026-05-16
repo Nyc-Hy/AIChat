@@ -2,6 +2,8 @@
 
 AIChat is a .NET 8 WPF desktop application for project-scoped LLM conversations and local code-agent workflows.
 
+Licensed under the [Apache License 2.0](LICENSE).
+
 ## Features
 
 - **Project-scoped conversations** — each project has its own conversation history and settings
@@ -106,11 +108,14 @@ tests/
 - [GitHub Workflow](docs/GITHUB_WORKFLOW.md) — branches, issues, pull requests, and CI expectations
 - [A2A Adapter Design](docs/A2A_ADAPTER_DESIGN.md) — future Agent-to-Agent boundary design
 - [Development Roadmap](docs/REMAINING_DEVELOPMENT_PLAN.md) — current state, maintenance priorities, and future roadmap
+- [Security Policy](SECURITY.md) — private vulnerability reporting and sensitive areas
+- [Changelog](CHANGELOG.md) — notable project changes
 
 ## Contributing
 
 Use GitHub issues to track work, pull requests for review, and the CI workflow as the merge gate.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit, PR, and verification conventions.
+Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Publish
 

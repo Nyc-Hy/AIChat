@@ -5,6 +5,7 @@ This project is managed through GitHub issues, pull requests, and CI.
 ## Repository Defaults
 
 - Default branch: `master`
+- License: Apache License 2.0
 - Required local verification for code changes:
   - `dotnet build AIChat.sln --no-restore -m:1 -v:minimal`
   - `dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal`
@@ -26,6 +27,8 @@ Recommended labels:
 - `area:ui`
 - `area:storage`
 - `area:security`
+- `good first issue`
+- `help wanted`
 
 An issue should describe the problem, expected behavior, implementation notes when useful, and verification expectations.
 
@@ -52,6 +55,15 @@ It performs:
 4. Test the unit test project with single-node MSBuild
 
 Single-node build/test is intentional because this repository has been stabilized around deterministic local and CI execution.
+
+## Branch Protection
+
+The `master` branch should be protected:
+
+- Require pull requests before merging.
+- Require the CI build/test workflow before merging.
+- Block force pushes.
+- Keep direct pushes limited to maintainers.
 
 ## Merge Guidance
 
