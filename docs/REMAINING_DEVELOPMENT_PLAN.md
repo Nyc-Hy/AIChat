@@ -24,6 +24,7 @@ Use these priorities before starting larger features:
 
 | Priority | Area | Goal |
 |---|---|---|
+| High | GitHub workflow | Track planned work in issues, review focused pull requests, and keep CI green before merge. |
 | High | `MainViewModel` size | Continue extracting pure workspace, audit, and agent-run logic into small services. |
 | High | Test coverage | Keep provider protocol parsing, tool approval, audit consistency, and workspace safety covered. |
 | Medium | Context quality | Improve relevance scoring, recent-file selection, and incremental indexing without increasing prompt noise. |
@@ -72,8 +73,8 @@ Extend the single-run queue to support queued or concurrent agent runs. This req
 For code changes:
 
 ```powershell
-dotnet build AIChat.sln --no-restore
-dotnet test AIChat.sln --no-restore
+dotnet build AIChat.sln --no-restore -m:1 -v:minimal
+dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 git diff --check
 ```
 

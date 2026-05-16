@@ -19,22 +19,25 @@ tests/
 ## Build
 
 ```bash
-dotnet build
+dotnet build AIChat.sln --no-restore -m:1 -v:minimal
 ```
 
 ## Test
 
 ```bash
-dotnet test
+dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 ```
 
 ## Git
 
-This project uses Git for version control.
+This project uses GitHub issues, pull requests, and CI for project management.
+Use focused branches and keep pull requests small enough to review.
 
 ## Conventions
 
 - Follow existing code style and patterns in the project.
 - Run build and tests before committing changes.
 - Use meaningful commit messages that describe the change.
+- Do not commit local secrets, logs, installers, `.tools/`, `.vs/`, `bin/`, or `obj/`.
+- See `CONTRIBUTING.md` and `docs/GITHUB_WORKFLOW.md` for the GitHub workflow.
 

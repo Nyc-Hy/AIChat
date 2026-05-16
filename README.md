@@ -27,8 +27,11 @@ On first launch, open Settings, choose a provider template, enter the API key, a
 ## Test
 
 ```powershell
-dotnet test AIChat.sln
+dotnet build AIChat.sln --no-restore -m:1
+dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1
 ```
+
+The same build and test commands run in GitHub Actions for every pull request.
 
 ## Agent Mode
 
@@ -100,8 +103,14 @@ tests/
 - [Architecture](docs/ARCHITECTURE.md) — layer diagram, project structure, and design rules
 - [Agent Harness](docs/AGENT_HARNESS.md) — agent loop lifecycle, tool budget, and recovery
 - [Tool Security](docs/TOOL_SECURITY.md) — permission model, path guard, and shell policy
+- [GitHub Workflow](docs/GITHUB_WORKFLOW.md) — branches, issues, pull requests, and CI expectations
 - [A2A Adapter Design](docs/A2A_ADAPTER_DESIGN.md) — future Agent-to-Agent boundary design
 - [Development Roadmap](docs/REMAINING_DEVELOPMENT_PLAN.md) — current state, maintenance priorities, and future roadmap
+
+## Contributing
+
+Use GitHub issues to track work, pull requests for review, and the CI workflow as the merge gate.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit, PR, and verification conventions.
 
 ## Publish
 
