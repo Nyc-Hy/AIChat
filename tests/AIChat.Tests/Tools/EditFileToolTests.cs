@@ -41,4 +41,23 @@ public sealed class EditFileToolTests
         var json = JsonDocument.Parse(result.Content).RootElement;
         Assert.Equal(original, json.GetProperty("contentSnapshot").GetString());
     }
+
+    [Theory]
+    [InlineData("../outside.txt")]
+    [InlineData("obj/generated.txt")]
+    [InlineData(".git/config")]
+    public async Task ExecuteAsync_RejectsUnsafePaths(string path)
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var target = Path.Combine(workspace.Path, "safe.txt");
+        await File.WriteAllTextAsync(target, "safe");
+        var tool = new EditFileTool();
+
+        var result = await tool.ExecuteAsync(
+            $$"""{"path":"{{path}}","old_text":"safe","new_text":"unsafe"}""",
+            new AgentToolContext { ProjectPath = workspace.Path });
+
+        Assert.True(result.IsError);
+        Assert.Equal("safe", await File.ReadAllTextAsync(target));
+    }
 }

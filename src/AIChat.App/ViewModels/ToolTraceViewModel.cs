@@ -1,16 +1,10 @@
-using System.Text.Encodings.Web;
-using System.Text.Json;
+using AIChat.Application.Diagnostics;
 using AIChat.Domain.Chat;
 
 namespace AIChat.App.ViewModels;
 
 public sealed class ToolTraceViewModel : ObservableObject
 {
-    private static readonly JsonSerializerOptions JsonDisplayOptions = new(JsonSerializerDefaults.Web)
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
-
     private readonly ChatToolTrace _trace;
 
     public ToolTraceViewModel(ChatToolTrace trace)
@@ -34,13 +28,13 @@ public sealed class ToolTraceViewModel : ObservableObject
         }
     }
 
-    public string ArgumentsPreview => CompactJson(_trace.ArgumentsJson, 220);
-    public string ResultPreview => CompactJson(_trace.ResultContent, 700);
-    public string CommandText => TryReadString(_trace.ResultContent, "command");
-    public string ShellText => TryReadString(_trace.ResultContent, "shell");
-    public string ExitCodeText => TryReadInt(_trace.ResultContent, "exitCode");
-    public string StdoutPreview => Truncate(TryReadString(_trace.ResultContent, "stdout").ReplaceLineEndings("\n").Trim(), 700);
-    public string StderrPreview => Truncate(TryReadString(_trace.ResultContent, "stderr").ReplaceLineEndings("\n").Trim(), 700);
+    public string ArgumentsPreview => ToolTraceDisplayFormatter.CompactJson(_trace.ArgumentsJson, 220);
+    public string ResultPreview => ToolTraceDisplayFormatter.CompactJson(_trace.ResultContent, 700);
+    public string CommandText => ToolTraceDisplayFormatter.TryReadString(_trace.ResultContent, "command");
+    public string ShellText => ToolTraceDisplayFormatter.TryReadString(_trace.ResultContent, "shell");
+    public string ExitCodeText => ToolTraceDisplayFormatter.TryReadString(_trace.ResultContent, "exitCode");
+    public string StdoutPreview => ToolTraceDisplayFormatter.Truncate(ToolTraceDisplayFormatter.TryReadString(_trace.ResultContent, "stdout").ReplaceLineEndings("\n").Trim(), 700);
+    public string StderrPreview => ToolTraceDisplayFormatter.Truncate(ToolTraceDisplayFormatter.TryReadString(_trace.ResultContent, "stderr").ReplaceLineEndings("\n").Trim(), 700);
     public bool HasResult => !string.IsNullOrWhiteSpace(_trace.ResultContent);
     public bool HasCommand => !string.IsNullOrWhiteSpace(CommandText);
     public bool HasShell => !string.IsNullOrWhiteSpace(ShellText);
@@ -79,7 +73,7 @@ public sealed class ToolTraceViewModel : ObservableObject
 
     public void Complete(string resultContent, bool isError)
     {
-        _trace.ResultContent = resultContent;
+        _trace.ResultContent = ToolTraceSanitizer.SanitizeResultContent(resultContent);
         _trace.IsError = isError;
         _trace.IsCompleted = true;
         _trace.CompletedAt = DateTimeOffset.Now;
@@ -105,64 +99,4 @@ public sealed class ToolTraceViewModel : ObservableObject
         OnPropertyChanged(nameof(IsError));
     }
 
-    private static string CompactJson(string value, int maxLength)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "";
-        }
-
-        var normalized = value.Trim();
-        try
-        {
-            using var document = JsonDocument.Parse(normalized);
-            normalized = JsonSerializer.Serialize(document.RootElement, JsonDisplayOptions);
-        }
-        catch (JsonException)
-        {
-            normalized = normalized.ReplaceLineEndings(" ");
-        }
-
-        return Truncate(normalized, maxLength);
-    }
-
-    private static string TryReadString(string json, string propertyName)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return "";
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            if (!document.RootElement.TryGetProperty(propertyName, out var property))
-            {
-                return "";
-            }
-
-            return property.ValueKind switch
-            {
-                JsonValueKind.String => property.GetString() ?? "",
-                JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => property.ToString(),
-                _ => JsonSerializer.Serialize(property, JsonDisplayOptions)
-            };
-        }
-        catch (JsonException)
-        {
-            return "";
-        }
-    }
-
-    private static string TryReadInt(string json, string propertyName)
-    {
-        return TryReadString(json, propertyName);
-    }
-
-    private static string Truncate(string value, int maxLength)
-    {
-        return value.Length <= maxLength
-            ? value
-            : value[..maxLength] + "...";
-    }
 }

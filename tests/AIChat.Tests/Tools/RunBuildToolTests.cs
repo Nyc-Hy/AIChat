@@ -20,6 +20,7 @@ public sealed class RunBuildToolTests
         using var document = JsonDocument.Parse(result.Content);
         Assert.Equal(0, document.RootElement.GetProperty("exitCode").GetInt32());
         Assert.Contains("dotnet build", document.RootElement.GetProperty("command").GetString());
+        Assert.Contains("-m:1", document.RootElement.GetProperty("command").GetString());
     }
 
     [Fact]

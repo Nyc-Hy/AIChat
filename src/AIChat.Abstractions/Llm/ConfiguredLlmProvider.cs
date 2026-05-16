@@ -1,5 +1,7 @@
 namespace AIChat.Abstractions.Llm;
 
+using System.Text.Json.Serialization;
+
 // User-specific provider configuration derived from a provider template plus an
 // API key and selected model.
 public sealed class ConfiguredLlmProvider
@@ -9,7 +11,10 @@ public sealed class ConfiguredLlmProvider
     public string ProtocolId { get; set; } = "openai";
     public string Name { get; set; } = "";
     public string BaseUrl { get; set; } = "";
+    [JsonIgnore]
     public string ApiKey { get; set; } = "";
+    public string ProtectedApiKey { get; set; } = "";
+    public string ApiKeyProtection { get; set; } = "";
     public string SelectedModelId { get; set; } = "";
     public bool SupportsVisionOverride { get; set; }
     public Dictionary<string, string> ModelParameters { get; set; } = [];

@@ -31,6 +31,10 @@ internal static class DotnetVerification
 
                 dotnetArgs.Add(ProjectPathGuard.ToProjectRelativePath(projectPath, fullTarget));
             }
+            else if (TryGetDefaultSolution(root, out var solutionPath))
+            {
+                dotnetArgs.Add(ProjectPathGuard.ToProjectRelativePath(projectPath, solutionPath));
+            }
 
             if (!string.IsNullOrWhiteSpace(configuration))
             {
@@ -39,6 +43,7 @@ internal static class DotnetVerification
             }
 
             dotnetArgs.Add("--nologo");
+            dotnetArgs.Add("-m:1");
             var result = await ProcessCommand.RunAsync("dotnet", dotnetArgs, root, timeoutSeconds, cancellationToken);
             var stdout = Truncate(result.Stdout, maxOutputChars);
             var stderr = Truncate(result.Stderr, maxOutputChars);
@@ -68,6 +73,19 @@ internal static class DotnetVerification
     private static AgentToolResult Error(string toolName, string content)
     {
         return new AgentToolResult { ToolName = toolName, Content = content, IsError = true };
+    }
+
+    private static bool TryGetDefaultSolution(string root, out string solutionPath)
+    {
+        var solutions = Directory.GetFiles(root, "*.sln", SearchOption.TopDirectoryOnly);
+        if (solutions.Length == 1)
+        {
+            solutionPath = solutions[0];
+            return true;
+        }
+
+        solutionPath = "";
+        return false;
     }
 
     private static string Truncate(string value, int maxChars)

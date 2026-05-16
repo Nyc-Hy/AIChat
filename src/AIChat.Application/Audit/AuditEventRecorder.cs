@@ -1,4 +1,5 @@
 using AIChat.Abstractions.Persistence;
+using AIChat.Application.Security;
 using AIChat.Domain.Audit;
 
 namespace AIChat.Application.Audit;
@@ -24,8 +25,8 @@ public static class AuditEventRecorder
                 RunId = runId,
                 Type = type,
                 ToolName = toolName,
-                Summary = summary,
-                Detail = detail
+                Summary = SensitiveDataRedactor.RedactText(summary),
+                Detail = SensitiveDataRedactor.RedactText(detail)
             }, cancellationToken);
         }
         catch

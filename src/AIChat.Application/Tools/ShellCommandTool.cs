@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using AIChat.Domain.Chat;
 
 namespace AIChat.Application.Tools;
@@ -23,6 +24,14 @@ public sealed class ShellCommandTool : IAgentTool
         "chmod 777", "chown -R",
         "dd if=", "mkfs.",
         "> /dev/", "shutdown", "reboot", "init 0", "init 6"
+    ];
+
+    private static readonly Regex[] BlockedCommandPatterns =
+    [
+        new(@"\bgit\s+push\b.*\s-f(?:\s|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+        new(@"\bgit\s+push\b.*--force(?:[=\s-]|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+        new(@"\b(?:ri|rd|rmdir)\b.*(?:\s|/|-)r(?:ecurse)?\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant),
+        new(@"\b(?:del|erase)\b.*(?:\s|/)-?s\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
     ];
 
     // Commands that are always safe to run without extra confirmation.
@@ -57,11 +66,11 @@ public sealed class ShellCommandTool : IAgentTool
           "type": "object",
           "required": ["command"],
           "properties": {
-            "command": { "type": "string", "description": "要执行的非交互式命令。默认按 Bash 语法解析，例如 dotnet --version、command -v dotnet、ls -la。" },
+            "command": { "type": "string", "description": "要执行的非交互式命令。例如 dotnet --version、git status、ls -la。" },
             "shell": {
               "type": "string",
               "enum": ["auto", "bash", "powershell", "cmd"],
-              "description": "要使用的 shell。默认 auto：优先 Git Bash，找不到再回退到 PowerShell/cmd。"
+              "description": "要使用的 shell。默认 auto：Windows 优先 PowerShell，其他系统优先 Bash。"
             },
             "working_directory": { "type": "string", "description": "相对项目根目录的工作目录，留空表示项目根目录。" },
             "timeout_seconds": { "type": "integer", "description": "超时时间，默认 30，最大 120。" },
@@ -182,13 +191,37 @@ public sealed class ShellCommandTool : IAgentTool
     private static bool LooksDestructive(string command)
     {
         var padded = " " + command + " ";
-        return BlockedCommandFragments.Any(fragment => padded.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+        return BlockedCommandFragments.Any(fragment => padded.Contains(fragment, StringComparison.OrdinalIgnoreCase)) ||
+               BlockedCommandPatterns.Any(pattern => pattern.IsMatch(command));
     }
 
     public static bool IsAllowlisted(string command)
     {
         var trimmed = command.Trim();
-        return AllowlistedPrefixes.Any(prefix => trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(trimmed) || LooksDestructive(trimmed) || ContainsShellControlOperator(trimmed))
+        {
+            return false;
+        }
+
+        return AllowlistedPrefixes.Any(prefix => MatchesAllowlistedPrefix(trimmed, prefix));
+    }
+
+    private static bool MatchesAllowlistedPrefix(string command, string prefix)
+    {
+        var normalizedPrefix = prefix.Trim();
+        return string.Equals(command, normalizedPrefix, StringComparison.OrdinalIgnoreCase) ||
+               command.StartsWith(normalizedPrefix + " ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsShellControlOperator(string command)
+    {
+        return command.Contains(';') ||
+               command.Contains('|') ||
+               command.Contains('&') ||
+               command.Contains('>') ||
+               command.Contains('<') ||
+               command.Contains('`') ||
+               command.Contains("$(", StringComparison.Ordinal);
     }
 
     private static string NormalizeShell(string? shell)
@@ -224,7 +257,9 @@ public sealed class ShellCommandTool : IAgentTool
             return new ShellSpec(CmdShell, "cmd.exe");
         }
 
-        return ResolveBash() ?? ResolvePowerShell();
+        return OperatingSystem.IsWindows()
+            ? ResolvePowerShell()
+            : ResolveBash() ?? ResolvePowerShell();
     }
 
     private static ShellSpec? ResolveBash()
@@ -241,7 +276,7 @@ public sealed class ShellCommandTool : IAgentTool
 
             // PATH bash on Windows is often the WSL launcher. It is still useful
             // when explicitly installed, but Git Bash is preferred above.
-            return new ShellSpec(BashShell, "bash.exe");
+            return IsExecutableOnPath("bash.exe") ? new ShellSpec(BashShell, "bash.exe") : null;
         }
 
         return File.Exists("/bin/bash")
@@ -251,9 +286,27 @@ public sealed class ShellCommandTool : IAgentTool
 
     private static ShellSpec ResolvePowerShell()
     {
-        return OperatingSystem.IsWindows()
-            ? new ShellSpec(PowerShellShell, "pwsh.exe")
-            : new ShellSpec(PowerShellShell, "pwsh");
+        if (OperatingSystem.IsWindows())
+        {
+            return IsExecutableOnPath("pwsh.exe")
+                ? new ShellSpec(PowerShellShell, "pwsh.exe")
+                : new ShellSpec(PowerShellShell, "powershell.exe");
+        }
+
+        return new ShellSpec(PowerShellShell, "pwsh");
+    }
+
+    private static bool IsExecutableOnPath(string fileName)
+    {
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(pathValue))
+        {
+            return false;
+        }
+
+        return pathValue
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(path => File.Exists(Path.Combine(path, fileName)));
     }
 
     private static ProcessStartInfo CreateStartInfo(

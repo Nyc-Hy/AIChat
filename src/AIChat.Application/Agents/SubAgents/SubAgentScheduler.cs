@@ -1,5 +1,6 @@
 using AIChat.Application.Agents.Templates;
 using AIChat.Application.Prompting;
+using AIChat.Application.Security;
 using AIChat.Application.Tools;
 using AIChat.Domain.Chat;
 
@@ -102,7 +103,7 @@ public sealed class SubAgentScheduler
                             SubAgentRunId = run.Id,
                             ToolCallId = agentEvent.ToolCall.Id,
                             ToolName = agentEvent.ToolCall.Name,
-                            ArgumentsJson = agentEvent.ToolCall.ArgumentsJson
+                            ArgumentsJson = SensitiveDataRedactor.RedactText(agentEvent.ToolCall.ArgumentsJson)
                         });
                         break;
                     case AgentRunEventType.ToolResult:
@@ -112,18 +113,18 @@ public sealed class SubAgentScheduler
                         if (record is not null && agentEvent.ToolResult is not null)
                         {
                             record.IsError = agentEvent.ToolResult.IsError;
-                            record.ResultSummary = SummarizeToolResult(agentEvent.ToolResult);
+                            record.ResultSummary = SensitiveDataRedactor.RedactText(SummarizeToolResult(agentEvent.ToolResult));
                             if (agentEvent.ToolResult.IsError)
                             {
-                                findings.Add($"{agentEvent.ToolResult.ToolName} failed: {record.ResultSummary}");
+                                findings.Add(SensitiveDataRedactor.RedactText($"{agentEvent.ToolResult.ToolName} failed: {record.ResultSummary}"));
                             }
                         }
                         break;
                     case AgentRunEventType.ContentDelta:
-                        content += agentEvent.Content;
+                        content += SensitiveDataRedactor.RedactText(agentEvent.Content);
                         break;
                     case AgentRunEventType.Error:
-                        findings.Add(agentEvent.Content);
+                        findings.Add(SensitiveDataRedactor.RedactText(agentEvent.Content));
                         return Complete(run, SubAgentStatus.Failed, agentEvent.Content, findings, "Inspect the sub-agent error and retry with narrower context.");
                     case AgentRunEventType.BudgetExceeded:
                         return Complete(run, SubAgentStatus.BudgetExceeded, agentEvent.Content, findings, "Continue with a larger sub-agent budget if needed.");
@@ -172,10 +173,10 @@ public sealed class SubAgentScheduler
         run.Result = new SubAgentResult
         {
             Status = status,
-            Summary = string.IsNullOrWhiteSpace(summary) ? status.ToString() : summary.Trim(),
-            Findings = findings.ToList(),
+            Summary = SensitiveDataRedactor.RedactText(string.IsNullOrWhiteSpace(summary) ? status.ToString() : summary.Trim()),
+            Findings = findings.Select(SensitiveDataRedactor.RedactText).ToList(),
             ChangedFiles = [],
-            ArtifactRefs = run.ContextPack?.ArtifactRefs ?? [],
+            ArtifactRefs = run.ContextPack?.ArtifactRefs.Select(SensitiveDataRedactor.RedactText).ToList() ?? [],
             RecommendedNextStep = recommendedNextStep
         };
         return run;

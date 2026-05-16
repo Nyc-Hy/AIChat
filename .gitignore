@@ -6,3 +6,26 @@ obj/
 *.suo
 TestResults/
 artifacts/
+
+# Local tool/user configuration
+.claude/settings.local.json
+.claude/*.local.json
+.tools/
+
+# Local secrets and environment overrides
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Local runtime/app data
+settings.json
+projects.json
+audit/
+*.log
+
+# Local installers/downloads
+*.msi
+*.zip

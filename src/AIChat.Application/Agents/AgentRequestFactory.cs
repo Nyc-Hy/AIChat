@@ -4,6 +4,7 @@ using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
 using AIChat.Application.Memory;
 using AIChat.Application.Prompting;
+using AIChat.Application.Security;
 using AIChat.Application.Projects;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
@@ -222,7 +223,7 @@ public sealed class AgentRequestFactory
             effectiveSettings.BaseUrl,
             effectiveSettings.Model,
             effectiveSettings.Temperature,
-            new Dictionary<string, string>(effectiveSettings.ModelParameters, StringComparer.OrdinalIgnoreCase),
+            SensitiveDataRedactor.RedactDictionary(effectiveSettings.ModelParameters),
             enabledToolIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             new Dictionary<string, ToolPermissionMode>(runtimeSettings.ToolPermissionModes, StringComparer.OrdinalIgnoreCase),
             GetRequestMessages(conversation, assistantMessageId)
@@ -242,7 +243,7 @@ public sealed class AgentRequestFactory
             effectiveSettings.BaseUrl,
             effectiveSettings.Model,
             effectiveSettings.Temperature,
-            new Dictionary<string, string>(effectiveSettings.ModelParameters, StringComparer.OrdinalIgnoreCase),
+            SensitiveDataRedactor.RedactDictionary(effectiveSettings.ModelParameters),
             enabledToolIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             new Dictionary<string, ToolPermissionMode>(runtimeSettings.ToolPermissionModes, StringComparer.OrdinalIgnoreCase),
             chatRequest.Messages.Select(ToSnapshotMessage).ToList());
@@ -253,7 +254,7 @@ public sealed class AgentRequestFactory
         return new AgentRequestSnapshotMessage(
             message.Id,
             message.Role.ToString().ToLowerInvariant(),
-            message.Content,
+            SensitiveDataRedactor.RedactText(message.Content),
             message.ContentParts.Select(ToSnapshotContentPart).ToList());
     }
 
@@ -262,7 +263,7 @@ public sealed class AgentRequestFactory
         return new AgentRequestSnapshotContentPart(
             part.Type,
             string.Equals(part.Type, "text", StringComparison.OrdinalIgnoreCase)
-                ? part.Text
+                ? SensitiveDataRedactor.RedactText(part.Text)
                 : "",
             part.MediaType,
             part.SourcePath,

@@ -1,6 +1,7 @@
 namespace AIChat.Abstractions.Configuration;
 
 using AIChat.Abstractions.Llm;
+using System.Text.Json.Serialization;
 
 // Persisted application settings plus the currently selected provider/model.
 // It lives in Abstractions because UI, storage, and providers all need this shape.
@@ -10,7 +11,10 @@ public sealed class AppSettings
     public string ProtocolId { get; set; } = "openai";
     public string ProviderName { get; set; } = "小米 MIMO (TokenPlan)";
     public string BaseUrl { get; set; } = "https://token-plan-cn.xiaomimimo.com/v1";
+    [JsonIgnore]
     public string ApiKey { get; set; } = "";
+    public string ProtectedApiKey { get; set; } = "";
+    public string ApiKeyProtection { get; set; } = "";
     public string Model { get; set; } = "mimo-v2.5-pro";
     // Code-agent workflows benefit from stable, low-variance behavior.
     public double Temperature { get; set; } = 0.3;

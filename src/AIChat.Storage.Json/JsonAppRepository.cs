@@ -26,12 +26,15 @@ public sealed class JsonAppRepository : IAppRepository
     private readonly SemaphoreSlim _writeLock = new(1, 1);
 
     public JsonAppRepository()
-    {
-        // User-specific app data avoids writing into the source tree and survives
-        // app restarts without requiring a database.
-        _dataDirectory = Path.Combine(
+        : this(Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AIChat");
+            "AIChat"))
+    {
+    }
+
+    public JsonAppRepository(string dataDirectory)
+    {
+        _dataDirectory = dataDirectory;
         _settingsPath = Path.Combine(_dataDirectory, "settings.json");
         _projectsPath = Path.Combine(_dataDirectory, "projects.json");
     }
@@ -43,14 +46,16 @@ public sealed class JsonAppRepository : IAppRepository
             return CreateInitialSettings();
         }
 
-        await using var stream = File.OpenRead(_settingsPath);
-        return await JsonSerializer.DeserializeAsync<AppSettings>(stream, JsonOptions, cancellationToken)
-               ?? CreateInitialSettings();
+        var json = await File.ReadAllTextAsync(_settingsPath, cancellationToken);
+        var settings = JsonSerializer.Deserialize<AppSettings>(json, JsonOptions)
+                       ?? CreateInitialSettings();
+        RestoreLegacyPlainTextApiKeys(settings, json);
+        return ProtectedSettingsSerializer.RestoreAfterLoad(settings);
     }
 
     public async Task SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
-        await AtomicWriteJsonAsync(_settingsPath, settings, cancellationToken);
+        await AtomicWriteJsonAsync(_settingsPath, ProtectedSettingsSerializer.PrepareForSave(settings), cancellationToken);
     }
 
     public async Task<IReadOnlyList<ProjectWorkspace>> LoadProjectsAsync(CancellationToken cancellationToken = default)
@@ -77,7 +82,7 @@ public sealed class JsonAppRepository : IAppRepository
     private async Task AtomicWriteJsonAsync<T>(string filePath, T value, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(_dataDirectory);
-        var tempPath = filePath + ".tmp";
+        var tempPath = $"{filePath}.{Guid.NewGuid():N}.tmp";
         await _writeLock.WaitAsync(cancellationToken);
         try
         {
@@ -107,6 +112,45 @@ public sealed class JsonAppRepository : IAppRepository
             Model = "mimo-v2.5-pro",
             ModelContextLimit = 1_000_000
         };
+    }
+
+    private static void RestoreLegacyPlainTextApiKeys(AppSettings settings, string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.TryGetProperty("apiKey", out var apiKeyElement))
+            {
+                settings.ApiKey = apiKeyElement.GetString() ?? "";
+            }
+
+            if (!root.TryGetProperty("configuredProviders", out var providersElement) ||
+                providersElement.ValueKind != JsonValueKind.Array)
+            {
+                return;
+            }
+
+            var index = 0;
+            foreach (var providerElement in providersElement.EnumerateArray())
+            {
+                if (index >= settings.ConfiguredProviders.Count)
+                {
+                    break;
+                }
+
+                if (providerElement.TryGetProperty("apiKey", out var providerApiKeyElement))
+                {
+                    settings.ConfiguredProviders[index].ApiKey = providerApiKeyElement.GetString() ?? "";
+                }
+
+                index++;
+            }
+        }
+        catch (JsonException)
+        {
+            // Invalid JSON will be handled by the normal deserialize path.
+        }
     }
 
     private static List<ProjectWorkspace> CreateInitialProjects()

@@ -5,6 +5,7 @@ using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Agents.Planning;
 using AIChat.Application.Agents.SubAgents;
 using AIChat.Application.Prompting;
+using AIChat.Application.Security;
 using AIChat.Application.Tools;
 using AIChat.Application.Verification;
 using AIChat.Domain.Chat;
@@ -348,7 +349,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.Error:
-                    run.CompletionReason = agentEvent.Content;
+                    run.CompletionReason = SensitiveDataRedactor.RedactText(agentEvent.Content);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.ContentDelta,
@@ -1150,8 +1151,8 @@ public sealed class AgentHarness
             StepId = step.Id,
             ToolName = subAgentRun.TemplateId,
             Kind = "sub_agent_result",
-            Summary = subAgentRun.Result.Summary,
-            Content = FormatSubAgentResult(subAgentRun),
+            Summary = SensitiveDataRedactor.RedactText(subAgentRun.Result.Summary),
+            Content = SensitiveDataRedactor.RedactText(FormatSubAgentResult(subAgentRun)),
             CreatedAt = DateTimeOffset.Now,
             Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1173,21 +1174,21 @@ public sealed class AgentHarness
             TemplateId = subAgentRun.TemplateId,
             Task = subAgentRun.Task,
             Status = subAgentRun.Status.ToString(),
-            Summary = result?.Summary ?? "",
-            RecommendedNextStep = result?.RecommendedNextStep ?? "",
+            Summary = SensitiveDataRedactor.RedactText(result?.Summary ?? ""),
+            RecommendedNextStep = SensitiveDataRedactor.RedactText(result?.RecommendedNextStep ?? ""),
             MaxToolCalls = subAgentRun.MaxToolCalls,
             ToolCallCount = subAgentRun.ToolCallCount,
             StartedAt = subAgentRun.StartedAt,
             CompletedAt = subAgentRun.CompletedAt,
-            Findings = result?.Findings.ToList() ?? [],
-            ArtifactRefs = result?.ArtifactRefs.ToList() ?? [],
+            Findings = result?.Findings.Select(SensitiveDataRedactor.RedactText).ToList() ?? [],
+            ArtifactRefs = result?.ArtifactRefs.Select(SensitiveDataRedactor.RedactText).ToList() ?? [],
             ToolCalls = subAgentRun.ToolCalls.Select(call => new AgentSubAgentToolCall
             {
                 ToolCallId = call.ToolCallId,
                 ToolName = call.ToolName,
-                ArgumentsJson = call.ArgumentsJson,
+                ArgumentsJson = SensitiveDataRedactor.RedactText(call.ArgumentsJson),
                 IsError = call.IsError,
-                ResultSummary = call.ResultSummary
+                ResultSummary = SensitiveDataRedactor.RedactText(call.ResultSummary)
             }).ToList()
         };
     }
@@ -1232,7 +1233,7 @@ public sealed class AgentHarness
             Number = number,
             Type = type,
             Title = title,
-            Input = input,
+            Input = SensitiveDataRedactor.RedactText(input),
             ToolCallId = toolCallId,
             ToolName = toolName,
             StartedAt = DateTimeOffset.Now
@@ -1257,8 +1258,8 @@ public sealed class AgentHarness
             Type = type,
             Status = AgentStepStatus.Completed,
             Title = title,
-            Input = input,
-            Output = output,
+            Input = SensitiveDataRedactor.RedactText(input),
+            Output = SensitiveDataRedactor.RedactText(output),
             StartedAt = now,
             CompletedAt = now
         };
@@ -1310,7 +1311,7 @@ public sealed class AgentHarness
             return;
         }
 
-        step.Output = output;
+        step.Output = SensitiveDataRedactor.RedactText(output);
         step.IsError = isError;
         step.Status = isError ? AgentStepStatus.Failed : AgentStepStatus.Completed;
         step.CompletedAt = DateTimeOffset.Now;
@@ -1345,7 +1346,7 @@ public sealed class AgentHarness
                 ToolCallId = toolCall.Id,
                 ToolName = toolResult.ToolName,
                 Path = changedFile.Path,
-                DiffText = ExtractDiffForPath(preview.DiffText, changedFile.Path),
+                DiffText = SensitiveDataRedactor.RedactText(ExtractDiffForPath(preview.DiffText, changedFile.Path)),
                 OldChars = changedFile.OldChars,
                 NewChars = changedFile.NewChars,
                 ContentSnapshot = changedFile.ContentSnapshot,
@@ -1371,6 +1372,7 @@ public sealed class AgentHarness
             ? step.Id
             : "";
         var parsed = ParseVerification(toolResult);
+        var safeOutput = SensitiveDataRedactor.RedactText(parsed.Output);
         var isSuccess = !toolResult.IsError && parsed.ExitCode == 0 && !parsed.TimedOut;
         run.Verifications.Add(new AgentVerification
         {
@@ -1382,8 +1384,8 @@ public sealed class AgentHarness
             ExitCode = parsed.ExitCode,
             TimedOut = parsed.TimedOut,
             IsSuccess = isSuccess,
-            Output = parsed.Output,
-            Summary = VerificationResultParser.Summarize(parsed.Output),
+            Output = safeOutput,
+            Summary = VerificationResultParser.Summarize(safeOutput),
             CreatedAt = DateTimeOffset.Now
         });
     }
@@ -1413,8 +1415,8 @@ public sealed class AgentHarness
             ToolCallId = toolCall.Id,
             ToolName = toolResult.ToolName,
             Kind = string.IsNullOrWhiteSpace(toolResult.ArtifactKind) ? "tool_result" : toolResult.ArtifactKind,
-            Summary = toolResult.Summary,
-            Content = toolResult.Content,
+            Summary = SensitiveDataRedactor.RedactText(toolResult.Summary),
+            Content = SensitiveDataRedactor.RedactText(toolResult.Content),
             CreatedAt = DateTimeOffset.Now,
             Metadata =
             {
@@ -1676,7 +1678,7 @@ public sealed class AgentHarness
             return JsonSerializer.Serialize(new
             {
                 command = cmd.Command,
-                shell = "auto",
+                shell = OperatingSystem.IsWindows() ? "cmd" : "auto",
                 working_directory = cmd.WorkingDirectory,
                 timeout_seconds = cmd.TimeoutSeconds > 0 ? cmd.TimeoutSeconds : 120,
                 max_output_chars = 20_000

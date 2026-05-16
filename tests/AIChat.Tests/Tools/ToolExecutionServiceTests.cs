@@ -160,6 +160,48 @@ public sealed class ToolExecutionServiceTests
         Assert.True(tool.WasExecuted);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_SessionAllowedShellSkipsApprovalForAllowlistedCommand()
+    {
+        var tool = new FakeTool("run_shell", AgentToolRisk.Shell);
+        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+
+        var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "run_shell", ArgumentsJson = """{"command":"git status"}""" },
+            ProjectPath = Environment.CurrentDirectory,
+            SessionAllowedToolIds = new HashSet<string> { "run_shell" }
+        }));
+
+        var result = Assert.Single(events);
+        Assert.Equal(ToolExecutionEventType.Result, result.Type);
+        Assert.True(tool.WasExecuted);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SessionAllowedShellStillRequiresApprovalForNonAllowlistedCommand()
+    {
+        var approvalRequested = false;
+        var tool = new FakeTool("run_shell", AgentToolRisk.Shell);
+        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+
+        var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "run_shell", ArgumentsJson = """{"command":"curl http://example.com"}""" },
+            ProjectPath = Environment.CurrentDirectory,
+            SessionAllowedToolIds = new HashSet<string> { "run_shell" },
+            RequestToolApprovalAsync = (_, _) =>
+            {
+                approvalRequested = true;
+                return Task.FromResult(ToolApprovalDecision.Approve());
+            }
+        }));
+
+        Assert.Equal([ToolExecutionEventType.ApprovalRequired, ToolExecutionEventType.Result], events.Select(item => item.Type));
+        Assert.True(approvalRequested);
+        Assert.True(tool.WasExecuted);
+    }
+
     private static async Task<List<ToolExecutionEvent>> CollectAsync(IAsyncEnumerable<ToolExecutionEvent> events)
     {
         var result = new List<ToolExecutionEvent>();

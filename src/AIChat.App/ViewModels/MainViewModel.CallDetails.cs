@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using AIChat.Application.Security;
 using AIChat.Domain.Chat;
 
 namespace AIChat.App.ViewModels;
@@ -64,7 +65,7 @@ public sealed partial class MainViewModel
     {
         // JSON formatting can be a little expensive for large raw event lists, so
         // run it off the UI thread.
-        var responseJson = await Task.Run(() => SerializeJson(response));
+        var responseJson = await Task.Run(() => SensitiveDataRedactor.RedactText(SerializeJson(response)));
         detail.Status = status;
         detail.CompletedAt = DateTimeOffset.Now;
         detail.ResponseJson = responseJson;
@@ -119,19 +120,21 @@ public sealed partial class MainViewModel
                 continue;
             }
 
-            if (rawEvent == "[DONE]")
+            var redactedRawEvent = SensitiveDataRedactor.RedactText(rawEvent);
+
+            if (redactedRawEvent == "[DONE]")
             {
-                normalized.Add(rawEvent);
+                normalized.Add(redactedRawEvent);
                 continue;
             }
 
             try
             {
-                normalized.Add(JsonSerializer.Deserialize<JsonElement>(rawEvent));
+                normalized.Add(JsonSerializer.Deserialize<JsonElement>(redactedRawEvent));
             }
             catch (JsonException)
             {
-                normalized.Add(rawEvent);
+                normalized.Add(redactedRawEvent);
             }
         }
 

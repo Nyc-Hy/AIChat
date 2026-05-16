@@ -2,6 +2,7 @@ using AIChat.Abstractions.Configuration;
 using AIChat.Application.Agents;
 using AIChat.Application.Context;
 using AIChat.Application.Prompting;
+using AIChat.Application.Security;
 using AIChat.Application.Tools;
 using AIChat.Domain.Artifacts;
 using AIChat.Domain.Chat;
@@ -82,6 +83,57 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Equal("screen.png", part.SourcePath);
         Assert.Equal(4, part.DataBytes);
         Assert.Equal("", part.Text);
+    }
+
+    [Fact]
+    public void CreateSnapshot_RedactsSensitiveModelParameters()
+    {
+        var settings = CreateEffectiveSettings();
+        settings.ModelParameters["api_key"] = "sk-test-secret-value";
+        settings.ModelParameters["safe"] = "enabled";
+
+        var snapshot = AgentRequestFactory.CreateSnapshot(
+            new ChatRequest { Model = settings.Model, Messages = [] },
+            settings,
+            CreateRuntimeSettings(),
+            ["read_file"]);
+
+        Assert.Equal(SensitiveDataRedactor.RedactedValue, snapshot.ModelParameters["api_key"]);
+        Assert.Equal("enabled", snapshot.ModelParameters["safe"]);
+    }
+
+    [Fact]
+    public void CreateSnapshot_RedactsSensitiveMessageText()
+    {
+        var request = new ChatRequest
+        {
+            Model = "deepseek-v4-pro",
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Role = ChatRole.User,
+                    Content = "token=ghp_123456789012345678901234",
+                    ContentParts =
+                    [
+                        ChatContentPart.TextPart("Authorization: Bearer abc.def.ghi")
+                    ]
+                }
+            ]
+        };
+
+        var snapshot = AgentRequestFactory.CreateSnapshot(
+            request,
+            CreateEffectiveSettings(),
+            CreateRuntimeSettings(),
+            ["read_file"]);
+
+        var message = Assert.Single(snapshot.Messages);
+        Assert.DoesNotContain("ghp_123456789012345678901234", message.Content);
+        Assert.Contains(SensitiveDataRedactor.RedactedValue, message.Content);
+        var part = Assert.Single(message.ContentParts);
+        Assert.DoesNotContain("abc.def.ghi", part.Text);
+        Assert.Contains(SensitiveDataRedactor.RedactedValue, part.Text);
     }
 
     [Fact]

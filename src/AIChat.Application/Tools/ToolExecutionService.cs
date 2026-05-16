@@ -53,7 +53,7 @@ public sealed class ToolExecutionService
             yield break;
         }
 
-        if (!IsAutoApproved(tool, mode, request.SessionAllowedToolIds))
+        if (!IsAutoApproved(request, tool, mode))
         {
             yield return new ToolExecutionEvent
             {
@@ -135,13 +135,14 @@ public sealed class ToolExecutionService
     }
 
     private static bool IsAutoApproved(
+        ToolExecutionRequest request,
         IAgentTool tool,
-        ToolPermissionMode mode,
-        IReadOnlySet<string> sessionAllowedToolIds)
+        ToolPermissionMode mode)
     {
-        if (sessionAllowedToolIds.Contains(tool.Id))
+        if (request.SessionAllowedToolIds.Contains(tool.Id))
         {
-            return true;
+            return !string.Equals(tool.Id, "run_shell", StringComparison.OrdinalIgnoreCase) ||
+                   IsAllowlistedShellToolCall(request.ToolCall);
         }
 
         return mode switch
@@ -150,5 +151,12 @@ public sealed class ToolExecutionService
             ToolPermissionMode.AutoReadOnly => tool.Risk == AgentToolRisk.ReadOnly,
             _ => false
         };
+    }
+
+    private static bool IsAllowlistedShellToolCall(ChatToolCall toolCall)
+    {
+        var args = ToolJson.ParseArguments(toolCall.ArgumentsJson);
+        var command = ToolJson.GetString(args, "command") ?? "";
+        return ShellCommandTool.IsAllowlisted(command);
     }
 }

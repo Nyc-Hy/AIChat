@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AIChat.Application.Diagnostics;
 using AIChat.Domain.Chat;
 
 namespace AIChat.App.ViewModels;
@@ -146,7 +147,7 @@ public sealed class ChatMessageViewModel : ObservableObject
         {
             ToolCallId = toolCall.Id,
             ToolName = toolCall.Name,
-            ArgumentsJson = string.IsNullOrWhiteSpace(toolCall.ArgumentsJson) ? "{}" : toolCall.ArgumentsJson,
+            ArgumentsJson = ToolTraceSanitizer.SanitizeArgumentsJson(toolCall.ArgumentsJson),
             StartedAt = DateTimeOffset.Now
         };
         Message.ToolTraces.Add(trace);

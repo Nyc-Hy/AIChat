@@ -763,8 +763,100 @@ public sealed class AgentHarnessTests
         Assert.Equal("run_test", verification.ToolName);
         Assert.Equal("dotnet test", verification.Command);
         Assert.Equal(0, verification.ExitCode);
-        Assert.True(verification.IsSuccess);
+        Assert.True(verification.IsSuccess, verification.Output);
         Assert.Contains("Passed", verification.Output);
+    }
+
+    [Fact]
+    public async Task RunAsync_RedactsSecretsFromVerificationOutput()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "run_test",
+            ArgumentsJson = "{}"
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "已运行测试。" }]
+            ]),
+            new AgentToolCatalog([new FakeSecretVerificationTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "verify",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var verification = Assert.Single(Assert.Single(conversation.AgentRuns).Verifications);
+        Assert.Contains("[REDACTED]", verification.Output);
+        Assert.Contains("[REDACTED]", verification.Summary);
+        Assert.DoesNotContain("sk-test-secret-value", verification.Output);
+        Assert.DoesNotContain("sk-test-secret-value", verification.Summary);
+        Assert.All(Assert.Single(conversation.AgentRuns).Steps, step =>
+            Assert.DoesNotContain("sk-test-secret-value", step.Output));
+    }
+
+    [Fact]
+    public async Task RunAsync_RedactsSecretsFromLargeToolResultArtifacts()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "read_file",
+            ArgumentsJson = "{}"
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done" }]
+            ]),
+            new AgentToolCatalog([new FakeLargeSecretReadTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "read large file",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "read" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var artifact = Assert.Single(Assert.Single(conversation.AgentRuns).Artifacts);
+        Assert.Contains("[REDACTED]", artifact.Content);
+        Assert.Contains("[REDACTED]", artifact.Summary);
+        Assert.DoesNotContain("sk-test-secret-value", artifact.Content);
+        Assert.DoesNotContain("sk-test-secret-value", artifact.Summary);
     }
 
     [Fact]
@@ -823,6 +915,65 @@ public sealed class AgentHarnessTests
         var change = Assert.Single(run.FileChanges);
         Assert.Equal("original content", change.ContentSnapshot);
         Assert.False(string.IsNullOrEmpty(change.PostChangeHash));
+    }
+
+    [Fact]
+    public async Task RunAsync_RedactsSecretsFromFileChangeDiffButKeepsSnapshotForRestore()
+    {
+        using var workspace = TemporaryWorkspace.Create();
+        var targetPath = Path.Combine(workspace.Path, "config.txt");
+        await File.WriteAllTextAsync(targetPath, "api_key=sk-test-secret-value");
+
+        var conversation = new Conversation { Id = "conversation-1" };
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "apply_patch",
+            ArgumentsJson = """
+            {
+              "changes": [
+                {
+                  "path": "config.txt",
+                  "old_text": "api_key=sk-test-secret-value",
+                  "new_text": "api_key=sk-new-secret-value"
+                }
+              ]
+            }
+            """
+        };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "updated" }]
+            ]),
+            new AgentToolCatalog([new ApplyPatchTool()])));
+
+        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "update config",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update config" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = workspace.Path,
+                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
+                           }
+                       }))
+        {
+        }
+
+        var change = Assert.Single(Assert.Single(conversation.AgentRuns).FileChanges);
+        Assert.Contains("[REDACTED]", change.DiffText);
+        Assert.DoesNotContain("sk-test-secret-value", change.DiffText);
+        Assert.DoesNotContain("sk-new-secret-value", change.DiffText);
+        Assert.Contains("sk-test-secret-value", change.ContentSnapshot);
     }
 
     [Fact]
@@ -1411,7 +1562,7 @@ public sealed class AgentHarnessTests
         var run = Assert.Single(conversation.AgentRuns);
         var verification = Assert.Single(run.Verifications);
         Assert.Equal("echo auto verify", verification.Command);
-        Assert.True(verification.IsSuccess);
+        Assert.True(verification.IsSuccess, verification.Output);
         Assert.Contains("auto verify", verification.Output);
         Assert.Contains(events, e => e.ToolCall?.Name == "run_shell" && e.ToolCall.ArgumentsJson.Contains("echo auto verify"));
     }
@@ -1547,6 +1698,89 @@ public sealed class AgentHarnessTests
                   "output": "Passed"
                 }
                 """
+            });
+        }
+    }
+
+    private sealed class FakeSecretVerificationTool : IAgentTool
+    {
+        public string Id => "run_test";
+        public AgentToolRisk Risk => AgentToolRisk.Shell;
+        public ChatToolDefinition Definition { get; } = new()
+        {
+            Name = "run_test",
+            Description = "fake secret test",
+            ParametersJson = "{}"
+        };
+
+        public Task<AgentToolPreview> PreviewAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "run fake secret tests",
+                PreviewText = "dotnet test"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolResult
+            {
+                ToolName = Id,
+                Content = """
+                {
+                  "command": "dotnet test",
+                  "exitCode": 0,
+                  "timedOut": false,
+                  "output": "Passed api_key=sk-test-secret-value"
+                }
+                """
+            });
+        }
+    }
+
+    private sealed class FakeLargeSecretReadTool : IAgentTool
+    {
+        public string Id => "read_file";
+        public AgentToolRisk Risk => AgentToolRisk.ReadOnly;
+        public ChatToolDefinition Definition { get; } = new()
+        {
+            Name = "read_file",
+            Description = "fake large read",
+            ParametersJson = "{}"
+        };
+
+        public Task<AgentToolPreview> PreviewAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "read large file"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            var content = "api_key=sk-test-secret-value\n" + new string('x', 4_500);
+            return Task.FromResult(new AgentToolResult
+            {
+                ToolName = Id,
+                Content = content
             });
         }
     }

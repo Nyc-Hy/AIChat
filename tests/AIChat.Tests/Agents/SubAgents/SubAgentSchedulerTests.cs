@@ -98,6 +98,33 @@ public sealed class SubAgentSchedulerTests
     }
 
     [Fact]
+    public async Task RunAsync_RedactsSecretsFromStoredSubAgentDiagnostics()
+    {
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-1",
+            Name = "read_file",
+            ArgumentsJson = """{"api_key":"sk-test-secret-value"}"""
+        };
+        var scheduler = CreateScheduler(
+            new QueueChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "done token=ghp_123456789012345678901234" }]
+            ]),
+            [new FakeTool("read_file", AgentToolRisk.ReadOnly, "api_key=sk-test-secret-value")]);
+
+        var run = await scheduler.RunAsync(CreateRequest());
+
+        var record = Assert.Single(run.ToolCalls);
+        Assert.Contains("[REDACTED]", record.ArgumentsJson);
+        Assert.Contains("[REDACTED]", record.ResultSummary);
+        Assert.Contains("[REDACTED]", run.Result!.Summary);
+        Assert.DoesNotContain("sk-test-secret-value", record.ArgumentsJson);
+        Assert.DoesNotContain("sk-test-secret-value", record.ResultSummary);
+        Assert.DoesNotContain("ghp_123456789012345678901234", run.Result.Summary);
+    }
+
+    [Fact]
     public async Task RunAsync_RejectsWriteScopeForExplorer()
     {
         var scheduler = CreateScheduler(new QueueChatCompletionService([]), []);

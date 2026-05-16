@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- Avoid intermittent no-error failures while MSBuild probes project references in parallel. -->
+    <BuildInParallel>false</BuildInParallel>
+    <RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

@@ -1,5 +1,6 @@
 using System.Windows;
 using AIChat.App.Controls;
+using AIChat.Application.Tools;
 
 namespace AIChat.App.ViewModels;
 
@@ -352,7 +353,18 @@ public sealed partial class MainViewModel
                 continue;
             }
 
-            var fullPath = System.IO.Path.Combine(SelectedProject.Path, change.Path);
+            string fullPath;
+            try
+            {
+                fullPath = ProjectPathGuard.ResolveInsideProject(SelectedProject.Path, change.Path);
+                ProjectPathGuard.EnsureWritableProjectPath(SelectedProject.Path, fullPath);
+            }
+            catch
+            {
+                conflicts.Add(change.Path);
+                continue;
+            }
+
             if (!System.IO.File.Exists(fullPath))
             {
                 continue;
@@ -407,7 +419,8 @@ public sealed partial class MainViewModel
                 {
                     try
                     {
-                        var fullPath = System.IO.Path.Combine(SelectedProject.Path, change.Path);
+                        var fullPath = ProjectPathGuard.ResolveInsideProject(SelectedProject.Path, change.Path);
+                        ProjectPathGuard.EnsureWritableProjectPath(SelectedProject.Path, fullPath);
                         var directory = System.IO.Path.GetDirectoryName(fullPath);
                         if (!string.IsNullOrWhiteSpace(directory) && !System.IO.Directory.Exists(directory))
                         {

@@ -61,6 +61,23 @@ public sealed class AuditEventRecorderTests : IDisposable
     }
 
     [Fact]
+    public async Task RecordAsync_RedactsSecretsFromSummaryAndDetail()
+    {
+        var repo = new AuditLogRepository(_tempDir);
+
+        await AuditEventRecorder.RecordAsync(
+            repo, AuditEventType.ToolCallRequested, "proj-1", "run-1",
+            summary: "Authorization: Bearer abc.def.ghi",
+            detail: "{\"api_key\":\"sk-test-secret-value\"}");
+
+        var auditEvent = Assert.Single(await repo.QueryAsync("proj-1", runId: "run-1"));
+        Assert.DoesNotContain("abc.def.ghi", auditEvent.Summary);
+        Assert.DoesNotContain("sk-test-secret-value", auditEvent.Detail);
+        Assert.Contains("[REDACTED]", auditEvent.Summary);
+        Assert.Contains("[REDACTED]", auditEvent.Detail);
+    }
+
+    [Fact]
     public async Task RecordAsync_RepositoryThrows_DoesNotPropagate()
     {
         // Use a path that will fail on write (read-only nested path on Windows)
