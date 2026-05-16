@@ -1,32 +1,31 @@
 ---
-name: Bug report
-about: Report a reproducible problem in AIChat
+name: 缺陷报告
+about: 报告 AIChat 中可复现的问题
 title: "[Bug] "
 labels: "type:bug"
 assignees: ""
 ---
 
-## Problem
+## 问题描述
 
 
-## Steps to Reproduce
+## 复现步骤
 
 1. 
 2. 
 3. 
 
-## Expected Behavior
+## 期望行为
 
 
-## Actual Behavior
+## 实际行为
 
 
-## Environment
+## 环境
 
 - OS:
 - .NET SDK:
 - AIChat commit:
 
-## Notes
-
+## 备注
 

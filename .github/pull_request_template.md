@@ -1,12 +1,12 @@
-## Summary
+## 摘要
 
 - 
 
-## Verification
+## 验证
 
 - [ ] `dotnet build AIChat.sln --no-restore -m:1 -v:minimal`
 - [ ] `dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal`
 
-## Notes
+## 备注
 
 - 

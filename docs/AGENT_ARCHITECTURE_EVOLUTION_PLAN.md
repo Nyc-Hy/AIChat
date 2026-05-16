@@ -1,20 +1,20 @@
-# Agent Architecture Evolution Plan
+# Agent 架构演进计划
 
-本文档描述 AIChat 从当前“单 Agent 线性工具循环”演进到“阶段化、可调度、上下文经济型 Agent 系统”的开发计划。
+本文档描述 AIChat 从当前“单 Agent 线性工具循环”演进到“阶段化、可调度、上下文经济型 Agent 系统”的计划。
 
-目标不是一次性重写 Agent，而是在现有 Harness、权限、审计、验证、持久化基础上逐步扩展。每一阶段都应保持可运行、可测试、可回滚。
+目标不是一次性重写 Agent，而是在现有 Harness、权限、审计、验证和持久化基础上逐步扩展。每一阶段都应保持可运行、可测试、可回滚。
 
-## 1. Current Baseline
+## 1. 当前基线
 
-当前 AIChat 已具备稳定的本地代码 Agent 基座：
+AIChat 已具备稳定的本地代码 Agent 基座：
 
-- `MainViewModel` 发起用户请求、更新 UI、处理审批、保存运行结果。
-- `AgentRequestFactory` 构建 `ChatRequest`、`AgentRunContext` 和 request snapshot。
-- `AgentHarness` 记录 `AgentRun`、steps、file changes、verification、plan。
-- `AgentRunner` 执行模型/tool loop。
+- `MainViewModel` 发起用户请求、更新 UI、处理审批并保存运行结果。
+- `AgentRequestFactory` 构建 `ChatRequest`、`AgentRunContext` 和请求快照。
+- `AgentHarness` 记录 `AgentRun`、步骤、文件变更、验证和计划。
+- `AgentRunner` 执行模型/工具循环。
 - `ToolExecutionService` 负责工具权限、审批和实际执行。
 - `AgentRunAuditService` 记录审计事件。
-- `JsonAppRepository` 持久化 settings/projects/conversations/runs。
+- `JsonAppRepository` 持久化 settings、projects、conversations 和 runs。
 - `ToolSettingsService`、`ProviderSettingsService`、`AdvancedSettingsService` 承担设置归一化。
 - `ConversationContextBuilder` 构建 system prompt 和会话上下文。
 
@@ -35,9 +35,7 @@ User goal
  -> audit + persistence
 ```
 
-## 2. Target Architecture
-
-目标架构：
+## 2. 目标架构
 
 ```text
 User input
@@ -56,118 +54,80 @@ User input
 
 核心原则：
 
-1. LLM decides semantic next steps.
-2. System enforces permissions, budgets, risk rules, and scheduling.
-3. Context is routed before prompt composition; do not inject everything by default.
-4. Agent instances are created on demand from predefined templates.
-5. Tool results are summarized and referenced instead of blindly appended.
-6. Long tasks run in phases with checkpoints, not one unbounded loop.
+1. LLM 决定语义层面的下一步。
+2. 系统负责权限、预算、风险规则和调度策略。
+3. 先路由上下文，再组合提示词，不默认塞入全部信息。
+4. Agent 实例从预定义模板按需创建。
+5. 工具结果应摘要化并通过产物引用，而不是盲目追加到上下文。
+6. 长任务按阶段和检查点推进，不进入无边界循环。
 
-## 3. Missing Capabilities
+## 3. 缺失能力
 
-| Capability | Current State | Needed |
+| 能力 | 当前状态 | 需要补齐 |
 |---|---|---|
-| Planner | Model may call `update_plan`, but no system planning phase | Structured planner output before execution |
-| Coordinator | `MainViewModel` and `AgentHarness` run a single loop | System-level state machine and scheduling policy |
-| Prompt Composer | Mostly static system prompt and accumulated transcript | Phase/model/task-specific prompt generation |
-| Context Router | Budgeted conversation context and file index | Task-aware retrieval, refs, recent-change scoring |
-| Tool Result Summarizer | Tool output enters transcript directly | Summary + artifact ref + on-demand expansion |
-| Memory Layer | Conversation history and pinned context | User, project, task, tool-result memory |
-| Agent Templates | One `AgentRunner` role | Planner, Explorer, Worker, Verifier, Summarizer, Reviewer templates |
-| Sub-agent Runtime | None | On-demand scoped child agents with budgets and write scopes |
-| Budget Manager | Tool-call limit and auto-fix limit | Token, time, tool, phase, and agent budgets |
-| Artifact Store | Call detail/audit/project persistence | Structured artifact refs for raw outputs, logs, diffs, summaries |
-| Multimodal Intake | Mostly text/code | Images, documents, screenshots, and extracted summaries |
+| Planner | 模型可能调用 `update_plan`，但没有系统规划阶段 | 执行前生成结构化计划 |
+| Coordinator | `MainViewModel` 和 `AgentHarness` 运行单循环 | 系统级状态机和调度策略 |
+| Prompt Composer | 多为静态 system prompt 和累积 transcript | 按阶段、模型和任务生成提示词 |
+| Context Router | 有预算化会话上下文和文件索引 | 任务感知检索、引用和最近变更评分 |
+| Tool Result Summarizer | 工具输出直接进入 transcript | 摘要 + 产物引用 + 按需展开 |
+| Memory Layer | 会话历史和固定上下文 | 用户、项目、任务、工具结果记忆 |
+| Agent Templates | 一个 `AgentRunner` 角色 | Planner、Explorer、Worker、Verifier、Summarizer、Reviewer 模板 |
+| Sub-agent Runtime | 暂无 | 具备预算和写入范围的按需子 Agent |
+| Budget Manager | 工具调用上限和自动修复上限 | Token、时间、工具、阶段和 Agent 预算 |
+| Artifact Store | 调用详情、审计、项目持久化 | 原始输出、日志、diff 和摘要的结构化引用 |
+| Multimodal Intake | 主要处理文本/代码 | 图片、文档、截图和提取摘要 |
 
-## 4. Development Phases
+## 4. 开发阶段
 
-### Phase 1: Tool Result Summaries and Artifact References
+### 阶段 1：工具结果摘要和产物引用
 
-Goal: reduce token waste before adding more orchestration.
+目标：在增加更多编排前先减少 token 浪费。
 
-Deliverables:
+交付内容：
 
-- Add an `AgentArtifact` domain model:
-  - `Id`
-  - `RunId`
-  - `StepId`
-  - `Kind`
-  - `Summary`
-  - `Content`
-  - `CreatedAt`
-  - optional metadata dictionary
-- Add `AgentArtifactStore` or repository methods for storing artifacts with the project/run.
-- Add `ToolResultSummarizer` in Application:
-  - summarize search output
-  - summarize file reads
-  - summarize command output
-  - summarize diffs
-  - preserve raw output as artifact
-- Change `AgentRunner` or `ToolExecutionService` boundary so large tool results can become:
+- 增加 `AgentArtifact` 领域模型，包含 `Id`、`RunId`、`StepId`、`Kind`、`Summary`、`Content`、`CreatedAt` 和可选 metadata。
+- 为 `AgentRun` 增加产物列表或仓储方法。
+- 增加 `ToolResultSummarizer`，摘要搜索结果、文件读取、命令输出和 diff。
+- 大型工具输出以“给模型的摘要 + UI 可查看的原始产物引用”形式传递。
 
-```text
-summary for LLM + artifact reference for UI/detail inspection
-```
+验收标准：
 
-Do not change tool permission behavior.
+- 大型工具输出默认不完整进入下一次 LLM 请求。
+- UI 仍可展示或复制原始工具输出。
+- 审计仍记录工具执行。
+- 现有工具测试通过。
+- 新增测试覆盖截断、摘要和引用行为。
 
-Acceptance criteria:
-
-- Large tool output does not fully enter the next LLM request by default.
-- UI can still display or copy raw tool output.
-- Audit still records tool execution.
-- Existing tool tests still pass.
-- New tests cover truncation/summarization/ref behavior.
-
-Suggested files:
+建议文件：
 
 - `src/AIChat.Domain/Chat/AgentArtifact.cs`
 - `src/AIChat.Application/Agents/ToolResultSummarizer.cs`
 - `src/AIChat.Application/Agents/AgentArtifactService.cs`
 - `tests/AIChat.Tests/Agents/ToolResultSummarizerTests.cs`
 
-### Phase 2: Structured Planner
+### 阶段 2：结构化 Planner
 
-Goal: add an explicit planning phase before execution.
+目标：在执行前增加显式规划阶段。
 
-Deliverables:
+交付内容：
 
-- Add domain/application DTOs:
-  - `AgentStructuredPlan`
-  - `AgentPlanPhase`
-  - `AgentPlanTask`
-  - `AgentPlanRisk`
-  - `AgentPlanBudget`
-- Add `PlannerPromptBuilder`.
-- Add `AgentPlanner` that calls the configured LLM and asks for structured JSON.
-- Add JSON parser and validation:
-  - reject empty plan
-  - cap task count
-  - normalize unknown phases
-  - extract suggested tools/context
-- Persist structured plan into `AgentRun.Plan` or a new plan property.
+- 增加 `AgentStructuredPlan`、`AgentPlanPhase`、`AgentPlanTask`、`AgentPlanRisk`、`AgentPlanBudget`。
+- 增加 `PlannerPromptBuilder` 和 `AgentPlanner`。
+- 解析并校验 Planner JSON：拒绝空计划、限制任务数量、归一化未知阶段、提取建议工具和上下文。
+- 将结构化计划持久化到 `AgentRun.Plan` 或新字段。
 
-Initial planner should not spawn sub-agents. It only produces a plan for the current run.
+验收标准：
 
-Acceptance criteria:
+- Agent 运行以校验后的结构化计划开始。
+- Planner 输出坏 JSON 时回退到简单单阶段计划。
+- UI 可以展示阶段和任务。
+- 测试覆盖有效计划、无效计划回退、风险和预算归一化。
 
-- Agent run starts with a validated structured plan.
-- Bad JSON planner output falls back to a simple single-phase plan.
-- UI can display phases/tasks.
-- Tests cover valid plan, invalid plan fallback, and risk/budget normalization.
+### 阶段 3：Coordinator 状态机
 
-Suggested files:
+目标：把运行编排从隐式单循环变成显式阶段。
 
-- `src/AIChat.Application/Agents/Planning/AgentPlanner.cs`
-- `src/AIChat.Application/Agents/Planning/PlannerPromptBuilder.cs`
-- `src/AIChat.Application/Agents/Planning/AgentStructuredPlanParser.cs`
-- `tests/AIChat.Tests/Agents/Planning/AgentPlannerTests.cs`
-
-### Phase 3: Coordinator State Machine
-
-Goal: move run orchestration from a single implicit loop into explicit phases.
-
-Target states:
+目标状态：
 
 ```text
 Planning
@@ -182,377 +142,224 @@ Failed
 Cancelled
 ```
 
-Deliverables:
-
-- Add `AgentCoordinator`.
-- Add `AgentRunPhase` enum.
-- Add phase transition events.
-- Add per-phase status and summary fields to `AgentRun`.
-- Update `AgentHarness` so it can delegate high-level decisions to coordinator.
-- Keep `AgentRunner` as the low-level model/tool loop.
+交付内容：
 
-Acceptance criteria:
+- 增加 `AgentCoordinator` 和 `AgentRunPhase`。
+- 增加阶段切换事件。
+- 在 `AgentRun` 中记录每个阶段的状态和摘要。
+- 让 `AgentHarness` 将高层决策委托给 Coordinator，同时保留 `AgentRunner` 作为底层模型/工具循环。
 
-- Existing single-agent behavior remains functionally equivalent.
-- Run details can show current phase.
-- Verification and repair are represented as phases.
-- Tests cover phase transitions and cancellation.
+验收标准：
 
-Suggested files:
+- 现有单 Agent 行为保持功能等价。
+- 运行详情可以展示当前阶段。
+- 验证和修复被表示为明确阶段。
+- 测试覆盖阶段切换和取消。
 
-- `src/AIChat.Application/Agents/Coordinator/AgentCoordinator.cs`
-- `src/AIChat.Application/Agents/Coordinator/AgentRunPhase.cs`
-- `tests/AIChat.Tests/Agents/Coordinator/AgentCoordinatorTests.cs`
+### 阶段 4：Prompt Composer
 
-### Phase 4: Prompt Composer
+目标：用阶段感知提示词替代单一通用提示词。
 
-Goal: replace one-size-fits-most prompts with phase-aware prompts.
-
-Deliverables:
+交付内容：
 
-- Add `AgentPromptComposer`.
-- Inputs:
-  - phase
-  - task goal
-  - model/provider info
-  - plan
-  - context refs
-  - memory snippets
-  - allowed tools
-  - budget
-- Output:
-  - system message
-  - developer-style instructions where applicable
-  - user task message
-  - structured response requirements
+- 增加 `AgentPromptComposer` 和 `AgentPromptProfile`。
+- 输入包括阶段、任务目标、模型/Provider 信息、计划、上下文引用、记忆片段、允许工具和预算。
+- 输出包括 system message、必要的 developer-style instructions、用户任务消息和结构化响应要求。
+- 支持 planning、context gathering、execution、verification repair、summarization、review 等 profile。
 
-Prompt profiles:
+验收标准：
 
-- planning
-- context gathering
-- execution
-- verification repair
-- summarization
-- review
+- Planner、执行和修复提示词都通过 Composer 生成。
+- 提示词大小可测量。
+- 测试通过快照覆盖关键提示词片段，但不过度锁死具体措辞。
 
-Acceptance criteria:
+### 阶段 5：Context Router
 
-- Planner, execution, and repair prompts are generated through the composer.
-- Prompt size is measurable.
-- Tests snapshot key prompt sections without over-constraining wording.
+目标：按任务和阶段路由最小必要上下文。
 
-Suggested files:
+交付内容：
 
-- `src/AIChat.Application/Prompting/AgentPromptComposer.cs`
-- `src/AIChat.Application/Prompting/AgentPromptProfile.cs`
-- `tests/AIChat.Tests/Prompting/AgentPromptComposerTests.cs`
+- 增加 `ContextRouter`。
+- 增加任务感知相关性评分：路径/文件名匹配、最近编辑、固定上下文、会话提及、测试/源码配对、文件类型标签。
+- 返回包含摘要、已包含文件、片段、产物引用、相关但省略引用和 token 估算的上下文包。
+- 可行时增加增量索引更新路径。
 
-### Phase 5: Context Router
+验收标准：
 
-Goal: route minimal context by task and phase.
+- Context Router 能为具体任务返回小而准的上下文包。
+- 不会盲目包含大文件。
+- LLM 调用前可获得 token 估算。
+- 测试覆盖评分和预算裁剪。
 
-Deliverables:
+### 阶段 6：Memory Layer
 
-- Add `ContextRouter`.
-- Add task-aware relevance scoring:
-  - file path/name match
-  - recent edits
-  - pinned context
-  - conversation mentions
-  - test/source pairing
-  - project file index type tags
-- Add context pack result with refs:
+目标：将长期记忆与临时 transcript 分离。
 
-```text
-summary
-included files
-included snippets
-artifact refs
-omitted-but-relevant refs
-estimated tokens
-```
+记忆类别：
 
-- Add incremental index update path if feasible.
+- 用户记忆：偏好、风格、重复指令。
+- 项目记忆：架构、约定、重要决定。
+- 任务记忆：当前运行发现、假设、检查点。
+- 工具记忆：工具输出摘要和引用。
 
-Acceptance criteria:
+验收标准：
 
-- Context router can return a small pack for a concrete task.
-- It does not include large files blindly.
-- Token estimate is available before LLM call.
-- Tests cover scoring and budget trimming.
+- Planner 和 Context Router 可以检索项目/任务记忆。
+- 记忆条目带来源和时间戳。
+- 测试覆盖检索、过滤和禁止存储密钥策略。
 
-Suggested files:
+### 阶段 7：Agent 模板
 
-- `src/AIChat.Application/Context/ContextRouter.cs`
-- `src/AIChat.Application/Context/TaskContextPack.cs`
-- `src/AIChat.Application/Context/FileRelevanceScorer.cs`
-- `tests/AIChat.Tests/Context/ContextRouterTests.cs`
+目标：在引入子 Agent 前定义角色模板。
 
-### Phase 6: Memory Layer
+模板包括：
 
-Goal: separate durable memory from transient transcript.
+- Planner：生成结构化计划。
+- Explorer：只读代码库分析。
+- Worker：在指定范围内修改。
+- Verifier：运行检查并解释失败。
+- Summarizer：压缩结果和产物。
+- Reviewer：查找风险和缺失测试。
 
-Memory categories:
+验收标准：
 
-- User memory: preferences, style, recurring instructions.
-- Project memory: architecture, conventions, important decisions.
-- Task memory: current run findings, assumptions, checkpoints.
-- Tool memory: summaries and refs for tool outputs.
+- 模板足够数据化/配置化，便于演进。
+- Coordinator 可以选择模板，即使暂不生成子 Agent。
+- 测试覆盖模板能力和默认权限。
 
-Deliverables:
+### 阶段 8：Sub-agent Runtime
 
-- Add memory models and repository support.
-- Add memory retrieval by category and relevance.
-- Add memory write policies:
-  - never silently store secrets
-  - store user memory only when explicitly confirmed or safe policy allows
-  - project memory should be inspectable/editable
-- Add UI surface later; first build API and tests.
+目标：允许 Coordinator 批准的子 Agent。
 
-Acceptance criteria:
+交付内容：
 
-- Planner/context router can request project/task memory.
-- Memory entries have source and timestamp.
-- Tests cover retrieval, filtering, and no-secret policy.
+- 增加 `SubAgentRun`、`SubAgentScheduler` 和 `SubAgentResult`。
+- 为子 Agent 提供隔离上下文：任务、最小上下文包、工具权限、写入范围和预算。
+- 增加安全规则：同一未解决任务不重复创建 Agent；Worker 写入范围必须不重叠或显式串行；Verifier/Explorer 不能编辑；所有工具调用继续走权限和审计链路。
 
-Suggested files:
+验收标准：
 
-- `src/AIChat.Domain/Memory/MemoryEntry.cs`
-- `src/AIChat.Application/Memory/MemoryService.cs`
-- `src/AIChat.Application/Memory/MemoryRetriever.cs`
-- `tests/AIChat.Tests/Memory/MemoryServiceTests.cs`
+- Coordinator 可以运行一个只读 Explorer 子 Agent。
+- 父运行能接收结构化结果。
+- 审计能归属父运行和子 Agent。
+- 测试覆盖预算、范围、取消和结果聚合。
 
-### Phase 7: Agent Templates
+### 阶段 9：预算管理和检查点
 
-Goal: define role templates before introducing sub-agent spawning.
+目标：支持长任务，同时保持可控。
 
-Templates:
+预算类型：
 
-- Planner: creates structured plan.
-- Explorer: read-only codebase analysis.
-- Worker: edits within assigned scope.
-- Verifier: runs checks and explains failures.
-- Summarizer: compresses results/artifacts.
-- Reviewer: finds risks and missing tests.
+- 工具调用数
+- 模型 token
+- 运行时间
+- 阶段调用数
+- 子 Agent 调用数
+- 自动修复轮数
+- 文件变更数量
 
-Deliverables:
+验收标准：
 
-- Add `AgentTemplate`.
-- Add `AgentTemplateCatalog`.
-- Add default tool permissions per template.
-- Add prompt profile per template.
-- Add allowed output schema per template.
+- 长任务可以在预算检查点暂停。
+- 用户可以追加预算继续。
+- 现有最大工具轮数仍作为最终安全上限。
+- 测试覆盖预算消耗和检查点触发。
 
-Acceptance criteria:
+### 阶段 10：多模态输入
 
-- Templates are data/config-driven enough to evolve.
-- Coordinator can select a template without spawning yet.
-- Tests cover template capabilities and permission defaults.
+目标：让图片、文档和截图以结构化产物进入规划/上下文系统。
 
-Suggested files:
+交付内容：
 
-- `src/AIChat.Application/Agents/Templates/AgentTemplate.cs`
-- `src/AIChat.Application/Agents/Templates/AgentTemplateCatalog.cs`
-- `tests/AIChat.Tests/Agents/Templates/AgentTemplateCatalogTests.cs`
+- 增加 `InputArtifact` 模型。
+- 增加输入产物提取流程：图片描述、OCR 文本、文档摘要、表格摘要、截图 UI 元素摘要。
+- 让计划和上下文引用输入产物。
+- 让 Prompt Composer 支持多模态摘要。
 
-### Phase 8: Sub-agent Runtime
+验收标准：
 
-Goal: allow Coordinator-approved sub-agents.
+- 用户附加图片或文档后，Planner 能看到简洁摘要。
+- 原始产物可检查。
+- Planner 可以请求产物引用的更多细节。
+- 测试覆盖纯文本回退和产物 metadata。
 
-Deliverables:
+## 5. 推荐实现顺序
 
-- Add `SubAgentRun`.
-- Add `SubAgentScheduler`.
-- Add isolated sub-agent context:
-  - task
-  - minimal context pack
-  - tool permissions
-  - write scope
-  - budget
-- Add result contract:
+1. 工具结果摘要和产物引用。
+2. 结构化 Planner。
+3. Coordinator 状态机。
+4. Prompt Composer。
+5. Context Router。
+6. Memory Layer。
+7. Agent 模板。
+8. Sub-agent Runtime。
+9. 预算管理和检查点。
+10. 多模态输入。
 
-```text
-status
-summary
-findings
-changed files
-artifact refs
-recommended next step
-```
+这个顺序的原因是：摘要/产物先解决最大的 token 浪费；Planner 和 Coordinator 应先于子 Agent；Prompt Composer 和 Context Router 会让后续每一次 LLM 调用更便宜、更清晰；Memory 和模板为子 Agent 铺路；子 Agent 较晚引入，因为它会放大权限、审计、预算和 UI 状态复杂度。
 
-- Add safety rules:
-  - no duplicate agents for same unresolved task
-  - worker write scopes must be disjoint unless explicitly serialized
-  - verifier cannot edit
-  - explorer cannot edit
-  - all tool calls still go through normal permission/audit pipeline
+## 6. 横向要求
 
-Acceptance criteria:
+### 权限
 
-- Coordinator can run one read-only Explorer sub-agent.
-- Parent run receives structured result.
-- Audit attributes tool calls to parent and sub-agent.
-- Tests cover budget, scope, cancellation, and result aggregation.
-
-Suggested files:
-
-- `src/AIChat.Application/Agents/SubAgents/SubAgentScheduler.cs`
-- `src/AIChat.Application/Agents/SubAgents/SubAgentRun.cs`
-- `src/AIChat.Application/Agents/SubAgents/SubAgentResult.cs`
-- `tests/AIChat.Tests/Agents/SubAgents/SubAgentSchedulerTests.cs`
-
-### Phase 9: Budget Manager and Checkpoints
-
-Goal: support long-running tasks without losing control.
-
-Budgets:
-
-- tool calls
-- model tokens
-- elapsed time
-- per-phase calls
-- per-sub-agent calls
-- auto-repair rounds
-- file mutation count
-
-Deliverables:
-
-- Add `AgentBudget`.
-- Add `AgentBudgetManager`.
-- Add checkpoint policy:
-  - every N tool calls
-  - before high-risk mutation
-  - before continuing after budget segment
-  - after verification failure loops
-- Add UI prompt for continue/pause.
-
-Acceptance criteria:
-
-- Long tasks can pause at budget checkpoints.
-- User can continue with an additional budget segment.
-- Existing hard max tool rounds remains as a final safety cap.
-- Tests cover budget consumption and checkpoint triggers.
-
-Suggested files:
-
-- `src/AIChat.Application/Agents/Budget/AgentBudget.cs`
-- `src/AIChat.Application/Agents/Budget/AgentBudgetManager.cs`
-- `tests/AIChat.Tests/Agents/Budget/AgentBudgetManagerTests.cs`
-
-### Phase 10: Multimodal Intake
-
-Goal: allow images/documents/screenshots to enter the planning/context system as structured artifacts.
-
-Deliverables:
-
-- Add `InputArtifact` model.
-- Add artifact extraction pipeline:
-  - image description
-  - OCR text
-  - document summary
-  - spreadsheet summary
-  - screenshot UI element summary
-- Add references from plan/context to input artifacts.
-- Add prompt composer support for multimodal summaries.
-
-Acceptance criteria:
-
-- User can attach an image/document and the planner sees a concise summary.
-- Raw artifact is inspectable.
-- Planner can request more detail from an artifact ref.
-- Tests cover text-only fallback and artifact metadata.
-
-Suggested files:
-
-- `src/AIChat.Domain/Artifacts/InputArtifact.cs`
-- `src/AIChat.Application/Artifacts/InputArtifactService.cs`
-- `tests/AIChat.Tests/Artifacts/InputArtifactServiceTests.cs`
-
-## 5. Recommended Implementation Order
-
-Short version:
-
-1. Tool result summaries and artifact refs.
-2. Structured planner.
-3. Coordinator state machine.
-4. Prompt composer.
-5. Context router.
-6. Memory layer.
-7. Agent templates.
-8. Sub-agent runtime.
-9. Budget manager and checkpoints.
-10. Multimodal intake.
-
-Reasoning:
-
-- Summaries/artifacts solve the biggest token waste first.
-- Planner and Coordinator should exist before sub-agents.
-- Prompt composer and context router make every later LLM call cheaper and clearer.
-- Memory and templates prepare the ground for sub-agents.
-- Sub-agents come late because they multiply complexity, audit, permissions, and UI states.
-
-## 6. Cross-Cutting Requirements
-
-### Permissions
-
-All tools, including future sub-agent tools, must continue through:
+所有工具，包括未来子 Agent 使用的工具，都必须继续经过：
 
 - `ToolExecutionService`
 - `ToolPermissionMode`
-- project-level overrides
-- approval UI
-- audit logging
+- 项目级覆盖
+- 审批 UI
+- 审计日志
 - `ProjectPathGuard`
 
-No new path may bypass these layers.
+任何新路径都不能绕过这些层。
 
-### Audit
+### 审计
 
-Every phase and sub-agent should produce auditable events:
+每个阶段和子 Agent 都应产生可审计事件：
 
-- phase started/completed
-- planner output accepted/rejected
-- sub-agent created/completed
-- budget checkpoint reached
-- tool result summarized
-- artifact stored
+- 阶段开始/完成
+- Planner 输出接受/拒绝
+- 子 Agent 创建/完成
+- 到达预算检查点
+- 工具结果已摘要
+- 产物已存储
 
-### Persistence
+### 持久化
 
-Long-running runs need durable state:
+长运行任务需要持久状态：
 
-- current phase
-- structured plan
-- artifacts
-- task memory
-- budget consumption
-- sub-agent results
-- checkpoint decisions
+- 当前阶段
+- 结构化计划
+- 产物
+- 任务记忆
+- 预算消耗
+- 子 Agent 结果
+- 检查点决策
 
 ### UI
 
-UI should show:
+UI 应展示：
 
-- current phase
-- plan
-- active sub-agent tasks
-- budget usage
-- artifacts/summaries
-- verification status
-- checkpoint actions
+- 当前阶段
+- 计划
+- 活跃子 Agent 任务
+- 预算使用
+- 产物和摘要
+- 验证状态
+- 检查点操作
 
-Avoid exposing every internal control as a normal setting. Prefer simple modes first.
+不要把每个内部控制都暴露成普通设置。优先提供简单模式。
 
-### Testing
+### 测试
 
-Each phase requires:
+每个阶段需要：
 
-- unit tests for pure services
-- integration tests for harness/coordinator behavior
-- serialization tests for new domain models
-- permission/audit tests for any new execution path
+- 纯服务单元测试
+- Harness/Coordinator 行为集成测试
+- 新领域模型序列化测试
+- 新执行路径的权限/审计测试
 
-Standard verification:
+标准验证：
 
 ```powershell
 dotnet build AIChat.sln --no-restore
@@ -560,21 +367,21 @@ dotnet test AIChat.sln --no-restore
 git diff --check
 ```
 
-## 7. Near-Term Next Step
+## 7. 近期下一步
 
-The next concrete implementation should be Phase 1:
+下一项具体实现建议从阶段 1 开始：
 
 ```text
-Tool Result Summaries and Artifact References
+工具结果摘要和产物引用
 ```
 
-Minimal first slice:
+最小切片：
 
-1. Add `AgentArtifact` domain model.
-2. Add artifact list to `AgentRun`.
-3. Add `ToolResultSummarizer`.
-4. Summarize only large tool outputs first.
-5. Keep raw output visible in call details/tool traces.
-6. Add tests for summary/ref behavior.
+1. 增加 `AgentArtifact` 领域模型。
+2. 在 `AgentRun` 上增加 artifact 列表。
+3. 增加 `ToolResultSummarizer`。
+4. 先只摘要大型工具输出。
+5. 保持原始输出仍可在调用详情和工具追踪中查看。
+6. 增加摘要/引用行为测试。
 
-This gives immediate token savings and sets up later memory/context routing work without changing the core model/tool loop too aggressively.
+这能立即降低 token 消耗，并为后续 Memory 和 Context Router 打基础，同时不会过度改变核心模型/工具循环。

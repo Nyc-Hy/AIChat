@@ -1,21 +1,21 @@
-# GitHub Workflow
+# GitHub 工作流
 
-This project is managed through GitHub issues, pull requests, and CI.
+AIChat 使用 GitHub Issues、Pull Requests 和 CI 管理项目。
 
-## Repository Defaults
+## 仓库默认设置
 
-- Default branch: `master`
-- License: Apache License 2.0
-- Required local verification for code changes:
+- 默认分支：`master`
+- 开源协议：Apache License 2.0
+- 代码变更的本地验证命令：
   - `dotnet build AIChat.sln --no-restore -m:1 -v:minimal`
   - `dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal`
-- CI entry point: `.github/workflows/ci.yml`
+- CI 入口：`.github/workflows/ci.yml`
 
-## Issues
+## Issues 规范
 
-Use issues as the planning source of truth.
+Issues 是规划和问题跟踪的入口。
 
-Recommended labels:
+推荐标签：
 
 - `type:feature`
 - `type:bug`
@@ -30,64 +30,64 @@ Recommended labels:
 - `good first issue`
 - `help wanted`
 
-An issue should describe the problem, expected behavior, implementation notes when useful, and verification expectations.
+一个 Issue 应说明问题、期望行为、必要的实现提示和验证方式。
 
-## Pull Requests
+## Pull Request 规范
 
-Open a PR for each focused change. The PR should:
+每个聚焦改动都应通过 PR 合并。PR 应：
 
-- Link the issue with `Closes #123` or `Refs #123`
-- Summarize user-facing behavior changes
-- List verification commands and results
-- Note any follow-up work intentionally left out
+- 使用 `Closes #123` 或 `Refs #123` 关联 Issue
+- 总结用户可见的行为变化
+- 列出验证命令和结果
+- 说明刻意留到后续处理的事项
 
-Use draft PRs for incomplete work. Ready PRs should pass CI before merge.
+未完成工作使用 Draft PR。Ready PR 应在 CI 通过后再合并。
 
-## CI Policy
+## CI 策略
 
-The CI workflow runs on pull requests and pushes to `master`.
+CI 在 Pull Request 和 push 到 `master` 时运行。
 
-It performs:
+流程包括：
 
-1. .NET SDK setup from `global.json`
+1. 根据 `global.json` 设置 .NET SDK
 2. Restore
-3. Build with single-node MSBuild
-4. Test the unit test project with single-node MSBuild
+3. 单节点 MSBuild 构建
+4. 单节点 MSBuild 运行测试项目
 
-Single-node build/test is intentional because this repository has been stabilized around deterministic local and CI execution.
+单节点构建/测试是有意选择的，用于保证本地和 CI 行为稳定一致。
 
-## Branch Protection
+## 分支保护
 
-The `master` branch should be protected:
+`master` 分支应启用保护：
 
-- Require pull requests before merging.
-- Require the CI build/test workflow before merging.
-- Block force pushes.
-- Keep direct pushes limited to maintainers.
+- 合并前需要 Pull Request。
+- 合并前需要 CI 构建和测试通过。
+- 禁止 force push。
+- 直接 push 权限仅限维护者。
 
-## Merge Guidance
+## 合并建议
 
-Before merging:
+合并前确认：
 
-- CI is green.
-- The PR has a clear summary and verification notes.
-- Security-sensitive changes mention path, shell, provider, audit, or secret-handling impact.
-- UI changes include a short note about the affected screen or interaction.
+- CI 通过。
+- PR 有清晰摘要和验证说明。
+- 安全敏感改动说明了路径、Shell、Provider、审计或密钥处理影响。
+- UI 改动说明影响的界面或交互。
 
-Prefer squash or regular merge consistently. If history readability matters more than preserving every local commit, use squash merge.
+建议保持一致的合并策略。若更重视历史可读性，可以使用 squash merge。
 
-## Releases
+## 发布
 
-For manual release builds:
+手动发布：
 
 ```powershell
 dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained false
 ```
 
-For a self-contained Windows build:
+自包含 Windows 发布：
 
 ```powershell
 dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained true
 ```
 
-Attach release notes that include user-facing changes, verification, and known issues.
+Release notes 应包含用户可见变更、验证结果和已知问题。

@@ -1,35 +1,35 @@
-# Security Policy
+# 安全策略
 
-AIChat can execute local tools, shell commands, git operations, and provider requests. Please report security issues privately instead of opening a public issue.
+AIChat 可以执行本地工具、Shell 命令、Git 操作和模型提供商请求。请通过私密渠道报告安全问题，不要直接创建包含漏洞细节的公开 Issue。
 
-## Supported Versions
+## 支持版本
 
-Security fixes are handled on the `master` branch until formal releases begin.
+在正式版本发布前，安全修复统一在 `master` 分支处理。
 
-## Reporting a Vulnerability
+## 报告漏洞
 
-Please report vulnerabilities through GitHub private vulnerability reporting if it is enabled for this repository. If that is unavailable, open a minimal public issue asking for a private security contact without including exploit details.
+如果本仓库启用了 GitHub private vulnerability reporting，请优先通过该渠道报告。若不可用，请创建一个最小化公开 Issue，只说明需要私密安全联系方式，不要包含利用方式或敏感细节。
 
-Include:
+报告中建议包含：
 
-- A short description of the vulnerability
-- Affected commit or version
-- Steps to reproduce
-- Impact and expected severity
-- Any suggested fix or mitigation
+- 漏洞简述
+- 受影响的提交或版本
+- 复现步骤
+- 影响范围和预期严重程度
+- 建议修复或缓解方案
 
-## Sensitive Areas
+## 敏感区域
 
-Please treat these areas as security-sensitive:
+以下区域视为安全敏感：
 
-- API key storage and redaction
-- Tool approval flow
-- Shell command policy
-- Project path confinement
-- Git mutation tools
-- Audit logs and run artifacts
-- Provider error handling and request payloads
+- API Key 存储和脱敏
+- 工具审批流程
+- Shell 命令策略
+- 项目路径限制
+- Git 写操作工具
+- 审计日志和运行产物
+- Provider 错误处理和请求载荷
 
-## Disclosure
+## 披露
 
-Do not publicly disclose a vulnerability until a fix or mitigation is available. The maintainer will coordinate disclosure timing through the security report.
+在修复或缓解方案可用前，请不要公开披露漏洞。维护者会通过安全报告协调披露时间。

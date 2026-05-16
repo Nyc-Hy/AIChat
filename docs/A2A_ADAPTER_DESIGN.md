@@ -1,19 +1,19 @@
-# A2A Adapter Design
+# A2A Adapter 设计
 
-## Overview
+## 概览
 
-AIChat is a local-first desktop code Agent. The A2A (Agent-to-Agent) adapter allows external agents to request AIChat to execute project-level tasks — file reads/writes, builds, tests, shell commands — while preserving all existing safety guarantees.
+AIChat 是本地优先的桌面代码 Agent。A2A（Agent-to-Agent）适配器允许外部 Agent 请求 AIChat 执行项目级任务，例如读取/写入文件、构建、测试和 Shell 命令，同时保留现有安全保证。
 
-## Core Principles
+## 核心原则
 
-1. **All external requests pass through the Harness.** No direct tool invocation bypasses the agent loop.
-2. **Permissions are enforced identically.** External requests respect the same `ToolPermissionMode`, approval flow, and shell sandbox as interactive sessions.
-3. **Audit trail is complete.** Every external request produces audit events tagged with the requesting agent's ID.
-4. **Workspace protection is unconditional.** Path guards, conflict detection, and rollback safety apply regardless of request origin.
+1. **所有外部请求都经过 Harness。** 不允许绕过 Agent 循环直接调用工具。
+2. **权限执行保持一致。** 外部请求遵守同样的 `ToolPermissionMode`、审批流程和 Shell 沙箱。
+3. **审计链路完整。** 每个外部请求都产生审计事件，并标记请求方 Agent ID。
+4. **工作区保护无条件生效。** 无论请求来源如何，路径保护、冲突检测和回滚安全都必须适用。
 
-## Architecture
+## 架构
 
-```
+```text
 External Agent (MCP/A2A)
         |
         v
@@ -23,62 +23,63 @@ External Agent (MCP/A2A)
   A2A Request Validator
         |
         v
-  AgentHarness.RunAsync()  ← same entry point as interactive UI
+  AgentHarness.RunAsync()  ← 与交互式 UI 使用同一入口
         |
         v
   AgentRunner → ToolExecutionService → IAgentTool
         |
         v
-  AuditLogRepository (events tagged with external agent ID)
+  AuditLogRepository（事件标记外部 Agent ID）
 ```
 
-## Request Flow
+## 请求流程
 
-1. External agent sends a task request (goal, project path, constraints).
-2. A2A endpoint validates the request, resolves the project, and creates an `AgentHarnessRunRequest`.
-3. The request is passed to `AgentHarness.RunAsync()` with `AgentRunContext` configured for the external agent:
-   - `ProjectPath` resolved from the request
-   - `ToolPermissionModes` from project-level overrides
-   - `RequestToolApprovalAsync` set to auto-reject (or configurable policy)
-4. The harness runs the standard agent loop: plan → tool calls → verification.
-5. Audit events are recorded with the external agent's ID in the `RunId` field.
-6. The result (success/failure, file changes, verification output) is returned to the external agent.
+1. 外部 Agent 发送任务请求（目标、项目路径、约束）。
+2. A2A endpoint 校验请求、解析项目并创建 `AgentHarnessRunRequest`。
+3. 请求传入 `AgentHarness.RunAsync()`，并为外部 Agent 配置 `AgentRunContext`：
+   - `ProjectPath` 来自请求解析结果。
+   - `ToolPermissionModes` 来自项目级覆盖。
+   - `RequestToolApprovalAsync` 默认设置为自动拒绝，或使用可配置策略。
+4. Harness 运行标准 Agent 循环：规划、工具调用、验证。
+5. 审计事件记录外部 Agent ID。
+6. 将结果（成功/失败、文件变更、验证输出）返回外部 Agent。
 
-## Security Model
+## 安全模型
 
-### Tool Permission Policy
+### 工具权限策略
 
-External requests use a configurable permission policy:
+外部请求使用可配置权限策略：
 
-- **Auto-reject mode (default):** All write/shell tools are rejected. External agents can only read files and inspect the project.
-- **Auto-approve with audit:** Write/shell tools are auto-approved but every invocation is logged. Suitable for trusted internal agents.
-- **Interactive approval:** External requests pause and wait for the human user to approve each tool call, identical to interactive sessions.
+- **自动拒绝（默认）：** 所有写入和 Shell 工具都会被拒绝。外部 Agent 只能读取文件和检查项目。
+- **自动批准并审计：** 写入和 Shell 工具自动批准，但每次调用都会记录。适合可信内部 Agent。
+- **交互式审批：** 外部请求暂停并等待用户逐个审批工具调用，与交互式会话一致。
 
-### Path Guards
+### 路径保护
 
-The existing `ProjectPathGuard` ensures all file operations stay within the project directory. External agents cannot escape the sandbox.
+现有 `ProjectPathGuard` 保证所有文件操作都留在项目目录内。外部 Agent 不能逃逸工作区。
 
-### Shell Sandbox
+### Shell 沙箱
 
-The existing `ShellCommandTool` blocklist and allowlist apply. External agents cannot execute destructive commands even if the permission policy allows shell access.
+现有 `ShellCommandTool` 的 blocklist 和 allowlist 继续适用。即使权限策略允许 Shell，外部 Agent 也不能执行破坏性命令。
 
-### Rate Limiting
+### 速率限制
 
-External requests should be rate-limited to prevent abuse:
-- Max concurrent runs per external agent
-- Max tool calls per run (existing `MaxToolRounds`)
-- Max total file changes per run
+外部请求应加入速率限制以防滥用：
 
-## Data Model Extensions
+- 每个外部 Agent 的最大并发运行数。
+- 每次运行的最大工具调用数（沿用 `MaxToolRounds`）。
+- 每次运行的最大文件变更数。
+
+## 数据模型扩展
 
 ```csharp
-// New field on AgentHarnessRunRequest
+// AgentHarnessRunRequest 新字段
 public string ExternalAgentId { get; init; } = "";
 
-// New field on AgentRun
+// AgentRun 新字段
 public string ExternalAgentId { get; set; } = "";
 
-// New audit event type
+// 新审计事件类型
 public enum AuditEventType
 {
     // ... existing types ...
@@ -87,9 +88,9 @@ public enum AuditEventType
 }
 ```
 
-## MCP Integration
+## MCP 集成
 
-The A2A adapter can expose an MCP-compatible endpoint:
+A2A 适配器可以暴露 MCP-compatible endpoint：
 
 ```csharp
 public class McpToolProvider : IExternalToolProvider
@@ -99,35 +100,35 @@ public class McpToolProvider : IExternalToolProvider
 
     public async Task<IReadOnlyList<IAgentTool>> GetToolsAsync(CancellationToken ct)
     {
-        // Connect to MCP server, discover tools, wrap as IAgentTool
+        // 连接 MCP server、发现工具，并包装为 IAgentTool
     }
 }
 ```
 
-MCP tools are registered with `AgentToolRegistry.RegisterExternalProvider()` and become available alongside built-in tools.
+MCP 工具通过 `AgentToolRegistry.RegisterExternalProvider()` 注册，并与内置工具一起可用。
 
-## A2A Protocol Mapping
+## A2A 协议映射
 
-| A2A Concept | AIChat Mapping |
+| A2A 概念 | AIChat 映射 |
 |---|---|
-| Agent Card | AIChat project + enabled tools |
+| Agent Card | AIChat 项目 + 已启用工具 |
 | Task | `AgentHarnessRunRequest` |
 | Artifact | `AgentFileChange` |
 | Message | `ChatMessage` |
-| Part | Tool call arguments/results |
+| Part | 工具调用参数/结果 |
 
-## Implementation Phases
+## 实现阶段
 
-1. **Phase 1 (current):** Interface defined (`IExternalToolProvider`), registry supports registration. No external endpoints.
-2. **Phase 2:** Add `A2AEndpoint` as an HTTP listener. Implement auto-reject permission policy.
-3. **Phase 3:** Add configurable permission policies. Implement rate limiting.
-4. **Phase 4:** Add MCP server integration via `McpToolProvider`.
-5. **Phase 5:** Full A2A protocol support with agent discovery and task delegation.
+1. **阶段 1（当前）：** 定义接口（`IExternalToolProvider`），registry 支持注册。暂不提供外部 endpoint。
+2. **阶段 2：** 增加 `A2AEndpoint` 作为 HTTP listener，实现自动拒绝权限策略。
+3. **阶段 3：** 增加可配置权限策略和速率限制。
+4. **阶段 4：** 通过 `McpToolProvider` 增加 MCP server 集成。
+5. **阶段 5：** 完整 A2A 协议支持，包括 Agent 发现和任务委托。
 
-## Constraints
+## 约束
 
-- A2A does not bypass tool permissions.
-- A2A does not bypass workspace protection.
-- A2A does not bypass audit logging.
-- A2A does not bypass the verification/auto-repair loop.
-- All external requests are visible in the agent run history.
+- A2A 不能绕过工具权限。
+- A2A 不能绕过工作区保护。
+- A2A 不能绕过审计日志。
+- A2A 不能绕过验证/自动修复循环。
+- 所有外部请求都必须在 Agent 运行历史中可见。

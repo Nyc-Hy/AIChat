@@ -1,86 +1,86 @@
 # Agent Harness
 
-The Agent Harness is the core orchestration layer that runs the model/tool loop.
+Agent Harness 是 AIChat 的核心编排层，负责运行模型/工具循环。
 
-## Lifecycle
+## 生命周期
 
-```
+```text
 RunStarted
     │
     ▼
 ┌─────────────────────────────┐
-│  AgentRunner.RunAsync()     │◄──── Feed verification failure
-│  ├─ Send messages to model  │      back to model (auto-repair)
-│  ├─ Model returns response  │
-│  ├─ If tool_calls:          │
-│  │   ├─ Execute each tool   │
-│  │   ├─ Record step         │
-│  │   └─ Loop back           │
-│  └─ If no tool_calls:       │
-│      └─ Done                │
+│  AgentRunner.RunAsync()     │◄──── 将验证失败反馈给模型
+│  ├─ 向模型发送消息          │      （自动修复）
+│  ├─ 模型返回响应            │
+│  ├─ 如果有 tool_calls:      │
+│  │   ├─ 执行每个工具        │
+│  │   ├─ 记录步骤            │
+│  │   └─ 回到循环            │
+│  └─ 如果没有 tool_calls:    │
+│      └─ 完成                │
 └─────────────────────────────┘
     │
     ▼
-Record file changes (snapshot + hash)
+记录文件变更（快照 + 哈希）
     │
     ▼
-Run verification commands (if configured)
+运行验证命令（如已配置）
     │
-    ├─ All pass ──► RunCompleted(Completed)
+    ├─ 全部通过 ──► RunCompleted(Completed)
     │
-    └─ Some fail ──► Feed failure summary to model
-                     ├─ Loop back to AgentRunner (up to MaxAutoFixRounds)
-                     └─ RunCompleted(Failed) after exhausting rounds
+    └─ 存在失败 ──► 将失败摘要反馈给模型
+                     ├─ 回到 AgentRunner（最多 MaxAutoFixRounds 次）
+                     └─ 修复轮数耗尽后 RunCompleted(Failed)
 ```
 
-## Key Types
+## 关键类型
 
-| Type | Purpose |
+| 类型 | 用途 |
 |---|---|
-| `AgentHarness` | Orchestrates the run, emits events, records state |
-| `AgentRunner` | Stateless model/tool loop (no mutable instance fields) |
-| `AgentHarnessRunRequest` | Input: conversation, goal, settings, context |
-| `AgentRunContext` | Runtime config: project path, tools, permissions |
-| `AgentRun` | Domain model: persisted run record |
-| `AgentStep` | Single tool call or model response |
-| `AgentFileChange` | File mutation with snapshot and hash |
-| `AgentVerification` | Verification command result |
+| `AgentHarness` | 编排运行、发送事件、记录状态 |
+| `AgentRunner` | 无状态模型/工具循环 |
+| `AgentHarnessRunRequest` | 输入：会话、目标、设置和上下文 |
+| `AgentRunContext` | 运行时配置：项目路径、工具、权限 |
+| `AgentRun` | 持久化运行记录 |
+| `AgentStep` | 单次工具调用或模型响应 |
+| `AgentFileChange` | 带快照和哈希的文件变更 |
+| `AgentVerification` | 验证命令结果 |
 
-## Events
+## 事件
 
-The harness emits `AgentHarnessEvent` via `IAsyncEnumerable`:
+Harness 通过 `IAsyncEnumerable` 发送 `AgentHarnessEvent`：
 
-| Event | Meaning |
+| 事件 | 含义 |
 |---|---|
-| `RunStarted` | Run begins, `AgentRun` created |
-| `StepAdded` | New step recorded |
-| `ContentDelta` | Model text token |
-| `ToolCall` | Model requests tool execution |
-| `ToolApprovalRequired` | Waiting for user approval |
-| `ToolApprovalRejected` | User rejected the tool call |
-| `ToolResult` | Tool execution completed |
-| `RawProviderEvent` | Raw protocol event for debugging |
-| `RunCompleted` | Run finished (success/fail/cancelled) |
+| `RunStarted` | 运行开始并创建 `AgentRun` |
+| `StepAdded` | 新步骤已记录 |
+| `ContentDelta` | 模型文本增量 |
+| `ToolCall` | 模型请求工具调用 |
+| `ToolApprovalRequired` | 等待用户审批 |
+| `ToolApprovalRejected` | 用户拒绝工具调用 |
+| `ToolResult` | 工具执行完成 |
+| `RawProviderEvent` | 用于调试的原始协议事件 |
+| `RunCompleted` | 运行结束（成功、失败或取消） |
 
-## Auto-Repair Loop
+## 自动修复循环
 
-When `AutoVerifyAgentRuns` is enabled:
+启用 `AutoVerifyAgentRuns` 后：
 
-1. After the initial agent run completes, the harness checks `VerificationCommands`
-2. Each command is executed and its output parsed for errors
-3. If any verification fails, the failure summary is injected into the conversation
-4. `AgentRunner.RunAsync()` is called again with the updated transcript
-5. The model sees the failures and attempts to fix them
-6. This repeats up to `MaxAutoFixRounds` (default: 3)
+1. 初始 Agent 运行完成后，Harness 检查 `VerificationCommands`。
+2. 逐个执行验证命令，并解析错误输出。
+3. 如果存在失败，将失败摘要注入会话。
+4. 使用更新后的 transcript 再次调用 `AgentRunner.RunAsync()`。
+5. 模型读取失败信息并尝试修复。
+6. 最多重复到 `MaxAutoFixRounds`，默认 3 轮。
 
-The runner is stateless — it has no mutable instance fields — so it can be called multiple times with different transcripts.
+`AgentRunner` 是无状态的，没有可变实例字段，因此可以在自动修复中多次复用。
 
-## Statelessness
+## 无状态设计
 
-`AgentRunner` is intentionally stateless. All mutable state lives in:
+可变状态只存在于：
 
-- `AgentRun` (persisted domain model)
-- `AgentHarness` (orchestration state)
-- `sessionAllowedTools` (local HashSet per run)
+- `AgentRun`：持久化领域模型。
+- `AgentHarness`：编排状态。
+- `sessionAllowedTools`：每次运行内的本地工具允许集合。
 
-This design allows the harness to call the runner multiple times during the auto-repair loop without state corruption.
+这使 Harness 可以在自动修复循环中安全地多次调用 Runner。

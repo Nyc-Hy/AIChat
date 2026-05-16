@@ -1,23 +1,22 @@
 ---
-name: Feature request
-about: Propose a focused improvement
+name: 功能建议
+about: 提出一个聚焦的改进建议
 title: "[Feature] "
 labels: "type:feature"
 assignees: ""
 ---
 
-## Goal
+## 目标
 
 
-## User Value
+## 用户价值
 
 
-## Proposed Scope
+## 建议范围
 
 
-## Verification
+## 验证方式
 
 
-## Out of Scope
-
+## 不在范围内
 

@@ -1,99 +1,99 @@
-# Tool Security Model
+# 工具安全模型
 
-## Permission Modes
+## 权限模式
 
-Each tool has a permission mode that controls how it's executed:
+每个工具都有权限模式，用于控制执行方式：
 
-| Mode | Behavior |
+| 模式 | 行为 |
 |---|---|
-| `Disabled` | Tool is not exposed to the model |
-| `AutoReadOnly` | Read-only tools run without confirmation; write/shell tools require approval |
-| `ConfirmEachTime` | Every invocation requires user approval |
-| `AllowForSession` | After first approval, auto-approves for the rest of the agent run |
+| `Disabled` | 不暴露给模型 |
+| `AutoReadOnly` | 只读工具无需确认；写入和 Shell 工具仍需审批 |
+| `ConfirmEachTime` | 每次调用都需要用户审批 |
+| `AllowForSession` | 首次审批后，本次 Agent 运行内自动允许 |
 
-### Default Permissions
+### 默认权限
 
-The `AgentToolRegistry` assigns default permissions based on tool risk:
+`AgentToolRegistry` 按风险分配默认权限：
 
-- **ReadOnly tools** (list_files, read_file, search_text, git_status, git_diff): `AutoReadOnly`
-- **Write tools** (write_file, edit_file, apply_patch, git_restore_file, git_commit): `ConfirmEachTime`
-- **Shell tools** (run_build, run_test, run_shell): `ConfirmEachTime`
+- **只读工具**（list_files、read_file、search_text、git_status、git_diff）：`AutoReadOnly`
+- **写入工具**（write_file、edit_file、apply_patch、git_restore_file、git_commit）：`ConfirmEachTime`
+- **Shell 工具**（run_build、run_test、run_shell）：`ConfirmEachTime`
 
-### Project Overrides
+### 项目级覆盖
 
-Projects can override global tool permissions. Project overrides take precedence when merged.
+项目可以覆盖全局工具权限。合并配置时，项目级覆盖优先。
 
-## Path Protection
+## 路径保护
 
-All file operations are confined to the project directory via `ProjectPathGuard`:
+所有文件操作都通过 `ProjectPathGuard` 限制在项目目录内：
 
-- `ResolveInsideProject()` resolves a relative path against the project root
-- Rejects paths that escape the project directory (via `..` or absolute paths)
-- Applied by: `ReadFileTool`, `WriteFileTool`, `EditFileTool`, `ApplyPatchTool`, `ShellCommandTool`
+- `ResolveInsideProject()` 将相对路径解析到项目根目录。
+- 拒绝通过 `..` 或绝对路径逃逸项目目录。
+- 适用于 `ReadFileTool`、`WriteFileTool`、`EditFileTool`、`ApplyPatchTool`、`ShellCommandTool`。
 
-## Shell Sandbox
+## Shell 沙箱
 
-The `ShellCommandTool` has a multi-layer defense:
+`ShellCommandTool` 使用多层防护。
 
-### Blocklist
+### Blocklist（拒绝列表）
 
-Commands containing these patterns are rejected outright:
+包含以下模式的命令会被直接拒绝：
 
-- Recursive delete: `rm -rf`, `Remove-Item -Recurse`, `rmdir /s`
-- Force reset: `git reset --hard`, `git clean -fdx`, `git push --force`
-- Disk operations: `dd if=`, `mkfs.`, `format `
-- System commands: `shutdown`, `reboot`, `Stop-Computer`
-- Permission escalation: `chmod 777`, `chown -R`, `Set-ExecutionPolicy`
+- 递归删除：`rm -rf`、`Remove-Item -Recurse`、`rmdir /s`
+- 强制重置：`git reset --hard`、`git clean -fdx`、`git push --force`
+- 磁盘操作：`dd if=`、`mkfs.`、`format `
+- 系统命令：`shutdown`、`reboot`、`Stop-Computer`
+- 权限提升：`chmod 777`、`chown -R`、`Set-ExecutionPolicy`
 
-### Allowlist
+### Allowlist（允许列表）
 
-Commands starting with these prefixes are considered safe:
+以下前缀开头的命令被视为相对安全：
 
-- Build/test: `dotnet build`, `dotnet test`, `dotnet restore`, `dotnet run`
-- Git read: `git status`, `git diff`, `git log`, `git branch`, `git show`
-- Search: `rg`, `grep`, `find`
-- File listing: `ls`, `dir`, `cat`, `head`, `tail`
-- Info: `echo`, `pwd`, `which`, `file`, `stat`
+- 构建/测试：`dotnet build`、`dotnet test`、`dotnet restore`、`dotnet run`
+- Git 只读：`git status`、`git diff`、`git log`、`git branch`、`git show`
+- 搜索：`rg`、`grep`、`find`
+- 文件列表：`ls`、`dir`、`cat`、`head`、`tail`
+- 信息查询：`echo`、`pwd`、`which`、`file`、`stat`
 
-### Timeout
+### 超时
 
-Shell commands have a configurable timeout (default: 30s, max: 120s). Processes are killed on timeout.
+Shell 命令有可配置超时，默认 30 秒，最大 120 秒。超时后进程会被终止。
 
-## Write Tool Safety
+## 写入工具安全
 
-### Snapshot + Hash
+### 快照 + 哈希
 
-Before modifying a file, the tool records:
+修改文件前，工具会记录：
 
-- `ContentSnapshot` — the file's content before the change
-- `PostChangeHash` — SHA256 of the file's content after the change
+- `ContentSnapshot`：修改前内容。
+- `PostChangeHash`：修改后内容的 SHA256。
 
-### Conflict Detection
+### 冲突检测
 
-When rolling back changes, the system compares the current file's hash with `PostChangeHash`. If they differ, the file was modified externally and a conflict is reported.
+回滚变更时，系统会比较当前文件哈希和 `PostChangeHash`。如果不同，说明文件被外部修改过，会报告冲突。
 
-## Audit Trail
+## 审计日志
 
-Every significant action is recorded in the audit log:
+每个重要动作都会记录到审计日志：
 
-- `ToolCallRequested` — model requested a tool call
-- `ToolCallApproved` — user approved
-- `ToolCallRejected` — user rejected
-- `FileWritten` — file was modified
-- `ShellExecuted` — shell command ran
-- `VerificationRun` — verification command executed
-- `AgentRunStarted/Completed/Failed/Cancelled` — run lifecycle
+- `ToolCallRequested`：模型请求工具调用。
+- `ToolCallApproved`：用户批准。
+- `ToolCallRejected`：用户拒绝。
+- `FileWritten`：文件被修改。
+- `ShellExecuted`：Shell 命令已执行。
+- `VerificationRun`：验证命令已执行。
+- `AgentRunStarted/Completed/Failed/Cancelled`：运行生命周期。
 
-Audit events are stored as JSONL per project under `%APPDATA%\AIChat\audit\`.
+审计事件以 JSONL 形式保存在 `%APPDATA%\AIChat\audit\` 下，每个项目一份。
 
-## Approval UI
+## 审批界面
 
-When a tool requires approval, the user sees:
+工具需要审批时，用户会看到：
 
-- Tool name and risk badge
-- Summary of what the tool will do
-- Full arguments JSON
-- Preview of changes (for file operations)
-- Diff text (for edit operations)
+- 工具名称和风险标识
+- 工具将执行内容的摘要
+- 完整参数 JSON
+- 文件操作预览
+- 编辑操作的 diff
 
-Three actions: Allow This Time, Allow for Session, Reject.
+可选动作包括：本次允许、本会话允许、拒绝。

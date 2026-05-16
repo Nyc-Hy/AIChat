@@ -1,23 +1,23 @@
-# Code of Conduct
+# 行为准则
 
-## Our Pledge
+## 我们的承诺
 
-We want AIChat to be a welcoming project for people who are learning, building, testing, and contributing in good faith.
+AIChat 希望成为一个对学习、构建、测试和善意贡献者都友好的项目。
 
-Participants are expected to:
+参与者应当：
 
-- Be respectful and constructive
-- Assume good intent while still being clear about problems
-- Keep technical disagreement focused on the work
-- Avoid harassment, insults, personal attacks, and discriminatory language
-- Respect maintainer decisions about project scope and safety
+- 保持尊重和建设性
+- 默认相信善意，同时清楚指出问题
+- 将技术分歧聚焦在工作本身
+- 避免骚扰、侮辱、人身攻击和歧视性语言
+- 尊重维护者对项目范围和安全边界的决定
 
-## Scope
+## 适用范围
 
-This code of conduct applies to project spaces including GitHub issues, pull requests, discussions, and any other official community channel.
+本行为准则适用于项目相关空间，包括 GitHub Issues、Pull Requests、Discussions，以及其他官方社区渠道。
 
-## Enforcement
+## 执行
 
-Maintainers may remove comments, close issues, reject contributions, or restrict participation when behavior harms the project or community.
+当某些行为损害项目或社区时，维护者可以删除评论、关闭 Issue、拒绝贡献或限制参与。
 
-If you need to report conduct concerns, contact the maintainer privately when possible. If no private channel is available, open a brief public issue asking for a private contact without including sensitive details.
+如果需要报告行为问题，请尽量私下联系维护者。若没有私密渠道，请创建一个简短公开 Issue，请求私密联系方式，不要在其中包含敏感细节。

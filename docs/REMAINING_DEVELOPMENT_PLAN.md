@@ -1,76 +1,76 @@
-# AIChat Development Roadmap
+# AIChat 开发路线图
 
-This document is the current planning entry point for AIChat. It replaces the older phase-by-phase handoff notes, which were useful during early development but had become stale after the optimization pass was completed.
+本文档是 AIChat 当前的规划入口。它取代了早期按阶段交接的旧说明；那些说明在早期开发中有帮助，但在优化工作完成后已经不再准确。
 
-## Current State
+## 当前状态
 
-AIChat is a .NET 8 WPF desktop application for project-scoped LLM conversations and local code-agent workflows.
+AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话和本地代码 Agent 工作流。
 
-The stable foundation now includes:
+目前稳定基础包括：
 
-- WPF desktop shell with MVVM, project-scoped conversations, settings, and persisted run history.
-- OpenAI-compatible and Anthropic provider adapters, including tool-call request/response handling.
-- Agent Harness with model/tool loop, planning, execution, verification, auto-repair, retry, and continue flows.
-- Built-in tools for file read/write/edit, search, patch, git operations, build/test, and shell execution.
-- Tool permissions, project-level overrides, approval flow, shell safety checks, and project path protection.
-- JSON persistence, JSONL audit logging, audit display in agent run details, and copyable review packets.
-- Project file indexing, budgeted context packs, pinned context items, and file type summaries.
-- Snapshot/hash-based file change tracking for conflict-aware rollback.
-- Version display and publish instructions.
+- WPF 桌面 Shell、MVVM、项目级会话、设置和持久化运行历史。
+- OpenAI-compatible 和 Anthropic Provider 适配器，包括 tool-call 请求/响应处理。
+- Agent Harness，支持模型/工具循环、规划、执行、验证、自动修复、重试和继续。
+- 内置工具：文件读写编辑、搜索、补丁、Git 操作、构建/测试和 Shell 执行。
+- 工具权限、项目级覆盖、审批流程、Shell 安全检查和项目路径保护。
+- JSON 持久化、JSONL 审计日志、运行详情中的审计展示，以及可复制的 review packet。
+- 项目文件索引、预算化上下文包、固定上下文项和文件类型摘要。
+- 基于快照/哈希的文件变更跟踪，用于冲突感知回滚。
+- 版本展示和发布说明。
 
-## Maintenance Priorities
+## 维护优先级
 
-Use these priorities before starting larger features:
+在开始大型功能前，优先处理以下事项：
 
-| Priority | Area | Goal |
+| 优先级 | 区域 | 目标 |
 |---|---|---|
-| High | GitHub workflow | Track planned work in issues, review focused pull requests, and keep CI green before merge. |
-| High | `MainViewModel` size | Continue extracting pure workspace, audit, and agent-run logic into small services. |
-| High | Test coverage | Keep provider protocol parsing, tool approval, audit consistency, and workspace safety covered. |
-| Medium | Context quality | Improve relevance scoring, recent-file selection, and incremental indexing without increasing prompt noise. |
-| Medium | Observability | Make agent failures easier to inspect through clearer run summaries, audit grouping, and verification output. |
-| Medium-Low | Packaging | Improve release packaging after the framework-dependent publish path remains reliable. |
+| 高 | GitHub 工作流 | 使用 Issues 跟踪计划，通过聚焦 PR 评审，并在合并前保持 CI 通过。 |
+| 高 | `MainViewModel` 体积 | 继续把纯工作区、审计和 Agent 运行逻辑拆到小服务中。 |
+| 高 | 测试覆盖 | 覆盖 Provider 协议解析、工具审批、审计一致性和工作区安全。 |
+| 中 | 上下文质量 | 提升相关性评分、最近文件选择和增量索引，避免增加提示词噪声。 |
+| 中 | 可观测性 | 通过更清晰的运行摘要、审计分组和验证输出，让 Agent 失败更容易排查。 |
+| 中低 | 打包 | 在 framework-dependent 发布路径稳定后，改进安装包和发布体验。 |
 
-## Future Features
+## 未来功能
 
-These are larger efforts. They should extend the existing Harness, permission, audit, and verification systems instead of bypassing them.
+这些是较大的工作，应扩展现有 Harness、权限、审计和验证系统，而不是绕过它们。
 
-### MCP Client Integration
+### MCP Client 集成
 
-Implement `McpToolProvider` behind `IExternalToolProvider` so AIChat can discover and use tools from external MCP servers. External tool calls must still go through the normal approval and audit pipeline.
+在 `IExternalToolProvider` 后实现 `McpToolProvider`，让 AIChat 可以发现并使用外部 MCP Server 提供的工具。外部工具调用仍必须经过正常审批和审计链路。
 
 ### A2A Server
 
-Expose AIChat as an Agent that external systems can invoke. Inbound requests must use the same Harness, permission model, path guard, audit trail, and verification loop as interactive runs. See [A2A Adapter Design](A2A_ADAPTER_DESIGN.md).
+将 AIChat 暴露为可被外部系统调用的 Agent。入站请求必须使用与交互式运行相同的 Harness、权限模型、路径保护、审计日志和验证循环。详见 [A2A Adapter 设计](A2A_ADAPTER_DESIGN.md)。
 
-### Multi-Agent Queue
+### 多 Agent 队列
 
-Extend the single-run queue to support queued or concurrent agent runs. This requires workspace isolation, separate tool approvals, and clear audit attribution per run.
+扩展当前单运行队列，支持排队或并发 Agent 运行。这需要工作区隔离、独立工具审批，以及每次运行清晰的审计归属。
 
-### Context Engineering Enhancements
+### 上下文工程增强
 
-- Smarter file relevance scoring based on recent edits and conversation topics.
-- Incremental index updates instead of full rescans.
-- Better prompt shaping for large repositories.
+- 基于最近编辑和会话主题的更智能文件相关性评分。
+- 使用增量索引替代全量重扫。
+- 面向大型仓库的更好提示词组织。
 
-### Desktop Experience
+### 桌面体验
 
-- Installer and auto-updater.
-- Theme customization.
-- Keyboard shortcuts for common agent actions.
+- 安装器和自动更新。
+- 主题自定义。
+- 常用 Agent 操作快捷键。
 
-## Development Principles
+## 开发原则
 
-1. Maintain layering: UI in `AIChat.App`, agent orchestration in `AIChat.Application`, domain models in `AIChat.Domain`, protocol adapters in `AIChat.Providers.*`, persistence in `AIChat.Storage.Json`.
-2. Avoid expanding `MainViewModel.cs`; move reusable logic to independent services.
-3. Keep changes small and focused. Do not mix UI, Provider, Harness, and Storage work unless the feature requires it.
-4. Tool and agent changes must account for permissions, audit, recovery, and tests.
-5. File-write, shell, and git-modification features must remain conservative. Never bypass `ProjectPathGuard` or approval mechanisms.
-6. Do not delete or roll back uncommitted user changes. Check `git status --short` before starting.
+1. 保持分层：UI 在 `AIChat.App`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
+2. 避免继续扩大 `MainViewModel.cs`，可复用逻辑应迁移到独立服务。
+3. 保持改动小而聚焦。除非功能需要，不要把 UI、Provider、Harness 和 Storage 工作混在一起。
+4. 工具和 Agent 变更必须考虑权限、审计、恢复和测试。
+5. 文件写入、Shell 和 Git 修改功能必须保持保守，不能绕过 `ProjectPathGuard` 或审批机制。
+6. 不要删除或回滚未提交的用户变更。开始前先检查 `git status --short`。
 
-## Verification
+## 验证
 
-For code changes:
+代码变更：
 
 ```powershell
 dotnet build AIChat.sln --no-restore -m:1 -v:minimal
@@ -78,7 +78,7 @@ dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 git diff --check
 ```
 
-For documentation-only changes:
+仅文档变更：
 
 ```powershell
 git diff --check

@@ -1,20 +1,20 @@
-# Contributing to AIChat
+# 贡献指南
 
-AIChat is managed through GitHub issues, pull requests, and CI checks.
+AIChat 使用 GitHub Issues、Pull Requests 和 CI 管理开发流程。
 
-By contributing, you agree that your contributions are licensed under the Apache License 2.0.
+提交贡献即表示你同意你的贡献使用 Apache License 2.0 授权。
 
-## Workflow
+## 工作流
 
-1. Open or pick a GitHub issue for the work.
-2. Create a short branch from `master`.
-3. Keep the change focused on one feature, fix, or documentation update.
-4. Run local verification before opening a pull request.
-5. Open a pull request that links the issue and explains the verification.
+1. 创建或选择一个 GitHub Issue。
+2. 从 `master` 创建一个简短、清晰的分支。
+3. 每次改动聚焦一个功能、修复或文档更新。
+4. 打开 Pull Request 前先完成本地验证。
+5. Pull Request 需要关联 Issue，并说明验证结果。
 
-## Branch Names
+## 分支命名
 
-Use short, descriptive names:
+建议使用简短、可读的名称：
 
 ```text
 feature/provider-health-check
@@ -23,11 +23,11 @@ docs/github-workflow
 chore/update-ci
 ```
 
-Automation branches may use the `codex/` prefix.
+自动化分支可以使用 `codex/` 前缀。
 
-## Commits
+## 提交信息
 
-Use imperative commit messages:
+使用祈使句描述变更：
 
 ```text
 Harden provider configuration and errors
@@ -35,47 +35,47 @@ Improve agent run reliability diagnostics
 Document GitHub workflow
 ```
 
-Do not include local secrets, logs, installers, `bin/`, `obj/`, `.vs/`, `.tools/`, or generated artifacts.
+不要提交本地密钥、日志、安装包、`bin/`、`obj/`、`.vs/`、`.tools/` 或生成产物。
 
-## Pull Requests
+## Pull Request 规范
 
-Each PR should include:
+每个 PR 应包含：
 
-- What changed
-- Why it changed
-- Tests or verification run
-- Screenshots only when UI behavior changed
-- Linked issue, if one exists
+- 改了什么
+- 为什么改
+- 运行了哪些测试或验证
+- UI 变更的截图或说明
+- 关联的 Issue
 
-Prefer draft PRs for work in progress. Mark a PR ready only after the local build and tests pass.
+未完成的工作请使用 Draft PR。只有本地构建和测试通过后再标记为 Ready for review。
 
-## Verification
+## 验证
 
-For code changes:
+代码变更：
 
 ```powershell
 dotnet build AIChat.sln --no-restore -m:1 -v:minimal
 dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 ```
 
-For documentation-only changes:
+仅文档变更：
 
 ```powershell
 git diff --check
 ```
 
-## Review Standard
+## 评审标准
 
-Reviews should focus on:
+评审重点：
 
-- Correctness and regressions
-- Safety around tools, paths, shell execution, git operations, and secrets
-- Test coverage for changed behavior
-- Consistency with existing architecture
-- Clear user-facing error messages
+- 正确性和回归风险
+- 工具、路径、Shell、Git 操作和密钥处理的安全性
+- 行为变更是否有测试覆盖
+- 是否符合既有架构和代码风格
+- 用户可见错误信息是否清晰
 
-Avoid mixing large refactors with feature work unless the refactor is necessary for the change.
+除非必要，不要把大规模重构和功能改动混在同一个 PR 中。
 
-## Security
+## 安全问题
 
-Do not report vulnerabilities with exploit details in public issues. Follow [SECURITY.md](SECURITY.md).
+不要在公开 Issue 中披露漏洞细节。请按照 [SECURITY.md](SECURITY.md) 处理。
