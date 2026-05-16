@@ -1,5 +1,3 @@
-using System.Net.Http;
-using System.Net.Http.Headers;
 using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Llm;
 using AIChat.Application.Configuration;
@@ -334,19 +332,22 @@ public sealed partial class MainViewModel
         }
 
         var template = ChatProviderCatalog.Resolve(_newProviderTemplateId);
+        var provider = new ConfiguredLlmProvider
+        {
+            TemplateId = template.Id,
+            ProtocolId = template.ProtocolId,
+            Name = template.Name,
+            BaseUrl = template.DefaultBaseUrl,
+            ApiKey = apiKey,
+            SelectedModelId = template.DefaultModel,
+            ModelParameters = ProviderSettingsService.NormalizeModelParameterValues(template.Id, template.DefaultModel, null)
+        };
         IsTestingProviderConnection = true;
         StatusText = "正在测试模型连接...";
         try
         {
-            // A lightweight /models request proves the API key and base URL are
-            // at least reachable before saving a provider entry.
-            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{template.DefaultBaseUrl.TrimEnd('/')}/models");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            using var response = await httpClient.SendAsync(request);
-            StatusText = response.IsSuccessStatusCode
-                ? "连接测试通过"
-                : $"连接测试失败：{(int)response.StatusCode} {response.ReasonPhrase}";
+            var result = await new ProviderConnectionTester().TestAsync(provider);
+            StatusText = result.IsSuccess ? "连接测试通过" : $"连接测试失败：{result.Message}";
         }
         catch (Exception ex)
         {

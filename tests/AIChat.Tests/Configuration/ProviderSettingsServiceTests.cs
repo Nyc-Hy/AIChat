@@ -146,4 +146,96 @@ public sealed class ProviderSettingsServiceTests
         Assert.NotNull(effective);
         Assert.True(effective!.ModelSupportsVision);
     }
+
+    [Fact]
+    public void ValidateEffectiveSettings_ReturnsErrorsForMissingApiKeyAndBadBaseUrl()
+    {
+        var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
+        {
+            ProviderId = "deepseek",
+            ProtocolId = "openai",
+            ProviderName = "DeepSeek",
+            BaseUrl = "not a url",
+            ApiKey = "",
+            Model = "deepseek-v4-pro",
+            Temperature = 0.3,
+            MaxOutputTokens = 4096,
+            ModelContextLimit = 128_000
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, issue => issue.Code == "provider.api_key");
+        Assert.Contains(result.Errors, issue => issue.Code == "provider.base_url");
+    }
+
+    [Fact]
+    public void ValidateEffectiveSettings_RejectsUnsupportedModelForTools()
+    {
+        var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
+        {
+            ProviderId = "deepseek",
+            ProtocolId = "openai",
+            ProviderName = "DeepSeek",
+            BaseUrl = "https://api.deepseek.com",
+            ApiKey = "key",
+            Model = "missing-model",
+            Temperature = 0.3,
+            MaxOutputTokens = 4096,
+            ModelContextLimit = 128_000
+        }, requireTools: true);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, issue => issue.Code == "provider.model");
+    }
+
+    [Fact]
+    public void ValidateEffectiveSettings_WarnsForUnknownModelParameter()
+    {
+        var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
+        {
+            ProviderId = "deepseek",
+            ProtocolId = "openai",
+            ProviderName = "DeepSeek",
+            BaseUrl = "https://api.deepseek.com",
+            ApiKey = "key",
+            Model = "deepseek-v4-pro",
+            Temperature = 0.3,
+            MaxOutputTokens = 4096,
+            ModelContextLimit = 128_000,
+            ModelParameters = new Dictionary<string, string>
+            {
+                ["unknown"] = "value"
+            }
+        });
+
+        Assert.True(result.IsValid);
+        Assert.Contains(result.Warnings, issue => issue.Code == "provider.parameter.unknown");
+    }
+
+    [Fact]
+    public void CreateEffectiveSettings_PreservesCustomBaseUrl()
+    {
+        var settings = new AppSettings
+        {
+            ActiveConfiguredProviderId = "custom",
+            ConfiguredProviders =
+            [
+                new ConfiguredLlmProvider
+                {
+                    Id = "custom",
+                    TemplateId = "deepseek",
+                    ProtocolId = "openai",
+                    Name = "DeepSeek",
+                    BaseUrl = "https://proxy.example.com/v1",
+                    ApiKey = "key",
+                    SelectedModelId = "deepseek-v4-pro"
+                }
+            ]
+        };
+
+        var effective = ProviderSettingsService.CreateEffectiveSettings(settings, defaultTemperature: 0.3);
+
+        Assert.NotNull(effective);
+        Assert.Equal("https://proxy.example.com/v1", effective!.BaseUrl);
+    }
 }

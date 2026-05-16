@@ -33,6 +33,13 @@ public sealed partial class MainViewModel
         NormalizeProviderSettings();
         NormalizeHarnessSettings();
         var effectiveSettings = CreateEffectiveSettings();
+        var providerValidation = ProviderConfigurationValidator.ValidateEffectiveSettings(effectiveSettings);
+        if (!providerValidation.IsValid)
+        {
+            StatusText = providerValidation.Errors.FirstOrDefault()?.Message ?? "请先在设置中添加模型提供商";
+            return;
+        }
+
         if (effectiveSettings is null)
         {
             StatusText = "请先在设置中添加模型提供商";
@@ -284,7 +291,7 @@ public sealed partial class MainViewModel
         await Task.Run(async () =>
         {
             var modelInfo = ChatProviderCatalog.ResolveModel(
-                effectiveSettings.ActiveConfiguredProviderId,
+                effectiveSettings.ProviderId,
                 effectiveSettings.Model);
             var supportsTools = modelInfo?.Capabilities?.SupportsTools == true;
 

@@ -21,6 +21,33 @@ public sealed class RoutedChatCompletionService : IChatCompletionService
         // Providers decide if they can handle the settings by protocol/provider
         // metadata. If nothing matches, fall back to the first registered provider.
         var provider = _providers.FirstOrDefault(item => item.CanHandle(settings)) ?? _providers.First();
-        return provider.SendAsync(request, settings, cancellationToken);
+        return SendWithStandardizedErrorsAsync(provider, request, settings, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<ChatDelta> SendWithStandardizedErrorsAsync(
+        IChatProvider provider,
+        ChatRequest request,
+        AppSettings settings,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var delta in provider.SendAsync(request, settings, cancellationToken))
+        {
+            if (delta.HttpStatusCode is > 0)
+            {
+                var error = ProviderErrorClassifier.FromDelta(
+                    delta.HttpStatusCode,
+                    settings.ProviderName,
+                    string.IsNullOrWhiteSpace(delta.RawJson) ? delta.Content : delta.RawJson);
+                yield return new ChatDelta
+                {
+                    Content = error.Message,
+                    RawJson = delta.RawJson,
+                    HttpStatusCode = delta.HttpStatusCode
+                };
+                continue;
+            }
+
+            yield return delta;
+        }
     }
 }

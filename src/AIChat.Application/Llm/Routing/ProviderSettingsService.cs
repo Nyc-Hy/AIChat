@@ -186,7 +186,9 @@ public static class ProviderSettingsService
         configured.TemplateId = template.Id;
         configured.ProtocolId = template.ProtocolId;
         configured.Name = template.Name;
-        configured.BaseUrl = template.DefaultBaseUrl;
+        configured.BaseUrl = string.IsNullOrWhiteSpace(configured.BaseUrl)
+            ? template.DefaultBaseUrl
+            : configured.BaseUrl.Trim();
         configured.SelectedModelId = model.Id;
 
         return new AppSettings
@@ -220,7 +222,9 @@ public static class ProviderSettingsService
         settings.ProviderId = configured.TemplateId;
         settings.ProtocolId = configured.ProtocolId;
         settings.ProviderName = configured.Name;
-        settings.BaseUrl = configured.BaseUrl;
+        settings.BaseUrl = string.IsNullOrWhiteSpace(configured.BaseUrl)
+            ? template.DefaultBaseUrl
+            : configured.BaseUrl.Trim();
         settings.ApiKey = configured.ApiKey;
         settings.Model = model.Id;
         settings.ModelContextLimit = model.ContextLimit;
@@ -276,7 +280,9 @@ public static class ProviderSettingsService
         configured.TemplateId = template.Id;
         configured.ProtocolId = template.ProtocolId;
         configured.Name = template.Name;
-        configured.BaseUrl = template.DefaultBaseUrl;
+        configured.BaseUrl = string.IsNullOrWhiteSpace(configured.BaseUrl)
+            ? template.DefaultBaseUrl
+            : configured.BaseUrl.Trim();
         configured.SelectedModelId = model.Id;
         configured.ModelParameters = NormalizeModelParameterValues(template.Id, model.Id, configured.ModelParameters);
     }

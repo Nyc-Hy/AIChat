@@ -133,7 +133,36 @@ public static class ChatProviderCatalog
         ]
     };
 
-    public static IReadOnlyList<LlmProviderInfo> All { get; } = [TokenPlanMiMo, DeepSeek, MiniMax];
+    public static readonly LlmProviderInfo Anthropic = new()
+    {
+        Id = "anthropic",
+        ProtocolId = "anthropic",
+        Name = "Anthropic",
+        DefaultBaseUrl = "https://api.anthropic.com",
+        DefaultModel = "claude-3-5-sonnet-latest",
+        DefaultContextLimit = 200_000,
+        Models =
+        [
+            new LlmModelInfo
+            {
+                Id = "claude-3-5-sonnet-latest",
+                DisplayName = "claude-3-5-sonnet-latest",
+                ContextLimit = 200_000,
+                CapabilityLabel = "tools · vision",
+                Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true }
+            },
+            new LlmModelInfo
+            {
+                Id = "claude-3-5-haiku-latest",
+                DisplayName = "claude-3-5-haiku-latest",
+                ContextLimit = 200_000,
+                CapabilityLabel = "tools · vision",
+                Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true }
+            }
+        ]
+    };
+
+    public static IReadOnlyList<LlmProviderInfo> All { get; } = [TokenPlanMiMo, DeepSeek, MiniMax, Anthropic];
 
     // Resolve methods deliberately fall back to a safe default so old settings
     // files or renamed provider IDs do not break startup.
