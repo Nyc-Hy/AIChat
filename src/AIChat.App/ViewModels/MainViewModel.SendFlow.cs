@@ -480,6 +480,8 @@ public sealed partial class MainViewModel
                         type = "tool_result",
                         tool = agentEvent.ToolResult?.ToolName,
                         isError = agentEvent.ToolResult?.IsError,
+                        status = agentEvent.ToolResult?.Status.ToString(),
+                        failureReason = agentEvent.ToolResult?.FailureReason,
                         content = agentEvent.ToolResult?.Content
                     }));
                     break;

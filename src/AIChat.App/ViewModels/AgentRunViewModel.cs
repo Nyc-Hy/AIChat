@@ -110,6 +110,9 @@ public sealed class AgentRunViewModel : ObservableObject
         $"Planner：{PlannerUsageText}{Environment.NewLine}" +
         $"Explorer：{ExplorerUsageText} · {ExplorerDecisionReason}{Environment.NewLine}" +
         $"最终状态原因：{FinalStatusReason}";
+    public string BlockingReasonText => AgentRunDiagnosticSummaryBuilder.Build(_run).BlockingReason;
+    public string NextActionText => AgentRunDiagnosticSummaryBuilder.Build(_run).NextAction;
+    public string AttentionSummaryText => AgentRunDiagnosticSummaryBuilder.Build(_run).AttentionSummary;
     public string RecoverySuggestion => string.IsNullOrWhiteSpace(_run.RecoverySuggestion)
         ? BuildAcceptanceRecoverySuggestion()
         : _run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges
@@ -353,6 +356,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(VerificationSummaryText));
         OnPropertyChanged(nameof(HasAgentRisk));
         OnPropertyChanged(nameof(RiskSummaryText));
+        OnPropertyChanged(nameof(BlockingReasonText));
+        OnPropertyChanged(nameof(NextActionText));
+        OnPropertyChanged(nameof(AttentionSummaryText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
         return viewModel;
@@ -396,6 +402,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(VerificationSummaryText));
         OnPropertyChanged(nameof(HasAgentRisk));
         OnPropertyChanged(nameof(RiskSummaryText));
+        OnPropertyChanged(nameof(BlockingReasonText));
+        OnPropertyChanged(nameof(NextActionText));
+        OnPropertyChanged(nameof(AttentionSummaryText));
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
         OnPropertyChanged(nameof(PlanSummary));
@@ -419,6 +428,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(ChangeSummary));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(FileChangeSummaryText));
+        OnPropertyChanged(nameof(BlockingReasonText));
+        OnPropertyChanged(nameof(NextActionText));
+        OnPropertyChanged(nameof(AttentionSummaryText));
         RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
@@ -442,6 +454,9 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(VerificationSummaryText));
         OnPropertyChanged(nameof(HasAgentRisk));
         OnPropertyChanged(nameof(RiskSummaryText));
+        OnPropertyChanged(nameof(BlockingReasonText));
+        OnPropertyChanged(nameof(NextActionText));
+        OnPropertyChanged(nameof(AttentionSummaryText));
         RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));

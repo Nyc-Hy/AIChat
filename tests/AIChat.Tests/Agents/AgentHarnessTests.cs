@@ -1625,6 +1625,85 @@ public sealed class AgentHarnessTests
         Assert.Contains(run.Steps, step => step.Title == "预算暂停");
     }
 
+    [Fact]
+    public async Task RunAsync_CompletesRunAsFailedWhenRunnerReportsError()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var harness = new AgentHarness(new AgentRunner(
+            new ThrowingChatCompletionService(),
+            new AgentToolCatalog([])));
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "do work",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "do work" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = []
+                           }
+                       }))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Failed, run.Status);
+        Assert.Contains("LLM 请求失败", run.CompletionReason);
+        Assert.Equal("failed", run.Phase);
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunCompleted);
+        Assert.Contains(run.Steps, step => step.Type == AgentStepType.Final);
+    }
+
+    [Fact]
+    public async Task RunAsync_CompletesRunAsCancelledWhenCancellationIsReported()
+    {
+        var conversation = new Conversation { Id = "conversation-1" };
+        var harness = new AgentHarness(new AgentRunner(
+            new FakeChatCompletionService([new ChatDelta { Content = "never" }]),
+            new AgentToolCatalog([])));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var events = new List<AgentHarnessEvent>();
+        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
+                       {
+                           Conversation = conversation,
+                           UserMessageId = "user-1",
+                           AssistantMessageId = "assistant-1",
+                           Goal = "do work",
+                           ChatRequest = new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "do work" }]
+                           },
+                           Settings = new AppSettings { Model = "test" },
+                           Context = new AgentRunContext
+                           {
+                               ProjectPath = Environment.CurrentDirectory,
+                               EnabledToolIds = []
+                           }
+                       }, cts.Token))
+        {
+            events.Add(item);
+        }
+
+        var run = Assert.Single(conversation.AgentRuns);
+        Assert.Equal(AgentRunStatus.Cancelled, run.Status);
+        Assert.Equal("cancelled", run.Phase);
+        Assert.Contains("继续这个已停止", run.RecoverySuggestion);
+        Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunCompleted);
+    }
+
     private sealed class FakeChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;
@@ -1655,6 +1734,21 @@ public sealed class AgentHarnessTests
         }
 
         public List<ChatRequest> Requests { get; } = [];
+    }
+
+    private sealed class ThrowingChatCompletionService : IChatCompletionService
+    {
+        public async IAsyncEnumerable<ChatDelta> SendAsync(
+            ChatRequest request,
+            AppSettings settings,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            throw new InvalidOperationException("model boom");
+            #pragma warning disable CS0162
+            yield return new ChatDelta();
+            #pragma warning restore CS0162
+        }
     }
 
     private sealed class FakeVerificationTool : IAgentTool

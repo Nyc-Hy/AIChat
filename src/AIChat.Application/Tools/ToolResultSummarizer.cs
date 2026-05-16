@@ -22,6 +22,8 @@ public static class ToolResultSummarizer
             ToolName = result.ToolName,
             Content = result.Content,
             IsError = result.IsError,
+            Status = result.Status,
+            FailureReason = result.FailureReason,
             ModelContent = summary,
             WasSummarized = true,
             ArtifactKind = "tool_result",

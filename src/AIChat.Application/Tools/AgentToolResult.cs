@@ -5,6 +5,8 @@ public sealed class AgentToolResult
     public required string ToolName { get; init; }
     public required string Content { get; init; }
     public bool IsError { get; init; }
+    public ToolExecutionStatus Status { get; init; } = ToolExecutionStatus.Succeeded;
+    public string FailureReason { get; init; } = "";
     public string ModelContent { get; init; } = "";
     public bool WasSummarized { get; init; }
     public string ArtifactKind { get; init; } = "";

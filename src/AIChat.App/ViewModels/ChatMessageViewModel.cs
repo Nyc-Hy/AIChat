@@ -54,6 +54,7 @@ public sealed class ChatMessageViewModel : ObservableObject
                 OnPropertyChanged(nameof(AgentRunFileChangeSummaryText));
                 OnPropertyChanged(nameof(AgentRunVerificationSummaryText));
                 OnPropertyChanged(nameof(AgentRunRiskSummaryText));
+                OnPropertyChanged(nameof(AgentRunNextActionText));
                 OnPropertyChanged(nameof(HasAgentRisk));
                 OnPropertyChanged(nameof(HasAgentFileChanges));
                 OnPropertyChanged(nameof(AgentFileChanges));
@@ -104,6 +105,7 @@ public sealed class ChatMessageViewModel : ObservableObject
     public string AgentRunFileChangeSummaryText => AgentRun?.FileChangeSummaryText ?? "文件变更：无";
     public string AgentRunVerificationSummaryText => AgentRun?.VerificationSummaryText ?? "验证：未运行";
     public string AgentRunRiskSummaryText => AgentRun?.RiskSummaryText ?? "风险：无";
+    public string AgentRunNextActionText => AgentRun?.NextActionText ?? "";
     public bool HasAgentRisk => AgentRun?.HasAgentRisk == true;
     public string ToolTraceSummaryText => ToolTraceCount <= 0 ? "" : $"{ToolTraceCount} 次工具调用";
     public bool IsError
@@ -185,6 +187,7 @@ public sealed class ChatMessageViewModel : ObservableObject
         OnPropertyChanged(nameof(HasAgentRun));
         OnPropertyChanged(nameof(AgentRunOutcomeText));
         OnPropertyChanged(nameof(AgentRunSummaryText));
+        OnPropertyChanged(nameof(AgentRunNextActionText));
         return viewModel;
     }
 
@@ -196,6 +199,7 @@ public sealed class ChatMessageViewModel : ObservableObject
         OnPropertyChanged(nameof(AgentFileChanges));
         OnPropertyChanged(nameof(AgentRunSummaryText));
         OnPropertyChanged(nameof(AgentRunFileChangeSummaryText));
+        OnPropertyChanged(nameof(AgentRunNextActionText));
     }
 
     public void SyncAgentVerifications()
@@ -205,6 +209,7 @@ public sealed class ChatMessageViewModel : ObservableObject
         OnPropertyChanged(nameof(AgentRunRiskSummaryText));
         OnPropertyChanged(nameof(HasAgentRisk));
         OnPropertyChanged(nameof(AgentRunSummaryText));
+        OnPropertyChanged(nameof(AgentRunNextActionText));
     }
 
     public void SyncAgentArtifacts()
@@ -224,6 +229,7 @@ public sealed class ChatMessageViewModel : ObservableObject
         AgentRun?.SyncPhaseHistory();
         OnPropertyChanged(nameof(AgentRunOutcomeText));
         OnPropertyChanged(nameof(AgentRunSummaryText));
+        OnPropertyChanged(nameof(AgentRunNextActionText));
     }
 
     public void SyncAgentPlan()

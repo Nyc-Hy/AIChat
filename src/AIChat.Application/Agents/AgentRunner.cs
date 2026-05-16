@@ -79,6 +79,7 @@ public sealed class AgentRunner
                 requestedToolCalls.Clear();
                 pendingEvents.Clear();
                 var hadTransientError = false;
+                AgentRunEvent? terminalEvent = null;
 
                 try
                 {
@@ -121,6 +122,29 @@ public sealed class AgentRunner
                 catch (HttpRequestException)
                 {
                     hadTransientError = true;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    terminalEvent = new AgentRunEvent
+                    {
+                        Type = AgentRunEventType.Cancelled,
+                        Content = "Agent 运行已取消。"
+                    };
+                }
+                catch (Exception ex)
+                {
+                    terminalEvent = new AgentRunEvent
+                    {
+                        Type = AgentRunEventType.Error,
+                        Content = $"LLM 请求失败：{ex.Message}"
+                    };
+                }
+
+                if (terminalEvent is not null)
+                {
+                    yield return terminalEvent;
+                    yield return new AgentRunEvent { Type = AgentRunEventType.Completed };
+                    yield break;
                 }
 
                 if (hadTransientError && retryAttempt < _retryPolicy.MaxRetries)
@@ -275,6 +299,17 @@ public sealed class AgentRunner
                 }
 
                 lastToolResult = result;
+
+                if (result.Status == ToolExecutionStatus.Cancelled)
+                {
+                    yield return new AgentRunEvent
+                    {
+                        Type = AgentRunEventType.Cancelled,
+                        Content = result.Content
+                    };
+                    yield return new AgentRunEvent { Type = AgentRunEventType.Completed };
+                    yield break;
+                }
 
                 transcript.Add(new ChatMessage
                 {

@@ -99,6 +99,7 @@ public sealed class ToolExecutionServiceTests
 
         var result = Assert.Single(events);
         Assert.True(result.Result!.IsError);
+        Assert.Equal(ToolExecutionStatus.Disabled, result.Result.Status);
         Assert.Contains("关闭", result.Result.Content);
         Assert.False(tool.WasExecuted);
     }
@@ -202,6 +203,41 @@ public sealed class ToolExecutionServiceTests
         Assert.True(tool.WasExecuted);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ReturnsStructuredFailureWhenToolThrows()
+    {
+        var tool = new ThrowingTool("read_file", AgentToolRisk.ReadOnly);
+        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+
+        var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "read_file", ArgumentsJson = "{}" },
+            ProjectPath = Environment.CurrentDirectory
+        }));
+
+        var result = Assert.Single(events).Result!;
+        Assert.True(result.IsError);
+        Assert.Equal(ToolExecutionStatus.Exception, result.Status);
+        Assert.Contains("boom", result.FailureReason);
+        Assert.Contains("执行失败", result.Content);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ReturnsUnknownToolStatus()
+    {
+        var service = new ToolExecutionService(new AgentToolCatalog([]));
+
+        var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
+        {
+            ToolCall = new ChatToolCall { Name = "missing_tool", ArgumentsJson = "{}" },
+            ProjectPath = Environment.CurrentDirectory
+        }));
+
+        var result = Assert.Single(events).Result!;
+        Assert.True(result.IsError);
+        Assert.Equal(ToolExecutionStatus.UnknownTool, result.Status);
+    }
+
     private static async Task<List<ToolExecutionEvent>> CollectAsync(IAsyncEnumerable<ToolExecutionEvent> events)
     {
         var result = new List<ToolExecutionEvent>();
@@ -249,6 +285,40 @@ public sealed class ToolExecutionServiceTests
         {
             WasExecuted = true;
             return Task.FromResult(_result);
+        }
+    }
+
+    private sealed class ThrowingTool : IAgentTool
+    {
+        public ThrowingTool(string id, AgentToolRisk risk)
+        {
+            Id = id;
+            Risk = risk;
+            Definition = new ChatToolDefinition
+            {
+                Name = id,
+                Description = id,
+                ParametersJson = """{"type":"object"}"""
+            };
+        }
+
+        public string Id { get; }
+        public AgentToolRisk Risk { get; }
+        public ChatToolDefinition Definition { get; }
+
+        public Task<AgentToolPreview> PreviewAsync(string argumentsJson, AgentToolContext context, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "preview"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(string argumentsJson, AgentToolContext context, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("boom");
         }
     }
 }

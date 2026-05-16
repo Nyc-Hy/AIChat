@@ -434,6 +434,11 @@
                                                Foreground="#9D2F25"
                                                TextTrimming="CharacterEllipsis"
                                                Visibility="Collapsed" />
+                                    <TextBlock Text="{Binding AgentRunNextActionText}"
+                                               Margin="0,4,0,0"
+                                               FontSize="11"
+                                               Foreground="#536172"
+                                               TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                                 <Button Grid.Column="1"
                                         Command="{Binding DataContext.OpenAgentRunDetailsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -1764,6 +1769,19 @@
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,5,0,0" />
                                         <TextBox Text="{Binding CurrentPhaseSummary, StringFormat=摘要：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBlock Text="运行诊断"
+                                                   Margin="0,14,0,0"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#303A47" />
+                                        <TextBox Text="{Binding BlockingReasonText, StringFormat=阻塞：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
+                                        <TextBox Text="{Binding NextActionText, StringFormat=下一步：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding AttentionSummaryText, StringFormat=关注：{0}, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,3,0,0" />
                                         <ItemsControl ItemsSource="{Binding PhaseHistory}"

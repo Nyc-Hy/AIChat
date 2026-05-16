@@ -11,6 +11,7 @@ public enum AgentRunEventType
     ToolSessionAllowed,
     ToolResult,
     BudgetExceeded,
+    Cancelled,
     Error,
     Completed
 }

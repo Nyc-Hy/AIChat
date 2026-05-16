@@ -111,6 +111,69 @@ public sealed class AgentRunnerTests
         Assert.Single(events, item => item.Type == AgentRunEventType.Completed);
     }
 
+    [Fact]
+    public async Task RunAsync_EmitsStructuredToolFailureWhenToolThrows()
+    {
+        var toolCall = new ChatToolCall
+        {
+            Id = "tool-call-1",
+            Name = "read_file",
+            ArgumentsJson = "{}"
+        };
+        var runner = new AgentRunner(
+            new RecordingChatCompletionService([
+                [new ChatDelta { ToolCalls = [toolCall] }],
+                [new ChatDelta { Content = "handled failure" }]
+            ]),
+            new AgentToolCatalog([new ThrowingReadTool()]));
+
+        var events = new List<AgentRunEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "inspect files" }]
+                           },
+                           new AppSettings { Model = "test" },
+                           new AgentRunContext { ProjectPath = Environment.CurrentDirectory }))
+        {
+            events.Add(item);
+        }
+
+        var result = Assert.Single(events, item => item.Type == AgentRunEventType.ToolResult).ToolResult!;
+        Assert.True(result.IsError);
+        Assert.Equal(ToolExecutionStatus.Exception, result.Status);
+        Assert.Contains("boom", result.FailureReason);
+        Assert.Contains(events, item => item.Type == AgentRunEventType.Completed);
+    }
+
+    [Fact]
+    public async Task RunAsync_EmitsCancelledWhenChatServiceIsCancelled()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var runner = new AgentRunner(
+            new RecordingChatCompletionService([[new ChatDelta { Content = "never" }]]),
+            new AgentToolCatalog([]));
+
+        var events = new List<AgentRunEvent>();
+        await foreach (var item in runner.RunAsync(
+                           new ChatRequest
+                           {
+                               Model = "test",
+                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "inspect files" }]
+                           },
+                           new AppSettings { Model = "test" },
+                           new AgentRunContext { ProjectPath = Environment.CurrentDirectory },
+                           cts.Token))
+        {
+            events.Add(item);
+        }
+
+        Assert.Contains(events, item => item.Type == AgentRunEventType.Cancelled);
+        Assert.Contains(events, item => item.Type == AgentRunEventType.Completed);
+    }
+
     private sealed class RecordingChatCompletionService : IChatCompletionService
     {
         private readonly Queue<IReadOnlyList<ChatDelta>> _responses;
@@ -183,5 +246,38 @@ public sealed class AgentRunnerTests
         }
 
         public int ExecuteCount { get; private set; }
+    }
+
+    private sealed class ThrowingReadTool : IAgentTool
+    {
+        public string Id => "read_file";
+        public AgentToolRisk Risk => AgentToolRisk.ReadOnly;
+        public ChatToolDefinition Definition { get; } = new()
+        {
+            Name = "read_file",
+            Description = "read",
+            ParametersJson = """{"type":"object"}"""
+        };
+
+        public Task<AgentToolPreview> PreviewAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentToolPreview
+            {
+                ToolName = Id,
+                Risk = Risk,
+                Summary = "read"
+            });
+        }
+
+        public Task<AgentToolResult> ExecuteAsync(
+            string argumentsJson,
+            AgentToolContext context,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("boom");
+        }
     }
 }

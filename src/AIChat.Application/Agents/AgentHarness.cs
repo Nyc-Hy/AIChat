@@ -221,6 +221,7 @@ public sealed class AgentHarness
         }
 
         var assistantContent = "";
+        var runnerReportedError = false;
         var stepByToolCallId = new Dictionary<string, AgentStep>(StringComparer.Ordinal);
         await foreach (var agentEvent in _agentRunner.RunAsync(
                            executionRequest,
@@ -349,6 +350,7 @@ public sealed class AgentHarness
                     };
                     break;
                 case AgentRunEventType.Error:
+                    runnerReportedError = true;
                     run.CompletionReason = SensitiveDataRedactor.RedactText(agentEvent.Content);
                     yield return new AgentHarnessEvent
                     {
@@ -357,6 +359,38 @@ public sealed class AgentHarness
                         Content = agentEvent.Content
                     };
                     break;
+                case AgentRunEventType.Cancelled:
+                {
+                    var reason = string.IsNullOrWhiteSpace(agentEvent.Content)
+                        ? "Agent 运行已取消。"
+                        : agentEvent.Content;
+                    run.CompletionReason = SensitiveDataRedactor.RedactText(reason);
+                    CompleteFinalValidation(run, assistantContent);
+                    run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.Cancelled);
+                    CompleteQualityAssessment(run, AgentRunStatus.Cancelled);
+                    CompleteRecoverySuggestion(run, executionPolicy, AgentRunStatus.Cancelled);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ContentDelta,
+                        Run = run,
+                        Content = reason
+                    };
+                    yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Cancelled));
+                    var cancelledStep = AddCompletedStep(
+                        run,
+                        run.Steps.Count + 1,
+                        AgentStepType.Final,
+                        "运行已取消",
+                        "",
+                        reason);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.RunCompleted,
+                        Run = run,
+                        Step = cancelledStep
+                    };
+                    yield break;
+                }
                 case AgentRunEventType.BudgetExceeded:
                 {
                     run.ToolBudgetExceeded = true;
@@ -435,7 +469,7 @@ public sealed class AgentHarness
                     }
 
                     CompleteFinalValidation(run, assistantContent);
-                    var finalStatus = DetermineFinalStatus(run);
+                    var finalStatus = runnerReportedError ? AgentRunStatus.Failed : DetermineFinalStatus(run);
                     run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
                     CompleteQualityAssessment(run, finalStatus);
                     CompleteRecoverySuggestion(run, executionPolicy);
@@ -721,7 +755,10 @@ public sealed class AgentHarness
         run.Status = originalStatus;
     }
 
-    private static void CompleteRecoverySuggestion(AgentRun run, AgentTaskExecutionPolicy policy)
+    private static void CompleteRecoverySuggestion(
+        AgentRun run,
+        AgentTaskExecutionPolicy policy,
+        AgentRunStatus? targetStatus = null)
     {
         run.VerificationRecoveryPacket = BuildVerificationRecoveryPacket(run);
         run.CheckpointSummary = BuildCheckpointSummary(run);
@@ -758,6 +795,29 @@ public sealed class AgentHarness
                 4. 如果需要修改，实际调用写入/编辑工具后再声称完成。
                 5. 如果发生修改，优先运行项目验证命令或合适的测试。
                 6. {recoveryStyle}
+                """;
+            return;
+        }
+
+        if (targetStatus == AgentRunStatus.Cancelled || run.Status == AgentRunStatus.Cancelled || run.Phase == "cancelled")
+        {
+            run.RecoverySuggestion =
+                $"""
+                继续这个已停止的 Agent 任务。
+
+                原始目标：
+                {run.Goal}
+
+                停止原因：
+                {(string.IsNullOrWhiteSpace(run.CompletionReason) ? "用户取消或请求中断。" : run.CompletionReason)}
+
+                恢复包：
+                {run.CheckpointSummary}
+
+                继续要求：
+                1. 先检查当前工作区状态，确认上一轮已经完成到哪里。
+                2. 沿用恢复包中的上下文，不要重复已经完成的步骤。
+                3. 从未完成的计划项或最后一个失败/运行中步骤继续。
                 """;
             return;
         }
@@ -1633,6 +1693,16 @@ public sealed class AgentHarness
                     case AgentRunEventType.BudgetExceeded:
                         run.ToolBudgetExceeded = true;
                         run.CompletionReason = "自动修复阶段已达到工具调用轮数上限。";
+                        yield break;
+                    case AgentRunEventType.Cancelled:
+                        run.CompletionReason = string.IsNullOrWhiteSpace(fixEvent.Content)
+                            ? "自动修复阶段已取消。"
+                            : SensitiveDataRedactor.RedactText(fixEvent.Content);
+                        yield break;
+                    case AgentRunEventType.Error:
+                        run.CompletionReason = string.IsNullOrWhiteSpace(fixEvent.Content)
+                            ? "自动修复阶段失败。"
+                            : SensitiveDataRedactor.RedactText(fixEvent.Content);
                         yield break;
                     case AgentRunEventType.Completed:
                         // Inner runner completed — break to continue auto-verify loop
