@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AIChat.Application.Agents;
+using AIChat.Application.Agents.Benchmark;
 using AIChat.Domain.Chat;
 
 namespace AIChat.App.ViewModels;
@@ -15,6 +16,7 @@ public sealed class AgentRunViewModel : ObservableObject
     private ObservableCollection<AgentSubAgentRunViewModel>? _subAgentRuns;
     private ObservableCollection<AgentRunPhaseRecordViewModel>? _phaseHistory;
     private ObservableCollection<AgentSmokeTestItemViewModel>? _smokeTests;
+    private ObservableCollection<AgentBenchmarkResultViewModel>? _benchmarkResults;
     private AgentPlanViewModel? _plan;
 
     public AgentRunViewModel(AgentRun run)
@@ -67,6 +69,18 @@ public sealed class AgentRunViewModel : ObservableObject
         $"耗时：{DurationText}{Environment.NewLine}" +
         $"质量评分：{QualityScoreText}{Environment.NewLine}" +
         $"质量风险：{RiskSummaryText}";
+    public string OutcomeText => FormatOutcome(_run.OutcomeKind);
+    public string OutcomeReason => string.IsNullOrWhiteSpace(_run.Telemetry.OutcomeReason)
+        ? "未记录"
+        : _run.Telemetry.OutcomeReason;
+    public string TelemetrySummary =>
+        $"结果：{OutcomeText}{Environment.NewLine}" +
+        $"模型调用：{_run.Telemetry.ModelCallCount} 次 · 工具调用：{_run.Telemetry.ToolCallCount} 次 · 工具/模型：{_run.Telemetry.ToolCallsPerModelCall:0.##}{Environment.NewLine}" +
+        $"Context：约 {_run.Telemetry.EstimatedPromptTokens} tokens · {_run.Telemetry.ContextRefCount} refs{Environment.NewLine}" +
+        $"验证：{_run.Telemetry.VerificationSuccessCount}/{_run.Telemetry.VerificationCount} 通过 · 通过率 {FormatRatio(_run.Telemetry.VerificationPassRate)}{Environment.NewLine}" +
+        $"修改工具：{_run.Telemetry.MutationToolSuccessCount} 次 · 审批：需确认 {_run.Telemetry.ApprovalRequiredCount} 次 / 拒绝 {_run.Telemetry.ApprovalRejectedCount} 次{Environment.NewLine}" +
+        $"产物：{_run.Telemetry.ArtifactCount} 个 · 已摘要 {_run.Telemetry.SummarizedArtifactCount} 个 · 节省约 {_run.Telemetry.EstimatedSavedChars} chars";
+    public string BenchmarkSummary => AgentBenchmarkReportBuilder.BuildRunSummary(_run);
     public string QualityScoreText => _run.QualityScore <= 0 ? "未评分" : $"{_run.QualityScore}/100";
     public string QualitySummary => string.IsNullOrWhiteSpace(_run.QualitySummary)
         ? "尚未生成质量摘要。"
@@ -286,6 +300,8 @@ public sealed class AgentRunViewModel : ObservableObject
         _run.PhaseHistory.Select(record => new AgentRunPhaseRecordViewModel(record)));
     public ObservableCollection<AgentSmokeTestItemViewModel> SmokeTests => _smokeTests ??= new ObservableCollection<AgentSmokeTestItemViewModel>(
         AgentSmokeTestChecklistBuilder.Build(_run).Select(item => new AgentSmokeTestItemViewModel(item)));
+    public ObservableCollection<AgentBenchmarkResultViewModel> BenchmarkResults => _benchmarkResults ??= new ObservableCollection<AgentBenchmarkResultViewModel>(
+        [new AgentBenchmarkResultViewModel(AgentBenchmarkReportBuilder.Evaluate(_run))]);
     public bool HasSmokeTests => SmokeTests.Count > 0;
     public AgentPlanViewModel? Plan
     {
@@ -384,6 +400,10 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(FinalStatusReason));
         OnPropertyChanged(nameof(DebugSummary));
         OnPropertyChanged(nameof(MetricsSummary));
+        OnPropertyChanged(nameof(OutcomeText));
+        OnPropertyChanged(nameof(OutcomeReason));
+        OnPropertyChanged(nameof(TelemetrySummary));
+        OnPropertyChanged(nameof(BenchmarkSummary));
         OnPropertyChanged(nameof(QualityScoreText));
         OnPropertyChanged(nameof(QualitySummary));
         OnPropertyChanged(nameof(StrategySuggestion));
@@ -408,6 +428,7 @@ public sealed class AgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
         OnPropertyChanged(nameof(PlanSummary));
+        RebuildBenchmarkResults();
     }
 
     public void SyncFileChanges()
@@ -434,6 +455,7 @@ public sealed class AgentRunViewModel : ObservableObject
         RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
+        RebuildBenchmarkResults();
     }
 
     public void SyncVerifications()
@@ -460,6 +482,7 @@ public sealed class AgentRunViewModel : ObservableObject
         RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
+        RebuildBenchmarkResults();
     }
 
     public void SyncArtifacts()
@@ -480,6 +503,7 @@ public sealed class AgentRunViewModel : ObservableObject
         RebuildSmokeTests();
         OnPropertyChanged(nameof(RunSummary));
         OnPropertyChanged(nameof(ReviewPacket));
+        RebuildBenchmarkResults();
     }
 
     public void SyncSubAgentRuns()
@@ -669,5 +693,44 @@ public sealed class AgentRunViewModel : ObservableObject
     private static string FormatBoolean(bool value)
     {
         return value ? "是" : "否";
+    }
+
+    private static string FormatRatio(double value)
+    {
+        if (value <= 0)
+        {
+            return "0%";
+        }
+
+        return $"{value:P0}";
+    }
+
+    private static string FormatOutcome(AgentRunOutcomeKind outcome)
+    {
+        return outcome switch
+        {
+            AgentRunOutcomeKind.Success => "成功",
+            AgentRunOutcomeKind.PartialSuccess => "部分成功",
+            AgentRunOutcomeKind.Failed => "失败",
+            AgentRunOutcomeKind.Cancelled => "已取消",
+            AgentRunOutcomeKind.VerificationFailed => "验证失败",
+            AgentRunOutcomeKind.PermissionBlocked => "权限阻塞",
+            AgentRunOutcomeKind.BudgetExceeded => "预算耗尽",
+            AgentRunOutcomeKind.EvidenceRisk => "证据风险",
+            _ => "未知"
+        };
+    }
+
+    private void RebuildBenchmarkResults()
+    {
+        if (_benchmarkResults is null)
+        {
+            return;
+        }
+
+        _benchmarkResults.Clear();
+        _benchmarkResults.Add(new AgentBenchmarkResultViewModel(AgentBenchmarkReportBuilder.Evaluate(_run)));
+        OnPropertyChanged(nameof(BenchmarkResults));
+        OnPropertyChanged(nameof(BenchmarkSummary));
     }
 }

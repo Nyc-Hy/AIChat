@@ -1,5 +1,6 @@
 using System.Windows;
 using AIChat.App.Controls;
+using AIChat.Application.Agents.Benchmark;
 using AIChat.Application.Tools;
 
 namespace AIChat.App.ViewModels;
@@ -46,6 +47,8 @@ public sealed partial class MainViewModel
         : $"显示 {AgentRunHistory.Count} / {_agentRunHistoryTotalCount} 次运行 · {AgentRunHistory.Count(item => item.CanContinue)} 个可继续 · {AgentRunHistory.Count(item => item.NeedsChanges)} 个需修改 · {AgentRunHistory.Count(item => item.CanRetry)} 个可重试";
     public string AgentRunHistoryInsight => AgentRunHistoryInsights.Build(AgentRunHistory.ToList());
     public string AgentRunHistoryPerformanceSummary => AIChat.Application.Agents.AgentRunPerformanceSummaryBuilder.Build(
+        AgentRunHistory.Select(item => item.Run.Run).ToList());
+    public string AgentRunHistoryBenchmarkSummary => AgentBenchmarkReportBuilder.BuildHistorySummary(
         AgentRunHistory.Select(item => item.Run.Run).ToList());
 
     public AgentRunViewModel? SelectedAgentRunDetails
@@ -150,6 +153,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(AgentRunHistorySummary));
         OnPropertyChanged(nameof(AgentRunHistoryInsight));
         OnPropertyChanged(nameof(AgentRunHistoryPerformanceSummary));
+        OnPropertyChanged(nameof(AgentRunHistoryBenchmarkSummary));
         RetryAgentRunCommand.RaiseCanExecuteChanged();
         ContinueAgentRunCommand.RaiseCanExecuteChanged();
     }
