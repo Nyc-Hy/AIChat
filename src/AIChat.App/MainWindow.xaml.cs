@@ -49,7 +49,7 @@ public partial class MainWindow : Window
         var contextEstimator = new TokenizerContextEstimator();
         var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat");
         var toolRegistry = AgentToolRegistry.CreateDefault();
-        LoadLocalPlugins(toolRegistry, Path.Combine(appDataPath, "plugins"));
+        var pluginProvider = LoadLocalPlugins(toolRegistry, Path.Combine(appDataPath, "plugins"));
         var auditLogRepository = new AuditLogRepository(appDataPath);
         _viewModel = new MainViewModel(
             new JsonAppRepository(),
@@ -57,7 +57,7 @@ public partial class MainWindow : Window
             contextEstimator,
             new ConversationContextBuilder(
                 contextEstimator,
-                new SystemPromptBuilder()),
+                new SystemPromptBuilder(pluginProvider.Skills)),
             new WorkspaceChangeService(),
             new AgentRunAuditService(auditLogRepository));
         var toolCatalog = new AgentToolCatalog(toolRegistry.All);
@@ -69,20 +69,21 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
     }
 
-    private static void LoadLocalPlugins(AgentToolRegistry toolRegistry, string pluginsDirectory)
+    private static PluginToolProvider LoadLocalPlugins(AgentToolRegistry toolRegistry, string pluginsDirectory)
     {
         var provider = PluginToolProvider.LoadFromDirectoryAsync(pluginsDirectory)
             .GetAwaiter()
             .GetResult();
         if (provider.Tools.Count == 0)
         {
-            return;
+            return provider;
         }
 
         toolRegistry.RegisterExternalProvider(provider);
         toolRegistry.LoadExternalToolsAsync()
             .GetAwaiter()
             .GetResult();
+        return provider;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)

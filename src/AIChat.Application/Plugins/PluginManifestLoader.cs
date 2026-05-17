@@ -93,7 +93,10 @@ public static class PluginManifestLoader
         manifest.DirectoryPath = manifestDirectory;
         foreach (var tool in manifest.Tools)
         {
-            tool.Id = PluginIds.NormalizeToolId(manifest.Id, tool.Id);
+            if (!string.IsNullOrWhiteSpace(tool.Id))
+            {
+                tool.Id = PluginIds.NormalizeToolId(manifest.Id, tool.Id);
+            }
             tool.Name = string.IsNullOrWhiteSpace(tool.Name) ? tool.Id : tool.Name.Trim();
             tool.Description = string.IsNullOrWhiteSpace(tool.Description)
                 ? $"插件工具：{tool.Name}"
@@ -101,6 +104,28 @@ public static class PluginManifestLoader
             if (string.IsNullOrWhiteSpace(tool.Command.WorkingDirectory))
             {
                 tool.Command.WorkingDirectory = manifestDirectory;
+            }
+        }
+
+        foreach (var skill in manifest.Skills)
+        {
+            if (!string.IsNullOrWhiteSpace(skill.Id))
+            {
+                skill.Id = PluginIds.NormalizeToolId(manifest.Id, skill.Id);
+            }
+            skill.Name = string.IsNullOrWhiteSpace(skill.Name) ? skill.Id : skill.Name.Trim();
+        }
+
+        foreach (var server in manifest.McpServers)
+        {
+            if (!string.IsNullOrWhiteSpace(server.Id))
+            {
+                server.Id = PluginIds.NormalizeToolId(manifest.Id, server.Id);
+            }
+            server.Name = string.IsNullOrWhiteSpace(server.Name) ? server.Id : server.Name.Trim();
+            if (string.IsNullOrWhiteSpace(server.WorkingDirectory))
+            {
+                server.WorkingDirectory = manifestDirectory;
             }
         }
     }

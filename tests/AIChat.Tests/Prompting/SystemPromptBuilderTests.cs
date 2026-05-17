@@ -1,4 +1,5 @@
 using AIChat.Abstractions.Configuration;
+using AIChat.Application.Plugins;
 using AIChat.Application.Prompting;
 
 namespace AIChat.Tests.Prompting;
@@ -91,5 +92,27 @@ public sealed class SystemPromptBuilderTests
         });
 
         Assert.DoesNotContain("DeepSeek 模型提示", prompt);
+    }
+
+    [Fact]
+    public void Build_IncludesPluginSkills()
+    {
+        var prompt = new SystemPromptBuilder(
+            [
+                new PluginSkill(
+                    "dotnet_tools",
+                    "dotnet_tools_helper",
+                    "Dotnet Helper",
+                    "Use for .NET work.",
+                    "Prefer targeted dotnet test commands.",
+                    @"C:\plugins\dotnet\SKILL.md")
+            ]).Build(new SystemPromptContext
+            {
+                EnabledToolIds = ["read_file"]
+            });
+
+        Assert.Contains("已启用插件 Skill", prompt);
+        Assert.Contains("Dotnet Helper", prompt);
+        Assert.Contains("Prefer targeted dotnet test commands.", prompt);
     }
 }

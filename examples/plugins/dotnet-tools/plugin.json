@@ -4,6 +4,24 @@
   "version": "0.1.0",
   "enabled": true,
   "description": "Read-only helpers for .NET projects.",
+  "skills": [
+    {
+      "id": "dotnet_project_helper",
+      "name": "Dotnet Project Helper",
+      "description": "Guidance for inspecting and validating .NET projects.",
+      "path": "SKILL.md"
+    }
+  ],
+  "mcpServers": [
+    {
+      "id": "example_stdio_server",
+      "name": "Example stdio MCP Server",
+      "transport": "stdio",
+      "command": "dotnet",
+      "arguments": ["--info"],
+      "enabled": false
+    }
+  ],
   "tools": [
     {
       "id": "sdk_version",

@@ -194,6 +194,50 @@ public sealed class PluginToolProviderTests
         }
     }
 
+    [Fact]
+    public async Task LoadFromDirectoryAsync_LoadsSkillsAndMcpServerDeclarations()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var pluginDirectory = Path.Combine(root, "local");
+            Directory.CreateDirectory(pluginDirectory);
+            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "SKILL.md"), "# Local Skill\nUse local workflow.");
+            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), """
+            {
+              "id": "local",
+              "name": "Local",
+              "skills": [
+                {
+                  "id": "workflow",
+                  "name": "Workflow",
+                  "path": "SKILL.md"
+                }
+              ],
+              "mcpServers": [
+                {
+                  "id": "stdio_server",
+                  "transport": "stdio",
+                  "command": "dotnet",
+                  "arguments": ["--info"]
+                }
+              ]
+            }
+            """);
+
+            var provider = await PluginToolProvider.LoadFromDirectoryAsync(root);
+
+            var skill = Assert.Single(provider.Skills);
+            Assert.Equal("local_workflow", skill.Id);
+            Assert.Contains("Use local workflow.", skill.Content);
+            Assert.Equal("local_stdio_server", Assert.Single(provider.McpServers).Id);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static async Task WritePluginAsync(string root, string content)
     {
         var pluginDirectory = Path.Combine(root, "local");

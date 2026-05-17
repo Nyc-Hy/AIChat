@@ -2,7 +2,11 @@
 
 AIChat 支持本地插件系统。插件通过 `plugin.json` 声明工具，应用启动时会从 `%APPDATA%\AIChat\plugins` 发现并加载启用的插件工具。
 
-当前版本支持 **命令型插件工具**：插件声明一个可执行文件和参数模板，AIChat 将它包装成标准 `IAgentTool`。插件工具仍会进入正常工具权限、审批、审计和结果摘要流程。
+当前版本支持三类插件能力：
+
+- **命令型工具**：插件声明一个可执行文件和参数模板，AIChat 将它包装成标准 `IAgentTool`。插件工具仍会进入正常工具权限、审批、审计和结果摘要流程。
+- **Skill**：插件声明 `SKILL.md`，AIChat 会把 Skill 内容注入 Agent system prompt，作为任务工作流建议。
+- **MCP server 配置**：插件可以声明 `mcpServers`，当前会进行配置校验和加载诊断；真实 MCP 协议客户端会在后续版本接入。
 
 ## 插件目录
 
@@ -26,6 +30,24 @@ AIChat 支持本地插件系统。插件通过 `plugin.json` 声明工具，应�
   "version": "0.1.0",
   "enabled": true,
   "description": "Local dotnet helper tools.",
+  "skills": [
+    {
+      "id": "dotnet_project_helper",
+      "name": "Dotnet Project Helper",
+      "description": "Guidance for inspecting and validating .NET projects.",
+      "path": "SKILL.md"
+    }
+  ],
+  "mcpServers": [
+    {
+      "id": "example_stdio_server",
+      "name": "Example stdio MCP Server",
+      "transport": "stdio",
+      "command": "dotnet",
+      "arguments": ["--info"],
+      "enabled": false
+    }
+  ],
   "tools": [
     {
       "id": "dotnet_version",
@@ -50,6 +72,57 @@ AIChat 支持本地插件系统。插件通过 `plugin.json` 声明工具，应�
 ```
 
 > 注意：`parametersJson` 在文件中可以写成 JSON 对象或转义后的 JSON 字符串；建议保持简单对象结构。
+
+## Skill
+
+插件可以通过 `skills` 声明一个或多个 Skill：
+
+```json
+{
+  "skills": [
+    {
+      "id": "review_helper",
+      "name": "Review Helper",
+      "description": "Review workflow guidance.",
+      "path": "SKILL.md",
+      "enabled": true
+    }
+  ]
+}
+```
+
+规则：
+
+- `path` 必须指向插件目录内的 Markdown 文件。
+- Skill 内容会注入 Agent system prompt，帮助模型选择工作流。
+- Skill 不是工具，不会直接执行代码。
+- Skill 与用户要求或实际项目文件冲突时，以用户要求和实际文件为准。
+
+## MCP server 配置
+
+插件可以声明 MCP server：
+
+```json
+{
+  "mcpServers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem MCP",
+      "transport": "stdio",
+      "command": "npx",
+      "arguments": ["-y", "@modelcontextprotocol/server-filesystem", "{project_path}"],
+      "enabled": false
+    }
+  ]
+}
+```
+
+当前状态：
+
+- AIChat 会校验 `mcpServers` 配置并保留诊断信息。
+- 当前只接受 `stdio` 声明。
+- 当前版本不会自动启动 MCP server，也不会把 MCP tools 暴露给模型。
+- 后续接入 MCP client 后，MCP tools 仍必须走统一工具权限、审批和审计链路。
 
 ## 参数模板
 
@@ -92,6 +165,8 @@ AIChat 支持本地插件系统。插件通过 `plugin.json` 声明工具，应�
 - 同一插件内工具 id 不能重复。
 - `command.executable` 必填。
 - `parametersJson` 必须是 JSON object。
+- Skill 文件必须位于插件目录内。
+- MCP server 当前只支持 `stdio` 声明，且必须提供 `command`。
 - 未知 `risk` 会按 `shell` 处理。
 - 坏 JSON 或校验失败的插件不会阻止应用启动，只会跳过该插件。
 

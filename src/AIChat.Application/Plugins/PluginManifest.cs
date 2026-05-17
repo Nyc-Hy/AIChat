@@ -22,6 +22,12 @@ public sealed class PluginManifest
     [JsonPropertyName("tools")]
     public List<PluginToolManifest> Tools { get; set; } = [];
 
+    [JsonPropertyName("skills")]
+    public List<PluginSkillManifest> Skills { get; set; } = [];
+
+    [JsonPropertyName("mcpServers")]
+    public List<PluginMcpServerManifest> McpServers { get; set; } = [];
+
     [JsonIgnore]
     public string DirectoryPath { get; set; } = "";
 }
