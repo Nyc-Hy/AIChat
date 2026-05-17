@@ -40,6 +40,8 @@ public sealed class AgentRun
     public bool CanClaimModified { get; set; }
     public string ExecutionPolicySummary { get; set; } = "";
     public string FinalStatusReason { get; set; } = "";
+    public AgentRunOutcomeKind OutcomeKind { get; set; } = AgentRunOutcomeKind.Unknown;
+    public AgentRunTelemetry Telemetry { get; set; } = new();
     public int QualityScore { get; set; }
     public string QualitySummary { get; set; } = "";
     public string StrategySuggestion { get; set; } = "";

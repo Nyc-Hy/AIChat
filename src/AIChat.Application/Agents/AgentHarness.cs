@@ -369,6 +369,7 @@ public sealed class AgentHarness
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.Cancelled);
                     CompleteQualityAssessment(run, AgentRunStatus.Cancelled);
                     CompleteRecoverySuggestion(run, executionPolicy, AgentRunStatus.Cancelled);
+                    CompleteTelemetry(run);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.ContentDelta,
@@ -399,6 +400,7 @@ public sealed class AgentHarness
                     run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                     CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
                     CompleteRecoverySuggestion(run, executionPolicy);
+                    CompleteTelemetry(run);
                     var budgetMessage = CreateBudgetPausedUserMessage(run);
                     yield return new AgentHarnessEvent
                     {
@@ -443,6 +445,7 @@ public sealed class AgentHarness
                             run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
                             CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
                             CompleteRecoverySuggestion(run, executionPolicy);
+                            CompleteTelemetry(run);
                             var budgetMessage = CreateBudgetPausedUserMessage(run);
                             yield return new AgentHarnessEvent
                             {
@@ -473,6 +476,7 @@ public sealed class AgentHarness
                     run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
                     CompleteQualityAssessment(run, finalStatus);
                     CompleteRecoverySuggestion(run, executionPolicy);
+                    CompleteTelemetry(run);
                     var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
                     var finalAppendix = CreateFinalContentAppendix(run, finalStatus);
@@ -508,6 +512,9 @@ public sealed class AgentHarness
             }
         }
 
+        run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.Completed);
+        CompleteQualityAssessment(run, AgentRunStatus.Completed);
+        CompleteTelemetry(run);
         yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
     }
 
@@ -713,6 +720,12 @@ public sealed class AgentHarness
         run.QualitySummary = evaluation.Summary;
         run.StrategySuggestion = evaluation.StrategySuggestion;
         run.Status = originalStatus;
+    }
+
+    private static void CompleteTelemetry(AgentRun run)
+    {
+        run.Telemetry = AgentRunTelemetryBuilder.Build(run);
+        run.OutcomeKind = AgentRunTelemetryBuilder.ClassifyOutcome(run);
     }
 
     private static void CompleteRecoverySuggestion(
@@ -1261,7 +1274,8 @@ public sealed class AgentHarness
             Metadata =
             {
                 ["contentLength"] = toolResult.Content.Length.ToString(),
-                ["modelContentLength"] = toolResult.ContentForModel.Length.ToString()
+                ["modelContentLength"] = toolResult.ContentForModel.Length.ToString(),
+                ["wasSummarized"] = "true"
             }
         });
     }
