@@ -110,7 +110,7 @@ AIChat 支持本地插件系统。插件通过 `plugin.json` 声明工具，应�
       "name": "Filesystem MCP",
       "transport": "stdio",
       "command": "npx",
-      "arguments": ["-y", "@modelcontextprotocol/server-filesystem", "{project_path}"],
+      "arguments": ["-y", "@modelcontextprotocol/server-everything"],
       "enabled": false
     }
   ]
@@ -121,8 +121,9 @@ AIChat 支持本地插件系统。插件通过 `plugin.json` 声明工具，应�
 
 - AIChat 会校验 `mcpServers` 配置并保留诊断信息。
 - 当前只接受 `stdio` 声明。
-- 当前版本不会自动启动 MCP server，也不会把 MCP tools 暴露给模型。
-- 后续接入 MCP client 后，MCP tools 仍必须走统一工具权限、审批和审计链路。
+- 启用的 MCP server 会在启动时通过 stdio 进行 `initialize` 和 `tools/list`，发现到的 MCP tools 会包装成 AIChat 工具。
+- MCP tool 调用通过 `tools/call` 执行，并继续走统一工具权限、审批、审计和结果摘要链路。
+- 当前 MCP server 配置在应用启动时加载，不能依赖当前项目路径；需要项目路径的 MCP server 会在后续项目级插件设置中支持。
 
 ## 参数模板
 

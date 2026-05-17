@@ -24,4 +24,10 @@ public sealed class PluginMcpServerManifest
 
     [JsonPropertyName("enabled")]
     public bool Enabled { get; set; } = true;
+
+    [JsonPropertyName("risk")]
+    public string Risk { get; set; } = "shell";
+
+    [JsonPropertyName("timeoutSeconds")]
+    public int TimeoutSeconds { get; set; } = 30;
 }
