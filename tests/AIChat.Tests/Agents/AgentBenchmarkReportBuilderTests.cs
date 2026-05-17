@@ -6,6 +6,28 @@ namespace AIChat.Tests.Agents;
 public sealed class AgentBenchmarkReportBuilderTests
 {
     [Fact]
+    public void PromptBuilder_IncludesBenchmarkBudgetAndVerificationRequirements()
+    {
+        var task = new AgentBenchmarkTask(
+            "small-bugfix",
+            "小型缺陷修复",
+            "bugfix",
+            "修复一个局部 bug 并验证",
+            RequiresMutation: true,
+            RequiresVerification: true,
+            MaxToolCalls: 12,
+            MaxEstimatedPromptTokens: 8000);
+
+        var prompt = AgentBenchmarkPromptBuilder.Build(task, "AIChat");
+
+        Assert.Contains("小型缺陷修复", prompt);
+        Assert.Contains("允许做满足任务所需的最小代码或文档修改", prompt);
+        Assert.Contains("必须运行项目验证命令或最小相关测试", prompt);
+        Assert.Contains("不超过 12 次", prompt);
+        Assert.Contains("8000", prompt);
+    }
+
+    [Fact]
     public void Match_ChoosesPluginBenchmarkForPluginRuns()
     {
         var run = new AgentRun

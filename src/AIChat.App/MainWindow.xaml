@@ -776,6 +776,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
                             <ComboBox ItemsSource="{Binding ConfiguredProviders}"
@@ -794,7 +795,24 @@
                                       Padding="8,0"
                                       ToolTip="选择模型" />
                         </StackPanel>
-                        <Button Grid.Column="1"
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    Margin="12,0,8,0">
+                            <ComboBox ItemsSource="{Binding BenchmarkTaskOptions}"
+                                      SelectedValue="{Binding SelectedBenchmarkTaskId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="Id"
+                                      DisplayMemberPath="Name"
+                                      Width="150"
+                                      Padding="8,0"
+                                      ToolTip="选择 Benchmark 任务" />
+                            <Button Command="{Binding RunBenchmarkCommand}"
+                                    Content="运行 Benchmark"
+                                    Width="116"
+                                    Height="34"
+                                    Margin="6,0,0,0"
+                                    Style="{StaticResource SubtleButtonStyle}" />
+                        </StackPanel>
+                        <Button Grid.Column="2"
                                 Command="{Binding OpenAgentRunHistoryCommand}"
                                 Content="运行历史"
                                 Width="100"

@@ -7,6 +7,7 @@ using AIChat.Abstractions.Context;
 using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.Application.Agents;
+using AIChat.Application.Agents.Benchmark;
 using AIChat.Application.Audit;
 using AIChat.Application.Context;
 using AIChat.Application.Memory;
@@ -82,6 +83,7 @@ public sealed partial class MainViewModel : ObservableObject
     private LlmCallDetailViewModel? _selectedCallDetail;
     private AgentRunHistoryItemViewModel? _selectedAgentRunHistoryItem;
     private AgentRunViewModel? _selectedAgentRunDetails;
+    private string _selectedBenchmarkTaskId = AgentBenchmarkSuite.DefaultTasks[0].Id;
     private int _agentRunHistoryTotalCount;
     private string _projectMemorySearchText = "";
     private string _projectMemoryFilterId = "all";
@@ -138,6 +140,8 @@ public sealed partial class MainViewModel : ObservableObject
     public ObservableCollection<InputArtifactViewModel> CurrentInputArtifacts { get; } = [];
     public ObservableCollection<ProjectVerificationCommandViewModel> ProjectVerificationCommands { get; } = [];
     public ObservableCollection<ProjectMemoryViewModel> ProjectMemories { get; } = [];
+    public IReadOnlyList<AgentBenchmarkTaskOptionViewModel> BenchmarkTaskOptions { get; } =
+        AgentBenchmarkSuite.DefaultTasks.Select(task => new AgentBenchmarkTaskOptionViewModel(task)).ToList();
     public IReadOnlyList<SelectionOptionViewModel> AgentRunHistoryFilterOptions => AgentRunHistoryFilter.Options;
     public IReadOnlyList<SelectionOptionViewModel> ProjectMemoryFilterOptions { get; } =
     [
@@ -176,6 +180,7 @@ public sealed partial class MainViewModel : ObservableObject
     public RelayCommand OpenCallDetailsCommand { get; private set; } = null!;
     public RelayCommand CloseCallDetailsCommand { get; private set; } = null!;
     public RelayCommand OpenAgentRunHistoryCommand { get; private set; } = null!;
+    public RelayCommand RunBenchmarkCommand { get; private set; } = null!;
     public RelayCommand CloseAgentRunHistoryCommand { get; private set; } = null!;
     public RelayCommand SelectAgentRunHistoryItemCommand { get; private set; } = null!;
     public RelayCommand RetryAgentRunCommand { get; private set; } = null!;
@@ -296,6 +301,14 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    public string SelectedBenchmarkTaskId
+    {
+        get => _selectedBenchmarkTaskId;
+        set => SetProperty(ref _selectedBenchmarkTaskId, string.IsNullOrWhiteSpace(value)
+            ? AgentBenchmarkSuite.DefaultTasks[0].Id
+            : value);
+    }
+
     public bool IsSending
     {
         get => _isSending;
@@ -312,6 +325,7 @@ public sealed partial class MainViewModel : ObservableObject
                 RetrySelectedAgentRunCommand.RaiseCanExecuteChanged();
                 ContinueAgentRunCommand.RaiseCanExecuteChanged();
                 ContinueSelectedAgentRunCommand.RaiseCanExecuteChanged();
+                RunBenchmarkCommand.RaiseCanExecuteChanged();
             }
         }
     }
