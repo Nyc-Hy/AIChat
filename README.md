@@ -105,6 +105,7 @@ tests/
 - [架构说明](docs/ARCHITECTURE.md)
 - [Agent Harness](docs/AGENT_HARNESS.md)
 - [工具安全模型](docs/TOOL_SECURITY.md)
+- [插件系统](docs/PLUGIN_SYSTEM.md)
 - [GitHub 工作流](docs/GITHUB_WORKFLOW.md)
 - [A2A Adapter 设计](docs/A2A_ADAPTER_DESIGN.md)
 - [开发路线图](docs/REMAINING_DEVELOPMENT_PLAN.md)
