@@ -15,12 +15,21 @@ public static class PluginManifestLoader
         string pluginsDirectory,
         CancellationToken cancellationToken = default)
     {
+        var result = await LoadDirectoryWithDiagnosticsAsync(pluginsDirectory, cancellationToken);
+        return result.Manifests;
+    }
+
+    public static async Task<PluginLoadResult> LoadDirectoryWithDiagnosticsAsync(
+        string pluginsDirectory,
+        CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(pluginsDirectory) || !Directory.Exists(pluginsDirectory))
         {
-            return [];
+            return new PluginLoadResult([], []);
         }
 
         var manifests = new List<PluginManifest>();
+        var diagnostics = new List<PluginDiagnostic>();
         foreach (var manifestPath in Directory.EnumerateFiles(pluginsDirectory, "plugin.json", SearchOption.AllDirectories))
         {
             PluginManifest? manifest;
@@ -28,19 +37,38 @@ public static class PluginManifestLoader
             {
                 manifest = await LoadFileAsync(manifestPath, cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // A broken local plugin should not prevent the application from starting.
+                diagnostics.Add(new PluginDiagnostic(
+                    PluginDiagnosticSeverity.Error,
+                    $"插件 manifest 读取失败：{ex.Message}",
+                    ManifestPath: manifestPath));
                 continue;
             }
 
-            if (manifest is not null && manifest.Enabled)
+            if (manifest is null)
+            {
+                diagnostics.Add(new PluginDiagnostic(
+                    PluginDiagnosticSeverity.Error,
+                    "插件 manifest 内容为空。",
+                    ManifestPath: manifestPath));
+                continue;
+            }
+
+            var manifestDiagnostics = PluginManifestValidator.Validate(manifest, manifestPath);
+            diagnostics.AddRange(manifestDiagnostics);
+            if (manifestDiagnostics.Any(diagnostic => diagnostic.Severity == PluginDiagnosticSeverity.Error))
+            {
+                continue;
+            }
+
+            if (manifest.Enabled)
             {
                 manifests.Add(manifest);
             }
         }
 
-        return manifests;
+        return new PluginLoadResult(manifests, diagnostics);
     }
 
     public static async Task<PluginManifest?> LoadFileAsync(
@@ -62,6 +90,7 @@ public static class PluginManifestLoader
     {
         manifest.Id = PluginIds.Normalize(manifest.Id);
         manifest.Name = string.IsNullOrWhiteSpace(manifest.Name) ? manifest.Id : manifest.Name.Trim();
+        manifest.DirectoryPath = manifestDirectory;
         foreach (var tool in manifest.Tools)
         {
             tool.Id = PluginIds.NormalizeToolId(manifest.Id, tool.Id);

@@ -1,0 +1,45 @@
+{
+  "id": "dotnet_tools",
+  "name": "Dotnet Tools",
+  "version": "0.1.0",
+  "enabled": true,
+  "description": "Read-only helpers for .NET projects.",
+  "tools": [
+    {
+      "id": "sdk_version",
+      "description": "Read the installed .NET SDK version.",
+      "risk": "read_only",
+      "category": "插件",
+      "groupLabel": "Dotnet 插件",
+      "parametersJson": {
+        "type": "object",
+        "properties": {}
+      },
+      "command": {
+        "executable": "dotnet",
+        "arguments": ["--version"],
+        "workingDirectory": "{project_path}",
+        "timeoutSeconds": 30,
+        "maxOutputChars": 4000
+      }
+    },
+    {
+      "id": "list_sdks",
+      "description": "List installed .NET SDKs.",
+      "risk": "read_only",
+      "category": "插件",
+      "groupLabel": "Dotnet 插件",
+      "parametersJson": {
+        "type": "object",
+        "properties": {}
+      },
+      "command": {
+        "executable": "dotnet",
+        "arguments": ["--list-sdks"],
+        "workingDirectory": "{project_path}",
+        "timeoutSeconds": 30,
+        "maxOutputChars": 8000
+      }
+    }
+  ]
+}

@@ -21,4 +21,7 @@ public sealed class PluginManifest
 
     [JsonPropertyName("tools")]
     public List<PluginToolManifest> Tools { get; set; } = [];
+
+    [JsonIgnore]
+    public string DirectoryPath { get; set; } = "";
 }

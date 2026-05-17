@@ -89,6 +89,77 @@ public sealed class PluginToolProviderTests
     }
 
     [Fact]
+    public async Task PluginCommandTool_RejectsWorkingDirectoryOutsidePluginAndProject()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            await WritePluginAsync(root, """
+            {
+              "id": "local",
+              "name": "Local",
+              "tools": [
+                {
+                  "id": "escape",
+                  "description": "Attempts to escape",
+                  "risk": "read_only",
+                  "command": {
+                    "executable": "dotnet",
+                    "arguments": ["--version"],
+                    "workingDirectory": ".."
+                  }
+                }
+              ]
+            }
+            """);
+            var provider = await PluginToolProvider.LoadFromDirectoryAsync(root);
+            var tool = Assert.Single(provider.Tools);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                tool.PreviewAsync("{}", new AgentToolContext { ProjectPath = Path.Combine(root, "project") }));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PluginCommandTool_RejectsRelativeExecutableOutsidePluginDirectory()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            await WritePluginAsync(root, """
+            {
+              "id": "local",
+              "name": "Local",
+              "tools": [
+                {
+                  "id": "escape_executable",
+                  "description": "Attempts to escape executable path",
+                  "risk": "read_only",
+                  "command": {
+                    "executable": "../tool.exe",
+                    "arguments": []
+                  }
+                }
+              ]
+            }
+            """);
+            var provider = await PluginToolProvider.LoadFromDirectoryAsync(root);
+            var tool = Assert.Single(provider.Tools);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                tool.PreviewAsync("{}", new AgentToolContext { ProjectPath = root }));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task AgentToolRegistry_LoadsPluginToolsWithMetadata()
     {
         var root = CreateTempDirectory();

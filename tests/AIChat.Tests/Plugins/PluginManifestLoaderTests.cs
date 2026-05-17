@@ -64,6 +64,82 @@ public sealed class PluginManifestLoaderTests
         }
     }
 
+    [Fact]
+    public async Task LoadDirectoryWithDiagnosticsAsync_ReportsInvalidManifestAndSkipsIt()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var pluginDirectory = Path.Combine(root, "invalid");
+            Directory.CreateDirectory(pluginDirectory);
+            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), """
+            {
+              "id": "invalid",
+              "tools": [
+                {
+                  "id": "broken",
+                  "parametersJson": [],
+                  "command": {}
+                }
+              ]
+            }
+            """);
+
+            var result = await PluginManifestLoader.LoadDirectoryWithDiagnosticsAsync(root);
+
+            Assert.Empty(result.Manifests);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == PluginDiagnosticSeverity.Error &&
+                diagnostic.Message.Contains("command.executable", StringComparison.Ordinal));
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == PluginDiagnosticSeverity.Error &&
+                diagnostic.Message.Contains("parametersJson", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadDirectoryWithDiagnosticsAsync_SkipsDuplicateToolIds()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var pluginDirectory = Path.Combine(root, "duplicate");
+            Directory.CreateDirectory(pluginDirectory);
+            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), """
+            {
+              "id": "duplicate",
+              "tools": [
+                {
+                  "id": "same",
+                  "description": "first",
+                  "command": { "executable": "dotnet", "arguments": ["--version"] }
+                },
+                {
+                  "id": "same",
+                  "description": "second",
+                  "command": { "executable": "dotnet", "arguments": ["--version"] }
+                }
+              ]
+            }
+            """);
+
+            var result = await PluginManifestLoader.LoadDirectoryWithDiagnosticsAsync(root);
+
+            Assert.Empty(result.Manifests);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Severity == PluginDiagnosticSeverity.Error &&
+                diagnostic.Message.Contains("重复", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "AIChat-plugin-tests-" + Guid.NewGuid().ToString("N"));
