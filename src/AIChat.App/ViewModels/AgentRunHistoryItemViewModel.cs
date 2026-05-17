@@ -13,6 +13,7 @@ public sealed class AgentRunHistoryItemViewModel : ObservableObject
     public string PhaseText => Run.PhaseText;
     public string StartedText => Run.StartedText;
     public string Summary => Run.Summary;
+    public string BenchmarkSummary => Run.BenchmarkSummary;
     public string AcceptanceStatusText => Run.AcceptanceStatusText;
     public string AcceptanceNote => Run.AcceptanceNote;
     public bool HasAcceptanceNote => Run.HasAcceptanceNote;

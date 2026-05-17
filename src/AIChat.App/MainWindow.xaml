@@ -1406,6 +1406,10 @@
                                                Margin="0,6,0,0"
                                                Foreground="#536172"
                                                TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding AgentRunHistoryBenchmarkSummary}"
+                                               Margin="0,6,0,0"
+                                               Foreground="#536172"
+                                               TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding AgentRunHistoryInsight}"
                                                Margin="0,6,0,0"
                                                Foreground="#596473"
@@ -1474,6 +1478,11 @@
                                                                    Margin="0,4,0,0"
                                                                    FontSize="11"
                                                                    Foreground="#6B7280"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Text="{Binding BenchmarkSummary}"
+                                                                   Margin="0,4,0,0"
+                                                                   FontSize="11"
+                                                                   Foreground="#536172"
                                                                    TextTrimming="CharacterEllipsis" />
                                                     </StackPanel>
                                                     <Button Grid.Column="1"
@@ -1682,6 +1691,69 @@
                                         <TextBox Text="{Binding MetricsSummary, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
                                                  Margin="0,5,0,0" />
+                                        <TextBox Text="{Binding TelemetrySummary, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,5,0,0" />
+                                        <TextBox Text="{Binding OutcomeReason, StringFormat=原因：{0}, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <TextBox Text="{Binding BenchmarkSummary, Mode=OneWay}"
+                                                 Style="{StaticResource SelectableTextBoxStyle}"
+                                                 Margin="0,3,0,0" />
+                                        <ItemsControl ItemsSource="{Binding BenchmarkResults}"
+                                                      Margin="0,8,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,0,0,7"
+                                                            Padding="9"
+                                                            CornerRadius="6"
+                                                            Background="#FFFFFF"
+                                                            BorderBrush="#E2E8F0"
+                                                            BorderThickness="1">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel>
+                                                                <TextBlock Text="{Binding Name}"
+                                                                           Foreground="#1F2937"
+                                                                           FontWeight="SemiBold"
+                                                                           TextWrapping="Wrap" />
+                                                                <TextBlock Text="{Binding Summary}"
+                                                                           Margin="0,3,0,0"
+                                                                           Foreground="#667386"
+                                                                           FontSize="11"
+                                                                           TextWrapping="Wrap" />
+                                                                <TextBlock Text="{Binding OutcomeText, StringFormat=结果：{0}}"
+                                                                           Margin="0,3,0,0"
+                                                                           Foreground="#667386"
+                                                                           FontSize="11" />
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="1"
+                                                                        Margin="12,0,0,0"
+                                                                        VerticalAlignment="Top">
+                                                                <TextBlock Text="{Binding StatusText}"
+                                                                           Foreground="#3E6F68"
+                                                                           FontWeight="SemiBold"
+                                                                           FontSize="11"
+                                                                           HorizontalAlignment="Right" />
+                                                                <TextBlock Text="{Binding QualityScoreText}"
+                                                                           Margin="0,3,0,0"
+                                                                           Foreground="#748092"
+                                                                           FontSize="11"
+                                                                           HorizontalAlignment="Right" />
+                                                                <TextBlock Text="{Binding ToolCallText}"
+                                                                           Margin="0,3,0,0"
+                                                                           Foreground="#748092"
+                                                                           FontSize="11"
+                                                                           HorizontalAlignment="Right" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                         <TextBlock Text="质量与策略"
                                                    Margin="0,14,0,0"
                                                    FontWeight="SemiBold"
