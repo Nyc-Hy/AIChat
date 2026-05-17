@@ -8,4 +8,5 @@ public interface IExternalToolProvider
     string Id { get; }
     string Name { get; }
     Task<IReadOnlyList<IAgentTool>> GetToolsAsync(CancellationToken cancellationToken = default);
+    IReadOnlyList<ToolMetadata> GetToolMetadata() => [];
 }

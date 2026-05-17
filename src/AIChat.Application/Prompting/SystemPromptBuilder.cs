@@ -1,12 +1,19 @@
 using System.Text;
 using AIChat.Abstractions.Configuration;
 using AIChat.Application.Context;
+using AIChat.Application.Plugins;
 
 namespace AIChat.Application.Prompting;
 
 public sealed class SystemPromptBuilder
 {
     private readonly ProjectContextPackBuilder _contextPackBuilder = new();
+    private readonly IReadOnlyList<PluginSkill> _pluginSkills;
+
+    public SystemPromptBuilder(IReadOnlyList<PluginSkill>? pluginSkills = null)
+    {
+        _pluginSkills = pluginSkills ?? [];
+    }
 
     public string Build(SystemPromptContext context)
     {
@@ -86,6 +93,7 @@ public sealed class SystemPromptBuilder
         if (context.EnabledToolIds.Count == 0)
         {
             builder.AppendLine("- 无。不能声称已经读取、修改或执行项目操作。");
+            AppendPluginSkills(builder, _pluginSkills);
             AppendInputArtifacts(builder, context.InputArtifactRefs);
             return builder.ToString().Trim();
         }
@@ -109,11 +117,34 @@ public sealed class SystemPromptBuilder
         }
 
         AppendMemorySnippets(builder, context.MemorySnippets);
+        AppendPluginSkills(builder, _pluginSkills);
         AppendInputArtifacts(builder, context.InputArtifactRefs);
 
         AppendProviderSpecificInstructions(builder, context.ProviderId);
 
         return builder.ToString().Trim();
+    }
+
+    private static void AppendPluginSkills(StringBuilder builder, IReadOnlyList<PluginSkill> skills)
+    {
+        if (skills.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("已启用插件 Skill：");
+        builder.AppendLine("- Skill 是插件提供的任务说明和工作流建议；如果与用户要求或项目文件冲突，以用户要求和实际文件为准。");
+        foreach (var skill in skills.Where(item => !string.IsNullOrWhiteSpace(item.Content)).Take(8))
+        {
+            builder.AppendLine($"## {skill.Name} ({skill.Id})");
+            if (!string.IsNullOrWhiteSpace(skill.Description))
+            {
+                builder.AppendLine(skill.Description.Trim());
+            }
+
+            builder.AppendLine(skill.Content.Trim());
+        }
     }
 
     private static string Normalize(string value, string fallback)

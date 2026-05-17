@@ -66,4 +66,25 @@ public sealed class ToolResultSummarizerTests
         Assert.Contains("退出码：1", summarized.ContentForModel);
         Assert.Contains("build line 001", summarized.ContentForModel);
     }
+
+    [Fact]
+    public void Summarize_IncludesFocusedErrorBlocksForLargeOutput()
+    {
+        var content = string.Join('\n',
+            Enumerable.Range(1, 160).Select(i => i == 100
+                ? "AppTests.cs(42): error CS1002: ; expected"
+                : $"line {i:000}"));
+
+        var summarized = ToolResultSummarizer.Summarize(new AgentToolResult
+        {
+            ToolName = "run_test",
+            Content = content,
+            IsError = true
+        }, threshold: 200);
+
+        Assert.True(summarized.WasSummarized);
+        Assert.Contains("关键片段", summarized.ContentForModel);
+        Assert.Contains("error CS1002", summarized.ContentForModel);
+        Assert.Contains("已省略约", summarized.ContentForModel);
+    }
 }

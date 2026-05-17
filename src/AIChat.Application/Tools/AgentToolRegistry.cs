@@ -7,7 +7,7 @@ public sealed class AgentToolRegistry
     private readonly Dictionary<string, IAgentTool> _toolsById;
     private readonly Dictionary<string, ToolMetadata> _metadataById;
     private readonly Lazy<IReadOnlyList<IAgentTool>> _lazyAll;
-    private bool _initialized;
+    private bool _builtinsInitialized;
 
     private AgentToolRegistry(
         IEnumerable<IAgentTool>? tools,
@@ -17,7 +17,7 @@ public sealed class AgentToolRegistry
         _toolsById = new Dictionary<string, IAgentTool>(StringComparer.OrdinalIgnoreCase);
         _metadataById = new Dictionary<string, ToolMetadata>(StringComparer.OrdinalIgnoreCase);
         _lazyAll = lazyAll;
-        _initialized = false;
+        _builtinsInitialized = tools != null;
 
         if (tools != null)
         {
@@ -40,21 +40,33 @@ public sealed class AgentToolRegistry
     {
         return new AgentToolRegistry(
             null,
-            null,
+            CreateDefaultMetadata(),
             new Lazy<IReadOnlyList<IAgentTool>>(CreateDefaultTools));
+    }
+
+    public static async Task<AgentToolRegistry> CreateDefaultWithPluginsAsync(
+        string pluginsDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        var registry = CreateDefault();
+        var provider = await Plugins.PluginToolProvider.LoadFromDirectoryAsync(pluginsDirectory, cancellationToken);
+        if (provider.Tools.Count > 0)
+        {
+            registry.RegisterExternalProvider(provider);
+            await registry.LoadExternalToolsAsync(cancellationToken);
+        }
+
+        return registry;
     }
 
     private void EnsureInitialized()
     {
-        if (_initialized) return;
-        _initialized = true;
+        if (_builtinsInitialized) return;
+        _builtinsInitialized = true;
 
-        if (_toolsById.Count == 0)
+        foreach (var tool in _lazyAll.Value)
         {
-            foreach (var tool in _lazyAll.Value)
-            {
-                _toolsById[tool.Id] = tool;
-            }
+            _toolsById.TryAdd(tool.Id, tool);
         }
     }
 
@@ -153,13 +165,16 @@ public sealed class AgentToolRegistry
 
     public void RegisterExternalProvider(IExternalToolProvider provider)
     {
-        // Tools are fetched lazily; this stores the provider reference for later use.
-        // Call LoadExternalToolsAsync to populate.
         _externalProviders.Add(provider);
+        foreach (var metadata in provider.GetToolMetadata())
+        {
+            _metadataById[metadata.ToolId] = metadata;
+        }
     }
 
     public async Task LoadExternalToolsAsync(CancellationToken cancellationToken = default)
     {
+        EnsureInitialized();
         foreach (var provider in _externalProviders)
         {
             var tools = await provider.GetToolsAsync(cancellationToken);

@@ -8,6 +8,21 @@ public static class ToolResultSummarizer
     public const int DefaultThreshold = 4000;
     private const int HeadLineCount = 40;
     private const int TailLineCount = 20;
+    private const int FocusLineContext = 2;
+    private const int MaxFocusBlocks = 6;
+
+    private static readonly string[] FocusTerms =
+    [
+        "error",
+        "failed",
+        "failure",
+        "exception",
+        "warning",
+        "失败",
+        "错误",
+        "异常",
+        "警告"
+    ];
 
     public static AgentToolResult Summarize(AgentToolResult result, int threshold = DefaultThreshold)
     {
@@ -40,7 +55,7 @@ public static class ToolResultSummarizer
         var lines = extracted.Split('\n');
         var builder = new StringBuilder();
         builder.AppendLine($"工具 {result.ToolName} 返回了较大的输出，原文已保存为运行产物。");
-        builder.AppendLine($"原始长度：{result.Content.Length} 字符；摘要来源：开头 {Math.Min(HeadLineCount, lines.Length)} 行 + 结尾 {Math.Min(TailLineCount, Math.Max(0, lines.Length - HeadLineCount))} 行。");
+        builder.AppendLine($"原始长度：{result.Content.Length} 字符，{lines.Length} 行；摘要来源：开头 {Math.Min(HeadLineCount, lines.Length)} 行 + 关键错误片段 + 结尾 {Math.Min(TailLineCount, Math.Max(0, lines.Length - HeadLineCount))} 行。");
 
         if (TryExtractShellMetadata(normalized, out var metadata))
         {
@@ -51,6 +66,18 @@ public static class ToolResultSummarizer
         builder.AppendLine("开头：");
         AppendLines(builder, lines.Take(HeadLineCount));
 
+        var focusBlocks = ExtractFocusBlocks(lines);
+        if (focusBlocks.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("关键片段：");
+            foreach (var block in focusBlocks)
+            {
+                builder.AppendLine($"-- lines {block.StartLine}-{block.EndLine} --");
+                AppendLines(builder, block.Lines);
+            }
+        }
+
         if (lines.Length > HeadLineCount)
         {
             builder.AppendLine();
@@ -58,7 +85,53 @@ public static class ToolResultSummarizer
             AppendLines(builder, lines.Skip(Math.Max(HeadLineCount, lines.Length - TailLineCount)));
         }
 
+        var includedLineCount = Math.Min(lines.Length, HeadLineCount) +
+                                focusBlocks.Sum(block => block.Lines.Count) +
+                                (lines.Length > HeadLineCount ? Math.Min(TailLineCount, lines.Length - HeadLineCount) : 0);
+        var omittedLineCount = Math.Max(0, lines.Length - includedLineCount);
+        if (omittedLineCount > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine($"已省略约 {omittedLineCount} 行重复或中间输出。");
+        }
+
         return builder.ToString().TrimEnd();
+    }
+
+    private static IReadOnlyList<FocusBlock> ExtractFocusBlocks(string[] lines)
+    {
+        var blocks = new List<FocusBlock>();
+        var occupied = new HashSet<int>();
+        for (var i = 0; i < lines.Length && blocks.Count < MaxFocusBlocks; i++)
+        {
+            if (!ContainsFocusTerm(lines[i]))
+            {
+                continue;
+            }
+
+            var start = Math.Max(0, i - FocusLineContext);
+            var end = Math.Min(lines.Length - 1, i + FocusLineContext);
+            if (Enumerable.Range(start, end - start + 1).All(occupied.Contains))
+            {
+                continue;
+            }
+
+            var blockLines = new List<string>();
+            for (var lineIndex = start; lineIndex <= end; lineIndex++)
+            {
+                occupied.Add(lineIndex);
+                blockLines.Add(lines[lineIndex]);
+            }
+
+            blocks.Add(new FocusBlock(start + 1, end + 1, blockLines));
+        }
+
+        return blocks;
+    }
+
+    private static bool ContainsFocusTerm(string line)
+    {
+        return FocusTerms.Any(term => line.Contains(term, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void AppendLines(StringBuilder builder, IEnumerable<string> lines)
@@ -141,4 +214,6 @@ public static class ToolResultSummarizer
             parts.Add($"{label}:\n{value.GetString()}");
         }
     }
+
+    private sealed record FocusBlock(int StartLine, int EndLine, IReadOnlyList<string> Lines);
 }
