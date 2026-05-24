@@ -17,7 +17,7 @@ public sealed class AgentRunContext
     public bool ProjectAgentsAvailable { get; init; }
     public int ProjectVerificationCommandCount { get; init; }
     public bool AutoVerifyAgentRuns { get; init; }
-    public int MaxAutoFixRounds { get; init; } = 3;
+    public int MaxAutoFixRounds { get; init; }
     public bool AdaptiveStrategiesEnabled { get; init; } = true;
     public bool AdaptiveBudgetAndExplorerEnabled { get; init; } = true;
     public bool AdaptiveRecoveryEnabled { get; init; } = true;

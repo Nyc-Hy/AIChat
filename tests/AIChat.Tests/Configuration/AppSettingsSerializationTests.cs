@@ -11,6 +11,7 @@ public sealed class AppSettingsSerializationTests
         var settings = new AppSettings
         {
             AgentMaxToolRounds = 7,
+            AgentExecutionMode = AgentExecutionMode.Deep,
             AgentAdaptiveStrategiesEnabled = false,
             AgentAdaptiveBudgetAndExplorerEnabled = false,
             AgentAdaptiveRecoveryEnabled = false,
@@ -22,6 +23,7 @@ public sealed class AppSettingsSerializationTests
 
         Assert.NotNull(roundTripped);
         Assert.Equal(7, roundTripped.AgentMaxToolRounds);
+        Assert.Equal(AgentExecutionMode.Deep, roundTripped.AgentExecutionMode);
         Assert.False(roundTripped.AgentAdaptiveStrategiesEnabled);
         Assert.False(roundTripped.AgentAdaptiveBudgetAndExplorerEnabled);
         Assert.False(roundTripped.AgentAdaptiveRecoveryEnabled);

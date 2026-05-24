@@ -110,7 +110,15 @@ public sealed class JsonAppRepository : IAppRepository
             BaseUrl = "https://token-plan-cn.xiaomimimo.com/v1",
             ApiKey = "",
             Model = "mimo-v2.5-pro",
-            ModelContextLimit = 1_000_000
+            ModelContextLimit = 1_000_000,
+            AgentMaxToolRounds = 16,
+            AgentExecutionMode = AgentExecutionMode.Standard,
+            MaxAutoFixRounds = 0,
+            AutoVerifyAgentRuns = false,
+            AgentAdaptiveStrategiesEnabled = false,
+            AgentAdaptiveBudgetAndExplorerEnabled = false,
+            AgentAdaptiveRecoveryEnabled = false,
+            AgentAdaptiveAutoVerifyEnabled = false
         };
     }
 

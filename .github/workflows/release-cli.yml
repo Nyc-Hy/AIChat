@@ -1,0 +1,93 @@
+name: Release CLI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-cli:
+    name: Publish CLI
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            runtime: osx-arm64
+            artifact: aichat-cli-osx-arm64
+          - os: ubuntu-latest
+            runtime: linux-x64
+            artifact: aichat-cli-linux-x64
+          - os: windows-latest
+            runtime: win-x64
+            artifact: aichat-cli-win-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish
+        run: dotnet publish src/AIChat.Cli/AIChat.Cli.csproj -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/${{ matrix.artifact }}
+
+      - name: Remove debug symbols
+        shell: bash
+        run: find artifacts/${{ matrix.artifact }} -name "*.pdb" -delete
+
+      - name: Package artifact
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "artifacts/${{ matrix.artifact }}/*" -DestinationPath "artifacts/${{ matrix.artifact }}.zip" -Force
+          $hash = Get-FileHash -Algorithm SHA256 "artifacts/${{ matrix.artifact }}.zip"
+          "$($hash.Hash.ToLowerInvariant())  ${{ matrix.artifact }}.zip" | Set-Content -Path "artifacts/${{ matrix.artifact }}.sha256" -Encoding ascii
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            artifacts/${{ matrix.artifact }}.zip
+            artifacts/${{ matrix.artifact }}.sha256
+
+  github-release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish-cli
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          notes_args=(--generate-notes)
+          version="${TAG_NAME#v}"
+          notes_file="docs/RELEASE_NOTES_${version}.md"
+          if [ -f "$notes_file" ]; then
+            notes_args=(--notes-file "$notes_file")
+          fi
+
+          mapfile -t assets < <(find release-artifacts -type f \( -name "*.zip" -o -name "*.sha256" \) | sort)
+          gh release create "$TAG_NAME" \
+            "${assets[@]}" \
+            --title "$TAG_NAME" \
+            "${notes_args[@]}"

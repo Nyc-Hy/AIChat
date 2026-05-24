@@ -6,7 +6,7 @@ public static class AdvancedSettingsService
 {
     public const int MinAgentMaxToolRounds = 1;
     public const int MaxAgentMaxToolRounds = 100;
-    public const int MinAutoFixRounds = 1;
+    public const int MinAutoFixRounds = 0;
     public const int MaxAutoFixRounds = 10;
     public const int MinRetryMaxAttempts = 0;
     public const int MaxRetryMaxAttempts = 10;

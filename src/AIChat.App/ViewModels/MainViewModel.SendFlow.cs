@@ -494,7 +494,6 @@ public sealed partial class MainViewModel
                     break;
                 case AgentHarnessEventType.RunCompleted:
                     await ApplyAgentHarnessUiEventAsync(agentEvent, assistantViewModel, agentUiState, cancellationToken);
-                    await PersistAgentRunMemoriesAsync(agentEvent.Run);
                     var runStatus = agentEvent.Run?.Status;
                     var auditType = runStatus switch
                     {

@@ -28,16 +28,17 @@ public sealed class AppSettings
     // Tool IDs selected in Settings. Only these schemas are sent to the model.
     public List<string> EnabledToolIds { get; set; } = [];
     public Dictionary<string, ToolPermissionMode> ToolPermissionModes { get; set; } = [];
-    public int AgentMaxToolRounds { get; set; } = 50;
+    public int AgentMaxToolRounds { get; set; } = 16;
+    public AgentExecutionMode AgentExecutionMode { get; set; } = AgentExecutionMode.Standard;
     // Maximum output tokens for LLM responses. Providers that support this
     // parameter will use it; others ignore it.
     public int MaxOutputTokens { get; set; } = 4096;
     public bool AutoVerifyAgentRuns { get; set; }
-    public int MaxAutoFixRounds { get; set; } = 3;
-    public bool AgentAdaptiveStrategiesEnabled { get; set; } = true;
-    public bool AgentAdaptiveBudgetAndExplorerEnabled { get; set; } = true;
-    public bool AgentAdaptiveRecoveryEnabled { get; set; } = true;
-    public bool AgentAdaptiveAutoVerifyEnabled { get; set; } = true;
+    public int MaxAutoFixRounds { get; set; }
+    public bool AgentAdaptiveStrategiesEnabled { get; set; }
+    public bool AgentAdaptiveBudgetAndExplorerEnabled { get; set; }
+    public bool AgentAdaptiveRecoveryEnabled { get; set; }
+    public bool AgentAdaptiveAutoVerifyEnabled { get; set; }
     // Multiple configured providers lets the user keep more than one API key or
     // model setup while the rest of the app only reads the active one.
     public List<ConfiguredLlmProvider> ConfiguredProviders { get; set; } = [];

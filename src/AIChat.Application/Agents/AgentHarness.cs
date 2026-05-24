@@ -43,7 +43,7 @@ public sealed class AgentHarness
         _planner = planner;
         _coordinator = coordinator ?? new AgentCoordinator();
         _promptComposer = promptComposer ?? new AgentPromptComposer();
-        _subAgentScheduler = subAgentScheduler ?? new SubAgentScheduler(agentRunner);
+        _subAgentScheduler = subAgentScheduler;
         _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
         _completionEvidenceChecker = completionEvidenceChecker ?? new AgentCompletionEvidenceChecker();

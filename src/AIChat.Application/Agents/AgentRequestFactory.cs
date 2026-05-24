@@ -101,6 +101,10 @@ public sealed class AgentRequestFactory
             : "";
         var requestMessages = GetRequestMessages(request.Conversation, request.AssistantMessageId);
         var goal = requestMessages.LastOrDefault(message => message.Role == ChatRole.User)?.Content ?? "";
+        var modeSettings = AgentExecutionModePolicy.Resolve(request.RuntimeSettings.AgentExecutionMode);
+        var modelProfile = Llm.Routing.ModelProfileCatalog.Resolve(
+            request.EffectiveSettings.ProviderId,
+            request.EffectiveSettings.Model);
         var taskComplexity = _taskClassifier.Classify(goal, new AgentRunContext
         {
             ProjectPath = projectPath,
@@ -135,12 +139,12 @@ public sealed class AgentRequestFactory
                 .Take(12)
                 .ToList(),
             InputArtifacts = selectedInputArtifacts,
-            MaxTokens = taskComplexity switch
+            MaxTokens = Math.Min(modeSettings.ContextTokenBudget, taskComplexity switch
             {
                 AgentTaskComplexity.Simple => 350,
                 AgentTaskComplexity.Standard => 900,
                 _ => 1600
-            },
+            }),
             MaxFileSizeBytes = taskComplexity == AgentTaskComplexity.Simple
                 ? 96 * 1024
                 : 256 * 1024
@@ -167,7 +171,13 @@ public sealed class AgentRequestFactory
                 PinnedContextItems = request.PinnedContextItems,
                 ContextRefs = contextPack.ToPromptRefs(),
                 MemorySnippets = memorySnippets,
-                InputArtifactRefs = inputArtifactRefs
+                InputArtifactRefs = inputArtifactRefs,
+                ExecutionMode = request.RuntimeSettings.AgentExecutionMode.ToString(),
+                ModelProfileName = modelProfile.DisplayName,
+                ModelProfilePromptGuidance = modelProfile.PromptGuidance,
+                ModelProfileToolCallPolicy = modelProfile.ToolCallPolicy,
+                ModelProfileThinkingPolicy = modelProfile.ThinkingPolicy,
+                ModelProfileCacheStrategy = modelProfile.CacheStrategy
             }
         });
         if (SupportsVision(request.EffectiveSettings))

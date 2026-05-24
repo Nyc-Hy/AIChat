@@ -115,6 +115,7 @@ internal static class ProtectedSettingsSerializer
             EnabledToolIds = settings.EnabledToolIds.ToList(),
             ToolPermissionModes = new Dictionary<string, ToolPermissionMode>(settings.ToolPermissionModes, StringComparer.OrdinalIgnoreCase),
             AgentMaxToolRounds = settings.AgentMaxToolRounds,
+            AgentExecutionMode = settings.AgentExecutionMode,
             MaxOutputTokens = settings.MaxOutputTokens,
             AutoVerifyAgentRuns = settings.AutoVerifyAgentRuns,
             MaxAutoFixRounds = settings.MaxAutoFixRounds,

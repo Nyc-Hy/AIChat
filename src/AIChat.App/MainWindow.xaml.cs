@@ -8,11 +8,9 @@ using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using AIChat.App.ViewModels;
 using AIChat.Application.Agents;
-using AIChat.Application.Agents.Planning;
 using AIChat.Application.Audit;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
-using AIChat.Application.Plugins;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
@@ -47,9 +45,8 @@ public partial class MainWindow : Window
             new AnthropicChatProvider()
         ]);
         var contextEstimator = new TokenizerContextEstimator();
-        var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat");
         var toolRegistry = AgentToolRegistry.CreateDefault();
-        var pluginProvider = LoadLocalPlugins(toolRegistry, Path.Combine(appDataPath, "plugins"));
+        var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat");
         var auditLogRepository = new AuditLogRepository(appDataPath);
         _viewModel = new MainViewModel(
             new JsonAppRepository(),
@@ -57,33 +54,16 @@ public partial class MainWindow : Window
             contextEstimator,
             new ConversationContextBuilder(
                 contextEstimator,
-                new SystemPromptBuilder(pluginProvider.Skills)),
+                new SystemPromptBuilder()),
             new WorkspaceChangeService(),
             new AgentRunAuditService(auditLogRepository));
         var toolCatalog = new AgentToolCatalog(toolRegistry.All);
         var agentRunner = new AgentRunner(chatService, toolCatalog);
         _viewModel.ConfigureAgent(
-            new AgentHarness(agentRunner, new AgentPlanner(chatService)),
+            new AgentHarness(agentRunner),
             toolRegistry);
         _viewModel.PropertyChanged += ViewModel_PropertyChanged;
         DataContext = _viewModel;
-    }
-
-    private static PluginToolProvider LoadLocalPlugins(AgentToolRegistry toolRegistry, string pluginsDirectory)
-    {
-        var provider = PluginToolProvider.LoadFromDirectoryAsync(pluginsDirectory)
-            .GetAwaiter()
-            .GetResult();
-        if (provider.Tools.Count == 0)
-        {
-            return provider;
-        }
-
-        toolRegistry.RegisterExternalProvider(provider);
-        toolRegistry.LoadExternalToolsAsync()
-            .GetAwaiter()
-            .GetResult();
-        return provider;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)

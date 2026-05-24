@@ -49,6 +49,7 @@ public sealed class SystemPromptBuilder
         builder.AppendLine("当前项目：");
         builder.AppendLine($"- 名称：{Normalize(context.ProjectName, "AIChat")}");
         builder.AppendLine($"- 路径：{Normalize(context.ProjectPath, "(未设置)")}");
+        builder.AppendLine($"- 执行模式：{Normalize(context.ExecutionMode, "Standard")}");
         if (!string.IsNullOrWhiteSpace(context.ProjectLoadSnapshot))
         {
             builder.AppendLine("- 加载快照：");
@@ -119,6 +120,7 @@ public sealed class SystemPromptBuilder
         AppendMemorySnippets(builder, context.MemorySnippets);
         AppendPluginSkills(builder, _pluginSkills);
         AppendInputArtifacts(builder, context.InputArtifactRefs);
+        AppendModelProfile(builder, context);
 
         AppendProviderSpecificInstructions(builder, context.ProviderId);
 
@@ -192,6 +194,30 @@ public sealed class SystemPromptBuilder
         foreach (var memory in memorySnippets.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.OrdinalIgnoreCase).Take(8))
         {
             builder.AppendLine($"- {memory.Trim()}");
+        }
+    }
+
+    private static void AppendModelProfile(StringBuilder builder, SystemPromptContext context)
+    {
+        if (string.IsNullOrWhiteSpace(context.ModelProfileName))
+        {
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("模型执行策略：");
+        builder.AppendLine($"- Profile：{context.ModelProfileName}");
+        AppendProfileLine(builder, "工具调用", context.ModelProfileToolCallPolicy);
+        AppendProfileLine(builder, "思考策略", context.ModelProfileThinkingPolicy);
+        AppendProfileLine(builder, "缓存策略", context.ModelProfileCacheStrategy);
+        AppendProfileLine(builder, "提示建议", context.ModelProfilePromptGuidance);
+    }
+
+    private static void AppendProfileLine(StringBuilder builder, string title, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            builder.AppendLine($"- {title}：{value.Trim()}");
         }
     }
 

@@ -20,4 +20,10 @@ public sealed class SystemPromptContext
     public IReadOnlyList<string> ContextRefs { get; init; } = [];
     public IReadOnlyList<string> MemorySnippets { get; init; } = [];
     public IReadOnlyList<string> InputArtifactRefs { get; init; } = [];
+    public string ExecutionMode { get; init; } = "Standard";
+    public string ModelProfileName { get; init; } = "";
+    public string ModelProfilePromptGuidance { get; init; } = "";
+    public string ModelProfileToolCallPolicy { get; init; } = "";
+    public string ModelProfileThinkingPolicy { get; init; } = "";
+    public string ModelProfileCacheStrategy { get; init; } = "";
 }

@@ -797,7 +797,8 @@
                         </StackPanel>
                         <StackPanel Grid.Column="1"
                                     Orientation="Horizontal"
-                                    Margin="12,0,8,0">
+                                    Margin="12,0,8,0"
+                                    Visibility="Collapsed">
                             <ComboBox ItemsSource="{Binding BenchmarkTaskOptions}"
                                       SelectedValue="{Binding SelectedBenchmarkTaskId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       SelectedValuePath="Id"
@@ -1427,7 +1428,8 @@
                                     <TextBlock Text="{Binding AgentRunHistoryBenchmarkSummary}"
                                                Margin="0,6,0,0"
                                                Foreground="#536172"
-                                               TextWrapping="Wrap" />
+                                               TextWrapping="Wrap"
+                                               Visibility="Collapsed" />
                                     <TextBlock Text="{Binding AgentRunHistoryInsight}"
                                                Margin="0,6,0,0"
                                                Foreground="#596473"
@@ -1501,7 +1503,8 @@
                                                                    Margin="0,4,0,0"
                                                                    FontSize="11"
                                                                    Foreground="#536172"
-                                                                   TextTrimming="CharacterEllipsis" />
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   Visibility="Collapsed" />
                                                     </StackPanel>
                                                     <Button Grid.Column="1"
                                                             Command="{Binding DataContext.SelectAgentRunHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -1717,9 +1720,11 @@
                                                  Margin="0,3,0,0" />
                                         <TextBox Text="{Binding BenchmarkSummary, Mode=OneWay}"
                                                  Style="{StaticResource SelectableTextBoxStyle}"
-                                                 Margin="0,3,0,0" />
+                                                 Margin="0,3,0,0"
+                                                 Visibility="Collapsed" />
                                         <ItemsControl ItemsSource="{Binding BenchmarkResults}"
-                                                      Margin="0,8,0,0">
+                                                      Margin="0,8,0,0"
+                                                      Visibility="Collapsed">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Border Margin="0,0,0,7"
@@ -2414,7 +2419,7 @@
                                         </StackPanel>
                                     </ScrollViewer>
                                 </TabItem>
-                                <TabItem Header="审计">
+                                <TabItem Header="审计" Visibility="Collapsed">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" PreviewMouseWheel="ScrollViewer_PreviewMouseWheel">
                                         <StackPanel Margin="4">
                                             <TextBlock Text="审计事件"
@@ -3030,7 +3035,8 @@
                                                 Background="#F5F8FA"
                                                 BorderBrush="#E1E8EF"
                                                 BorderThickness="1"
-                                                Margin="0,0,0,14">
+                                                Margin="0,0,0,14"
+                                                Visibility="Collapsed">
                                             <StackPanel>
                                                 <TextBlock Text="可发送给模型选择的工具"
                                                            FontSize="15"
@@ -3104,7 +3110,8 @@
                                                 Background="#FFFFFF"
                                                 BorderBrush="#E2E8F0"
                                                 BorderThickness="1"
-                                                Margin="0,0,0,14">
+                                                Margin="0,0,0,14"
+                                                Visibility="Collapsed">
                                             <StackPanel>
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
@@ -3377,7 +3384,7 @@
                                 </ScrollViewer>
                             </TabItem>
 
-                            <TabItem Header="记忆">
+                            <TabItem Header="记忆" Visibility="Collapsed">
                                 <ScrollViewer Style="{StaticResource ModernScrollViewerStyle}"
                                               VerticalAlignment="Stretch"
                                               VerticalScrollBarVisibility="Auto"
