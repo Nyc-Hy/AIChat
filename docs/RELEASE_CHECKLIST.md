@@ -33,7 +33,8 @@ On Linux x64:
 
 - [ ] Confirm `CHANGELOG.md` has the release summary.
 - [ ] Confirm `docs/RELEASE_NOTES_0.5.0.md` is up to date.
-- [ ] Open the PR using `docs/PR_CLI_0.5.0.md`.
+- [ ] Open the PR using `docs/PR_CLI_0.5.0.md`: <https://github.com/Nyc-Hy/AIChat/pull/new/codex/cli-0.5-release>.
+- [ ] Confirm the PR branch is `codex/cli-0.5-release`.
 - [ ] Push the release branch.
 - [ ] Tag the release as `v0.5.0`.
 - [ ] Confirm the `Release CLI` workflow succeeds.
