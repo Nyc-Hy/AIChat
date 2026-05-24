@@ -93,7 +93,7 @@ Then initialize a project:
 cd /path/to/repo
 aichat init --project .
 aichat context "summarize the project"
-aichat tui --project .
+aichat
 ```
 
 ## Verify Checksums

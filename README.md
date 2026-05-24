@@ -22,6 +22,12 @@ AIChat 是一个面向 Vibe Coding 的跨平台代码编程助手。核心目标
 
 ## 跨平台 CLI
 
+在任意项目目录直接进入 TUI：
+
+```bash
+aichat
+```
+
 列出支持的模型：
 
 ```bash

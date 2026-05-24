@@ -1053,7 +1053,12 @@ sealed record CliCommand(
 
     public static CliCommand Parse(string[] args)
     {
-        if (args.Length == 0 || args.Contains("-h") || args.Contains("--help"))
+        if (args.Length == 0)
+        {
+            return new CliCommand("tui", [], new Dictionary<string, string>(), new HashSet<string>(), "", false, false);
+        }
+
+        if (args.Contains("-h") || args.Contains("--help"))
         {
             return Empty(showHelp: true);
         }

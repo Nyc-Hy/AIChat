@@ -11,6 +11,12 @@ aichat <command> [options]
 - `--data-dir <path>`: use a custom settings/projects directory.
 - `-h`, `--help`: show help.
 
+Running `aichat` with no command starts the TUI in the current directory. It is equivalent to:
+
+```bash
+aichat tui --project .
+```
+
 ## Version
 
 ```bash
