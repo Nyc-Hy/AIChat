@@ -13,6 +13,7 @@ The primary cross-platform interface is the CLI/TUI:
 - `aichat config` for provider setup.
 - `aichat context` for model-free context diagnostics before spending tokens.
 - `aichat doctor` for local readiness checks.
+- `aichat config test` for provider readiness checks before coding tasks.
 
 WPF remains a Windows-only shell. It should not block macOS or Linux usage, and it should not be the default product surface for new cross-platform work.
 

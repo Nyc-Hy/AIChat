@@ -81,6 +81,35 @@ static async Task<int> RunConfigAsync(
         return 0;
     }
 
+    if (string.Equals(action, "test", StringComparison.OrdinalIgnoreCase))
+    {
+        var provider = SelectConfiguredProvider(settings, command.GetOption("provider"));
+        if (provider is null)
+        {
+            Console.Error.WriteLine(string.IsNullOrWhiteSpace(command.GetOption("provider"))
+                ? "No configured provider with an API key was found."
+                : $"Configured provider was not found: {command.GetOption("provider")}");
+            Console.Error.WriteLine("Run: aichat config set-provider --provider deepseek --api-key <key>");
+            return 2;
+        }
+
+        Console.WriteLine($"Testing provider: {provider.Name} ({provider.SelectedModelId})");
+        Console.WriteLine($"Base URL: {provider.BaseUrl}");
+        var testResult = await new ProviderConnectionTester().TestAsync(provider);
+        if (testResult.IsSuccess)
+        {
+            Console.WriteLine(testResult.Message);
+            return 0;
+        }
+
+        Console.Error.WriteLine($"Provider test failed: {testResult.ErrorKind}");
+        Console.Error.WriteLine(testResult.Message);
+        Console.Error.WriteLine(IsTransientProviderError(testResult.ErrorKind)
+            ? "Retry may succeed later; check network, rate limits, or provider status."
+            : "Check API key, model name, base URL, and account permissions.");
+        return 3;
+    }
+
     if (string.Equals(action, "use", StringComparison.OrdinalIgnoreCase))
     {
         var selectedProviderId = command.GetOption("provider");
@@ -115,7 +144,7 @@ static async Task<int> RunConfigAsync(
 
     if (!string.Equals(action, "set-provider", StringComparison.OrdinalIgnoreCase))
     {
-        Console.Error.WriteLine("Expected config action: show, list, use, or set-provider.");
+        Console.Error.WriteLine("Expected config action: show, list, test, use, or set-provider.");
         return 1;
     }
 
@@ -815,6 +844,36 @@ static void PrintConfiguredProviders(AppSettings settings)
     }
 }
 
+static ConfiguredLlmProvider? SelectConfiguredProvider(AppSettings settings, string providerSelector)
+{
+    var candidates = settings.ConfiguredProviders
+        .Where(provider => !string.IsNullOrWhiteSpace(provider.ApiKey))
+        .ToList();
+    if (candidates.Count == 0)
+    {
+        return null;
+    }
+
+    if (string.IsNullOrWhiteSpace(providerSelector))
+    {
+        return candidates.FirstOrDefault(provider => provider.Id == settings.ActiveConfiguredProviderId) ??
+               candidates.FirstOrDefault();
+    }
+
+    return candidates.FirstOrDefault(provider =>
+        string.Equals(provider.Id, providerSelector, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(provider.TemplateId, providerSelector, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(provider.Name, providerSelector, StringComparison.OrdinalIgnoreCase));
+}
+
+static bool IsTransientProviderError(ProviderErrorKind kind)
+{
+    return kind is ProviderErrorKind.RateLimited or
+        ProviderErrorKind.Timeout or
+        ProviderErrorKind.Network or
+        ProviderErrorKind.Server;
+}
+
 static void PrintVersion()
 {
     Console.WriteLine(GetVersion());
@@ -949,6 +1008,7 @@ static void PrintHelp()
       aichat models [--provider deepseek]
       aichat config show
       aichat config list
+      aichat config test [--provider deepseek]
       aichat config use --provider deepseek [--model deepseek-chat]
       aichat config set-provider --provider deepseek --api-key <key> [--model deepseek-chat] [--base-url <url>]
       aichat projects list

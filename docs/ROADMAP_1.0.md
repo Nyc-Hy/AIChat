@@ -31,7 +31,7 @@ The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper ass
 
 ### 0.8.0 Provider Reliability
 
-- Add provider smoke test command that performs a small non-mutating request.
+- Add provider smoke test command that performs a small non-mutating request. Started with `aichat config test`.
 - Improve provider error messages for auth, rate limit, timeout, and context length failures.
 - Add model profile validation so custom provider/model pairs get predictable defaults.
 

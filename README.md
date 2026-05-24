@@ -35,6 +35,7 @@ dotnet run --project src/AIChat.Cli -- models --provider deepseek
 dotnet run --project src/AIChat.Cli -- config set-provider --provider deepseek --api-key "$DEEPSEEK_API_KEY" --model deepseek-chat
 dotnet run --project src/AIChat.Cli -- config show
 dotnet run --project src/AIChat.Cli -- config list
+dotnet run --project src/AIChat.Cli -- config test
 dotnet run --project src/AIChat.Cli -- config use --provider deepseek --model deepseek-chat
 ```
 
