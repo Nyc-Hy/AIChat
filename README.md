@@ -45,6 +45,12 @@ dotnet run --project src/AIChat.Cli -- init --project .
 dotnet run --project src/AIChat.Cli -- projects list
 ```
 
+查看上下文诊断，不调用模型：
+
+```bash
+dotnet run --project src/AIChat.Cli -- context "修复登录测试" --project . --tokens 1200
+```
+
 执行一次代码任务：
 
 ```bash
@@ -178,6 +184,7 @@ tests/
 
 - [产品范围](docs/PRODUCT_SCOPE.md)
 - [上线计划](docs/LAUNCH_PLAN.md)
+- [1.0 路线图](docs/ROADMAP_1.0.md)
 - [发布检查清单](docs/RELEASE_CHECKLIST.md)
 - [架构说明](docs/ARCHITECTURE.md)
 - [Agent Harness](docs/AGENT_HARNESS.md)

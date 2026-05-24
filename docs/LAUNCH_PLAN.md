@@ -60,10 +60,10 @@ AIChat 的上线目标是成为跨平台 Vibe Coding 编程助手，优先用 CL
 
 ## 之后版本
 
-下一阶段按顺序推进：
+下一阶段按 [1.0 路线图](ROADMAP_1.0.md) 顺序推进：
 
-1. TUI：连续会话、工具审批、diff 预览、验证状态。
-2. ModelProfile 深化：用真实任务基准细化 DeepSeek / MiMo / MiniMAX 参数。
-3. Context cache：固定 prompt 前缀、项目摘要、文件索引、工具输出摘要。
-4. Web/Tauri Desktop：跨平台图形入口。
+1. Context cache：固定 prompt 前缀、项目摘要、文件索引、工具输出摘要。
+2. TUI：连续会话、工具审批、diff 预览、验证状态。
+3. ModelProfile 深化：用真实任务基准细化 DeepSeek / MiMo / MiniMAX 参数。
+4. 发布候选：macOS / Linux 真机验证和安装说明。
 5. 高级能力回归：Plugin/MCP、Memory、Benchmark、Sub-agent 作为显式高级模式。

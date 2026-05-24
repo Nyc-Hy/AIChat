@@ -7,6 +7,13 @@ namespace AIChat.Application.Context;
 
 public sealed class FileRelevanceScorer
 {
+    private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and", "the", "for", "with", "from", "this", "that", "into", "your", "you",
+        "are", "can", "how", "why", "what", "when", "where", "fix", "add", "use",
+        "using", "update", "change", "make", "task", "code", "file", "files"
+    };
+
     public FileRelevanceScore Score(
         ProjectFileIndexEntry entry,
         string goal,
@@ -124,7 +131,7 @@ public sealed class FileRelevanceScorer
         return text
             .ToLowerInvariant()
             .Split(Path.GetInvalidFileNameChars().Concat([' ', '\r', '\n', '\t', '.', ',', ';', ':', '/', '\\', '-', '_', '(', ')', '[', ']']).Distinct().ToArray(), StringSplitOptions.RemoveEmptyEntries)
-            .Where(term => term.Length >= 3)
+            .Where(term => term.Length >= 3 && !StopWords.Contains(term))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }

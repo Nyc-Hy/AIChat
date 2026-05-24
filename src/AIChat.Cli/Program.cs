@@ -4,10 +4,12 @@ using AIChat.Application.Agents;
 using AIChat.Application.Agents.Planning;
 using AIChat.Application.Configuration;
 using AIChat.Application.Context;
+using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
+using AIChat.Application.Workspace;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using AIChat.Providers.Anthropic;
@@ -47,6 +49,8 @@ switch (command.Name)
         return await RunConfigAsync(command, repository, settings);
     case "projects":
         return await RunProjectsAsync(command, repository);
+    case "context":
+        return await RunContextAsync(command, repository);
     case "init":
         return await RunInitAsync(command, repository);
     case "ask":
@@ -189,6 +193,47 @@ static async Task<int> RunProjectsAsync(CliCommand command, JsonAppRepository re
         Console.WriteLine($"  verification commands: {project.VerificationCommands.Count}");
     }
 
+    return 0;
+}
+
+static async Task<int> RunContextAsync(CliCommand command, JsonAppRepository repository)
+{
+    var projectPath = ResolveProjectPath(command.GetOption("project"));
+    if (!Directory.Exists(projectPath))
+    {
+        Console.Error.WriteLine($"Project directory does not exist: {projectPath}");
+        return 1;
+    }
+
+    var projects = (await repository.LoadProjectsAsync()).ToList();
+    var project = FindProject(projects, projectPath) ?? new ProjectWorkspace
+    {
+        Name = new DirectoryInfo(projectPath).Name,
+        Path = projectPath,
+        VerificationCommands = new ProjectInitializer().SuggestVerificationCommands(projectPath).ToList()
+    };
+
+    var goal = string.Join(' ', command.Positionals).Trim();
+    if (string.IsNullOrWhiteSpace(goal))
+    {
+        goal = "project overview";
+    }
+
+    var maxTokens = ParsePositiveInt(command.GetOption("tokens"), 1200);
+    var maxFiles = ParsePositiveInt(command.GetOption("max-files"), 500);
+    var fileIndex = new ProjectFileIndexBuilder().Build(projectPath, maxFiles);
+    var contextPack = new ContextRouter().Route(new ContextRouterRequest
+    {
+        Goal = goal,
+        Phase = AgentRunPhase.GatheringContext,
+        FileIndex = fileIndex,
+        PinnedItems = project.PinnedContext,
+        InputArtifacts = project.InputArtifacts,
+        MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
+        MaxTokens = maxTokens
+    });
+
+    PrintContextReport(project, fileIndex, contextPack, goal, maxTokens, maxFiles);
     return 0;
 }
 
@@ -812,6 +857,88 @@ static string BuildProjectSnapshot(ProjectWorkspace project)
     ]);
 }
 
+static void PrintContextReport(
+    ProjectWorkspace project,
+    ProjectFileIndex fileIndex,
+    TaskContextPack contextPack,
+    string goal,
+    int maxTokens,
+    int maxFiles)
+{
+    Console.WriteLine($"Project: {project.Name}");
+    Console.WriteLine($"Path: {project.Path}");
+    Console.WriteLine($"Goal: {goal}");
+    Console.WriteLine($"Budget: {maxTokens} context tokens; index cap: {maxFiles} files");
+    Console.WriteLine();
+    Console.WriteLine(BuildProjectSnapshot(project));
+    Console.WriteLine();
+
+    Console.WriteLine($"File index: {fileIndex.Entries.Count} files");
+    foreach (var group in fileIndex.Entries
+                 .GroupBy(entry => string.IsNullOrWhiteSpace(entry.TypeTag) ? "other" : entry.TypeTag)
+                 .OrderByDescending(group => group.Count())
+                 .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+                 .Take(8))
+    {
+        Console.WriteLine($"  {group.Key}: {group.Count()}");
+    }
+
+    Console.WriteLine();
+    Console.WriteLine(contextPack.Summary);
+    PrintFileRefs("Included files", contextPack.IncludedFiles, 12);
+    PrintFileRefs("Omitted relevant files", contextPack.OmittedButRelevantRefs, 8);
+
+    if (contextPack.IncludedSnippets.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Snippets:");
+        foreach (var snippet in contextPack.IncludedSnippets.Take(8))
+        {
+            Console.WriteLine($"  - {snippet}");
+        }
+    }
+
+    if (project.VerificationCommands.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Verification commands:");
+        foreach (var command in project.VerificationCommands.Take(8))
+        {
+            Console.WriteLine($"  - {command.Name}: {command.Command}");
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Cache hints:");
+    Console.WriteLine("  - Keep AGENTS.md, README, and stable config files small and stable.");
+    Console.WriteLine("  - Pin recurring task files instead of asking the model to rediscover them.");
+    Console.WriteLine("  - Use narrower goals and lower --tokens for fast/cache-friendly runs.");
+}
+
+static void PrintFileRefs(string title, IReadOnlyList<TaskContextFileRef> files, int limit)
+{
+    if (files.Count == 0)
+    {
+        return;
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"{title}:");
+    foreach (var file in files.Take(limit))
+    {
+        Console.WriteLine($"  - {file.Path} ({file.TypeTag}, score {file.Score:0.##})");
+        if (!string.IsNullOrWhiteSpace(file.Reason))
+        {
+            Console.WriteLine($"    {file.Reason}");
+        }
+    }
+}
+
+static int ParsePositiveInt(string value, int fallback)
+{
+    return int.TryParse(value, out var parsed) && parsed > 0 ? parsed : fallback;
+}
+
 static void PrintHelp()
 {
     Console.WriteLine("""
@@ -825,6 +952,7 @@ static void PrintHelp()
       aichat config use --provider deepseek [--model deepseek-chat]
       aichat config set-provider --provider deepseek --api-key <key> [--model deepseek-chat] [--base-url <url>]
       aichat projects list
+      aichat context [goal] [--project <path>] [--tokens 1200] [--max-files 500]
       aichat doctor
       aichat init [--project <path>] [--name <name>]
       aichat ask "fix the failing test" [--project <path>] [--mode fast|standard|deep] [--plain] [--yes] [--no-write] [--verify]
@@ -880,6 +1008,8 @@ sealed record CliCommand(
                 case "--project":
                 case "--name":
                 case "--mode":
+                case "--tokens":
+                case "--max-files":
                     if (!ReadValue(args, ref i, arg, out var value))
                     {
                         return Empty(showHelp: true, hasError: true);
