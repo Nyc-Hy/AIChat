@@ -15,7 +15,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>0.5.0</Version>
+    <Version>1.0.0</Version>
     <Product>AIChat CLI</Product>
     <Description>Cross-platform Vibe Coding assistant CLI</Description>
   </PropertyGroup>
@@ -23,6 +23,8 @@
   <ItemGroup>
     <None Include="..\..\LICENSE" Link="LICENSE" CopyToPublishDirectory="Always" />
     <None Include="..\..\README.md" Link="README.md" CopyToPublishDirectory="Always" />
+    <None Include="..\..\docs\CLI_REFERENCE.md" Link="CLI_REFERENCE.md" CopyToPublishDirectory="Always" />
+    <None Include="..\..\docs\INSTALL.md" Link="INSTALL.md" CopyToPublishDirectory="Always" />
     <None Include="..\..\docs\LAUNCH_PLAN.md" Link="LAUNCH_PLAN.md" CopyToPublishDirectory="Always" />
   </ItemGroup>
 

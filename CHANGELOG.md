@@ -8,6 +8,10 @@ AIChat 的重要变更会记录在此文件中。
 
 ### 新增
 
+- AIChat CLI/TUI 1.0 正式命令面：`ask`、`tui`、`context`、`doctor`、`models`、`config`、`projects`、`init`。
+- `aichat context` 和 TUI `/context [goal]`，用于模型调用前的上下文诊断和缓存命中优化。
+- `aichat config test`，用于编码任务前验证 provider 配置可用性。
+- `docs/INSTALL.md`、`docs/CLI_REFERENCE.md` 和 `docs/RELEASE_NOTES_1.0.0.md`。
 - 跨平台 CLI `aichat`，支持 `models`、`config`、`doctor`、`init`、`ask` 和 `tui`。
 - Fast / Standard / Deep 三档 Agent 执行模式，用于平衡速度、准确率和 Token 消耗。
 - DeepSeek、MiMo、MiniMAX 模型 profile，用于模型定制化提示和执行策略。

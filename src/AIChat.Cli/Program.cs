@@ -480,7 +480,7 @@ static async Task<int> RunTuiAsync(
             new TokenizerContextEstimator(),
             new SystemPromptBuilder()));
 
-    Console.WriteLine("AIChat TUI Beta");
+    Console.WriteLine("AIChat TUI");
     Console.WriteLine($"Project: {project.Name}");
     Console.WriteLine($"Model: {effectiveSettings.ProviderName} / {effectiveSettings.Model}");
     Console.WriteLine($"Mode: {mode}");
@@ -874,7 +874,7 @@ static string GetVersion()
 {
     return typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ??
            typeof(Program).Assembly.GetName().Version?.ToString() ??
-           "0.5.0";
+           "1.0.0";
 }
 
 static string ResolveProjectPath(string projectPath)

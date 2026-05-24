@@ -44,10 +44,12 @@ The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper ass
 
 ### 1.0.0 Stable CLI/TUI
 
-- Publish signed or checksum-verifiable release artifacts.
+- Publish checksum-verifiable release artifacts.
 - Document the stable command surface.
 - Document what remains advanced/experimental.
 - Keep WPF as Windows-only and outside the cross-platform release promise.
+
+Status: implemented in the CLI/TUI release branch. Platform-specific smoke testing is still required on macOS Apple Silicon and Linux x64 before marking those platforms fully verified.
 
 ## 1.0 Acceptance Bar
 

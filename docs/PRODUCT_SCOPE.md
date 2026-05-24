@@ -41,7 +41,7 @@ Fast and Deep modes exist for explicit user intent. Fast should optimize for low
 
 ## Supported Model Families
 
-0.5.0 includes first-class model profiles for:
+1.0.0 includes first-class model profiles for:
 
 - DeepSeek
 - MiMo

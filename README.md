@@ -2,7 +2,7 @@
 
 AIChat 是一个面向 Vibe Coding 的跨平台代码编程助手。核心目标是让 DeepSeek、MiMo、MiniMAX 等模型在本地项目里获得接近 Claude Code / Claude Code Desktop 的编程协作体验：任务执行准确、快速、Token 消耗低，并尽可能命中稳定上下文缓存。
 
-当前长期主线是跨平台 CLI/TUI + 后续 Web/Tauri Desktop。WPF 应用仍保留为 Windows 桌面入口，但不再是唯一产品形态。
+当前正式主线是跨平台 CLI/TUI。WPF 应用仍保留为 Windows 桌面入口，但不再是唯一产品形态。
 
 本项目使用 [Apache License 2.0](LICENSE) 开源。
 
@@ -61,7 +61,7 @@ dotnet run --project src/AIChat.Cli -- ask "分析复杂重构方案" --project 
 dotnet run --project src/AIChat.Cli -- doctor
 ```
 
-进入交互式 TUI Beta：
+进入交互式 TUI：
 
 ```bash
 dotnet run --project src/AIChat.Cli -- tui --project . --mode standard
@@ -185,6 +185,8 @@ tests/
 ## 文档
 
 - [产品范围](docs/PRODUCT_SCOPE.md)
+- [安装说明](docs/INSTALL.md)
+- [CLI 参考](docs/CLI_REFERENCE.md)
 - [上线计划](docs/LAUNCH_PLAN.md)
 - [1.0 路线图](docs/ROADMAP_1.0.md)
 - [发布检查清单](docs/RELEASE_CHECKLIST.md)
