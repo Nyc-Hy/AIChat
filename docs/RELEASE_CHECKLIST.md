@@ -33,6 +33,7 @@ On Linux x64:
 
 - [ ] Confirm `CHANGELOG.md` has the release summary.
 - [ ] Confirm `docs/RELEASE_NOTES_0.5.0.md` is up to date.
+- [ ] Open the PR using `docs/PR_CLI_0.5.0.md`.
 - [ ] Push the release branch.
 - [ ] Tag the release as `v0.5.0`.
 - [ ] Confirm the `Release CLI` workflow succeeds.
