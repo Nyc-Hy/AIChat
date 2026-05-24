@@ -24,7 +24,7 @@ The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper ass
 
 ### 0.7.0 TUI Daily Use
 
-- Improve TUI status output with context summary and last run outcome.
+- Improve TUI status output with context summary and last run outcome. Started with `/context [goal]`.
 - Add command history affordances where the terminal supports it.
 - Add clearer approval prompts for write, shell, build, test, and git operations.
 - Add transcript export for bug reports and PR review packets.

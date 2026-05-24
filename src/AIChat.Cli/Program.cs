@@ -242,27 +242,13 @@ static async Task<int> RunContextAsync(CliCommand command, JsonAppRepository rep
         VerificationCommands = new ProjectInitializer().SuggestVerificationCommands(projectPath).ToList()
     };
 
-    var goal = string.Join(' ', command.Positionals).Trim();
-    if (string.IsNullOrWhiteSpace(goal))
-    {
-        goal = "project overview";
-    }
-
-    var maxTokens = ParsePositiveInt(command.GetOption("tokens"), 1200);
-    var maxFiles = ParsePositiveInt(command.GetOption("max-files"), 500);
-    var fileIndex = new ProjectFileIndexBuilder().Build(projectPath, maxFiles);
-    var contextPack = new ContextRouter().Route(new ContextRouterRequest
-    {
-        Goal = goal,
-        Phase = AgentRunPhase.GatheringContext,
-        FileIndex = fileIndex,
-        PinnedItems = project.PinnedContext,
-        InputArtifacts = project.InputArtifacts,
-        MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
-        MaxTokens = maxTokens
-    });
-
-    PrintContextReport(project, fileIndex, contextPack, goal, maxTokens, maxFiles);
+    var diagnostics = BuildContextDiagnostics(
+        project,
+        projectPath,
+        string.Join(' ', command.Positionals).Trim(),
+        ParsePositiveInt(command.GetOption("tokens"), 1200),
+        ParsePositiveInt(command.GetOption("max-files"), 500));
+    PrintContextReport(diagnostics);
     return 0;
 }
 
@@ -498,7 +484,7 @@ static async Task<int> RunTuiAsync(
     Console.WriteLine($"Project: {project.Name}");
     Console.WriteLine($"Model: {effectiveSettings.ProviderName} / {effectiveSettings.Model}");
     Console.WriteLine($"Mode: {mode}");
-    Console.WriteLine("Commands: /help, /mode fast|standard|deep, /yes, /plain, /no-write, /verify, /status, /exit");
+    Console.WriteLine("Commands: /help, /mode fast|standard|deep, /context, /yes, /plain, /no-write, /verify, /status, /exit");
     Console.WriteLine();
 
     while (true)
@@ -623,6 +609,7 @@ static bool TryHandleTuiCommand(
             Console.WriteLine("  /plain     toggle plain chat mode");
             Console.WriteLine("  /no-write  toggle read-only/no-mutation tools");
             Console.WriteLine("  /verify    toggle automatic verification when commands exist");
+            Console.WriteLine("  /context   print model-free context diagnostics for this project");
             Console.WriteLine("  /status    print current session status");
             Console.WriteLine("  /exit      leave TUI");
             return true;
@@ -659,6 +646,10 @@ static bool TryHandleTuiCommand(
             Console.WriteLine($"Mode: {mode}");
             Console.WriteLine($"Plain: {plain}; Auto approve: {autoApprove}; No write: {noWrite}; Verify: {verify}");
             Console.WriteLine($"Verification commands: {project.VerificationCommands.Count}");
+            return true;
+        case "/context":
+            var goal = string.Join(' ', parts.Skip(1)).Trim();
+            PrintContextReport(BuildContextDiagnostics(project, project.Path, goal, 1200, 500));
             return true;
         default:
             Console.WriteLine($"Unknown TUI command: {parts[0]}");
@@ -916,18 +907,42 @@ static string BuildProjectSnapshot(ProjectWorkspace project)
     ]);
 }
 
-static void PrintContextReport(
+static ContextDiagnostics BuildContextDiagnostics(
     ProjectWorkspace project,
-    ProjectFileIndex fileIndex,
-    TaskContextPack contextPack,
+    string projectPath,
     string goal,
     int maxTokens,
     int maxFiles)
 {
+    if (string.IsNullOrWhiteSpace(goal))
+    {
+        goal = "project overview";
+    }
+
+    var fileIndex = new ProjectFileIndexBuilder().Build(projectPath, maxFiles);
+    var contextPack = new ContextRouter().Route(new ContextRouterRequest
+    {
+        Goal = goal,
+        Phase = AgentRunPhase.GatheringContext,
+        FileIndex = fileIndex,
+        PinnedItems = project.PinnedContext,
+        InputArtifacts = project.InputArtifacts,
+        MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
+        MaxTokens = maxTokens
+    });
+
+    return new ContextDiagnostics(project, fileIndex, contextPack, goal, maxTokens, maxFiles);
+}
+
+static void PrintContextReport(ContextDiagnostics diagnostics)
+{
+    var project = diagnostics.Project;
+    var fileIndex = diagnostics.FileIndex;
+    var contextPack = diagnostics.ContextPack;
     Console.WriteLine($"Project: {project.Name}");
     Console.WriteLine($"Path: {project.Path}");
-    Console.WriteLine($"Goal: {goal}");
-    Console.WriteLine($"Budget: {maxTokens} context tokens; index cap: {maxFiles} files");
+    Console.WriteLine($"Goal: {diagnostics.Goal}");
+    Console.WriteLine($"Budget: {diagnostics.MaxTokens} context tokens; index cap: {diagnostics.MaxFiles} files");
     Console.WriteLine();
     Console.WriteLine(BuildProjectSnapshot(project));
     Console.WriteLine();
@@ -1108,3 +1123,11 @@ sealed record CliCommand(
         return true;
     }
 }
+
+sealed record ContextDiagnostics(
+    ProjectWorkspace Project,
+    ProjectFileIndex FileIndex,
+    TaskContextPack ContextPack,
+    string Goal,
+    int MaxTokens,
+    int MaxFiles);

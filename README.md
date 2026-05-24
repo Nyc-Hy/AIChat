@@ -72,6 +72,7 @@ TUI 内置命令：
 ```text
 /help
 /mode fast|standard|deep
+/context [goal]
 /yes
 /plain
 /no-write
