@@ -1,0 +1,266 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+        xmlns:controls="using:AIChat.App.Avalonia.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1240" d:DesignHeight="800"
+        x:Class="AIChat.App.Avalonia.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="AIChat"
+        MinWidth="1080"
+        MinHeight="700"
+        WindowDecorations="None"
+        TransparencyLevelHint="Transparent"
+        CanResize="True"
+        Background="Transparent">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Border Background="#EEF2F7" CornerRadius="18" ClipToBounds="True">
+        <Grid RowDefinitions="56,*">
+            <Grid ColumnDefinitions="260,*,Auto,Auto" Margin="20,0,8,0" ColumnSpacing="18" Background="Transparent" PointerPressed="TitleBar_OnPointerPressed">
+                <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Border Width="30" Height="30" CornerRadius="10" Background="#EAF2FF">
+                        <TextBlock Text="AI" Foreground="#2563EB" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel>
+                        <TextBlock Text="AIChat" FontSize="18" FontWeight="SemiBold" Foreground="#111827"/>
+                        <TextBlock Text="智能开发工作台" Classes="muted"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Border Classes="badge success">
+                        <TextBlock Text="{Binding Readiness}" FontSize="12" FontWeight="SemiBold" Foreground="#18794E"/>
+                    </Border>
+                    <TextBlock Text="{Binding ActiveProvider}" Classes="body" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ActiveModel}" Classes="muted" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <Button Grid.Column="2" Command="{Binding RefreshCommand}" Content="刷新"/>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                    <Button Classes="chrome-button" Content="🌗" Click="ToggleTheme_OnClick" ToolTip.Tip="切换主题"/>
+                    <Button Classes="chrome-button" Content="−" Click="Minimize_OnClick"/>
+                    <Button Classes="chrome-button" Content="□" Click="MaximizeRestore_OnClick"/>
+                    <Button Classes="chrome-button close" Content="×" Click="Close_OnClick"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid Grid.Row="1" ColumnDefinitions="248,*,306" ColumnSpacing="16" Margin="18,10,18,18">
+                <Border Classes="rail">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="当前项目" Classes="section-title"/>
+                            <TextBlock Text="{Binding Sidebar.SelectedProjectName}" FontSize="17" FontWeight="SemiBold" Foreground="#111827" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Sidebar.SelectedProjectPath}" Classes="muted" TextWrapping="Wrap"/>
+                            <Button Content="添加项目" Click="AddProject_OnClick" HorizontalAlignment="Stretch" Margin="0,8,0,0"/>
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="1" MaxHeight="120" Margin="0,14,0,8" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Sidebar.Projects}" HorizontalAlignment="Stretch">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProjectCardViewModel">
+                                        <Button Classes="list-action" Tag="{Binding Id}" Click="ProjectButton_OnClick" Margin="0,0,0,8" ToolTip.Tip="{Binding Name}">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock Text="{Binding Name}" Foreground="#111827" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Grid.Column="1" Text="切换" Classes="muted"/>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <StackPanel Grid.Row="2" Spacing="12" Margin="0,6,0,0">
+                            <StackPanel Spacing="5">
+                                <TextBlock Text="项目状态" Classes="section-title"/>
+                                <TextBlock Text="{Binding Sidebar.ProjectHealth}" Classes="muted" TextWrapping="Wrap"/>
+                            </StackPanel>
+
+                            <Border Classes="section-divider" Margin="0,2"/>
+
+                            <TextBlock Text="最近对话" Classes="section-title"/>
+                            <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ConversationCardViewModel">
+                                        <Button Classes="list-action" Tag="{Binding Id}" Click="ConversationButton_OnClick" Margin="0,0,0,8" ToolTip.Tip="{Binding Title}" Background="{Binding Background}">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock Text="{Binding Title}" Foreground="#111827" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Detail}" Classes="muted"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="3" Text="{Binding StatusMessage}" Classes="muted" TextWrapping="Wrap" Margin="0,12,0,0"/>
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="今天要完成什么？" Classes="page-title"/>
+                            <TextBlock Text="输入目标后，AIChat 会读取项目上下文并在风险操作前询问你。" Classes="muted"/>
+                        </StackPanel>
+                        <Border Grid.Column="1" Classes="badge" VerticalAlignment="Top">
+                            <TextBlock Text="Avalonia 主界面" FontSize="12" FontWeight="SemiBold" Foreground="#1554B7"/>
+                        </Border>
+                    </Grid>
+
+                    <ItemsControl Grid.Row="1" ItemsSource="{Binding SessionInsights.SessionMetrics}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Rows="1"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SessionMetricViewModel">
+                                <Border Background="#FFFFFF" CornerRadius="10" Padding="10,8" Margin="0,0,8,0" ToolTip.Tip="{Binding Tooltip}">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding Label}" Classes="muted" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Value}" Classes="body" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border Grid.Row="2" Classes="panel" Padding="8,18">
+                        <Grid RowDefinitions="Auto,*" RowSpacing="14">
+                            <TextBlock Text="对话" Classes="section-title"/>
+                            <ScrollViewer Grid.Row="1">
+                                <ItemsControl ItemsSource="{Binding Activity}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ActivityItemViewModel">
+                                        <StackPanel HorizontalAlignment="{Binding BubbleAlignment}" MaxWidth="{Binding BubbleMaxWidth}" Margin="0,0,0,14" Spacing="5">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding Title}" Foreground="#697386" FontWeight="SemiBold"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Margin="10,0,0,0"/>
+                                            </Grid>
+                                            <Border Background="{Binding BubbleBackground}" CornerRadius="14" Padding="14,11">
+                                                <controls:MarkdownTextBlock Markdown="{Binding Detail}" Foreground="{Binding TextForeground}" TextWrapping="Wrap"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="3" Classes="input-shell">
+                        <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                            <TextBox Text="{Binding DraftPrompt}"
+                                     PlaceholderText="例如：检查发布前风险，修复失败测试，整理 README..."
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="82"/>
+                            <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                <TextBlock Text="写文件、命令、测试、Git 操作都会先确认。" Classes="muted" VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" Classes="primary" Command="{Binding SendTaskCommand}" Content="{Binding PrimaryActionText}"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Column="2" Classes="rail">
+                    <ScrollViewer>
+                        <StackPanel>
+                            <TextBlock Text="本次上下文" Classes="section-title"/>
+                            <ItemsControl ItemsSource="{Binding SessionInsights.ContextPreview}" Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ContextPreviewItemViewModel">
+                                        <Grid ColumnDefinitions="68,*" ColumnSpacing="8" Margin="0,5">
+                                            <TextBlock Text="{Binding Label}" Classes="muted"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Detail}" Classes="body" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Border Classes="section-divider"/>
+
+                            <StackPanel IsVisible="{Binding Approval.HasPendingApproval}" Spacing="10">
+                                <Border Classes="badge warning" HorizontalAlignment="Left">
+                                    <TextBlock Text="需要确认" FontSize="12" FontWeight="SemiBold" Foreground="#7A4D00"/>
+                                </Border>
+                                <TextBlock Text="{Binding Approval.PendingApprovalTitle}" FontSize="16" FontWeight="SemiBold" Foreground="#111827"/>
+                                <TextBlock Text="{Binding Approval.PendingApprovalSummary}" Classes="body" TextWrapping="Wrap"/>
+                                <Border Background="#FFFFFF" CornerRadius="12" Padding="12" MaxHeight="180">
+                                    <ScrollViewer>
+                                        <TextBlock Text="{Binding Approval.PendingApprovalPreview}" Classes="body" TextWrapping="Wrap"/>
+                                    </ScrollViewer>
+                                </Border>
+                                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                    <Button Classes="primary" Command="{Binding Approval.ApproveCommand}" Content="允许" HorizontalAlignment="Stretch"/>
+                                    <Button Grid.Column="1" Command="{Binding Approval.RejectCommand}" Content="拒绝" HorizontalAlignment="Stretch"/>
+                                </Grid>
+                                <Border Classes="section-divider"/>
+                            </StackPanel>
+
+                            <TextBlock Text="安全策略" Classes="section-title"/>
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" Margin="0,8,0,8">
+                                <TextBlock Text="只读模式" Classes="body" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding NoWriteMode}"/>
+                                <TextBlock Grid.Row="1" Text="修改后验证" Classes="body" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoVerify}"/>
+                            </Grid>
+                            <ItemsControl ItemsSource="{Binding SafetyNotes}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" Classes="muted" Margin="0,3" TextWrapping="Wrap"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Expander Header="高级" IsExpanded="{Binding ShowAdvanced}" Margin="0,16,0,0">
+                                <Border Background="#FFFFFF" CornerRadius="12" Padding="12" Margin="0,8,0,0">
+                                    <StackPanel Spacing="9">
+                                        <TextBlock Text="配置模型" Classes="section-title"/>
+                                        <ComboBox ItemsSource="{Binding Provider.ProviderTemplates}"
+                                                  SelectedItem="{Binding Provider.SelectedProviderTemplate}"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ProviderTemplateViewModel">
+                                                    <TextBlock Text="{Binding Name}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <TextBox Text="{Binding Provider.ProviderApiKey}" PlaceholderText="API Key" PasswordChar="●"/>
+                                        <TextBox Text="{Binding Provider.ProviderModel}" PlaceholderText="模型 ID"/>
+                                        <TextBox Text="{Binding Provider.ProviderBaseUrl}" PlaceholderText="Base URL"/>
+                                        <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                            <Button Classes="primary" Command="{Binding SaveProviderCommand}" Content="保存配置" HorizontalAlignment="Stretch"/>
+                                            <Button Grid.Column="1" Command="{Binding TestProviderCommand}" Content="测试连接" HorizontalAlignment="Stretch"/>
+                                        </Grid>
+                                        <Border Classes="section-divider" Margin="0,8"/>
+                                        <TextBlock Text="模型提供方" Classes="section-title"/>
+                                        <ItemsControl ItemsSource="{Binding Provider.AdvancedProviders}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ProviderCardViewModel">
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="0,5">
+                                                        <StackPanel>
+                                                            <TextBlock Text="{Binding Name}" Classes="body"/>
+                                                            <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="#2563EB"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </Expander>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

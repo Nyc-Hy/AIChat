@@ -56,4 +56,9 @@ public sealed class AppSettings
     public long AuditLogMaxFileSizeBytes { get; set; } = 5 * 1024 * 1024;
     // Number of days to retain rotated audit log archives.
     public int AuditLogRetentionDays { get; set; } = 30;
+
+    // Visual theme preference. Persisted so the user's choice survives
+    // restarts. PR-9 added this; older settings files deserialise as
+    // the default (System) which lets the platform decide.
+    public ThemePreference ThemePreference { get; set; } = ThemePreference.System;
 }
