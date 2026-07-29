@@ -2,7 +2,7 @@
 
 AIChat v0.5.0 is the first CLI/TUI-focused release candidate for a cross-platform Vibe Coding assistant.
 
-The main goal of this release is to make AIChat usable without the Windows-only WPF shell, with conservative defaults for accurate task execution, lower token usage, and predictable tool approval.
+The main goal of this release is to make AIChat usable from the cross-platform CLI/TUI, with conservative defaults for accurate task execution, lower token usage, and predictable tool approval.
 
 ## Highlights
 
@@ -11,7 +11,7 @@ The main goal of this release is to make AIChat usable without the Windows-only 
 - Fast / Standard / Deep execution modes.
 - First-class DeepSeek, MiMo, and MiniMAX model profiles.
 - Conservative default agent settings to reduce token use and avoid unnecessary planner/sub-agent flows.
-- Windows-only WPF shell simplified and kept out of the cross-platform path.
+- Legacy Windows-only WPF shell kept out of the cross-platform path.
 - Release packages for:
   - `osx-arm64`
   - `linux-x64`

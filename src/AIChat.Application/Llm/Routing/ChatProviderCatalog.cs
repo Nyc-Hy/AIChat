@@ -133,6 +133,20 @@ public static class ChatProviderCatalog
         ]
     };
 
+    public static readonly LlmProviderInfo OpenAICompatible = new()
+    {
+        Id = "openai-compatible",
+        ProtocolId = "openai",
+        Name = "OpenAI-compatible",
+        DefaultBaseUrl = "https://api.openai.com/v1",
+        DefaultModel = "custom-model",
+        DefaultContextLimit = 128_000,
+        Models =
+        [
+            new LlmModelInfo { Id = "custom-model", DisplayName = "custom-model", ContextLimit = 128_000, CapabilityLabel = "tools", Capabilities = ToolCapable }
+        ]
+    };
+
     public static readonly LlmProviderInfo Anthropic = new()
     {
         Id = "anthropic",
@@ -162,7 +176,7 @@ public static class ChatProviderCatalog
         ]
     };
 
-    public static IReadOnlyList<LlmProviderInfo> All { get; } = [TokenPlanMiMo, DeepSeek, MiniMax, Anthropic];
+    public static IReadOnlyList<LlmProviderInfo> All { get; } = [TokenPlanMiMo, DeepSeek, MiniMax, OpenAICompatible, Anthropic];
 
     // Resolve methods deliberately fall back to a safe default so old settings
     // files or renamed provider IDs do not break startup.
@@ -177,6 +191,19 @@ public static class ChatProviderCatalog
     public static LlmModelInfo ResolveModel(string? providerIdOrName, string? modelId)
     {
         var provider = Resolve(providerIdOrName);
+        if (string.Equals(provider.Id, OpenAICompatible.Id, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(modelId))
+        {
+            return new LlmModelInfo
+            {
+                Id = modelId.Trim(),
+                DisplayName = modelId.Trim(),
+                ContextLimit = provider.DefaultContextLimit,
+                CapabilityLabel = "tools",
+                Capabilities = ToolCapable
+            };
+        }
+
         return provider.Models.FirstOrDefault(model =>
                    string.Equals(model.Id, modelId, StringComparison.OrdinalIgnoreCase))
                ?? provider.Models.First();

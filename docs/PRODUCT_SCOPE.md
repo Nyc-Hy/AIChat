@@ -4,9 +4,11 @@ AIChat is a Vibe Coding assistant optimized for third-party coding models such a
 
 The product goal is not to expose every agent framework capability. The goal is to provide a small, reliable, low-cost coding assistant that can replace a Claude Code style workflow for day-to-day repository work.
 
+The detailed product baseline is maintained in [PRODUCT_BASELINE.md](PRODUCT_BASELINE.md).
+
 ## Primary Interface
 
-The primary cross-platform interface is the CLI/TUI:
+The primary cross-platform interface is the Avalonia desktop UI. CLI/TUI remains the terminal-first interface for automation, scripting, and keyboard-driven workflows:
 
 - `aichat ask` for one-shot coding tasks.
 - `aichat tui` for interactive coding sessions.
@@ -15,16 +17,20 @@ The primary cross-platform interface is the CLI/TUI:
 - `aichat doctor` for local readiness checks.
 - `aichat config test` for provider readiness checks before coding tasks.
 
-WPF remains a Windows-only shell. It should not block macOS or Linux usage, and it should not be the default product surface for new cross-platform work.
+The legacy WPF shell has been removed. Avalonia is the main UI direction, while CLI/TUI remains a supported secondary interface.
 
 ## Core Priorities
 
-1. Accurate task execution.
-2. Fast response time.
-3. Low token usage.
-4. Better prompt and provider-cache hit rates.
-5. Predictable tool approval and write behavior.
-6. Simple install and release process.
+1. Clear and simple Avalonia UI.
+2. Explicit project and conversation boundaries.
+3. Accurate task execution.
+4. Fast response time.
+5. Low token usage.
+6. Accurate context-size visibility.
+7. Per-session input/output/cache usage summaries.
+8. Better prompt and provider-cache hit rates.
+9. Predictable tool approval and write behavior.
+10. Simple install and release process.
 
 ## Default Product Shape
 

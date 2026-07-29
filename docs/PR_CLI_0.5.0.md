@@ -13,7 +13,7 @@ Prepare CLI 0.5.0 release
 
 - add the cross-platform `aichat` CLI and lightweight TUI beta for the 0.5.0 product path
 - add Fast / Standard / Deep execution modes plus first-pass DeepSeek, MiMo, and MiniMAX model profiles
-- simplify default agent/WPF startup behavior so heavyweight planner, sub-agent, memory, benchmark, and plugin paths stay out of the default flow
+- simplify default agent startup behavior so heavyweight planner, sub-agent, memory, benchmark, and plugin paths stay out of the default flow
 - add local publish tooling, GitHub release workflow, checksums, release notes, release checklist, launch plan, and product scope docs
 
 ## Validation

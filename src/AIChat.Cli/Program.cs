@@ -1063,13 +1063,13 @@ sealed record CliCommand(
             return Empty(showHelp: true);
         }
 
-        var name = args[0];
+        var name = "";
         var positionals = new List<string>();
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var flags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var dataDirectory = "";
 
-        for (var i = 1; i < args.Length; i++)
+        for (var i = 0; i < args.Length; i++)
         {
             var arg = args[i];
             switch (arg)
@@ -1104,9 +1104,22 @@ sealed record CliCommand(
                     flags.Add(arg[2..]);
                     break;
                 default:
-                    positionals.Add(arg);
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        name = arg;
+                    }
+                    else
+                    {
+                        positionals.Add(arg);
+                    }
+
                     break;
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = "tui";
         }
 
         return new CliCommand(name, positionals, options, flags, dataDirectory, false, false);

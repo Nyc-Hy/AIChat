@@ -83,6 +83,20 @@ public sealed class ProviderSettingsServiceTests
     }
 
     [Fact]
+    public void AddConfiguredProvider_SupportsOpenAICompatibleTemplate()
+    {
+        var settings = new AppSettings();
+
+        var result = ProviderSettingsService.AddConfiguredProvider(settings, "openai-compatible", "key-1");
+
+        Assert.False(result.AlreadyExisted);
+        Assert.Equal("openai-compatible", result.Provider.TemplateId);
+        Assert.Equal("openai", result.Provider.ProtocolId);
+        Assert.Equal("custom-model", result.Provider.SelectedModelId);
+        Assert.Equal(result.Provider.Id, settings.ActiveConfiguredProviderId);
+    }
+
+    [Fact]
     public void NormalizeModelParameterValues_DropsUnknownAndResetsInvalidOption()
     {
         var values = ProviderSettingsService.NormalizeModelParameterValues(
@@ -186,6 +200,26 @@ public sealed class ProviderSettingsServiceTests
 
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, issue => issue.Code == "provider.model");
+    }
+
+    [Fact]
+    public void ValidateEffectiveSettings_AllowsCustomOpenAICompatibleModel()
+    {
+        var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
+        {
+            ProviderId = "openai-compatible",
+            ProtocolId = "openai",
+            ProviderName = "OpenAI-compatible",
+            BaseUrl = "https://gateway.example.com/v1",
+            ApiKey = "key",
+            Model = "vendor-coder-latest",
+            Temperature = 0.3,
+            MaxOutputTokens = 4096,
+            ModelContextLimit = 128_000
+        }, requireTools: true);
+
+        Assert.True(result.IsValid);
+        Assert.DoesNotContain(result.Errors, issue => issue.Code == "provider.model");
     }
 
     [Fact]

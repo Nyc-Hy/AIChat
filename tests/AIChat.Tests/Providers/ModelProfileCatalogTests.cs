@@ -8,6 +8,7 @@ public sealed class ModelProfileCatalogTests
     [InlineData("deepseek", "deepseek-chat", "DeepSeek coding profile")]
     [InlineData("tokenplan-mimo", "mimo-v2.5-pro", "MiMo long-context coding profile")]
     [InlineData("minimax", "MiniMax-M2.1", "MiniMAX coding profile")]
+    [InlineData("openai-compatible", "vendor-coder-latest", "OpenAI-compatible default")]
     public void Resolve_ReturnsProviderSpecificProfile(string providerId, string modelId, string expectedName)
     {
         var profile = ModelProfileCatalog.Resolve(providerId, modelId);

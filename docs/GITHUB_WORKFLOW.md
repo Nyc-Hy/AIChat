@@ -78,16 +78,10 @@ CI 在 Pull Request 和 push 到 `master` 时运行。
 
 ## 发布
 
-手动发布：
+手动发布 CLI：
 
 ```powershell
-dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained false
-```
-
-自包含 Windows 发布：
-
-```powershell
-dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained true
+pwsh scripts\publish-cli.ps1
 ```
 
 Release notes 应包含用户可见变更、验证结果和已知问题。

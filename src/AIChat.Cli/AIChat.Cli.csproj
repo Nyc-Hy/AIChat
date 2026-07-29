@@ -21,6 +21,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="AIChat.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\..\LICENSE" Link="LICENSE" CopyToPublishDirectory="Always" />
     <None Include="..\..\README.md" Link="README.md" CopyToPublishDirectory="Always" />
     <None Include="..\..\docs\CLI_REFERENCE.md" Link="CLI_REFERENCE.md" CopyToPublishDirectory="Always" />

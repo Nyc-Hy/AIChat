@@ -1,17 +1,21 @@
 # AIChat 1.0 Roadmap
 
-AIChat 1.0 should make the CLI/TUI product reliable enough for everyday Vibe Coding work across macOS, Linux, and Windows.
+AIChat 1.0 should make the Avalonia desktop UI reliable enough for everyday Vibe Coding work across macOS, Linux, and Windows, with CLI/TUI kept as the secondary terminal interface.
 
 The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper assistant that is accurate, fast, low-cost, cache-friendly, and easy to diagnose.
 
+Product decisions should follow the baseline in [PRODUCT_BASELINE.md](PRODUCT_BASELINE.md).
+
 ## Product Pillars
 
-1. CLI/TUI first.
-2. Conservative defaults.
-3. Explicit tool approval and write behavior.
-4. Context that is visible, bounded, and cache-friendly.
-5. Release artifacts that are easy to install and verify.
-6. Real smoke tests against target model families.
+1. Avalonia UI first, CLI/TUI second.
+2. Simple, clear conversation-centered UI.
+3. Conservative defaults.
+4. Explicit tool approval and write behavior.
+5. Context that is visible, bounded, and cache-friendly.
+6. Per-session input/output/cache usage visibility.
+7. Release artifacts that are easy to install and verify.
+8. Real smoke tests against target model families.
 
 ## Milestones
 
@@ -22,11 +26,11 @@ The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper ass
 - Keep context diagnostics model-free and read-only.
 - Make cache-friendly behavior visible before spending model tokens.
 
-### 0.7.0 TUI Daily Use
+### 0.7.0 Avalonia Daily Use
 
-- Improve TUI status output with context summary and last run outcome. Started with `/context [goal]`.
-- Add command history affordances where the terminal supports it.
-- Add clearer approval prompts for write, shell, build, test, and git operations.
+- Make the Avalonia main flow cover project selection, provider setup, chat, tool approval, context visibility, and run status.
+- Keep TUI status output useful for terminal workflows. Started with `/context [goal]`.
+- Add clearer approval prompts for write, shell, build, test, and git operations across both UI surfaces.
 - Add transcript export for bug reports and PR review packets.
 
 ### 0.8.0 Provider Reliability
@@ -42,19 +46,21 @@ The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper ass
 - Verify GitHub Release automation on a release candidate tag.
 - Freeze 1.0 defaults unless a bug forces a change.
 
-### 1.0.0 Stable CLI/TUI
+### 1.0.0 Stable Avalonia + CLI/TUI
 
 - Publish checksum-verifiable release artifacts.
 - Document the stable command surface.
 - Document what remains advanced/experimental.
-- Keep WPF as Windows-only and outside the cross-platform release promise.
+- Keep WPF removed; build the stable GUI path on Avalonia.
 
-Status: implemented in the CLI/TUI release branch. Platform-specific smoke testing is still required on macOS Apple Silicon and Linux x64 before marking those platforms fully verified.
+Status: Avalonia is the main UI target; CLI/TUI remains the fallback and automation surface. Platform-specific smoke testing is still required on macOS Apple Silicon and Linux x64 before marking those platforms fully verified.
 
 ## 1.0 Acceptance Bar
 
 - Build passes.
 - Test suite passes.
+- Avalonia app starts and covers the primary coding workflow.
+- Avalonia shows explicit project, conversation, context size, run status, and session usage summaries.
 - `aichat doctor` reports useful readiness information.
 - `aichat context` explains what will enter the prompt before an agent run.
 - `aichat ask` works for one-shot coding tasks.
@@ -65,7 +71,7 @@ Status: implemented in the CLI/TUI release branch. Platform-specific smoke testi
 
 ## Non-Goals Before 1.0
 
-- Cross-platform graphical UI.
+- A second graphical UI stack.
 - Always-on planner.
 - Always-on sub-agents.
 - Automatic long-term memory writes.

@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话和本地代码 Agent 工作流。
+AIChat 是一个基于 .NET 8 的跨平台 Avalonia 桌面编程助手，并保留 CLI/TUI 作为终端入口。
 
 目前稳定基础包括：
 
-- WPF 桌面 Shell、MVVM、项目级会话、设置和持久化运行历史。
+- Avalonia 主 UI、CLI/TUI 终端入口、项目级会话、设置和持久化运行历史。
 - OpenAI-compatible 和 Anthropic Provider 适配器，包括 tool-call 请求/响应处理。
 - Agent Harness，支持模型/工具循环、规划、执行、验证、自动修复、重试和继续。
 - 内置工具：文件读写编辑、搜索、补丁、Git 操作、构建/测试和 Shell 执行。
@@ -25,7 +25,7 @@ AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话
 | 优先级 | 区域 | 目标 |
 |---|---|---|
 | 高 | GitHub 工作流 | 使用 Issues 跟踪计划，通过聚焦 PR 评审，并在合并前保持 CI 通过。 |
-| 高 | `MainViewModel` 体积 | 继续把纯工作区、审计和 Agent 运行逻辑拆到小服务中。 |
+| 高 | Avalonia 主 UI | 保持主界面聚焦，避免高级 Agent 能力重新挤入默认流程。 |
 | 高 | 测试覆盖 | 覆盖 Provider 协议解析、工具审批、审计一致性和工作区安全。 |
 | 中 | 上下文质量 | 提升相关性评分、最近文件选择和增量索引，避免增加提示词噪声。 |
 | 中 | 可观测性 | 通过更清晰的运行摘要、审计分组和验证输出，让 Agent 失败更容易排查。 |
@@ -55,14 +55,12 @@ AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话
 
 ### 桌面体验
 
-- 安装器和自动更新。
-- 主题自定义。
-- 常用 Agent 操作快捷键。
+Avalonia 是桌面主线。桌面体验应复用 `AIChat.Application` 能力，不把业务逻辑重新塞回 UI 层。
 
 ## 开发原则
 
-1. 保持分层：UI 在 `AIChat.App`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
-2. 避免继续扩大 `MainViewModel.cs`，可复用逻辑应迁移到独立服务。
+1. 保持分层：交互入口在 `AIChat.App.Avalonia` / `AIChat.Cli`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
+2. 避免把交互层做成业务逻辑承载点，可复用逻辑应迁移到独立服务。
 3. 保持改动小而聚焦。除非功能需要，不要把 UI、Provider、Harness 和 Storage 工作混在一起。
 4. 工具和 Agent 变更必须考虑权限、审计、恢复和测试。
 5. 文件写入、Shell 和 Git 修改功能必须保持保守，不能绕过 `ProjectPathGuard` 或审批机制。

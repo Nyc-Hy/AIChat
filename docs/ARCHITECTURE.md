@@ -4,8 +4,8 @@
 
 ```text
 ┌─────────────────────────────────────────────────┐
-│                   AIChat.App                     │
-│  WPF Shell · MVVM · Composition Root · XAML      │
+│        AIChat.App.Avalonia / AIChat.Cli          │
+│  Avalonia Shell · CLI/TUI · Composition Root     │
 ├─────────────────────────────────────────────────┤
 │              AIChat.Application                  │
 │  Agent Harness · Tools · Prompting · Context     │
@@ -27,14 +27,14 @@
 
 ## 依赖规则
 
-- **App** 依赖 Application、Abstractions、Domain、Providers、Storage。
+- **Avalonia App / CLI** 依赖 Application、Abstractions、Domain、Providers、Storage。
 - **Application** 依赖 Abstractions、Domain。
 - **Providers** 依赖 Abstractions、Domain。
 - **Abstractions** 不依赖其他项目。
 - **Domain** 不依赖其他项目。
 - **Storage** 依赖 Domain、Abstractions。
 
-Domain 是最内层。任何项目都不应依赖 App。
+Domain 是最内层。任何项目都不应依赖 Avalonia App 或 CLI。
 
 ## 核心抽象
 
@@ -52,7 +52,7 @@ Domain 是最内层。任何项目都不应依赖 App。
 User Input
     │
     ▼
-MainViewModel.SendAsync()
+Avalonia UI 或 CLI/TUI 入口
     │
     ├─ 构建上下文（文件索引、工作区摘要、固定上下文项）
     ├─ 构建系统提示词（规则、工具、上下文包）
@@ -78,6 +78,19 @@ AgentHarness.RunAsync()
     ├─ 运行验证命令（如已配置）
     └─ 向 UI 发送事件
 ```
+
+## 会话指标
+
+每次 Agent 运行都应尽量产生可展示的会话指标：
+
+- 上下文估算 tokens。
+- 输入 tokens。
+- 输出 tokens。
+- 缓存命中量或命中率（Provider 返回时使用精确值，否则标记为估算或未知）。
+- 工具轮次和运行时长。
+- 验证命令数量和通过/失败状态。
+
+Avalonia UI 应默认展示紧凑摘要，并通过信息提示或鼠标悬停显示组成明细。指标缺失时必须明确标记为未知，不能把估算值伪装成精确账单数据。
 
 ## 持久化
 

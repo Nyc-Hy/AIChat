@@ -1,13 +1,14 @@
 # AIChat v1.0.0 Release Notes
 
-AIChat v1.0.0 is the first stable CLI/TUI release of the project.
+AIChat v1.0.0 is the first stable Avalonia-first release of the project, with CLI/TUI kept as the secondary terminal interface.
 
 The release focuses on a practical Claude Code style workflow for third-party coding models: accurate task execution, fast feedback, low token usage, explicit tool approval, and visible context diagnostics.
 
 ## Highlights
 
-- Stable cross-platform `aichat` CLI.
-- Stable interactive `aichat tui`.
+- Stable cross-platform Avalonia desktop UI.
+- Supported cross-platform `aichat` CLI.
+- Supported interactive `aichat tui`.
 - `aichat context` for model-free context diagnostics before spending tokens.
 - TUI `/context [goal]` for in-session context diagnostics.
 - `aichat config test` for provider readiness checks.
@@ -52,7 +53,7 @@ Validated locally on Windows:
 
 - Build passes with 0 warnings and 0 errors.
 - Test suite passes: 564 tests.
-- Windows package runs `--version`, `doctor`, `models`, `config set-provider`, `config test`, `init`, `projects list`, `context`, and TUI command switching.
+- Windows smoke verifies the Avalonia app starts and the CLI package runs `--version`, `doctor`, `models`, `config set-provider`, `config test`, `init`, `projects list`, `context`, and TUI command switching.
 - Release packages are generated for `osx-arm64`, `linux-x64`, and `win-x64`.
 - Generated checksums match local zip artifacts.
 

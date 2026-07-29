@@ -1,12 +1,12 @@
 # AIChat Launch Plan
 
-AIChat 的上线目标是成为跨平台 Vibe Coding 编程助手，优先用 CLI/TUI 替代 Claude Code 的核心代码任务体验，再演进到 Web/Tauri Desktop。
+AIChat 的上线目标是成为跨平台 Vibe Coding 编程助手，优先用 Avalonia 桌面 UI 承载主体验，并保留 CLI/TUI 作为终端和自动化入口。
 
-产品边界见 [PRODUCT_SCOPE.md](PRODUCT_SCOPE.md)。发布前检查见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。0.5.0 的主线是让 AIChat 以 CLI/TUI 形式成为可发布、可验证、可替代 Claude Code 类工作流的编码助手。
+产品边界见 [PRODUCT_SCOPE.md](PRODUCT_SCOPE.md)。发布前检查见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。主线是让 AIChat 以 Avalonia UI 为主、CLI/TUI 为辅，成为可发布、可验证、可替代 Claude Code 类工作流的编码助手。
 
 ## 上线范围
 
-`0.5.0` 可上线版本聚焦 CLI：
+可上线版本聚焦 Avalonia 主 UI 和 CLI/TUI 辅助入口：
 
 - 支持 Mac / Linux / Windows。
 - 支持 DeepSeek、MiMo、MiniMAX、Anthropic 等已登记 provider。
@@ -14,7 +14,7 @@ AIChat 的上线目标是成为跨平台 Vibe Coding 编程助手，优先用 CL
 - 支持 `Fast` / `Standard` / `Deep` 执行模式。
 - 支持 DeepSeek、MiMo、MiniMAX 的第一版 `ModelProfile`。
 - 支持 `doctor`、`projects list`、`config list/use`、`--version`。
-- 支持 `tui` 交互式连续会话入口。
+- 支持 Avalonia 交互式主入口和 `tui` 终端连续会话入口。
 - 支持文件读取、搜索、编辑、补丁、Git、构建、测试和 Shell 工具。
 - 默认单 Agent loop，避免 planner、sub-agent、benchmark、memory、plugin/MCP 进入主路径。
 - 写入、Shell、构建/测试和 Git mutation 默认需要显式 `--yes` 批准。

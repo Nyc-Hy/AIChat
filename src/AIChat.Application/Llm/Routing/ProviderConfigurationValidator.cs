@@ -99,6 +99,13 @@ public static class ProviderConfigurationValidator
 
         var knownModel = provider.Models.FirstOrDefault(model =>
             string.Equals(model.Id, modelId, StringComparison.OrdinalIgnoreCase));
+        if (knownModel is null &&
+            string.Equals(provider.Id, ChatProviderCatalog.OpenAICompatible.Id, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(modelId))
+        {
+            knownModel = ChatProviderCatalog.ResolveModel(provider.Id, modelId);
+        }
+
         if (knownModel is null)
         {
             issues.Add(Error("provider.model", $"{provider.Name} 不包含模型“{modelId}”。"));

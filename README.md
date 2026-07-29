@@ -2,13 +2,14 @@
 
 AIChat 是一个面向 Vibe Coding 的跨平台代码编程助手。核心目标是让 DeepSeek、MiMo、MiniMAX 等模型在本地项目里获得接近 Claude Code / Claude Code Desktop 的编程协作体验：任务执行准确、快速、Token 消耗低，并尽可能命中稳定上下文缓存。
 
-当前正式主线是跨平台 CLI/TUI。WPF 应用仍保留为 Windows 桌面入口，但不再是唯一产品形态。
+当前正式主线是跨平台 Avalonia 桌面 UI，CLI/TUI 作为终端入口和自动化入口保留。不再维护旧 WPF 应用。
 
 本项目使用 [Apache License 2.0](LICENSE) 开源。
 
 ## 功能特性
 
-- **跨平台 CLI**：Mac / Linux / Windows 均可运行核心 coding loop
+- **跨平台 Avalonia 主 UI**：Mac / Linux / Windows 使用统一桌面入口
+- **CLI / TUI**：保留终端、脚本和自动化场景的 coding loop
 - **项目级对话**：每个项目拥有独立的会话历史和设置
 - **多模型提供商**：支持 OpenAI-compatible 和 Anthropic 协议
 - **简化 Agent Loop**：默认单 Agent 工具循环，减少不必要的模型调用和 token 消耗
@@ -20,7 +21,15 @@ AIChat 是一个面向 Vibe Coding 的跨平台代码编程助手。核心目标
 - **上下文工程**：文件索引、预算化上下文包、固定上下文项
 - **变更控制**：基于快照和哈希的冲突检测与安全回滚
 
-## 跨平台 CLI
+## 跨平台桌面应用
+
+```powershell
+dotnet run --project src\AIChat.App.Avalonia\AIChat.App.Avalonia.csproj
+```
+
+Avalonia 是主 UI 入口；新交互体验应优先在这里落地。
+
+## CLI / TUI
 
 在任意项目目录直接进入 TUI：
 
@@ -103,14 +112,6 @@ TUI 内置命令：
 - MiMo：长上下文项目理解、稳定前缀和低 token quick path。
 - MiniMAX：interleaved thinking 策略、短 action loop、工具参数收敛。
 
-## Windows 桌面应用
-
-```powershell
-dotnet run --project src\AIChat.App\AIChat.App.csproj
-```
-
-首次启动后，进入设置页，选择模型提供商模板，填写 API Key，并添加到已配置提供商列表。
-
 ## 测试
 
 ```powershell
@@ -168,7 +169,7 @@ Agent 运行会随会话一起持久化。历史面板可用于：
 
 ```text
 src/
-  AIChat.App/                  WPF Shell、MVVM 状态、组合根
+  AIChat.App.Avalonia/         跨平台 Avalonia 主 UI
   AIChat.Cli/                  跨平台 CLI 入口
   AIChat.Domain/               纯领域模型（聊天、项目、审计、上下文）
   AIChat.Abstractions/         跨边界契约和 DTO
@@ -182,7 +183,7 @@ tests/
 
 ### 分层规则
 
-1. UI (`AIChat.App`) 负责 MVVM 状态和应用组合，不承载业务逻辑。
+1. UI (`AIChat.App.Avalonia` / `AIChat.Cli`) 负责交互入口和应用组合，不承载业务逻辑。
 2. Domain (`AIChat.Domain`) 只放纯模型，不依赖其他项目。
 3. Application (`AIChat.Application`) 负责 Agent 循环、工具和提示词。
 4. Providers (`AIChat.Providers.*`) 将具体模型协议适配到统一的 `IChatProvider`。
@@ -190,6 +191,7 @@ tests/
 
 ## 文档
 
+- [产品基准](docs/PRODUCT_BASELINE.md)
 - [产品范围](docs/PRODUCT_SCOPE.md)
 - [安装说明](docs/INSTALL.md)
 - [CLI 参考](docs/CLI_REFERENCE.md)
@@ -241,16 +243,4 @@ pwsh scripts/publish-cli.ps1
 
 也可以在 GitHub Actions 中手动运行 `Release CLI` 工作流，或推送 `v*` tag 生成三个平台的 CLI artifacts。CLI 发布产物中的可执行文件名为 `aichat`（Windows 为 `aichat.exe`）。
 
-Windows WPF：
-
-```powershell
-dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained false
-```
-
-该命令生成依赖 .NET 8 Runtime 的发布包。
-
-如果需要自包含发布包：
-
-```powershell
-dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained true
-```
+当前发布主线优先覆盖 Avalonia 桌面应用和 CLI 包；TUI 作为 CLI 的交互模式随 CLI 发布。
