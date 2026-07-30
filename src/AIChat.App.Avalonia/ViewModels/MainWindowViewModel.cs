@@ -229,6 +229,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // runner takes over.
     public AgentRunnerViewModel AgentRunner => _agentRunner;
 
+    // The current agent plan (the task list the agent built via
+    // update_plan). Items are rebuilt every time the harness emits a
+    // StepAdded event, so the XAML sees an ObservableCollection it can
+    // ItemsControl-bind. Empty when the agent isn't running or hasn't
+    // created a plan yet.
+    public System.Collections.ObjectModel.ObservableCollection<PlanItemViewModel> PlanItems { get; } = [];
+    public bool HasPlan => PlanItems.Count > 0;
+
     public MainWindowViewModel(
         IAppRepository repository,
         AgentToolRegistry toolRegistry,
@@ -270,6 +278,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             setStatusMessage: value => StatusMessage = value,
             clearDraftPrompt: () => DraftPrompt = "",
             setLastAssistantStatus: value => LastAssistantStatus = value,
+            updatePlan: plan => UpdatePlan(plan),
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode);
 
@@ -564,6 +573,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void StopTask()
     {
         _runCts?.Cancel();
+    }
+
+    // Rebuild PlanItems from the current AgentPlan. Called by the
+    // AgentRunner on every StepAdded / SubAgentStarted / SubAgentCompleted
+    // event (so the plan list stays in lockstep with what the agent
+    // just wrote). Items appear in the same order the agent wrote them.
+    public void UpdatePlan(AgentPlan? plan)
+    {
+        PlanItems.Clear();
+        if (plan is null)
+        {
+            return;
+        }
+        foreach (var item in plan.Items.OrderBy(item => item.Order))
+        {
+            PlanItems.Add(new PlanItemViewModel
+            {
+                Title = item.Title,
+                Status = item.Status
+            });
+        }
     }
 
     private bool CanStopTask() => IsRunning;

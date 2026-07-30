@@ -46,6 +46,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     private readonly Action<string> _setStatusMessage;
     private readonly Action _clearDraftPrompt;
     private readonly Action<string> _setLastAssistantStatus;
+    private readonly Action<AIChat.Domain.Chat.AgentPlan?> _updatePlan;
     private readonly Func<AppSettings> _getSettings;
     private readonly Func<bool> _getNoWriteMode;
 
@@ -62,6 +63,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         Action<string> setStatusMessage,
         Action clearDraftPrompt,
         Action<string> setLastAssistantStatus,
+        Action<AIChat.Domain.Chat.AgentPlan?> updatePlan,
         Func<AppSettings> getSettings,
         Func<bool> getNoWriteMode)
     {
@@ -77,6 +79,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         _setStatusMessage = setStatusMessage;
         _clearDraftPrompt = clearDraftPrompt;
         _setLastAssistantStatus = setLastAssistantStatus;
+        _updatePlan = updatePlan;
         _getSettings = getSettings;
         _getNoWriteMode = getNoWriteMode;
     }
@@ -228,6 +231,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     {
         switch (agentEvent.Type)
         {
+            case AgentHarnessEventType.StepAdded:
+            case AgentHarnessEventType.SubAgentStarted:
+            case AgentHarnessEventType.SubAgentCompleted:
+                // The harness updates Run.Plan whenever the agent adds
+                // a step or starts/ends a sub-agent. Forward the latest
+                // plan to the host so the plan panel stays in sync.
+                _updatePlan(agentEvent.Run?.Plan);
+                break;
             case AgentHarnessEventType.PhaseChanged:
                 if (!string.IsNullOrWhiteSpace(agentEvent.PhaseTransition?.Summary))
                 {
@@ -273,6 +284,12 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     });
                 }
 
+                // update_plan mutates Run.Plan directly and emits a
+                // ToolResult rather than a StepAdded, so the plan
+                // panel won't see the new items unless we forward
+                // here too. Cheap to do on every ToolResult — the
+                // host just clears + re-adds the same items.
+                _updatePlan(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.ContentDelta:
                 if (!string.IsNullOrEmpty(agentEvent.Content))

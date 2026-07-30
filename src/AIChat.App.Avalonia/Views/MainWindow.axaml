@@ -178,7 +178,7 @@
                     <!-- ========== Main column ========== -->
                     <Grid Grid.Column="1">
 
-                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="{StaticResource Space3}">
+                        <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{StaticResource Space3}">
 
                             <!-- Slim page header: just project breadcrumb + readiness pill. No hero.
                                  Hero lives in the empty state so the conversation starts at the top. -->
@@ -368,7 +368,46 @@
                               width, so the composer always fills 80% of the
                               available chat area regardless of window size.
                             -->
-                            <Grid Grid.Row="2" ColumnDefinitions="5*,40*,5*">
+                            <!--
+                              Plan panel: shows the current agent plan
+                              (the task list update_plan writes). Sits
+                              between the conversation and the composer
+                              so it's always visible while the agent is
+                              working. IsVisible collapses the row when
+                              the plan is empty (no plan or all items
+                              completed + cleared).
+                            -->
+                            <Border Grid.Row="2"
+                                    Classes="panel"
+                                    IsVisible="{Binding HasPlan}"
+                                    Padding="{StaticResource Padding3}">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="计划" Classes="section-title"/>
+                                    <ItemsControl ItemsSource="{Binding PlanItems}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PlanItemViewModel">
+                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,2">
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding Glyph}"
+                                                               FontFamily="{StaticResource FontMono}"
+                                                               FontSize="13"
+                                                               Foreground="{StaticResource AccentBrush}"
+                                                               VerticalAlignment="Center"
+                                                               MinWidth="14"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Title}"
+                                                               Classes="body"
+                                                               Foreground="{StaticResource Text2Brush}"
+                                                               TextWrapping="Wrap"
+                                                               VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+
+                            <Grid Grid.Row="3" ColumnDefinitions="5*,40*,5*">
                                 <Border Grid.Column="1" Classes="input-floating">
                                     <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
                                         <TextBox x:Name="PromptInput"
