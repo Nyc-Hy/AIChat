@@ -22,7 +22,8 @@ public static class SlashCommandHandler
         "可用命令:\n" +
         "/clear — 清空当前对话\n" +
         "/new — 同 /clear\n" +
-        "/status — 显示当前项目、模型、对话数\n" +
+        "/status — 显示当前项目、模型、对话数、Context、上次运行\n" +
+        "/memory — 显示当前项目的 memory 列表\n" +
         "/help — 显示本帮助";
 
     // Returns true if the prompt was a slash command and the host
@@ -58,12 +59,55 @@ public static class SlashCommandHandler
             case "/status":
                 result = new Result("当前状态", BuildStatus(host));
                 return true;
+            case "/memory":
+                result = new Result("Memory", BuildMemory(host));
+                return true;
             default:
                 result = new Result(
                     "未知命令",
                     $"没有 `{command}` 这个命令。输入 `/help` 查看可用命令。");
                 return true;
         }
+    }
+
+    private static string BuildMemory(MainWindowViewModel host)
+    {
+        var project = host.Sidebar.CurrentProject;
+        if (project is null || project.Memories.Count == 0)
+        {
+            return "(当前项目还没有 memory 记录)";
+        }
+
+        var lines = new List<string>
+        {
+            $"{project.Memories.Count} 条记录 (项目: {project.Name}):"
+        };
+
+        // Group by category so the user can scan the rough shape of
+        // what the agent has remembered. Sorted by UpdatedAt descending
+        // inside each group so the most recent items surface first.
+        var byCategory = project.Memories
+            .GroupBy(item => item.Category)
+            .OrderBy(group => group.Key);
+
+        foreach (var group in byCategory)
+        {
+            lines.Add("");
+            lines.Add($"[{group.Key}]");
+            foreach (var item in group.OrderByDescending(item => item.UpdatedAt).Take(5))
+            {
+                var truncated = item.Content.Length > 120
+                    ? item.Content[..120] + "…"
+                    : item.Content;
+                lines.Add($"  • {truncated}");
+            }
+            if (group.Count() > 5)
+            {
+                lines.Add($"  … 还有 {group.Count() - 5} 条");
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 
     private static string BuildStatus(MainWindowViewModel host)
