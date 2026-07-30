@@ -90,6 +90,16 @@ public static class SlashCommandHandler
             ? "状态: 就绪"
             : $"状态: {host.StatusMessage}";
 
-        return string.Join("\n", projectLine, modelLine, conversationLine, contextLine, status);
+        // Last run's terminal status is more actionable than the current
+        // StatusMessage — the user typically wants to know "what just
+        // happened" not "what's the latest update". Only emit the line
+        // when there has been at least one run.
+        var lastRunLine = string.IsNullOrEmpty(host.LastAssistantStatus)
+            ? null
+            : $"上次运行: {host.LastAssistantStatus}";
+
+        var lines = new[] { projectLine, modelLine, conversationLine, contextLine, lastRunLine, status }
+            .Where(line => line is not null);
+        return string.Join("\n", lines);
     }
 }
