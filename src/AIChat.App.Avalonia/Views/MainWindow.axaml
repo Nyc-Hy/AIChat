@@ -382,7 +382,14 @@
                                     IsVisible="{Binding HasPlan}"
                                     Padding="{StaticResource Padding3}">
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="计划" Classes="section-title"/>
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="计划" Classes="section-title"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding PlanProgressText}"
+                                                   Classes="muted"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
                                     <ItemsControl ItemsSource="{Binding PlanItems}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PlanItemViewModel">

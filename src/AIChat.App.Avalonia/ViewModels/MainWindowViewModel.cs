@@ -236,6 +236,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // created a plan yet.
     public System.Collections.ObjectModel.ObservableCollection<PlanItemViewModel> PlanItems { get; } = [];
     public bool HasPlan => PlanItems.Count > 0;
+    public int PlanCompletedCount => PlanItems.Count(item => item.IsCompleted);
+    public string PlanProgressText => $"{PlanCompletedCount} / {PlanItems.Count}";
 
     public MainWindowViewModel(
         IAppRepository repository,
@@ -644,6 +646,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         PlanItems.Clear();
         if (plan is null)
         {
+            OnPropertyChanged(nameof(PlanCompletedCount));
+            OnPropertyChanged(nameof(PlanProgressText));
             return;
         }
         foreach (var item in plan.Items.OrderBy(item => item.Order))
@@ -654,6 +658,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 Status = item.Status
             });
         }
+        OnPropertyChanged(nameof(PlanCompletedCount));
+        OnPropertyChanged(nameof(PlanProgressText));
     }
 
     private bool CanStopTask() => IsRunning;

@@ -19,4 +19,6 @@ public sealed class PlanItemViewModel
         AgentPlanItemStatus.Skipped => "⊘",
         _ => "·"
     };
+
+    public bool IsCompleted => Status == AgentPlanItemStatus.Completed;
 }
