@@ -45,6 +45,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // AgentRunner.RunAsync and forwarded to AgentHarness so cancellation
     // halts the inner loop at the next await point.
     private CancellationTokenSource? _runCts;
+
+    // The last user prompt that survived validation. Used by RetryLastTask
+    // so a failed/cancelled run can be re-sent without retyping.
+    private string _lastUserPrompt = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRetry))]
+    private string lastAssistantStatus = "";
+
+    public bool CanRetry =>
+        !string.IsNullOrEmpty(_lastUserPrompt)
+        && !IsRunning
+        && (LastAssistantStatus is "失败" or "已停止");
+
     private AppSettings _settings = new();
 
     [ObservableProperty]
@@ -244,6 +258,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             setIsRunning: value => IsRunning = value,
             setStatusMessage: value => StatusMessage = value,
             clearDraftPrompt: () => DraftPrompt = "",
+            setLastAssistantStatus: value => LastAssistantStatus = value,
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode);
 
@@ -487,6 +502,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _runCts?.Dispose();
         _runCts = new CancellationTokenSource();
 
+        // Remember the prompt so a failed/cancelled run can be retried
+        // without retyping. RetryLastTask only fires when this is set AND
+        // the last run's status was 失败 or 已停止 (CanRetry).
+        _lastUserPrompt = prompt;
+
         try
         {
             await _agentRunner.RunAsync(prompt, effectiveSettings, _runCts.Token);
@@ -513,6 +533,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     private bool CanStopTask() => IsRunning;
+
+    [RelayCommand(CanExecute = nameof(CanRetry))]
+    private void RetryLastTask()
+    {
+        if (string.IsNullOrEmpty(_lastUserPrompt))
+        {
+            return;
+        }
+
+        DraftPrompt = _lastUserPrompt;
+        // Re-enter the send command. SendTaskCommand reads DraftPrompt,
+        // so we don't pass the prompt in directly.
+        if (SendTaskCommand.CanExecute(null))
+        {
+            SendTaskCommand.Execute(null);
+        }
+    }
 
     private bool CanSendTask() => !IsRunning;
 

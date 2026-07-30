@@ -58,6 +58,14 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘R re-sends the last user prompt. Gated by CanRetry on
+            // RetryLastTaskCommand so it only fires when the previous
+            // run failed or was stopped.
+            Gesture = new KeyGesture(Key.R, KeyModifiers.Meta),
+            Command = viewModel.RetryLastTaskCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {

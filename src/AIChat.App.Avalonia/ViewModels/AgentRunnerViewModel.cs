@@ -45,6 +45,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     private readonly Action<bool> _setIsRunning;
     private readonly Action<string> _setStatusMessage;
     private readonly Action _clearDraftPrompt;
+    private readonly Action<string> _setLastAssistantStatus;
     private readonly Func<AppSettings> _getSettings;
     private readonly Func<bool> _getNoWriteMode;
 
@@ -60,6 +61,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         Action<bool> setIsRunning,
         Action<string> setStatusMessage,
         Action clearDraftPrompt,
+        Action<string> setLastAssistantStatus,
         Func<AppSettings> getSettings,
         Func<bool> getNoWriteMode)
     {
@@ -74,6 +76,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         _setIsRunning = setIsRunning;
         _setStatusMessage = setStatusMessage;
         _clearDraftPrompt = clearDraftPrompt;
+        _setLastAssistantStatus = setLastAssistantStatus;
         _getSettings = getSettings;
         _getNoWriteMode = getNoWriteMode;
     }
@@ -95,6 +98,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             "AIChat",
             _getNoWriteMode() ? "正在以只读模式启动..." : "正在启动任务...",
             "运行中");
+        _setLastAssistantStatus("运行中");
         _activityFeed.Add(userItem);
         _activityFeed.Add(assistantItem);
         _setStatusMessage("AIChat 正在读取上下文...");
@@ -180,6 +184,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             }
 
             assistantItem.Status = "完成";
+            _setLastAssistantStatus("完成");
             _insights.UpdateMetrics(conversation.AgentRuns.LastOrDefault(), assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
             conversation.UpdatedAt = DateTimeOffset.Now;
             project.Conversations.Add(conversation);
@@ -191,6 +196,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         catch (OperationCanceledException)
         {
             assistantItem.Status = "已停止";
+            _setLastAssistantStatus("已停止");
             if (string.IsNullOrEmpty(assistantItem.Detail))
             {
                 assistantItem.Detail = "本次运行已停止。";
@@ -202,6 +208,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         catch (Exception ex)
         {
             assistantItem.Status = "失败";
+            _setLastAssistantStatus("失败");
             assistantItem.Detail = $"请求失败：{ex.Message}";
             _setStatusMessage("请求失败。");
         }

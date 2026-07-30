@@ -377,7 +377,7 @@
                                                  VerticalAlignment="Top"
                                                  KeyDown="PromptInput_OnKeyDown"/>
 
-                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
                                             <!-- Left: + attach, model chip. Right: send. The center
                                                  column (where ⌘⏎ used to live) is gone, and the
                                                  read-only toggle is dropped — single teal icon
@@ -402,7 +402,25 @@
                                                  visible at a time. Stop is enabled while
                                                  IsRunning so a misclick on the now-disabled
                                                  send can't accidentally fire another run. -->
+                                            <!-- Retry: only shown when CanRetry (last run
+                                                 failed or was stopped). Sits between the
+                                                 tools and the send button so it's the obvious
+                                                 next step. -->
                                             <Button Grid.Column="1"
+                                                    Classes="retry-button"
+                                                    Command="{Binding RetryLastTaskCommand}"
+                                                    IsVisible="{Binding CanRetry}"
+                                                    ToolTip.Tip="重试上一次任务 (⌘R)">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Path Data="M5 12 a7 7 0 1 0 1.5 -4.2 M5 4 V8 H9"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.6" StrokeLineCap="Round"
+                                                          Width="14" Height="14" Stretch="Uniform"
+                                                          VerticalAlignment="Center"/>
+                                                    <TextBlock Text="重试" FontFamily="{StaticResource FontSans}" FontSize="12" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="2"
                                                     Classes="send-button"
                                                     Command="{Binding SendTaskCommand}"
                                                     IsEnabled="{Binding !IsRunning}"
@@ -413,7 +431,7 @@
                                                       StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
                                                       Width="16" Height="16" Stretch="Uniform"/>
                                             </Button>
-                                            <Button Grid.Column="1"
+                                            <Button Grid.Column="2"
                                                     Classes="stop-button"
                                                     Command="{Binding StopTaskCommand}"
                                                     IsVisible="{Binding IsRunning}"

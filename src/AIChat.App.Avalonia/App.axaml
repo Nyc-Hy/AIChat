@@ -303,6 +303,24 @@
         <Style Selector="Button.stop-button:pointerover">
             <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
         </Style>
+        <!--
+          Retry button: a secondary ghost button that only shows up after
+          a failed/cancelled run. Smaller than the primary send, sits to
+          its left so the user's eye lands on the natural next step.
+        -->
+        <Style Selector="Button.retry-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <Style Selector="Button.retry-button:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+        </Style>
 
         <!--
           Secondary button: the muted sibling of primary. Used for Reject
