@@ -1,0 +1,93 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    AIChat design tokens (1.0 Beta UI design system v1).
+
+    All hard-coded hex / size / radius / font values in App.axaml should
+    reference these keys via {StaticResource ...} or {DynamicResource ...}.
+    Dark mode (PR 2 follow-up) is wired by overriding these values in a
+    separate Resources/Tokens.Dark.axaml dictionary merged when
+    RequestedThemeVariant="Dark".
+  -->
+
+  <!-- ===== Color (light) ===== -->
+  <Color x:Key="BgColor">#fafaf7</Color>
+  <Color x:Key="Bg2Color">#f1ede4</Color>
+  <Color x:Key="SurfaceColor">#ffffff</Color>
+  <Color x:Key="LineColor">#e9e3d6</Color>
+  <Color x:Key="LineSoftColor">#f0ead9</Color>
+  <Color x:Key="TextColor">#18181b</Color>
+  <Color x:Key="Text2Color">#3a4256</Color>
+  <Color x:Key="MutedColor">#71717a</Color>
+  <Color x:Key="AccentColor">#2f6f5e</Color>
+  <!-- Accent at 8% opacity for soft backgrounds (badges, hover, active) -->
+  <Color x:Key="AccentSoftColor">#142f6f5e</Color>
+  <Color x:Key="WarnColor">#c97b3f</Color>
+  <Color x:Key="DangerColor">#b06367</Color>
+  <!-- Accent variant used by primary action button (cool blue) -->
+  <Color x:Key="AccentBlueColor">#2563eb</Color>
+
+  <!-- Surface tones for badges / hover states -->
+  <Color x:Key="InfoBgColor">#eaf2ff</Color>
+  <Color x:Key="SuccessBgColor">#e7f7ef</Color>
+  <Color x:Key="WarningBgColor">#fff3d6</Color>
+  <Color x:Key="DividerColor">#e2e8f0</Color>
+  <Color x:Key="HoverBgColor">#f8fafc</Color>
+  <Color x:Key="HoverBg2Color">#e6ebf2</Color>
+  <Color x:Key="CloseHoverColor">#dc2626</Color>
+  <Color x:Key="TextOnAccentColor">#ffffff</Color>
+
+  <!-- ===== Brushes (consumed by XAML) ===== -->
+  <SolidColorBrush x:Key="BgBrush"          Color="{StaticResource BgColor}" />
+  <SolidColorBrush x:Key="Bg2Brush"         Color="{StaticResource Bg2Color}" />
+  <SolidColorBrush x:Key="SurfaceBrush"     Color="{StaticResource SurfaceColor}" />
+  <SolidColorBrush x:Key="LineBrush"        Color="{StaticResource LineColor}" />
+  <SolidColorBrush x:Key="LineSoftBrush"    Color="{StaticResource LineSoftColor}" />
+  <SolidColorBrush x:Key="TextBrush"        Color="{StaticResource TextColor}" />
+  <SolidColorBrush x:Key="Text2Brush"       Color="{StaticResource Text2Color}" />
+  <SolidColorBrush x:Key="MutedBrush"       Color="{StaticResource MutedColor}" />
+  <SolidColorBrush x:Key="AccentBrush"      Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentSoftBrush"  Color="{StaticResource AccentSoftColor}" />
+  <SolidColorBrush x:Key="WarnBrush"        Color="{StaticResource WarnColor}" />
+  <SolidColorBrush x:Key="DangerBrush"      Color="{StaticResource DangerColor}" />
+  <SolidColorBrush x:Key="AccentBlueBrush"  Color="{StaticResource AccentBlueColor}" />
+  <SolidColorBrush x:Key="InfoBgBrush"      Color="{StaticResource InfoBgColor}" />
+  <SolidColorBrush x:Key="SuccessBgBrush"   Color="{StaticResource SuccessBgColor}" />
+  <SolidColorBrush x:Key="WarningBgBrush"   Color="{StaticResource WarningBgColor}" />
+  <SolidColorBrush x:Key="DividerBrush"     Color="{StaticResource DividerColor}" />
+  <SolidColorBrush x:Key="HoverBgBrush"     Color="{StaticResource HoverBgColor}" />
+  <SolidColorBrush x:Key="HoverBg2Brush"    Color="{StaticResource HoverBg2Color}" />
+  <SolidColorBrush x:Key="CloseHoverBrush"  Color="{StaticResource CloseHoverColor}" />
+  <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccentColor}" />
+
+  <!-- ===== Spacing (Thickness for padding / margin, double for grid lengths) ===== -->
+  <Thickness x:Key="Space1">4</Thickness>
+  <Thickness x:Key="Space2">8</Thickness>
+  <Thickness x:Key="Space3">12</Thickness>
+  <Thickness x:Key="Space4">16</Thickness>
+  <Thickness x:Key="Space6">24</Thickness>
+  <x:Double x:Key="SpaceGap1">4</x:Double>
+  <x:Double x:Key="SpaceGap2">8</x:Double>
+  <x:Double x:Key="SpaceGap3">12</x:Double>
+  <x:Double x:Key="SpaceGap4">16</x:Double>
+  <x:Double x:Key="SpaceGap6">24</x:Double>
+
+  <!-- ===== Corner radius ===== -->
+  <CornerRadius x:Key="RadiusSm">6</CornerRadius>
+  <CornerRadius x:Key="RadiusMd">10</CornerRadius>
+  <CornerRadius x:Key="RadiusLg">14</CornerRadius>
+  <CornerRadius x:Key="RadiusFull">999</CornerRadius>
+
+  <!-- ===== Typography ===== -->
+  <FontFamily x:Key="FontSans">Outfit, -apple-system, sans-serif</FontFamily>
+  <FontFamily x:Key="FontMono">JetBrains Mono, ui-monospace, monospace</FontFamily>
+
+  <x:Double x:Key="FontXs">11</x:Double>
+  <x:Double x:Key="FontSm">12</x:Double>
+  <x:Double x:Key="FontBase">13</x:Double>
+  <x:Double x:Key="FontMd">14</x:Double>
+  <x:Double x:Key="FontLg">17</x:Double>
+  <x:Double x:Key="FontXl">22</x:Double>
+
+</ResourceDictionary>
