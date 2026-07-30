@@ -513,6 +513,66 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // @file references: pull @path tokens out of the prompt, read
+        // the file contents, and drop a system bubble per attachment
+        // so the user can see what got inlined. Warnings (file not
+        // found, too large) render as their own system bubble so the
+        // user gets feedback rather than a silent skip. The cleaned
+        // prompt (with the @tokens stripped) plus a context block
+        // listing the attached file contents is what the agent sees.
+        var projectRoot = _sidebar.CurrentProject?.Path;
+        var parsed = PromptAttachmentParser.Parse(prompt, projectRoot);
+        foreach (var attachment in parsed.Attachments)
+        {
+            var preview = attachment.Content.Length > 200
+                ? attachment.Content[..200] + "…"
+                : attachment.Content;
+            ActivityFeed.Add(
+                $"📎 {attachment.ResolvedPath}  ({attachment.ByteCount} 字节)",
+                preview,
+                "附件");
+        }
+        foreach (var warning in parsed.Warnings)
+        {
+            ActivityFeed.Add(
+                $"⚠ {warning.OriginalToken}",
+                warning.Message,
+                "附件");
+        }
+
+        // Build the prompt the agent actually sees: cleaned user
+        // question + a labelled context block listing every attached
+        // file's content. Empty if the prompt was just @file
+        // references — in that case the user has seen the system
+        // bubbles; nothing more to do.
+        if (parsed.Attachments.Count > 0)
+        {
+            var contextBlock = new System.Text.StringBuilder();
+            contextBlock.AppendLine("Attached files (use these for context):");
+            foreach (var attachment in parsed.Attachments)
+            {
+                contextBlock.AppendLine();
+                contextBlock.AppendLine($"--- {attachment.ResolvedPath} ---");
+                contextBlock.Append(attachment.Content);
+            }
+            prompt = string.IsNullOrWhiteSpace(parsed.CleanPrompt)
+                ? contextBlock.ToString()
+                : contextBlock + Environment.NewLine + Environment.NewLine + parsed.CleanPrompt;
+        }
+        else
+        {
+            prompt = parsed.CleanPrompt;
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            // The prompt was just @file references; nothing to send
+            // to the agent. DraftPrompt is already cleared below.
+            StatusMessage = "已附加文件。";
+            DraftPrompt = "";
+            return;
+        }
+
         _insights.PrepareContextPreview(prompt, _sidebar.CurrentProject, NoWriteMode);
 
         var effectiveSettings = ProviderSettingsService.CreateEffectiveSettings(_settings, _settings.Temperature);
