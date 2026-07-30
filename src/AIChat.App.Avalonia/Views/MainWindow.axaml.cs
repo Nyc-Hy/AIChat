@@ -104,6 +104,23 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘G surfaces the current project's git status (branch +
+            // uncommitted change list) as a system bubble. The user can
+            // re-fire it to refresh — the workspace change service reads
+            // git state on every call, so there's no staleness.
+            Gesture = new KeyGesture(Key.G, KeyModifiers.Meta),
+            Command = new RelayCommand(async () =>
+            {
+                var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync("/git", viewModel);
+                if (handled && slashResult is not null)
+                {
+                    viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
+                    viewModel.StatusMessage = slashResult.Title + "。";
+                }
+            })
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘⇧K is Slack / Discord's "clear channel" shortcut. In our
             // case it clears the current activity feed (ActivityFeed.Clear)
             // and is a no-op when the agent is running so the user

@@ -41,6 +41,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IProjectPicker _projectPicker;
     private readonly IClipboardService _clipboard;
     private readonly MemoryEditorViewModel _memoryEditor;
+    private readonly AIChat.Application.Workspace.IWorkspaceChangeService _workspace;
     private readonly AgentRunnerViewModel _agentRunner;
     // CTS for the currently running agent task. New SendTaskCommand runs
     // replace it; StopTaskCommand cancels it. The token is passed into
@@ -113,6 +114,56 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool HasClipboardService => _clipboard.IsAvailable;
 
     public Task CopyToClipboardAsync(string text) => _clipboard.SetTextAsync(text);
+
+    // Git status helper used by the /git-status slash command. Renders
+    // the current project's branch + a compact change list as a single
+    // string the host can drop into the activity feed. The full
+    // WorkspaceChangeService handles the underlying git call; this
+    // method is the presentation layer.
+    public async Task<string> GetGitStatusSummaryAsync()
+    {
+        var project = _sidebar.CurrentProject;
+        if (project is null || string.IsNullOrWhiteSpace(project.Path))
+        {
+            return "(请先选择项目)";
+        }
+
+        AIChat.Application.Workspace.WorkspaceChangeSet changeSet;
+        try
+        {
+            changeSet = await _workspace.GetChangesAsync(project.Path);
+        }
+        catch (Exception ex)
+        {
+            return $"git 状态读取失败：{ex.Message}";
+        }
+
+        var branch = string.IsNullOrWhiteSpace(changeSet.Branch)
+            ? "(无分支信息)"
+            : changeSet.Branch.TrimStart('#', ' ');
+        if (changeSet.Changes.Count == 0)
+        {
+            return $"分支: {branch}\n工作区干净，没有未提交改动。";
+        }
+
+        var lines = new List<string>
+        {
+            $"分支: {branch}",
+            $"{changeSet.Changes.Count} 个变更文件:",
+            "",
+        };
+        foreach (var change in changeSet.Changes)
+        {
+            var tag = change.IsUntracked ? "未跟踪" : change.DisplayStatus;
+            lines.Add($"  [{tag}] {change.Path}");
+        }
+        if (changeSet.IsTruncated)
+        {
+            lines.Add("");
+            lines.Add("  … 已截断。完整列表请在终端运行 git status。");
+        }
+        return string.Join("\n", lines);
+    }
 
     [ObservableProperty]
     private bool autoVerify;
@@ -315,7 +366,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IToastService toast,
         IProjectPicker projectPicker,
         IClipboardService clipboard,
-        MemoryEditorViewModel memoryEditor)
+        MemoryEditorViewModel memoryEditor,
+        AIChat.Application.Workspace.IWorkspaceChangeService workspace)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -332,6 +384,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _projectPicker = projectPicker;
         _clipboard = clipboard;
         _memoryEditor = memoryEditor;
+        _workspace = workspace;
         _agentRunner = new AgentRunnerViewModel(
             chatService,
             toolRegistry,

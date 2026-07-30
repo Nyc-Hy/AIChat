@@ -24,6 +24,7 @@ public static class SlashCommandHandler
         "/new — 同 /clear\n" +
         "/status — 显示当前项目、模型、对话数、Context、上次运行\n" +
         "/memory — 显示当前项目的 memory 列表\n" +
+        "/git — 显示当前项目的 git 状态\n" +
         "/copy — 复制最后一条 AI 回复到剪贴板\n" +
         "/help — 显示本帮助";
 
@@ -67,6 +68,9 @@ public static class SlashCommandHandler
                 return (true, new Result("当前状态", BuildStatus(host)));
             case "/memory":
                 return (true, new Result("Memory", BuildMemory(host)));
+            case "/git":
+            case "/git-status":
+                return (true, new Result("Git 状态", await host.GetGitStatusSummaryAsync()));
             case "/copy":
                 return (true, await TryCopyLastAssistantAsync(host));
             default:

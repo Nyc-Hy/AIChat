@@ -4,6 +4,18 @@ namespace AIChat.Application.Workspace;
 
 public interface IWorkspaceChangeService
 {
+    Task<WorkspaceChangeSet> GetChangesAsync(
+        string projectPath,
+        int maxFiles = 200,
+        CancellationToken cancellationToken = default);
+
+    Task<WorkspaceDiff> GetDiffAsync(
+        string projectPath,
+        string path,
+        bool staged = false,
+        int maxChars = 40_000,
+        CancellationToken cancellationToken = default);
+
     Task<WorkspaceRestoreResult> RestoreFileAsync(
         string projectPath,
         string path,
