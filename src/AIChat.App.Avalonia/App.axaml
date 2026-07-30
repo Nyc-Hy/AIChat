@@ -202,19 +202,20 @@
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
         <!--
-          Floating input shell: the main chat-composer that anchors at the
-          bottom of the main column. Borderless — the FloatingShadow alone
-          communicates "this is a chat surface, not a form". 14px corner
-          radius + the shadow make it feel like a paper card lifted off
-          the page. Matches the v0 / ChatGPT / Claude pattern.
+          Floating input shell: the main chat-composer at the bottom of the
+          main column. v1.1 polish: warm sunken background + a 1px hairline
+          border + generous 16px internal padding. Dropped the
+          FloatingShadow in favor of the border — the warmer tone + the
+          border feel like a notebook line on a desk rather than a SaaS
+          chat-bubble lifted off the page. 14px corner keeps the rounded
+          feel without looking like a button.
         -->
         <Style Selector="Border.input-floating">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
-            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="{StaticResource Padding3}" />
-            <Setter Property="BoxShadow" Value="{StaticResource Elevation3Shadow}" />
+            <Setter Property="Padding" Value="16" />
         </Style>
 
         <!--

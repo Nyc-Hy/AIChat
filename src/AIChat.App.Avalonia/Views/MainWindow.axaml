@@ -42,14 +42,13 @@
                       Margin="20,0,12,0"
                       ColumnSpacing="12"
                       PointerPressed="TitleBar_OnPointerPressed">
-                    <!-- Brand mark: 3-dot constellation (2 teal + 1 teal-300). -->
+                    <!-- Brand mark: a single solid teal dot. v1.1: dropped the
+                         3-dot constellation in favor of a single dot — reads
+                         less like an AI-startup logo, more like a private
+                         tool someone built for themselves. -->
                     <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <Border Width="24" Height="24">
-                            <Canvas Width="24" Height="24">
-                                <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Canvas.Left="2" Canvas.Top="2" />
-                                <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Canvas.Left="14" Canvas.Top="2" />
-                                <Ellipse Width="8" Height="8" Fill="{StaticResource Accent300Brush}" Canvas.Left="8" Canvas.Top="14" />
-                            </Canvas>
+                            <Ellipse Width="10" Height="10" Fill="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="AIChat" FontFamily="{StaticResource FontSans}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
@@ -92,7 +91,19 @@
                 <Grid Grid.Row="1" ColumnDefinitions="264,*" Margin="14,4,14,6" ColumnSpacing="14">
 
                     <!-- ========== Sidebar ========== -->
-                    <Border Grid.Column="0" Classes="rail" Padding="{StaticResource Padding3}">
+                    <!--
+                      v1.1: the 1px right edge is the divider between the
+                      sidebar and the main column. Stays on the sidebar (not
+                      a separate column) so the column layout doesn't have
+                      to know about a 1px gap, and the divider inherits the
+                      same Padding3 horizontal spacing as the sidebar
+                      content.
+                    -->
+                    <Border Grid.Column="0"
+                            Classes="rail"
+                            Padding="{StaticResource Padding3}"
+                            BorderBrush="{StaticResource LineSoftBrush}"
+                            BorderThickness="0,0,1,0">
                         <Grid RowDefinitions="Auto,*,Auto">
                             <!-- New chat + search + project + conversation list -->
                             <StackPanel Spacing="{StaticResource Space2}">
@@ -210,18 +221,17 @@
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
                                                         <Grid Classes="bubble-enter" Margin="0,0,0,12">
-                                                            <!-- AI bubble: 3-dot mark on the left, document-section card -->
+                                                            <!-- AI bubble: a single small dot on the left, document-section card.
+                                                                 v1.1 polish: dropped the 3-dot "constellation" mark that read
+                                                                 too much like an AI-startup brand; a single filled dot in the
+                                                                 accent tone reads as a person-typed bullet, less corporate. -->
                                                             <Grid IsVisible="{Binding IsAssistantBubble}"
                                                                   HorizontalAlignment="Left"
                                                                   MaxWidth="720"
                                                                   ColumnDefinitions="Auto,*"
                                                                   ColumnSpacing="10">
-                                                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}" VerticalAlignment="Top">
-                                                                    <Canvas Width="28" Height="28">
-                                                                        <Ellipse Width="9" Height="9" Fill="{StaticResource AccentBrush}" Canvas.Left="4" Canvas.Top="4" />
-                                                                        <Ellipse Width="9" Height="9" Fill="{StaticResource AccentBrush}" Canvas.Left="15" Canvas.Top="4" />
-                                                                        <Ellipse Width="9" Height="9" Fill="{StaticResource Accent300Brush}" Canvas.Left="9" Canvas.Top="15" />
-                                                                    </Canvas>
+                                                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14" Background="{StaticResource SurfaceSunkenBrush}" BorderBrush="{StaticResource LineSoftBrush}" BorderThickness="1" VerticalAlignment="Top">
+                                                                    <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 </Border>
                                                                 <StackPanel Grid.Column="1" Spacing="4">
                                                                     <Grid ColumnDefinitions="*,Auto">
@@ -282,7 +292,8 @@
                                                 HorizontalAlignment="Center"
                                                 MaxWidth="620">
                                         <StackPanel Spacing="8" HorizontalAlignment="Center">
-                                            <TextBlock Text="想问 AIChat 什么？"
+                                            <!-- v1.1: less AI-startup, more "real person tool" — short, casual, no "ask AIChat" framing. -->
+                                            <TextBlock Text="想做点什么？"
                                                        Classes="hero-title"
                                                        HorizontalAlignment="Center"/>
                                         </StackPanel>
@@ -352,10 +363,10 @@
                                     <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
                                         <TextBox x:Name="PromptInput"
                                                  Text="{Binding DraftPrompt}"
-                                                 PlaceholderText="Ask anything…"
+                                                 PlaceholderText="说说你想做啥…  (⌘↵ 发送)"
                                                  AcceptsReturn="True"
                                                  TextWrapping="Wrap"
-                                                 MinHeight="92"
+                                                 MinHeight="112"
                                                  Background="Transparent"
                                                  BorderThickness="0"
                                                  Padding="0"
