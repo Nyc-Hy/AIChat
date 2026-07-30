@@ -79,10 +79,6 @@
             <Setter Property="BorderBrush" Value="{StaticResource FocusRingBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
-        <Style Selector="Border.input-floating:focus-within">
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
-            <Setter Property="BorderThickness" Value="2" />
-        </Style>
 
         <!--
           ===== Typography — type ramp =====
@@ -217,11 +213,26 @@
           feel without looking like a button.
         -->
         <Style Selector="Border.input-floating">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-            <Setter Property="Padding" Value="14,12" />
+            <!--
+              v1.1 revert: the original 5c1eace "floating composer" was
+              SurfaceBrush + 0 border + RadiusLg + Elevation3 shadow —
+              the input literally floated above the page. The 843335e
+              "polish" changed it to SurfaceSunken + 1px line + no shadow,
+              which read as a heavier, more AI-product form field. Going
+              back: cream floating block, no border, soft shadow.
+            -->
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+            <Setter Property="BoxShadow" Value="{StaticResource Elevation3Shadow}" />
+        </Style>
+        <Style Selector="Border.input-floating:focus-within">
+            <!-- Focus indicator: deepen the shadow one elevation step. The
+                 2px AccentBrush border on the inner TextBox is removed so
+                 the cream block doesn't get a blue stripe inside it. -->
+            <Setter Property="BoxShadow" Value="{StaticResource Elevation4Shadow}" />
         </Style>
 
         <!--

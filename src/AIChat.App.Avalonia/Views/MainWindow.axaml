@@ -357,16 +357,22 @@
                                 </Panel>
                             </Border>
 
-                            <!-- Floating composer: borderless, 14px corner, 760 max-width centered. -->
+                            <!--
+                              Floating composer (v1.1 revert to 5c1eace look).
+                              Surface + RadiusLg + Elevation3 shadow, no 1px
+                              border. The input "lifts" off the page. Focus
+                              indicator = shadow deepens one step (no blue
+                              ring inside the cream block).
+                            -->
                             <Grid Grid.Row="2" MaxWidth="760" HorizontalAlignment="Center">
                                 <Border Classes="input-floating">
                                     <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
                                         <TextBox x:Name="PromptInput"
                                                  Text="{Binding DraftPrompt}"
-                                                 PlaceholderText="说说你想做啥…  (⌘↵ 发送)"
+                                                 PlaceholderText="说点什么…"
                                                  AcceptsReturn="True"
                                                  TextWrapping="Wrap"
-                                                 MinHeight="44"
+                                                 MinHeight="56"
                                                  Background="Transparent"
                                                  BorderThickness="0"
                                                  Padding="0"
@@ -374,10 +380,9 @@
                                                  MaxHeight="220"
                                                  KeyDown="PromptInput_OnKeyDown"/>
 
-                                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,8,0,0">
+                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,8,0,0">
                                             <!-- Left: + attach, model chip, icon toggle for read-only.
-                                                 Right: send button. The ⌘↵ hint lives in the
-                                                 PlaceholderText so we don't need a kbd-pill here. -->
+                                                 Center: ⌘⏎ kbd hint. Right: send. -->
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                 <Button Classes="icon-toggle" ToolTip.Tip="附加文件 (⌘⇧A)">
                                                     <Path Data="M12 5 V19 M5 12 H19"
@@ -400,7 +405,10 @@
                                                           Width="14" Height="14" Stretch="Uniform"/>
                                                 </ToggleButton>
                                             </StackPanel>
-                                            <Button Grid.Column="1"
+                                            <Border Grid.Column="1" Classes="kbd-pill" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock Text="⌘ ⏎" Classes="kbd-inline"/>
+                                            </Border>
+                                            <Button Grid.Column="2"
                                                     Classes="send-button"
                                                     Command="{Binding SendTaskCommand}"
                                                     IsEnabled="{Binding !IsRunning}"
