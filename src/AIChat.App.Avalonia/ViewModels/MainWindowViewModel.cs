@@ -269,6 +269,37 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public int PlanCompletedCount => PlanItems.Count(item => item.IsCompleted);
     public string PlanProgressText => $"{PlanCompletedCount} / {PlanItems.Count}";
 
+    // Sub-agent runs dispatched by the harness during a run (currently
+    // just the read-only explorer template — the coordinator skips
+    // every other template). Surfaced in the plan panel as a sub-
+    // section so the user can see the agent is making progress on
+    // multi-step research / verification work without scrolling the
+    // activity feed. Cleared on every new SendTaskCommand.
+    public System.Collections.ObjectModel.ObservableCollection<SubAgentRunViewModel> SubAgentRuns { get; } = [];
+    public bool HasSubAgentRuns => SubAgentRuns.Count > 0;
+
+    // Upsert from the runner: started events add a new row, completed
+    // events update the matching row by Id. The harness emits both
+    // events per sub-agent, so this is the only place the collection
+    // gets touched.
+    public void UpsertSubAgentRun(AIChat.Domain.Chat.AgentSubAgentRun run)
+    {
+        if (run is null)
+        {
+            return;
+        }
+        var existing = SubAgentRuns.FirstOrDefault(item => item.Id == run.Id);
+        if (existing is null)
+        {
+            SubAgentRuns.Add(new SubAgentRunViewModel(run));
+        }
+        else
+        {
+            existing.Update(run);
+        }
+        OnPropertyChanged(nameof(HasSubAgentRuns));
+    }
+
     public MainWindowViewModel(
         IAppRepository repository,
         AgentToolRegistry toolRegistry,
@@ -315,6 +346,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             clearDraftPrompt: () => DraftPrompt = "",
             setLastAssistantStatus: value => LastAssistantStatus = value,
             updatePlan: plan => UpdatePlan(plan),
+            upsertSubAgent: run => UpsertSubAgentRun(run),
+            clearSubAgentRuns: () => SubAgentRuns.Clear(),
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode);
 

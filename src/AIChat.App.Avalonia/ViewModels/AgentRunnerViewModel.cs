@@ -47,6 +47,8 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     private readonly Action _clearDraftPrompt;
     private readonly Action<string> _setLastAssistantStatus;
     private readonly Action<AIChat.Domain.Chat.AgentPlan?> _updatePlan;
+    private readonly Action<AIChat.Domain.Chat.AgentSubAgentRun> _upsertSubAgent;
+    private readonly Action _clearSubAgentRuns;
     private readonly Func<AppSettings> _getSettings;
     private readonly Func<bool> _getNoWriteMode;
 
@@ -64,6 +66,8 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         Action clearDraftPrompt,
         Action<string> setLastAssistantStatus,
         Action<AIChat.Domain.Chat.AgentPlan?> updatePlan,
+        Action<AIChat.Domain.Chat.AgentSubAgentRun> upsertSubAgent,
+        Action clearSubAgentRuns,
         Func<AppSettings> getSettings,
         Func<bool> getNoWriteMode)
     {
@@ -80,6 +84,8 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         _clearDraftPrompt = clearDraftPrompt;
         _setLastAssistantStatus = setLastAssistantStatus;
         _updatePlan = updatePlan;
+        _upsertSubAgent = upsertSubAgent;
+        _clearSubAgentRuns = clearSubAgentRuns;
         _getSettings = getSettings;
         _getNoWriteMode = getNoWriteMode;
     }
@@ -96,6 +102,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     {
         _setIsRunning(true);
         _clearDraftPrompt();
+        _clearSubAgentRuns();
         var userItem = new ActivityItemViewModel("你", prompt, "已发送");
         var assistantItem = new ActivityItemViewModel(
             "AIChat",
@@ -232,11 +239,21 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         switch (agentEvent.Type)
         {
             case AgentHarnessEventType.StepAdded:
+                // The harness updates Run.Plan whenever the agent adds
+                // a step. Forward the latest plan to the host so the
+                // plan panel stays in sync.
+                _updatePlan(agentEvent.Run?.Plan);
+                break;
             case AgentHarnessEventType.SubAgentStarted:
             case AgentHarnessEventType.SubAgentCompleted:
-                // The harness updates Run.Plan whenever the agent adds
-                // a step or starts/ends a sub-agent. Forward the latest
-                // plan to the host so the plan panel stays in sync.
+                // Sub-agent runs are surfaced as a sub-section of the
+                // plan panel (template + task + status + duration).
+                // Upsert so the started event creates the row and the
+                // completed event updates the same row in place.
+                if (agentEvent.SubAgentRun is not null)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() => _upsertSubAgent(agentEvent.SubAgentRun));
+                }
                 _updatePlan(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.PhaseChanged:

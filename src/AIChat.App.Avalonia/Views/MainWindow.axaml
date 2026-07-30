@@ -411,6 +411,49 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+
+                                    <!--
+                                      Sub-agent runs: the harness runs read-only
+                                      explorer sub-agents in parallel-ish batches
+                                      during a run. Each row here is one
+                                      sub-agent dispatch (start → complete)
+                                      with a template badge, the task description,
+                                      duration, and a status glyph. Lives at
+                                      the foot of the plan panel because it IS
+                                      plan execution — not its own modal.
+                                    -->
+                                    <StackPanel Spacing="4" IsVisible="{Binding HasSubAgentRuns}">
+                                        <Border Classes="section-divider" Margin="0,6,0,2"/>
+                                        <TextBlock Text="子 Agent" Classes="section-title"/>
+                                        <ItemsControl ItemsSource="{Binding SubAgentRuns}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:SubAgentRunViewModel">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2">
+                                                        <Border Grid.Column="0"
+                                                                Classes="badge"
+                                                                Padding="6,2"
+                                                                CornerRadius="{StaticResource RadiusSm}"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding TemplateDisplay}"
+                                                                       FontSize="10"
+                                                                       FontWeight="SemiBold"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Task}"
+                                                                   Classes="body"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxLines="1"
+                                                                   VerticalAlignment="Center"/>
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding DurationDisplay}"
+                                                                   Classes="muted"
+                                                                   FontSize="11"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 
