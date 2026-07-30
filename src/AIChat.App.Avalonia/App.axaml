@@ -160,5 +160,60 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="14,12" />
         </Style>
+
+        <!--
+          1.0 Beta additions: empty-state card (welcome tiles), link button
+          (text-only nav), keyboard pill (the small ⌘K / Esc / ⌘, chips),
+          and a quieter command-list ListBox that hides the default selection
+          background so the user can scan the items cleanly.
+        -->
+        <Style Selector="Button.empty-state-card">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+        </Style>
+        <Style Selector="Button.empty-state-card:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        </Style>
+
+        <Style Selector="Button.link-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style Selector="Button.link-button:pointerover">
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        </Style>
+
+        <Style Selector="Border.kbd-pill">
+            <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="ListBox.command-list ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        </Style>
+        <Style Selector="ListBox.command-list ListBoxItem:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBgBrush}" />
+        </Style>
+        <Style Selector="ListBox.command-list ListBoxItem:selected">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="ListBox.command-list ListBoxItem:selected:pointerover">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+        </Style>
     </Application.Styles>
 </Application>

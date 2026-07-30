@@ -39,6 +39,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IThemeService _theme;
     private readonly ISettingsHolder _settingsHolder;
     private readonly IToastService _toast;
+    private readonly IProjectPicker _projectPicker;
     private AppSettings _settings = new();
 
     [ObservableProperty]
@@ -72,12 +73,55 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(SendTaskCommand))]
     private bool isRunning;
 
+    // 1.0 Beta: command palette + settings modal overlays. The toggles flip
+    // a Border's IsVisible in the MainWindow XAML.
+    [ObservableProperty]
+    private bool isCommandPaletteOpen;
+
+    [ObservableProperty]
+    private bool isSettingsOpen;
+
+    [ObservableProperty]
+    private bool hasConversation;
+
+    // Approximate context window. 64K covers GPT-4 / Claude / DeepSeek with
+    // a single number so the input-area progress bar reads consistently.
+    // Will become per-model once the provider API reports the real cap.
+    private const int ApproximateContextWindow = 64_000;
+    [ObservableProperty]
+    private int contextBudgetPercent;
+
+    // Width in DIPs for the context budget bar. The container is 320px wide;
+    // we expose the computed width so the XAML can bind directly without
+    // needing a percent→width converter. Min width 0 keeps the bar hidden
+    // until the first estimate arrives.
+    public double ContextBudgetWidth => Math.Max(0, ContextBudgetPercent * 3.2);
+
     public ObservableCollection<ActivityItemViewModel> Activity { get; } = [];
     public ObservableCollection<string> SafetyNotes { get; } = [];
 
     // Toast surface is owned by the IToastService singleton; expose the same
     // ObservableCollection here so the MainWindow XAML can bind via DataContext.
     public ObservableCollection<ToastItem> Toasts => _toast.Toasts;
+
+    // Command palette is its own view-model; the MainWindow binds a search box
+    // and an ItemsControl to it.
+    public CommandPaletteViewModel CommandPalette { get; } = new();
+
+    // 1.0 Beta: top-level commands the MainWindow code-behind binds to
+    // keyboard shortcuts (Cmd+K, Cmd+,). Both flip a single bool so the
+    // XAML only has to react to one property change.
+    [RelayCommand]
+    private void OpenCommandPalette() => IsCommandPaletteOpen = true;
+
+    [RelayCommand]
+    private void CloseCommandPalette() => IsCommandPaletteOpen = false;
+
+    [RelayCommand]
+    private void OpenSettings() => IsSettingsOpen = true;
+
+    [RelayCommand]
+    private void CloseSettings() => IsSettingsOpen = false;
 
     // PR-2: provider config surface is delegated to a dedicated view-model.
     public ProviderConfigViewModel Provider => _provider;
@@ -113,7 +157,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IApprovalService approval,
         IThemeService theme,
         ISettingsHolder settingsHolder,
-        IToastService toast)
+        IToastService toast,
+        IProjectPicker projectPicker)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -127,6 +172,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _theme = theme;
         _settingsHolder = settingsHolder;
         _toast = toast;
+        _projectPicker = projectPicker;
 
         _provider.Saved += OnProviderSaved;
         _provider.TestStarted += OnProviderTestStarted;
@@ -136,6 +182,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _conversationList.ConversationSelected += OnConversationSelected;
         _approvalViewModel.RequestPresented += OnApprovalPresented;
         _approvalViewModel.RequestResolved += OnApprovalResolved;
+
+        Activity.CollectionChanged += (_, _) => HasConversation = Activity.Count > 0;
+        _insights.SessionMetrics.CollectionChanged += (_, _) => UpdateContextBudget();
+        RegisterCommandPaletteCommands();
 
         SeedEmptyState();
         _ = RefreshAsync();
@@ -159,6 +209,113 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         ApplyConversationToActivity(args.Conversation);
         StatusMessage = args.StatusMessage;
+    }
+
+    // 1.0 Beta: command palette surface. Each CommandItem carries a
+    // lucide-style glyph, a one-line description, the keyboard shortcut
+    // hint, and an async action that returns true if the palette should
+    // close after running.
+    private void RegisterCommandPaletteCommands()
+    {
+        CommandPalette.RegisterCommands(
+        [
+            new CommandItem(
+                "打开设置",
+                "配置模型提供方、API Key、Base URL",
+                "⌘ ,",
+                "M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z",
+                () => { IsSettingsOpen = true; return Task.FromResult(true); }),
+            new CommandItem(
+                "切换主题",
+                "在浅色 / 深色 / 跟随系统之间循环",
+                "⌘ ⇧ T",
+                "M12 4 V2 M12 22 V20 M4 12 H2 M22 12 H20 M5.5 5.5 L4.1 4.1 M19.9 19.9 L18.5 18.5 M5.5 18.5 L4.1 19.9 M19.9 4.1 L18.5 5.5 M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8",
+                () => { _theme.CycleToNext(); return Task.FromResult(true); }),
+            new CommandItem(
+                "刷新状态",
+                "从本地仓库重新读取项目和会话",
+                "F5",
+                "M3 12 a9 9 0 1 0 9 -9 a9.75 9.75 0 0 0 -6.74 2.74 L3 8 M3 3 V8 H8 M12 7 V12 L16 14",
+                async () => { await RefreshAsync(); return true; }),
+            new CommandItem(
+                "新建对话",
+                "清空当前活动，开始一个全新会话",
+                "⌘ N",
+                "M12 5 V19 M5 12 H19",
+                () => { ShowNewConversation(); return Task.FromResult(true); }),
+            new CommandItem(
+                "添加项目",
+                "从本地选择一个新的代码仓库",
+                "⌘ O",
+                "M4 4 H20 V20 H4 Z M4 9 H20",
+                async () =>
+                {
+                    var path = await _projectPicker.PickProjectFolderAsync();
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        await AddProjectFromUiAsync(path);
+                    }
+                    return true;
+                }),
+            new CommandItem(
+                "切换只读模式",
+                "禁止 AIChat 修改项目中的任何文件",
+                "⌘ ⇧ R",
+                "M5 12 a7 7 0 1 1 14 0 a7 7 0 1 1 -14 0 M3 3 L21 21",
+                () => { NoWriteMode = !NoWriteMode; return Task.FromResult(true); }),
+            new CommandItem(
+                "切换自动验证",
+                "修改完成后自动运行检查命令",
+                "⌘ ⇧ V",
+                "M5 12 l4 4 L19 6",
+                () => { AutoVerify = !AutoVerify; return Task.FromResult(true); }),
+            new CommandItem(
+                "测试当前模型",
+                "发起一次连接性测试，确认 API Key 有效",
+                "⌘ T",
+                "M3 12 a9 9 0 1 0 18 0 a9 9 0 1 0 -18 0 M12 7 V12 L16 14",
+                async () =>
+                {
+                    await _provider.TestProviderCommand.ExecuteAsync(null);
+                    return true;
+                }),
+            new CommandItem(
+                "显示命令面板",
+                "搜索命令、动作、设置",
+                "⌘ K",
+                "M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z",
+                () => { IsCommandPaletteOpen = true; return Task.FromResult(false); }),
+        ]);
+    }
+
+    // Called whenever the session insights re-render. Recomputes the
+    // context budget percentage for the input-area progress bar.
+    private void UpdateContextBudget()
+    {
+        var approx = (ApproximateContextWindow > 0) ? ApproximateContextWindow : 1;
+        var inputTokens = _insights.SessionMetrics.Count >= 2
+            ? ParseTokenCount(_insights.SessionMetrics[1].Value)
+            : 0;
+        var percent = (int)Math.Clamp(inputTokens * 100.0 / approx, 0, 100);
+        ContextBudgetPercent = percent;
+    }
+
+    private static int ParseTokenCount(string text)
+    {
+        if (string.IsNullOrEmpty(text) || text == "—")
+        {
+            return 0;
+        }
+        var trimmed = text.Replace(",", "").Trim();
+        if (trimmed.EndsWith("K", StringComparison.OrdinalIgnoreCase))
+        {
+            if (double.TryParse(trimmed[..^1], out var k)) return (int)(k * 1000);
+        }
+        if (trimmed.EndsWith("M", StringComparison.OrdinalIgnoreCase))
+        {
+            if (double.TryParse(trimmed[..^1], out var m)) return (int)(m * 1_000_000);
+        }
+        return int.TryParse(trimmed, out var n) ? n : 0;
     }
 
     private void OnApprovalPresented(object? sender, ToolApprovalPresentedEventArgs args)
@@ -196,7 +353,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ActiveProvider = active is null ? "未配置模型" : active.Name;
         ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
         Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
-        PrimaryActionText = Readiness == "可运行" ? "发送" : "准备";
+        PrimaryActionText = Readiness == "可运行" ? "发送 ⌘↵" : "准备";
         AutoVerify = _settings.AutoVerifyAgentRuns;
 
         _sidebar.Refresh(projects);
@@ -309,7 +466,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ActiveProvider = args.ProviderName;
         ActiveModel = args.ModelId;
         Readiness = "可运行";
-        PrimaryActionText = "发送";
+        PrimaryActionText = "发送 ⌘↵";
         StatusMessage = args.AlreadyExisted ? "已更新模型配置。" : "已保存模型配置。";
     }
 
@@ -340,7 +497,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             args.Message,
             args.IsSuccess ? "通过" : "失败"));
         Readiness = args.IsSuccess ? "可运行" : "需检查";
-        PrimaryActionText = args.IsSuccess ? "发送" : "准备";
+        PrimaryActionText = args.IsSuccess ? "发送 ⌘↵" : "准备";
         StatusMessage = args.IsSuccess ? "模型连接正常。" : "模型连接失败。";
     }
 
@@ -729,6 +886,15 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
 
     [ObservableProperty]
     private string status = status;
+
+    // The "thinking" state is: an assistant bubble that has not yet received
+    // any content from the model. The XAML renders three animated dots
+    // instead of the detail markdown, so the user always knows the run is
+    // in flight.
+    public bool IsThinking => Title == "AIChat" && string.IsNullOrEmpty(Detail) && Status == "运行中";
+
+    partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
+    partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
 
     private static HorizontalAlignment GetAlignment(string title)
     {

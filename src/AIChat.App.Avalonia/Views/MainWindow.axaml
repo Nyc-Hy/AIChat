@@ -22,10 +22,16 @@
     </Design.DataContext>
 
     <!--
-      Root overlay grid: the inner Border carries the main surface (titlebar +
-      content + status bar), the outer ItemsControl lays the toasts on top so
-      they survive theme changes and re-layouts independently of the main
-      content.
+      Top-level overlay stack (back to front):
+        1. Main surface (titlebar + content + status bar)
+        2. Toasts (bottom-right)
+        3. Command palette (centered top, search-first)
+        4. Settings modal (centered, provider config form)
+        5. Tool approval modal (centered, blocks until resolved)
+
+      Each overlay is a Grid row in the same root Grid; IsVisible gates
+      visibility AND hit-testing so the underlying UI is unclickable while
+      the overlay is open.
     -->
     <Grid>
         <Border Background="{StaticResource BgBrush}" CornerRadius="18" ClipToBounds="True">
@@ -53,10 +59,11 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
-                        <Button Classes="chrome-button" Command="{Binding RefreshCommand}" ToolTip.Tip="刷新">
-                            <Path Data="M3 12 a9 9 0 1 0 9 -9 a9.75 9.75 0 0 0 -6.74 2.74 L3 8 M3 3 V8 H8 M12 7 V12 L16 14"
+                        <!-- Cmd+K entrypoint is now the primary nav surface. -->
+                        <Button Classes="chrome-button" Command="{Binding OpenCommandPaletteCommand}" ToolTip.Tip="命令面板 (⌘K)">
+                            <Path Data="M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z"
                                   Stroke="{Binding $parent[Button].Foreground}"
-                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  StrokeThickness="1.6" StrokeJoin="Round"
                                   Width="16" Height="16" Stretch="Uniform"/>
                         </Button>
                         <Button Classes="chrome-button" Click="ToggleTheme_OnClick" ToolTip.Tip="切换主题">
@@ -141,15 +148,22 @@
                                 <Border Classes="badge" HorizontalAlignment="Left">
                                     <TextBlock Text="{Binding ActiveProvider}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}"/>
                                 </Border>
-                                <TextBlock Text="{Binding ActiveModel}" Classes="muted" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding ActiveModel}" Classes="muted" TextWrapping="Wrap"/>
+                                <Button Classes="link-button"
+                                        Command="{Binding OpenSettingsCommand}"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,4,0,0"
+                                        Cursor="Hand">
+                                    <TextBlock Text="设置 / 切换模型  ⌘," Classes="muted" FontWeight="SemiBold"/>
+                                </Button>
                             </StackPanel>
                         </Grid>
                     </Border>
 
-                    <!-- ========== Main column (with bottom-right context sheet + modal overlay) ========== -->
+                    <!-- ========== Main column ========== -->
                     <Grid Grid.Column="1">
 
-                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14" Margin="0,0,0,0">
+                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14">
 
                             <!-- Page title + session metrics -->
                             <StackPanel Spacing="12">
@@ -182,41 +196,182 @@
                                 </ItemsControl>
                             </StackPanel>
 
-                            <!-- Conversation panel -->
+                            <!-- Conversation panel: real bubbles OR empty state -->
                             <Border Grid.Row="1" Classes="panel" Padding="{StaticResource Space3}">
-                                <Grid RowDefinitions="Auto,*" RowSpacing="10">
-                                    <TextBlock Text="对话" Classes="section-title"/>
-                                    <ScrollViewer Grid.Row="1">
-                                        <ItemsControl ItemsSource="{Binding Activity}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="vm:ActivityItemViewModel">
-                                                    <StackPanel HorizontalAlignment="{Binding BubbleAlignment}" MaxWidth="{Binding BubbleMaxWidth}" Margin="0,0,0,14" Spacing="5">
-                                                        <Grid ColumnDefinitions="*,Auto">
-                                                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold"/>
-                                                            <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Margin="10,0,0,0"/>
-                                                        </Grid>
-                                                        <Border Background="{Binding BubbleBackground}" CornerRadius="14" Padding="14,11">
-                                                            <controls:MarkdownTextBlock Markdown="{Binding Detail}" Foreground="{Binding TextForeground}" TextWrapping="Wrap"/>
-                                                        </Border>
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
+                                <Panel>
+                                    <Grid IsVisible="{Binding HasConversation}" RowDefinitions="Auto,*">
+                                        <TextBlock Text="对话" Classes="section-title"/>
+                                        <ScrollViewer Grid.Row="1">
+                                            <ItemsControl ItemsSource="{Binding Activity}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ActivityItemViewModel">
+                                                        <StackPanel HorizontalAlignment="{Binding BubbleAlignment}" MaxWidth="{Binding BubbleMaxWidth}" Margin="0,0,0,14" Spacing="5">
+                                                            <Grid ColumnDefinitions="*,Auto">
+                                                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Margin="10,0,0,0"/>
+                                                            </Grid>
+                                                            <Border Background="{Binding BubbleBackground}" CornerRadius="14" Padding="14,11">
+                                                                <Panel>
+                                                                    <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
+                                                                                                Markdown="{Binding Detail}"
+                                                                                                Foreground="{Binding TextForeground}"
+                                                                                                TextWrapping="Wrap"/>
+                                                                    <!--
+                                                                      Thinking indicator: three pulsing dots shown only while the
+                                                                      assistant bubble is waiting for the first content delta.
+                                                                      All three dots share the same animation; they pulse in unison
+                                                                      which reads as a single "thinking" wave.
+                                                                    -->
+                                                                    <StackPanel IsVisible="{Binding IsThinking}"
+                                                                                Orientation="Horizontal"
+                                                                                Spacing="6"
+                                                                                VerticalAlignment="Center"
+                                                                                HorizontalAlignment="Left">
+                                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
+                                                                            <Ellipse.Styles>
+                                                                                <Style Selector="Ellipse">
+                                                                                    <Style.Animations>
+                                                                                        <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut">
+                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                        </Animation>
+                                                                                    </Style.Animations>
+                                                                                </Style>
+                                                                            </Ellipse.Styles>
+                                                                        </Ellipse>
+                                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
+                                                                            <Ellipse.Styles>
+                                                                                <Style Selector="Ellipse">
+                                                                                    <Style.Animations>
+                                                                                        <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.2">
+                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                        </Animation>
+                                                                                    </Style.Animations>
+                                                                                </Style>
+                                                                            </Ellipse.Styles>
+                                                                        </Ellipse>
+                                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
+                                                                            <Ellipse.Styles>
+                                                                                <Style Selector="Ellipse">
+                                                                                    <Style.Animations>
+                                                                                        <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.4">
+                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                        </Animation>
+                                                                                    </Style.Animations>
+                                                                                </Style>
+                                                                            </Ellipse.Styles>
+                                                                        </Ellipse>
+                                                                    </StackPanel>
+                                                                </Panel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+
+                                    <!-- Empty state: shown when no conversation yet. Suggested actions become
+                                         a single-click "fill the input and send" shortcut. -->
+                                    <StackPanel IsVisible="{Binding !HasConversation}"
+                                                Spacing="20"
+                                                VerticalAlignment="Center"
+                                                HorizontalAlignment="Center"
+                                                MaxWidth="520">
+                                        <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                            <TextBlock Text="Ask AIChat anything"
+                                                       FontFamily="{StaticResource FontSans}"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="22"
+                                                       Foreground="{StaticResource TextBrush}"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="用自然语言描述你的目标。AIChat 会先读上下文，碰到写文件、命令、Git 操作时会请你确认。"
+                                                       Classes="muted"
+                                                       TextWrapping="Wrap"
+                                                       TextAlignment="Center"
+                                                       HorizontalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <ItemsControl>
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <UniformGrid Rows="2" Columns="2"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <Button Classes="empty-state-card" Tag="检查发布前风险并修复失败的测试" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="发布前检查" FontWeight="SemiBold" Classes="body"/>
+                                                    <TextBlock Text="跑测试、找风险、生成修复建议" Classes="muted" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="empty-state-card" Tag="重构 UserDialog，把 prompt 模板抽到独立文件" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="重构" FontWeight="SemiBold" Classes="body"/>
+                                                    <TextBlock Text="按目标拆分大函数、提取模块" Classes="muted" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="empty-state-card" Tag="整理 README，把功能、快捷键、构建步骤写清楚" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="写文档" FontWeight="SemiBold" Classes="body"/>
+                                                    <TextBlock Text="README、CHANGELOG、AGENTS.md" Classes="muted" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="empty-state-card" Tag="解释一下当前项目结构和核心数据流" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="理解项目" FontWeight="SemiBold" Classes="body"/>
+                                                    <TextBlock Text="先建立项目地图再动手" Classes="muted" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Button>
                                         </ItemsControl>
-                                    </ScrollViewer>
-                                </Grid>
+                                    </StackPanel>
+                                </Panel>
                             </Border>
 
-                            <!-- Input area -->
+                            <!-- Input area (with context budget bar + keyboard hints) -->
                             <Border Grid.Row="2" Classes="input-shell">
-                                <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
-                                    <TextBox Text="{Binding DraftPrompt}"
-                                             PlaceholderText="例如：检查发布前风险，修复失败测试，整理 README..."
+                                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                                    <TextBox x:Name="PromptInput"
+                                             Text="{Binding DraftPrompt}"
+                                             PlaceholderText="例如：检查发布前风险，修复失败测试，整理 README…  (⌘K 命令面板，⌘↵ 发送)"
                                              AcceptsReturn="True"
                                              TextWrapping="Wrap"
-                                             MinHeight="82"/>
-                                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                        <TextBlock Text="写文件、命令、测试、Git 操作都会先确认。" Classes="muted" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="1" Classes="primary" Command="{Binding SendTaskCommand}" Content="{Binding PrimaryActionText}"/>
+                                             MinHeight="82"
+                                             KeyDown="PromptInput_OnKeyDown"/>
+
+                                    <!-- Context budget bar: shows estimated input tokens vs. ~64K cap. -->
+                                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                        <Border Background="{StaticResource HoverBgBrush}"
+                                                CornerRadius="3"
+                                                Height="4"
+                                                VerticalAlignment="Center"
+                                                ClipToBounds="True">
+                                            <Border Background="{StaticResource AccentBrush}"
+                                                    CornerRadius="3"
+                                                    Height="4"
+                                                    HorizontalAlignment="Left"
+                                                    Width="{Binding ContextBudgetWidth}"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1"
+                                                   Classes="muted"
+                                                   FontFamily="{StaticResource FontMono}"
+                                                   FontSize="11"
+                                                   Text="{Binding ContextBudgetPercent, StringFormat={}{0}% 上下文}"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                                        <TextBlock Text="写文件、命令、测试、Git 操作都会先确认。"
+                                                   Classes="muted"
+                                                   VerticalAlignment="Center"/>
+                                        <Button Grid.Column="1"
+                                                Classes="primary"
+                                                Command="{Binding SendTaskCommand}"
+                                                Content="{Binding PrimaryActionText}"/>
                                     </Grid>
                                 </Grid>
                             </Border>
@@ -227,7 +382,6 @@
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Bottom"
                                 Width="320"
-                                Margin="0,0,0,0"
                                 Padding="{StaticResource Space4}">
                             <StackPanel Spacing="10">
                                 <Grid ColumnDefinitions="*,Auto">
@@ -258,23 +412,6 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding}" Classes="muted" Margin="0,3" TextWrapping="Wrap"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Border Classes="section-divider" Margin="0,2"/>
-
-                                <TextBlock Text="模型提供方" Classes="section-title"/>
-                                <ItemsControl ItemsSource="{Binding Provider.AdvancedProviders}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ProviderCardViewModel">
-                                            <Grid ColumnDefinitions="*,Auto" Margin="0,5">
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}" Classes="body"/>
-                                                    <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentBlueBrush}"/>
-                                            </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -317,16 +454,17 @@
 
                 <!-- ============== Status bar (mono, bottom) ============== -->
                 <Border Grid.Row="2" Background="{StaticResource Bg2Brush}">
-                    <Grid ColumnDefinitions="*,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="16">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="16">
                         <TextBlock Text="{Binding StatusMessage}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                         <TextBlock Grid.Column="1" Text="·" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding ActiveProvider}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="280"/>
+                        <TextBlock Grid.Column="2" Text="{Binding ActiveProvider}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
+                        <TextBlock Grid.Column="3" Text="{Binding ActiveModel}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
                     </Grid>
                 </Border>
             </Grid>
         </Border>
 
-        <!-- ============== Toasts (bottom-right, top-most) ============== -->
+        <!-- ============== Toasts (bottom-right) ============== -->
         <ItemsControl ItemsSource="{Binding Toasts}"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Bottom"
@@ -351,5 +489,172 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+
+        <!-- ============== Command palette (Cmd+K) ============== -->
+        <Border IsVisible="{Binding IsCommandPaletteOpen}"
+                Background="{StaticResource ScrimBrush}"
+                IsHitTestVisible="{Binding IsCommandPaletteOpen}"
+                KeyDown="CommandPalette_OnKeyDown">
+            <Border Background="{StaticResource SurfaceBrush}"
+                    Width="640"
+                    MaxHeight="480"
+                    Padding="{StaticResource Space3}"
+                    CornerRadius="{StaticResource RadiusLg}"
+                    BoxShadow="{StaticResource ModalShadow}"
+                    VerticalAlignment="Top"
+                    Margin="0,80,0,0">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Search input: focused by default. Bound to CommandPalette.SearchText. -->
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                        <Path Grid.Column="0"
+                              Data="M11 19 a8 8 0 1 0 0 -16 a8 8 0 1 0 0 16 M21 21 L16.65 16.65"
+                              Stroke="{StaticResource MutedBrush}"
+                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                              Width="18" Height="18" Stretch="Uniform"
+                              VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="1"
+                                 x:Name="CommandSearchInput"
+                                 Text="{Binding CommandPalette.SearchText, Mode=TwoWay}"
+                                 PlaceholderText="搜索命令、操作、设置…"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 FontSize="14"
+                                 KeyDown="CommandPalette_OnKeyDown"/>
+                        <Border Grid.Column="2" Classes="kbd-pill">
+                            <TextBlock Text="ESC" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                        </Border>
+                    </Grid>
+
+                    <Border Grid.Row="1" Classes="section-divider" Margin="0,8"/>
+
+                    <ListBox Grid.Row="1" Classes="command-list"
+                             ItemsSource="{Binding CommandPalette.FilteredCommands}"
+                             SelectedIndex="{Binding CommandPalette.SelectedIndex, Mode=TwoWay}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0,4"
+                             MaxHeight="360">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CommandItem">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="8,6">
+                                    <Border Grid.Column="0"
+                                            Width="28" Height="28"
+                                            CornerRadius="6"
+                                            Background="{StaticResource Bg2Brush}">
+                                        <Path Data="{Binding Glyph}"
+                                              Stroke="{StaticResource MutedBrush}"
+                                              StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="16" Height="16" Stretch="Uniform"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Title}" Classes="body" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding Subtitle}" Classes="muted" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <Border Grid.Column="2" Classes="kbd-pill" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Shortcut}" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ============== Settings modal (Cmd+,) ============== -->
+        <Border IsVisible="{Binding IsSettingsOpen}"
+                Background="{StaticResource ScrimBrush}"
+                IsHitTestVisible="{Binding IsSettingsOpen}">
+            <Border Background="{StaticResource SurfaceBrush}"
+                    Width="720"
+                    MaxHeight="600"
+                    Padding="{StaticResource Space6}"
+                    CornerRadius="{StaticResource RadiusLg}"
+                    BoxShadow="{StaticResource ModalShadow}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16">
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="设置" Classes="page-title"/>
+                            <TextBlock Text="配置模型提供方、API Key 和默认行为。" Classes="muted"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="chrome-button" Command="{Binding CloseSettingsCommand}" ToolTip.Tip="关闭 (Esc)">
+                            <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round"
+                                  Width="14" Height="14" Stretch="Uniform"/>
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1">
+                        <StackPanel Spacing="16">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="模型提供方" Classes="section-title"/>
+                                <ComboBox ItemsSource="{Binding Provider.ProviderTemplates}"
+                                          SelectedItem="{Binding Provider.SelectedProviderTemplate}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProviderTemplateViewModel">
+                                            <TextBlock Text="{Binding Name}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </StackPanel>
+
+                            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" RowSpacing="10" ColumnSpacing="10">
+                                <TextBox Grid.Row="0" Grid.Column="0"
+                                         Text="{Binding Provider.ProviderApiKey}"
+                                         PlaceholderText="API Key"
+                                         PasswordChar="●"/>
+                                <TextBox Grid.Row="0" Grid.Column="1"
+                                         Text="{Binding Provider.ProviderModel}"
+                                         PlaceholderText="模型 ID"/>
+                                <TextBox Grid.Row="1" Grid.ColumnSpan="2"
+                                         Text="{Binding Provider.ProviderBaseUrl}"
+                                         PlaceholderText="Base URL"/>
+                            </Grid>
+
+                            <Border Classes="section-divider" Margin="0,2"/>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="可用的提供方" Classes="section-title"/>
+                                <ItemsControl ItemsSource="{Binding Provider.AdvancedProviders}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProviderCardViewModel">
+                                            <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Classes="body" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <Border Classes="section-divider" Margin="0,2"/>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="安全策略" Classes="section-title"/>
+                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8">
+                                    <TextBlock Text="只读模式" Classes="body" VerticalAlignment="Center"/>
+                                    <CheckBox Grid.Column="1" IsChecked="{Binding NoWriteMode}"/>
+                                    <TextBlock Grid.Row="1" Text="修改后自动验证" Classes="body" VerticalAlignment="Center"/>
+                                    <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoVerify}"/>
+                                </Grid>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                        <Button Grid.Column="1" Command="{Binding Provider.TestProviderCommand}" Content="测试连接" HorizontalAlignment="Stretch"/>
+                        <Button Grid.Column="2" Classes="primary" Command="{Binding Provider.SaveProviderCommand}" Content="保存配置" HorizontalAlignment="Stretch"/>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 </Window>

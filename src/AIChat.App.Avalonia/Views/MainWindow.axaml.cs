@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.Views;
 
@@ -22,6 +23,47 @@ public partial class MainWindow : Window
         // App.axaml.cs because the constructor is the only place that has
         // a stable reference to this.
         _picker.TopLevel = this;
+
+        // Window-level keyboard shortcuts. The per-input shortcuts (Cmd+Enter
+        // on the prompt box, arrows in the command palette) are handled in
+        // their respective KeyDown handlers.
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.K, KeyModifiers.Meta),
+            Command = viewModel.OpenCommandPaletteCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // Avalonia's OemComma is the platform-neutral comma key.
+            Gesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta),
+            Command = viewModel.OpenSettingsCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.Escape),
+            Command = new RelayCommand(() =>
+            {
+                if (viewModel.IsCommandPaletteOpen)
+                {
+                    viewModel.IsCommandPaletteOpen = false;
+                }
+                else if (viewModel.IsSettingsOpen)
+                {
+                    viewModel.IsSettingsOpen = false;
+                }
+            })
+        });
+
+        // Focus the command-palette search input every time the palette opens
+        // so the user can start typing immediately.
+        viewModel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainWindowViewModel.IsCommandPaletteOpen) &&
+                viewModel.IsCommandPaletteOpen)
+            {
+                CommandSearchInput.Focus();
+            }
+        };
     }
 
     private void ToggleTheme_OnClick(object? sender, RoutedEventArgs e)
@@ -98,6 +140,79 @@ public partial class MainWindow : Window
         if (path is { Length: > 0 })
         {
             await viewModel.AddProjectFromUiAsync(path);
+        }
+    }
+
+    // Empty-state welcome card click: fill the prompt with the suggested
+    // task and focus the input so the user can press Enter immediately.
+    private void EmptyStateCard_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string prompt } ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.DraftPrompt = prompt;
+        PromptInput.Focus();
+    }
+
+    // Prompt input: Cmd+Enter (or Ctrl+Enter on non-mac) sends. The default
+    // Enter key still inserts a newline because the box is multi-line.
+    private async void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        var isSend = e.KeyModifiers.HasFlag(KeyModifiers.Meta) ||
+                     e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        if (!isSend)
+        {
+            return;
+        }
+
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (viewModel.SendTaskCommand.CanExecute(null))
+        {
+            await viewModel.SendTaskCommand.ExecuteAsync(null);
+        }
+    }
+
+    // Command palette: arrow keys move selection, Enter executes, Escape
+    // closes. The list box already has focus navigation; we just need to
+    // intercept these to keep the search box in focus while cycling.
+    private async void CommandPalette_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        switch (e.Key)
+        {
+            case Key.Down:
+                e.Handled = true;
+                viewModel.CommandPalette.MoveNextCommand.Execute(null);
+                break;
+            case Key.Up:
+                e.Handled = true;
+                viewModel.CommandPalette.MovePreviousCommand.Execute(null);
+                break;
+            case Key.Enter:
+                e.Handled = true;
+                await viewModel.CommandPalette.ExecuteSelectedAsync();
+                break;
+            case Key.Escape:
+                e.Handled = true;
+                viewModel.IsCommandPaletteOpen = false;
+                break;
         }
     }
 
