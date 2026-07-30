@@ -1,113 +1,140 @@
-# Install AIChat CLI
+# Install AIChat Desktop
 
-AIChat CLI is distributed as self-contained release archives for macOS, Linux, and Windows.
+AIChat 1.0 Beta is distributed as a cross-platform Avalonia desktop application for macOS, Linux, and Windows.
+
+The legacy CLI / TUI surface has been removed. If you need a scripted entry point, drive the desktop app from the OS launcher or use the `AIChat.Application` libraries from your own .NET host.
+
+## Requirements
+
+- macOS 12+ on Apple Silicon (`osx-arm64`) or Intel (`osx-x64`)
+- Linux x64 (glibc-based, e.g. Ubuntu 22.04+, Debian 12+, Fedora 39+)
+- Windows 10 1809+ / Windows 11 on x64
+
+Runtime dependencies are bundled — no .NET SDK install is required for end users.
 
 ## Download
 
 Download the archive for your platform from the GitHub Release page:
 
-- `aichat-cli-osx-arm64.zip` for Apple Silicon macOS
-- `aichat-cli-linux-x64.zip` for Linux x64
-- `aichat-cli-win-x64.zip` for Windows x64
+- `aichat-desktop-osx-arm64.zip` — Apple Silicon macOS
+- `aichat-desktop-osx-x64.zip` — Intel macOS
+- `aichat-desktop-linux-x64.tar.gz` — Linux x64
+- `aichat-desktop-win-x64.zip` — Windows x64
 
-Each release also includes sha256 files for verification.
+Each release also includes SHA-256 checksum files for verification.
 
-## macOS Apple Silicon
-
-```bash
-unzip aichat-cli-osx-arm64.zip -d aichat
-cd aichat
-chmod +x ./aichat
-./aichat --version
-./aichat doctor
-```
-
-Optional PATH install:
+## macOS (Apple Silicon)
 
 ```bash
-mkdir -p ~/.local/bin
-cp ./aichat ~/.local/bin/aichat
-aichat --version
+# Verify checksum
+shasum -a 256 aichat-desktop-osx-arm64.zip
+cat aichat-desktop-osx-arm64.sha256
+
+# Unpack
+unzip aichat-desktop-osx-arm64.zip -d AIChat.app.d
+# The .app bundle is inside the archive; move it to /Applications
+mv AIChat.app.d/AIChat.app /Applications/AIChat.app
+
+# First launch: macOS Gatekeeper will block an unsigned binary the first time
+xattr -d com.apple.quarantine /Applications/AIChat.app 2>/dev/null || true
+open /Applications/AIChat.app
 ```
 
-If macOS Gatekeeper blocks the binary, allow it from System Settings, or remove quarantine after you verify the checksum:
-
-```bash
-xattr -d com.apple.quarantine ./aichat
-```
+If macOS still blocks the app, allow it from **System Settings → Privacy & Security**, then re-open.
 
 ## Linux x64
 
 ```bash
-unzip aichat-cli-linux-x64.zip -d aichat
-cd aichat
-chmod +x ./aichat
-./aichat --version
-./aichat doctor
-```
+shasum -a 256 aichat-desktop-linux-x64.tar.gz
+cat aichat-desktop-linux-x64.sha256
 
-Optional PATH install:
-
-```bash
-mkdir -p ~/.local/bin
-cp ./aichat ~/.local/bin/aichat
-aichat --version
+tar -xzf aichat-desktop-linux-x64.tar.gz
+# The unpacked tree contains aichat (ELF executable) plus README/LICENSE.
+# Run it directly, or install:
+mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons
+mv aichat ~/.local/bin/aichat-desktop
+cat > ~/.local/share/applications/aichat.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=AIChat
+Exec=aichat-desktop %u
+Icon=aichat
+Terminal=false
+Categories=Development;IDE;
+EOF
 ```
 
 ## Windows x64
 
-Extract `aichat-cli-win-x64.zip`, then run:
-
 ```powershell
-.\aichat.exe --version
-.\aichat.exe doctor
-```
+# Verify checksum
+Get-FileHash -Algorithm SHA256 .\aichat-desktop-win-x64.zip
+Get-Content .\aichat-desktop-win-x64.sha256
 
-Optional PATH install:
+# Unpack
+Expand-Archive .\aichat-desktop-win-x64.zip -DestinationPath .\AIChat
 
-```powershell
-$installDir = "$env:LOCALAPPDATA\AIChat\bin"
+# Optional: install to user-local app data
+$installDir = "$env:LOCALAPPDATA\AIChat"
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-Copy-Item .\aichat.exe $installDir -Force
+Copy-Item .\AIChat\* $installDir -Recurse -Force
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$installDir", "User")
 ```
 
-Open a new terminal and run:
+Open a new terminal and run `aichat`.
 
-```powershell
-aichat --version
-```
+## First-Run Setup
 
-## Configure A Provider
+The first time the app starts it will show the **Avalonia main window** with the project sidebar empty. The onboarding flow covers:
 
-DeepSeek example:
+1. Pick a project folder (the **Add project** button on the sidebar).
+2. Configure a model provider (the **Advanced** expander on the right rail — API key, model, base URL).
+3. Run a smoke test (the **Test connection** button next to the provider config).
+4. Send a task in the bottom input box.
 
-```bash
-aichat config set-provider --provider deepseek --api-key "$DEEPSEEK_API_KEY" --model deepseek-chat
-aichat config test
-```
+Project settings and provider credentials are persisted to:
 
-Then initialize a project:
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Application Support/AIChat/` |
+| Linux | `~/.config/AIChat/` |
+| Windows | `%APPDATA%\AIChat\` |
 
-```bash
-cd /path/to/repo
-aichat init --project .
-aichat context "summarize the project"
-aichat
-```
+## Verifying Checksums
 
-## Verify Checksums
-
-macOS/Linux:
+macOS / Linux:
 
 ```bash
-shasum -a 256 aichat-cli-osx-arm64.zip
-cat aichat-cli-osx-arm64.sha256
+shasum -a 256 aichat-desktop-osx-arm64.zip
+cat aichat-desktop-osx-arm64.sha256
 ```
 
 Windows:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\aichat-cli-win-x64.zip
-Get-Content .\aichat-cli-win-x64.sha256
+Get-FileHash -Algorithm SHA256 .\aichat-desktop-win-x64.zip
+Get-Content .\aichat-desktop-win-x64.sha256
+```
+
+## Build From Source
+
+If you want to build a desktop bundle yourself:
+
+```bash
+git clone https://github.com/Nyc-Hy/AIChat.git
+cd AIChat
+dotnet build src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj -c Release
+dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj
+```
+
+To produce a self-contained zip for your current platform:
+
+```bash
+dotnet publish src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj \
+  -c Release \
+  -r osx-arm64 \
+  --self-contained true \
+  -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true \
+  -p:DebugType=embedded
 ```

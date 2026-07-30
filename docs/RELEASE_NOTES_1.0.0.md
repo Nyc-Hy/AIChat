@@ -1,86 +1,60 @@
-# AIChat v1.0.0 Release Notes
+# AIChat v1.0.0 Beta — Release Notes
 
-AIChat v1.0.0 is the first stable Avalonia-first release of the project, with CLI/TUI kept as the secondary terminal interface.
+AIChat v1.0.0 Beta is the first **desktop-only** release of the project. The Avalonia application for macOS, Linux, and Windows is the only product surface. The legacy CLI / TUI has been removed.
 
 The release focuses on a practical Claude Code style workflow for third-party coding models: accurate task execution, fast feedback, low token usage, explicit tool approval, and visible context diagnostics.
 
 ## Highlights
 
-- Stable cross-platform Avalonia desktop UI.
-- Supported cross-platform `aichat` CLI.
-- Supported interactive `aichat tui`.
-- `aichat context` for model-free context diagnostics before spending tokens.
-- TUI `/context [goal]` for in-session context diagnostics.
-- `aichat config test` for provider readiness checks.
+- Stable cross-platform Avalonia desktop UI for macOS, Linux, and Windows.
+- Project-scoped conversations with persistent settings and run history.
+- Model-free context diagnostics in the right-rail context panel.
+- Provider readiness check from the provider config card.
 - Fast / Standard / Deep execution modes.
 - First-class DeepSeek, MiMo, and MiniMAX model profiles.
-- Conservative default agent behavior: single-agent loop, planner off by default, sub-agents off by default, auto-fix off by default, memory writes off by default.
-- Explicit approval for write, shell, build/test, and git mutation tools.
+- Conservative default agent behaviour: single-agent loop, planner off, sub-agents off, auto-fix off, memory writes off.
+- Explicit approval for write, shell, build/test, and git mutation tools — surfaced as an in-app approval card.
 - macOS Apple Silicon, Linux x64, and Windows x64 release archives.
-- SHA-256 checksum files for release artifacts.
+- SHA-256 checksum files for every release artifact.
 
-## Stable Command Surface
+## Desktop UI Surface
 
-- `aichat --version`
-- `aichat doctor`
-- `aichat models`
-- `aichat config show`
-- `aichat config list`
-- `aichat config set-provider`
-- `aichat config use`
-- `aichat config test`
-- `aichat init`
-- `aichat projects list`
-- `aichat context`
-- `aichat ask`
-- `aichat tui`
+The Avalonia window is built around three areas:
 
-## TUI Commands
+- **Left rail** — current project + project list + recent conversations + project health.
+- **Centre** — page title + session metrics + conversation activity stream + prompt input.
+- **Right rail** — context preview, pending tool approval card, safety toggles (read-only / auto-verify), advanced provider configuration.
 
-- `/help`
-- `/mode fast|standard|deep`
-- `/context [goal]`
-- `/yes`
-- `/plain`
-- `/no-write`
-- `/verify`
-- `/status`
-- `/exit`
+Provider templates supported out of the box: DeepSeek, MiMo, MiniMAX, generic OpenAI-compatible, Anthropic-compatible.
+
+## Agent Mode
+
+When the active model supports tool calls, the desktop app enters agent mode with a single-agent loop. The bottom input box sends a task; the centre activity stream renders the conversation with Markdown and surfaces tool calls, approvals, and verification results. Risky actions — file writes, shell commands, tests, builds, git mutations — pause for an in-app approval card.
 
 ## Verification
 
-Validated locally on Windows and macOS Apple Silicon.
+Validated locally on macOS Apple Silicon and Windows x64.
 
 ### macOS Apple Silicon (M-series, arm64)
 
 - OS: macOS 26.5.2 (Darwin 25.5.0, arm64)
-- Runtime: .NET 10.0.8 (self-contained, single-file)
+- Runtime: .NET 10.0.8 (self-contained, single-file Avalonia app)
 - Build: `dotnet build AIChat.sln` — 0 warnings, 0 errors.
-- Tests: `dotnet test tests/AIChat.Tests/AIChat.Tests.csproj` — 626/626 passing on net10.0.
-- Artifact: `aichat-cli-osx-arm64.zip` (~33 MB compressed, ~89 MB self-contained binary).
-- SHA-256: `2e54a1113e8d471a09bf2f7ada0f156eb3879e74ad041fabf6a7625b1cd4ba53`.
-- INSTALL.md flow verified end-to-end:
-  - `unzip` + `chmod +x ./aichat` — clean layout, no `__MACOSX` resource forks.
-  - `./aichat --version` — `1.0.0+864b1652b5a76e8de0be58dd952093350fb687aa`.
-  - `./aichat doctor` — reports .NET 10.0.8, macOS 26.5.2, 15 tools, no provider configured.
-  - `./aichat models` — lists all 5 provider profiles (MiMo, DeepSeek, MiniMax, OpenAI-compatible, Anthropic).
-  - `./aichat config show` / `config list` — defaults render correctly.
-  - `./aichat init --project .` — detects 2 verification commands.
-  - `./aichat context "smoke"` — returns project snapshot, file index (430 files), context pack (28 included / 42 omitted, ~1189 tokens).
-  - `./aichat config set-provider --provider deepseek --api-key <dummy>` + `config test` — `OpenAICompatibleChatProvider` reaches the real DeepSeek endpoint, parses 401, classifies as `Authentication`.
-  - PATH install to `~/.local/bin/aichat` works.
+- Tests: `dotnet test tests/AIChat.Tests/AIChat.Tests.csproj` — 621/621 passing on net10.0.
+- Avalonia app: `dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj` — window opens, sidebar / context panel / input box render, theme toggle works, project picker wired.
+- Architecture: Apple Silicon `osx-arm64` self-contained publish succeeds (89 MB single-file binary).
 
 ### Windows x64 (validated on a separate machine)
 
 - Build passes with 0 warnings and 0 errors.
-- Test suite passes: 564 tests.
-- Windows smoke verifies the Avalonia app starts and the CLI package runs `--version`, `doctor`, `models`, `config set-provider`, `config test`, `init`, `projects list`, `context`, and TUI command switching.
-- Release packages are generated for `osx-arm64`, `linux-x64`, and `win-x64`.
-- Generated checksums match local zip artifacts.
+- Test suite passes.
+- Avalonia app: window opens, primary coding workflow (project select → provider config → send task) is reachable from the UI.
+- WPF shell is fully removed; the GUI path is Avalonia-only.
 
-### Known gap
+### Known gaps
 
-- Linux x64 release package is built but has not been smoke-tested on a real Linux machine yet.
-- API keys for configured providers are stored on disk using Windows DPAPI on Windows. On macOS and Linux the current implementation falls back to a "plain" marker (the file is still owned by the user account, but is not encrypted at rest). Tracking encrypted protection for non-Windows platforms as a post-1.0 follow-up.
+- Linux x64 release archive is built but has not been smoke-tested on a real Linux machine yet.
+- API keys for configured providers are stored on disk using Windows DPAPI on Windows. On macOS and Linux the current implementation falls back to a "plain" marker — the file is owned by the user account, but is not encrypted at rest. Encrypted protection for non-Windows platforms is tracked as a post-1.0 follow-up.
+- The Avalonia app has not been end-to-end smoke-tested with a real provider (DeepSeek / MiMo / MiniMAX) on a real conversation yet — manual `aichat config test` validation still uses the removed CLI flow on this branch. The 1.0.0 GA release will require a real provider round trip from the Avalonia UI.
 
-Before calling a platform fully verified, run the smoke tests from `INSTALL.md` on that platform.
+Before calling a platform fully verified, run the smoke flow from [INSTALL.md](INSTALL.md) on that platform.

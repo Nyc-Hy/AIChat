@@ -4,11 +4,11 @@
 
 ## 当前状态
 
-AIChat 是一个基于 .NET 8 的跨平台 Avalonia 桌面编程助手，并保留 CLI/TUI 作为终端入口。
+AIChat 是一个基于 .NET 10 的跨平台 Avalonia 桌面编程助手。**桌面 UI 是唯一的产品形态**——CLI/TUI 已移除。
 
 目前稳定基础包括：
 
-- Avalonia 主 UI、CLI/TUI 终端入口、项目级会话、设置和持久化运行历史。
+- Avalonia 主 UI、项目级会话、设置和持久化运行历史。
 - OpenAI-compatible 和 Anthropic Provider 适配器，包括 tool-call 请求/响应处理。
 - Agent Harness，支持模型/工具循环、规划、执行、验证、自动修复、重试和继续。
 - 内置工具：文件读写编辑、搜索、补丁、Git 操作、构建/测试和 Shell 执行。
@@ -30,6 +30,7 @@ AIChat 是一个基于 .NET 8 的跨平台 Avalonia 桌面编程助手，并保�
 | 中 | 上下文质量 | 提升相关性评分、最近文件选择和增量索引，避免增加提示词噪声。 |
 | 中 | 可观测性 | 通过更清晰的运行摘要、审计分组和验证输出，让 Agent 失败更容易排查。 |
 | 中低 | 打包 | 在 framework-dependent 发布路径稳定后，改进安装包和发布体验。 |
+| 中 | 跨平台加密存储 | 在 macOS / Linux 上对本地 Provider API key 做加密保护（与 Windows DPAPI 对齐）。 |
 
 ## 未来功能
 
@@ -57,9 +58,14 @@ AIChat 是一个基于 .NET 8 的跨平台 Avalonia 桌面编程助手，并保�
 
 Avalonia 是桌面主线。桌面体验应复用 `AIChat.Application` 能力，不把业务逻辑重新塞回 UI 层。
 
+### 跨平台加密存储
+
+- 在 macOS / Linux 上为 Provider API key 引入加密 at-rest 保护（与 Windows DPAPI 对齐）。
+- 不改变 UI 行为；纯后端存储升级。
+
 ## 开发原则
 
-1. 保持分层：交互入口在 `AIChat.App.Avalonia` / `AIChat.Cli`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
+1. 保持分层：交互入口在 `AIChat.App.Avalonia`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
 2. 避免把交互层做成业务逻辑承载点，可复用逻辑应迁移到独立服务。
 3. 保持改动小而聚焦。除非功能需要，不要把 UI、Provider、Harness 和 Storage 工作混在一起。
 4. 工具和 Agent 变更必须考虑权限、审计、恢复和测试。
@@ -70,14 +76,21 @@ Avalonia 是桌面主线。桌面体验应复用 `AIChat.Application` 能力，�
 
 代码变更：
 
-```powershell
+```bash
 dotnet build AIChat.sln --no-restore -m:1 -v:minimal
-dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal
+dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 git diff --check
 ```
 
 仅文档变更：
 
-```powershell
+```bash
 git diff --check
+```
+
+桌面端冒烟（在 macOS / Linux / Windows 真机上）：
+
+```bash
+dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj
+# 验证：窗口打开 → 添加项目 → 配置 Provider → Test connection → 发送任务 → Tool approval → 完成
 ```
