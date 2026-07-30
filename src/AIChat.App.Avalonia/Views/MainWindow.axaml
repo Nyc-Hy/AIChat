@@ -205,9 +205,9 @@
                             <Border Grid.Row="1" Classes="panel" Padding="0">
                                 <Panel>
                                     <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline -->
-                                    <Grid IsVisible="{Binding HasConversation}">
+                                    <Grid IsVisible="{Binding ActivityFeed.HasConversation}">
                                         <ScrollViewer Padding="20,12">
-                                            <ItemsControl ItemsSource="{Binding Activity}">
+                                            <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
                                                         <Grid Classes="bubble-enter" Margin="0,0,0,12">
@@ -276,7 +276,7 @@
 
                                     <!-- Empty state: lean — hero + 4 quick-action cards. No sub-greeting, no kbd-hint row.
                                          ToolTip.Tip on each card shows the full prompt. -->
-                                    <StackPanel IsVisible="{Binding !HasConversation}"
+                                    <StackPanel IsVisible="{Binding !ActivityFeed.HasConversation}"
                                                 Spacing="32"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"

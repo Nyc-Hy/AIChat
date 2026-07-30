@@ -41,11 +41,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IProjectPicker _projectPicker;
     private AppSettings _settings = new();
 
-    // Set during bulk Activity mutations (clear + add) so the
-    // CollectionChanged handler does not flip HasConversation between
-    // Clear and the first Add. Caller recomputes the flag after the loop.
-    private bool _suppressHasConversation;
-
     [ObservableProperty]
     private string activeProvider = "正在加载...";
 
@@ -97,9 +92,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool isSettingsOpen;
 
-    [ObservableProperty]
-    private bool hasConversation;
-
     // 1.0 Beta: derive the top status, breadcrumb visibility and status-bar
     // text from the same handful of fields so the XAML can stay declarative.
     // HasProject hides the project crumb when no project is selected (so
@@ -131,7 +123,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // bar is 80px wide so the percent→width factor is 0.8.
     public double ContextBudgetWidthInMini => Math.Max(0, ContextBudgetPercent * 0.8);
 
-    public ObservableCollection<ActivityItemViewModel> Activity { get; } = [];
+    // PR-12: conversation activity feed is its own view-model. The XAML
+    // binds to ActivityFeed.Activity / ActivityFeed.HasConversation.
+    public ActivityFeedViewModel ActivityFeed { get; } = new();
 
     // Toast surface is owned by the IToastService singleton; expose the same
     // ObservableCollection here so the MainWindow XAML can bind via DataContext.
@@ -169,7 +163,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private void NewConversation()
     {
-        ShowNewConversation();
+        ActivityFeed.Clear();
         StatusMessage = "新对话。";
     }
 
@@ -236,13 +230,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _approvalViewModel.RequestPresented += OnApprovalPresented;
         _approvalViewModel.RequestResolved += OnApprovalResolved;
 
-        Activity.CollectionChanged += (_, _) =>
-        {
-            if (!_suppressHasConversation)
-            {
-                HasConversation = Activity.Count > 0;
-            }
-        };
         _insights.SessionMetrics.CollectionChanged += (_, _) => UpdateContextBudget();
         _sidebar.PropertyChanged += (_, e) =>
         {
@@ -277,7 +264,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void OnConversationSelected(object? sender, ConversationSelectedEventArgs args)
     {
-        ApplyConversationToActivity(args.Conversation);
+        ActivityFeed.LoadConversation(args.Conversation);
         StatusMessage = args.StatusMessage;
     }
 
@@ -390,16 +377,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void OnApprovalPresented(object? sender, ToolApprovalPresentedEventArgs args)
     {
-        Activity.Add(new ActivityItemViewModel(
+        ActivityFeed.Add(
             "需要确认",
             args.Request.Preview.Summary,
-            "等待"));
+            "等待");
         StatusMessage = args.StatusMessage;
     }
 
     private void OnApprovalResolved(object? sender, ToolApprovalResolvedEventArgs args)
     {
-        Activity.Add(new ActivityItemViewModel(
+        ActivityFeed.Add(new ActivityItemViewModel(
             args.Decision.IsApproved ? "已允许操作" : "已拒绝操作",
             args.Decision.IsApproved ? "AIChat 可以继续。" : args.Decision.Reason,
             args.Decision.IsApproved ? "已允许" : "已拒绝"));
@@ -430,9 +417,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _provider.Refresh();
         _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
 
-        if (Activity.Count == 0)
+        if (ActivityFeed.Activity.Count == 0)
         {
-            ShowNewConversation();
+            ActivityFeed.Clear();
         }
 
         StatusMessage = "已加载。";
@@ -444,7 +431,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var prompt = DraftPrompt.Trim();
         if (string.IsNullOrWhiteSpace(prompt))
         {
-            Activity.Add(new ActivityItemViewModel("需要任务", "先描述你希望 AIChat 完成什么。", "等待"));
+            ActivityFeed.Add("需要任务", "先描述你希望 AIChat 完成什么。", "等待");
             StatusMessage = "请先输入任务。";
             return;
         }
@@ -456,14 +443,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (!validation.IsValid || effectiveSettings is null)
         {
             var message = validation.Errors.FirstOrDefault()?.Message ?? "发送前需要配置模型密钥。";
-            Activity.Add(new ActivityItemViewModel("需要配置模型", message, "已阻止"));
+            ActivityFeed.Add("需要配置模型", message, "已阻止");
             StatusMessage = message;
             return;
         }
 
         if (_sidebar.CurrentProject is null || string.IsNullOrWhiteSpace(_sidebar.CurrentProject.Path))
         {
-            Activity.Add(new ActivityItemViewModel("需要项目", "发送前请先选择或初始化项目。", "已阻止"));
+            ActivityFeed.Add("需要项目", "发送前请先选择或初始化项目。", "已阻止");
             StatusMessage = "当前没有可运行的项目。";
             return;
         }
@@ -536,10 +523,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         IsRunning = true;
         StatusMessage = $"正在测试 {args.ProviderName}...";
-        Activity.Add(new ActivityItemViewModel(
+        ActivityFeed.Add(
             "模型测试",
             $"正在连接 {args.ProviderName} ({args.ModelId})",
-            "运行中"));
+            "运行中");
     }
 
     private void OnProviderTestCompleted(object? sender, ProviderTestCompletedEventArgs args)
@@ -547,71 +534,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IsRunning = false;
         if (args.Exception is not null)
         {
-            Activity.Add(new ActivityItemViewModel("模型测试", $"测试失败：{args.Message}", "失败"));
+            ActivityFeed.Add("模型测试", $"测试失败：{args.Message}", "失败");
             Readiness = "需检查";
             StatusMessage = "模型连接失败。";
             return;
         }
 
-        Activity.Add(new ActivityItemViewModel(
+        ActivityFeed.Add(
             "模型测试",
             args.Message,
-            args.IsSuccess ? "通过" : "失败"));
+            args.IsSuccess ? "通过" : "失败");
         Readiness = args.IsSuccess ? "可运行" : "需检查";
         StatusMessage = args.IsSuccess ? "模型连接正常。" : "模型连接失败。";
     }
 
-    // PR-4: replaced by ConversationListViewModel.
-    //
-    // "New conversation" used to seed a placeholder activity item. With the
-    // 1.0 Beta empty state that placeholder is redundant (the hero card
-    // already explains how to start a task) and it was breaking the
-    // HasConversation toggle — Activity.Count was always 1, so the empty
-    // state never showed. Clear and let the XAML fall through to the
-    // hero card.
-    private void ShowNewConversation()
-    {
-        Activity.Clear();
-    }
-
-    // Loads a conversation's messages into the activity feed. Called by
-    // the OnConversationSelected event handler. When the conversation is
-    // null we show the "new conversation" prompt instead.
-    private void ApplyConversationToActivity(Conversation? conversation)
-    {
-        if (conversation is null)
-        {
-            ShowNewConversation();
-            return;
-        }
-
-        // v1 bug B-4 fix: clear + bulk-insert without firing HasConversation
-        // changes in between. The CollectionChanged handler flips
-        // HasConversation for every Add; if we let it run mid-loop the empty
-        // state and the conversation panel swap multiple times in one frame.
-        // Suppress notifications for the bulk update, then recompute once.
-        _suppressHasConversation = true;
-        try
-        {
-            Activity.Clear();
-            foreach (var message in conversation.Messages.OrderBy(message => message.CreatedAt))
-            {
-                var title = message.Role == ChatRole.User ? "你" : "AIChat";
-                var status = message.CreatedAt.ToLocalTime().ToString("HH:mm");
-                Activity.Add(new ActivityItemViewModel(title, message.Content, status));
-            }
-
-            if (Activity.Count == 0)
-            {
-                Activity.Add(new ActivityItemViewModel("AIChat", "这个对话还没有消息。", "空"));
-            }
-        }
-        finally
-        {
-            _suppressHasConversation = false;
-        }
-        HasConversation = Activity.Count > 0;
-    }
+    // PR-12: ShowNewConversation and ApplyConversationToActivity moved to
+    // ActivityFeedViewModel. The parent VM only orchestrates
+    // ActivityFeed.LoadConversation via the OnConversationSelected handler.
 
 
     // PR-6: Approve / Reject commands live on ToolApprovalViewModel.
@@ -622,8 +561,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         DraftPrompt = "";
         var userItem = new ActivityItemViewModel("你", prompt, "已发送");
         var assistantItem = new ActivityItemViewModel("AIChat", NoWriteMode ? "正在以只读模式启动..." : "正在启动任务...", "运行中");
-        Activity.Add(userItem);
-        Activity.Add(assistantItem);
+        ActivityFeed.Add(userItem);
+        ActivityFeed.Add(assistantItem);
         StatusMessage = "AIChat 正在读取上下文...";
 
         var project = _sidebar.CurrentProject!;
@@ -747,10 +686,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 {
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        Activity.Add(new ActivityItemViewModel(
+                        ActivityFeed.Add(
                             "正在读取",
                             FriendlyToolSummary(agentEvent.ToolCall.Name),
-                            "工具"));
+                            "工具");
                         _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
                     });
                 }
@@ -759,10 +698,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             case AgentHarnessEventType.ToolApprovalRejected:
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    Activity.Add(new ActivityItemViewModel(
+                    ActivityFeed.Add(
                         "已跳过操作",
                         agentEvent.ToolPreview?.Summary ?? "此操作需要确认后才能执行。",
-                        "已阻止"));
+                        "已阻止");
                 });
                 break;
             case AgentHarnessEventType.ToolResult:
@@ -770,10 +709,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 {
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        Activity.Add(new ActivityItemViewModel(
+                        ActivityFeed.Add(
                             "工具问题",
                             agentEvent.ToolResult.Content,
-                            "需查看"));
+                            "需查看");
                     });
                 }
 
