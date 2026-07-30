@@ -64,6 +64,11 @@ internal static class ProtectedSettingsSerializer
             return;
         }
 
+        // macOS / Linux fallback: persist the secret in cleartext under the
+        // "plain" marker. The settings file is owned by the user account, so
+        // this matches the behaviour of common CLI config tools, but it is
+        // not a real protection-at-rest boundary. Encrypted protection for
+        // non-Windows platforms is tracked as a post-1.0 follow-up.
         protectedValue = secret;
         protection = "plain";
     }

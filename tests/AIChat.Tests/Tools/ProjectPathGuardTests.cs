@@ -18,9 +18,10 @@ public sealed class ProjectPathGuardTests
     public void ResolveInsideProject_RejectsPathTraversal()
     {
         var root = Path.Combine(Path.GetTempPath(), "AIChat.PathGuard.Tests");
+        var traversal = $"..{Path.DirectorySeparatorChar}outside.txt";
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            ProjectPathGuard.ResolveInsideProject(root, "..\\outside.txt"));
+            ProjectPathGuard.ResolveInsideProject(root, traversal));
 
         Assert.Contains("项目范围", ex.Message);
     }

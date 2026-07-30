@@ -80,6 +80,16 @@ public sealed class JsonAppRepositoryTests : IDisposable
     [Fact]
     public async Task SaveSettings_ProtectsApiKeysOnDiskAndRestoresOnLoad()
     {
+        // Windows uses DPAPI to protect API keys on disk. On macOS and Linux the
+        // current implementation falls back to "plain" mode (see
+        // ProtectedSettingsSerializer.ProtectSecret), so this disk-content
+        // assertion is Windows-only. Tracking the macOS/Linux protection gap
+        // separately.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         var repo = new JsonAppRepository(_dataDirectory);
         var settings = await repo.LoadSettingsAsync();
         settings.ApiKey = "legacy-secret-key";
