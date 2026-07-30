@@ -39,6 +39,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ISettingsHolder _settingsHolder;
     private readonly IToastService _toast;
     private readonly IProjectPicker _projectPicker;
+    private readonly AgentRunnerViewModel _agentRunner;
     private AppSettings _settings = new();
 
     [ObservableProperty]
@@ -192,6 +193,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // harness depends on; the service is a thin facade over the VM.
     public ToolApprovalViewModel Approval => _approvalViewModel;
 
+    // PR-13: the inner agent loop (harness, event streaming, conversation
+    // persistence) lives in its own view-model. The host VM owns only the
+    // user-facing SendTaskCommand and validation; once those pass the
+    // runner takes over.
+    public AgentRunnerViewModel AgentRunner => _agentRunner;
+
     public MainWindowViewModel(
         IAppRepository repository,
         AgentToolRegistry toolRegistry,
@@ -220,6 +227,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settingsHolder = settingsHolder;
         _toast = toast;
         _projectPicker = projectPicker;
+        _agentRunner = new AgentRunnerViewModel(
+            chatService,
+            toolRegistry,
+            approval,
+            repository,
+            ActivityFeed,
+            insights,
+            sidebar,
+            conversationList,
+            setIsRunning: value => IsRunning = value,
+            setStatusMessage: value => StatusMessage = value,
+            clearDraftPrompt: () => DraftPrompt = "",
+            getSettings: () => _settings,
+            getNoWriteMode: () => NoWriteMode);
 
         _provider.Saved += OnProviderSaved;
         _provider.TestStarted += OnProviderTestStarted;
@@ -455,7 +476,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await RunAgentTaskAsync(prompt, effectiveSettings);
+        await _agentRunner.RunAsync(prompt, effectiveSettings);
     }
 
     private bool CanSendTask() => !IsRunning;
@@ -555,230 +576,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     // PR-6: Approve / Reject commands live on ToolApprovalViewModel.
 
-    private async Task RunAgentTaskAsync(string prompt, AppSettings effectiveSettings)
-    {
-        IsRunning = true;
-        DraftPrompt = "";
-        var userItem = new ActivityItemViewModel("你", prompt, "已发送");
-        var assistantItem = new ActivityItemViewModel("AIChat", NoWriteMode ? "正在以只读模式启动..." : "正在启动任务...", "运行中");
-        ActivityFeed.Add(userItem);
-        ActivityFeed.Add(assistantItem);
-        StatusMessage = "AIChat 正在读取上下文...";
-
-        var project = _sidebar.CurrentProject!;
-        var conversation = new Conversation
-        {
-            ProjectId = project.Id,
-            Title = prompt.Length > 80 ? prompt[..80] : prompt,
-            UpdatedAt = DateTimeOffset.Now
-        };
-        var userMessage = new ChatMessage
-        {
-            ConversationId = conversation.Id,
-            Role = ChatRole.User,
-            Content = prompt,
-            CreatedAt = DateTimeOffset.Now
-        };
-        var assistantMessage = new ChatMessage
-        {
-            ConversationId = conversation.Id,
-            Role = ChatRole.Assistant,
-            Content = "",
-            CreatedAt = DateTimeOffset.Now
-        };
-        conversation.Messages.Add(userMessage);
-        conversation.Messages.Add(assistantMessage);
-
-        try
-        {
-            var runtimeSettings = NoWriteMode
-                ? RuntimeSettingsBuilder.ReadOnly(_settings, _toolRegistry)
-                : RuntimeSettingsBuilder.Gui(_settings, _toolRegistry);
-            var requestFactory = new AgentRequestFactory(
-                new ConversationContextBuilder(
-                    new TokenizerContextEstimator(),
-                    new SystemPromptBuilder()));
-            var requestBuild = requestFactory.Build(new AgentRequestBuildRequest
-            {
-                Conversation = conversation,
-                AssistantMessageId = assistantMessage.Id,
-                EffectiveSettings = effectiveSettings,
-                RuntimeSettings = runtimeSettings,
-                ProjectName = project.Name,
-                ProjectPath = project.Path,
-                ProjectLoadSnapshot = BuildProjectSnapshot(project),
-                PinnedContextItems = project.PinnedContext,
-                InputArtifacts = project.InputArtifacts,
-                MemoryEntries = project.Memories,
-                ProjectToolPermissionModes = project.ProjectToolPermissionModes,
-                VerificationCommands = project.VerificationCommands,
-                RequestToolApprovalAsync = _approval.RequestApprovalAsync
-            });
-
-            _insights.BeginRun(
-                prompt,
-                requestBuild.ContextPack?.EstimatedTokens ?? 0,
-                project.VerificationCommands.Count);
-
-            var harness = new AgentHarness(
-                new AgentRunner(_chatService, new AgentToolCatalog(_toolRegistry.All)));
-            assistantItem.Detail = "";
-            await foreach (var agentEvent in harness.RunAsync(new AgentHarnessRunRequest
-                           {
-                               Conversation = conversation,
-                               UserMessageId = userMessage.Id,
-                               AssistantMessageId = assistantMessage.Id,
-                               Goal = prompt,
-                               ChatRequest = requestBuild.ChatRequest,
-                               Settings = effectiveSettings,
-                               ContextPack = requestBuild.ContextPack,
-                               Context = requestBuild.AgentContext
-                           }))
-            {
-                await ApplyAgentEventAsync(agentEvent, assistantItem, assistantMessage);
-            }
-
-            if (string.IsNullOrWhiteSpace(assistantItem.Detail))
-            {
-                assistantItem.Detail = "本次运行已结束，但没有可显示的文本。";
-            }
-
-            assistantItem.Status = "完成";
-            _insights.UpdateMetrics(conversation.AgentRuns.LastOrDefault(), assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
-            conversation.UpdatedAt = DateTimeOffset.Now;
-            project.Conversations.Add(conversation);
-            project.UpdatedAt = DateTimeOffset.Now;
-            await SaveProjectsAsync();
-            _conversationList.Refresh(project, conversation.Id);
-            StatusMessage = "完成。";
-        }
-        catch (Exception ex)
-        {
-            assistantItem.Status = "失败";
-            assistantItem.Detail = $"请求失败：{ex.Message}";
-            StatusMessage = "请求失败。";
-        }
-        finally
-        {
-            IsRunning = false;
-        }
-    }
-
-    private async Task ApplyAgentEventAsync(
-        AgentHarnessEvent agentEvent,
-        ActivityItemViewModel assistantItem,
-        ChatMessage assistantMessage)
-    {
-        switch (agentEvent.Type)
-        {
-            case AgentHarnessEventType.PhaseChanged:
-                if (!string.IsNullOrWhiteSpace(agentEvent.PhaseTransition?.Summary))
-                {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        StatusMessage = agentEvent.PhaseTransition.Summary;
-                    });
-                }
-
-                break;
-            case AgentHarnessEventType.ToolCall:
-                if (!string.IsNullOrWhiteSpace(agentEvent.ToolCall?.Name))
-                {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        ActivityFeed.Add(
-                            "正在读取",
-                            FriendlyToolSummary(agentEvent.ToolCall.Name),
-                            "工具");
-                        _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
-                    });
-                }
-
-                break;
-            case AgentHarnessEventType.ToolApprovalRejected:
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    ActivityFeed.Add(
-                        "已跳过操作",
-                        agentEvent.ToolPreview?.Summary ?? "此操作需要确认后才能执行。",
-                        "已阻止");
-                });
-                break;
-            case AgentHarnessEventType.ToolResult:
-                if (agentEvent.ToolResult?.IsError == true)
-                {
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        ActivityFeed.Add(
-                            "工具问题",
-                            agentEvent.ToolResult.Content,
-                            "需查看");
-                    });
-                }
-
-                break;
-            case AgentHarnessEventType.ContentDelta:
-                if (!string.IsNullOrEmpty(agentEvent.Content))
-                {
-                    assistantMessage.Content += agentEvent.Content;
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        assistantItem.Detail += agentEvent.Content;
-                        StatusMessage = "正在接收回复...";
-                        _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
-                    });
-                }
-
-                break;
-            case AgentHarnessEventType.RunCompleted:
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    StatusMessage = agentEvent.Run?.CompletionReason is { Length: > 0 } reason ? reason : "运行完成。";
-                    _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
-                });
-                break;
-        }
-    }
-
-    private static string FriendlyToolSummary(string toolName)
-    {
-        return toolName switch
-        {
-            "list_files" => "正在列出项目文件",
-            "read_file" => "正在读取文件",
-            "search_text" => "正在搜索项目",
-            "read_input_artifact" => "正在读取输入资料",
-            "update_plan" => "正在更新任务计划",
-            _ => $"正在使用 {toolName}"
-        };
-    }
-
-    private async Task SaveProjectsAsync()
-    {
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(project => project.Id == _sidebar.CurrentProject?.Id);
-        if (index >= 0)
-        {
-            projects[index] = _sidebar.CurrentProject!;
-        }
-        else if (_sidebar.CurrentProject is not null)
-        {
-            projects.Add(_sidebar.CurrentProject);
-        }
-
-        await _repository.SaveProjectsAsync(projects);
-    }
-
-    private static string BuildProjectSnapshot(ProjectWorkspace project)
-    {
-        var snapshot = ProjectLoadSnapshotBuilder.Build(project);
-        return string.Join(Environment.NewLine, [
-            snapshot.HealthText,
-            snapshot.ProfileText,
-            snapshot.ActivityText,
-            snapshot.RecommendationText
-        ]);
-    }
+    // PR-13: RunAgentTaskAsync, ApplyAgentEventAsync, FriendlyToolSummary,
+    // SaveProjectsAsync, and BuildProjectSnapshot all moved to
+    // AgentRunnerViewModel. The host VM only validates input and calls
+    // _agentRunner.RunAsync(prompt, effectiveSettings).
 }
 
 public sealed partial class ProjectCardViewModel(string id, string name, string path) : ObservableObject
