@@ -6,6 +6,7 @@ obj/
 *.suo
 TestResults/
 artifacts/
+.DS_Store
 
 # Local tool/user configuration
 .claude/settings.local.json

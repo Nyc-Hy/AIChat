@@ -1,0 +1,113 @@
+name: Release Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish-desktop:
+    name: Publish Desktop
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            runtime: osx-arm64
+            artifact: aichat-desktop-osx-arm64
+            pack: zip
+          - os: macos-13
+            runtime: osx-x64
+            artifact: aichat-desktop-osx-x64
+            pack: zip
+          - os: ubuntu-latest
+            runtime: linux-x64
+            artifact: aichat-desktop-linux-x64
+            pack: tar.gz
+          - os: windows-latest
+            runtime: win-x64
+            artifact: aichat-desktop-win-x64
+            pack: zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Publish Avalonia
+        run: dotnet publish src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj -c Release -r ${{ matrix.runtime }} --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o artifacts/${{ matrix.artifact }}
+
+      - name: Remove debug symbols
+        shell: bash
+        run: find artifacts/${{ matrix.artifact }} -name "*.pdb" -delete
+
+      - name: Package archive
+        shell: pwsh
+        run: |
+          $archive = "artifacts/${{ matrix.artifact }}"
+          switch ("${{ matrix.pack }}") {
+            "tar.gz" {
+              $tar = "$archive.tar.gz"
+              if (Test-Path $tar) { Remove-Item $tar -Force }
+              tar -czf $tar -C $archive .
+            }
+            default {
+              $zip = "$archive.zip"
+              if (Test-Path $zip) { Remove-Item $zip -Force }
+              Compress-Archive -Path "$archive/*" -DestinationPath $zip -Force
+            }
+          }
+          $archivePath = (Get-ChildItem -Path "artifacts/${{ matrix.artifact }}.*" -File | Where-Object { $_.Extension -in ".zip",".gz" } | Select-Object -First 1).FullName
+          $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $archivePath
+          "$($hash.Hash.ToLowerInvariant())  $(Split-Path $archivePath -Leaf)" | Set-Content -Path "$archivePath.sha256" -Encoding ascii
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            artifacts/${{ matrix.artifact }}.*
+            artifacts/${{ matrix.artifact }}.sha256
+
+  github-release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish-desktop
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          notes_args=(--generate-notes)
+          version="${TAG_NAME#v}"
+          notes_file="docs/RELEASE_NOTES_${version}.md"
+          if [ -f "$notes_file" ]; then
+            notes_args=(--notes-file "$notes_file")
+          fi
+
+          mapfile -t assets < <(find release-artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.sha256" \) | sort)
+          gh release create "$TAG_NAME" \
+            "${assets[@]}" \
+            --title "$TAG_NAME" \
+            "${notes_args[@]}"

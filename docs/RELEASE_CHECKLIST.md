@@ -1,51 +1,39 @@
 # Release Checklist
 
-Use this checklist before publishing a public CLI release.
+Use this checklist before publishing a public **desktop** release.
 
-## 1.0.0
+## 1.0.0 Beta
 
 ### Local validation
 
 - [ ] Run `dotnet build AIChat.sln --no-restore -m:1 -v:minimal`.
-- [ ] Run `dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal`.
-- [ ] Run `pwsh scripts/publish-cli.ps1`.
-- [ ] Verify `artifacts/release/SHA256SUMS.txt`.
-- [ ] Run `artifacts/release/aichat-cli-win-x64/aichat.exe --version`.
-- [ ] Run `artifacts/release/aichat-cli-win-x64/aichat.exe doctor`.
-- [ ] Run `artifacts/release/aichat-cli-win-x64/aichat.exe context "project overview" --project <repo>`.
-- [ ] Run `aichat tui`, then `/context`, `/status`, `/exit`.
-- [ ] Verify every zip contains `README.md`, `LICENSE`, `CLI_REFERENCE.md`, `INSTALL.md`, and `LAUNCH_PLAN.md`.
-
-### Cross-platform smoke tests
-
-On macOS Apple Silicon:
-
-- [ ] Extract `aichat-cli-osx-arm64.zip`.
-- [ ] Run `./aichat --version`.
-- [ ] Run `./aichat doctor`.
-- [ ] Run `./aichat context "project overview" --project <repo>`.
-- [ ] Run `./aichat tui --project <repo>`.
-
-On Linux x64:
-
-- [ ] Extract `aichat-cli-linux-x64.zip`.
-- [ ] Run `./aichat --version`.
-- [ ] Run `./aichat doctor`.
-- [ ] Run `./aichat context "project overview" --project <repo>`.
-- [ ] Run `./aichat tui --project <repo>`.
+- [ ] Run `dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal` (expect 621/621).
+- [ ] Run `dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj` locally and confirm the window opens.
+- [ ] Run `pwsh scripts/publish-desktop.ps1` to produce the four platform archives under `artifacts/release/`.
+- [ ] Verify `artifacts/release/SHA256SUMS.txt` matches every `.zip` and `.tar.gz`.
+- [ ] On macOS Apple Silicon: extract `aichat-desktop-osx-arm64.zip`, install the `.app` bundle, and confirm the window opens.
+- [ ] On Linux x64: extract `aichat-desktop-linux-x64.tar.gz`, launch the binary, and confirm the window opens.
+- [ ] On Windows x64: extract `aichat-desktop-win-x64.zip`, launch `AIChat.exe`, and confirm the window opens.
+- [ ] End-to-end Avalonia smoke (any platform): add a project folder, configure a provider, run **Test connection**, send a task, approve a tool call, confirm the run completes.
 
 ### GitHub release
 
 - [ ] Confirm `CHANGELOG.md` has the release summary.
 - [ ] Confirm `docs/RELEASE_NOTES_1.0.0.md` is up to date.
-- [ ] Open the PR from `codex/cli-1.0-roadmap`.
+- [ ] Open the PR from `codex/desktop-rebuild`.
 - [ ] Push the release branch.
 - [ ] Tag the release as `v1.0.0`.
-- [ ] Confirm the `Release CLI` workflow succeeds.
+- [ ] Confirm the `Release Desktop` workflow succeeds.
 - [ ] Confirm GitHub Release contains:
-  - [ ] `aichat-cli-osx-arm64.zip`
-  - [ ] `aichat-cli-osx-arm64.sha256`
-  - [ ] `aichat-cli-linux-x64.zip`
-  - [ ] `aichat-cli-linux-x64.sha256`
-  - [ ] `aichat-cli-win-x64.zip`
-  - [ ] `aichat-cli-win-x64.sha256`
+  - [ ] `aichat-desktop-osx-arm64.zip` + `.sha256`
+  - [ ] `aichat-desktop-osx-x64.zip` + `.sha256`
+  - [ ] `aichat-desktop-linux-x64.tar.gz` + `.sha256`
+  - [ ] `aichat-desktop-win-x64.zip` + `.sha256`
+
+## 1.0.0 Stable (post-Beta)
+
+- [ ] All 1.0.0 Beta items above.
+- [ ] Real-provider Avalonia end-to-end on macOS, Linux, and Windows (DeepSeek / MiMo / MiniMAX).
+- [ ] Linux x64 release archive smoke-tested on a real machine.
+- [ ] macOS / Linux API key at-rest protection (encrypted, not "plain" marker).
+- [ ] Re-run the Avalonia app on each platform with a real coding task: project context → task → tool approval → verification → summary.

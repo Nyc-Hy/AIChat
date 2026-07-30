@@ -10,6 +10,7 @@ AIChat 使用 GitHub Issues、Pull Requests 和 CI 管理项目。
   - `dotnet build AIChat.sln --no-restore -m:1 -v:minimal`
   - `dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal`
 - CI 入口：`.github/workflows/ci.yml`
+- Release 入口：`.github/workflows/release-desktop.yml`
 
 ## Issues 规范
 
@@ -78,10 +79,10 @@ CI 在 Pull Request 和 push 到 `master` 时运行。
 
 ## 发布
 
-手动发布 CLI：
+手动发布桌面端：
 
-```powershell
-pwsh scripts\publish-cli.ps1
+```bash
+pwsh scripts/publish-desktop.ps1
 ```
 
 Release notes 应包含用户可见变更、验证结果和已知问题。

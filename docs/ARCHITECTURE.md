@@ -4,8 +4,8 @@
 
 ```text
 ┌─────────────────────────────────────────────────┐
-│        AIChat.App.Avalonia / AIChat.Cli          │
-│  Avalonia Shell · CLI/TUI · Composition Root     │
+│              AIChat.App.Avalonia                │
+│  Avalonia Desktop UI · Composition Root          │
 ├─────────────────────────────────────────────────┤
 │              AIChat.Application                  │
 │  Agent Harness · Tools · Prompting · Context     │
@@ -21,20 +21,20 @@
 │  Pure POCOs · Chat · Projects · Audit · Context  │
 ├─────────────────────────────────────────────────┤
 │             AIChat.Storage.Json                  │
-│  Local JSON Persistence (%APPDATA%\AIChat)       │
+│  Local JSON Persistence (per-platform app data)  │
 └─────────────────────────────────────────────────┘
 ```
 
 ## 依赖规则
 
-- **Avalonia App / CLI** 依赖 Application、Abstractions、Domain、Providers、Storage。
+- **Avalonia App** 依赖 Application、Abstractions、Domain、Providers、Storage。
 - **Application** 依赖 Abstractions、Domain。
 - **Providers** 依赖 Abstractions、Domain。
 - **Abstractions** 不依赖其他项目。
 - **Domain** 不依赖其他项目。
 - **Storage** 依赖 Domain、Abstractions。
 
-Domain 是最内层。任何项目都不应依赖 Avalonia App 或 CLI。
+Domain 是最内层。任何项目都不应依赖 Avalonia App。
 
 ## 核心抽象
 
@@ -45,6 +45,9 @@ Domain 是最内层。任何项目都不应依赖 Avalonia App 或 CLI。
 | `IAppRepository` | Abstractions | 设置和项目持久化 |
 | `IContextEstimator` | Abstractions | Token 数估算 |
 | `IExternalToolProvider` | Application | 未来 MCP/A2A 外部工具来源 |
+| `IApprovalService` | AIChat.App.Avalonia | UI 边界：Agent Harness 调起 UI 审批 |
+| `IProjectPicker` | AIChat.App.Avalonia | 文件夹选择抽象，方便测试 |
+| `IThemeService` | AIChat.App.Avalonia | Light / Dark 主题切换 |
 
 ## 数据流
 
@@ -52,7 +55,7 @@ Domain 是最内层。任何项目都不应依赖 Avalonia App 或 CLI。
 User Input
     │
     ▼
-Avalonia UI 或 CLI/TUI 入口
+Avalonia UI（MainWindow → MainWindowViewModel → SendTaskCommand）
     │
     ├─ 构建上下文（文件索引、工作区摘要、固定上下文项）
     ├─ 构建系统提示词（规则、工具、上下文包）
@@ -70,7 +73,7 @@ AgentHarness.RunAsync()
     │   ToolExecutionService.ExecuteAsync()
     │       │
     │       ├─ 检查权限模式
-    │       ├─ 必要时请求用户审批
+    │       ├─ 必要时通过 IApprovalService 请求用户审批（UIBoundApprovalService → ToolApprovalViewModel）
     │       ├─ 执行 IAgentTool
     │       └─ 将结果返回模型
     │
@@ -94,7 +97,13 @@ Avalonia UI 应默认展示紧凑摘要，并通过信息提示或鼠标悬停�
 
 ## 持久化
 
-所有数据默认保存在本机 `%APPDATA%\AIChat\` 下：
+数据默认保存在平台标准的应用数据目录：
+
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Application Support/AIChat/` |
+| Linux | `~/.config/AIChat/` |
+| Windows | `%APPDATA%\AIChat\` |
 
 - `settings.json`：应用设置，包括 Provider、工具和权限。
 - `projects.json`：项目工作区、会话和 Agent 运行记录。
