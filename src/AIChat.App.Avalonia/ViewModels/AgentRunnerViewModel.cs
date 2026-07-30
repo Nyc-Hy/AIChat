@@ -80,7 +80,13 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
     // Entry point. The host has already validated the prompt, settings,
     // and project; this method assumes all preconditions hold.
-    public async Task RunAsync(string prompt, AppSettings effectiveSettings)
+    //
+    // The host owns the CancellationTokenSource and exposes a StopTaskCommand
+    // that cancels it. The token is forwarded to AgentHarness.RunAsync so
+    // the inner loop halts at the next await point. OperationCanceledException
+    // is caught here and surfaces as a "已停止" status on the assistant
+    // bubble rather than a "失败" one.
+    public async Task RunAsync(string prompt, AppSettings effectiveSettings, CancellationToken cancellationToken = default)
     {
         _setIsRunning(true);
         _clearDraftPrompt();
@@ -163,7 +169,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 Settings = effectiveSettings,
                 ContextPack = requestBuild.ContextPack,
                 Context = requestBuild.AgentContext
-            }))
+            }, cancellationToken))
             {
                 await ApplyAgentEventAsync(agentEvent, assistantItem, assistantMessage);
             }
@@ -181,6 +187,17 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             await SaveProjectsAsync();
             _conversationList.Refresh(project, conversation.Id);
             _setStatusMessage("完成。");
+        }
+        catch (OperationCanceledException)
+        {
+            assistantItem.Status = "已停止";
+            if (string.IsNullOrEmpty(assistantItem.Detail))
+            {
+                assistantItem.Detail = "本次运行已停止。";
+            }
+            // Re-throw so the host's SendTaskCommand can set its own
+            // status message; the host owns the user-facing status bar.
+            throw;
         }
         catch (Exception ex)
         {

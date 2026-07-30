@@ -40,6 +40,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IToastService _toast;
     private readonly IProjectPicker _projectPicker;
     private readonly AgentRunnerViewModel _agentRunner;
+    // CTS for the currently running agent task. New SendTaskCommand runs
+    // replace it; StopTaskCommand cancels it. The token is passed into
+    // AgentRunner.RunAsync and forwarded to AgentHarness so cancellation
+    // halts the inner loop at the next await point.
+    private CancellationTokenSource? _runCts;
     private AppSettings _settings = new();
 
     [ObservableProperty]
@@ -476,8 +481,38 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        await _agentRunner.RunAsync(prompt, effectiveSettings);
+        // Replace any prior CTS. A new run cancels nothing — the user
+        // already chose to start a fresh one, so the old token has no
+        // listener any more.
+        _runCts?.Dispose();
+        _runCts = new CancellationTokenSource();
+
+        try
+        {
+            await _agentRunner.RunAsync(prompt, effectiveSettings, _runCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // StopTaskCommand cancelled the run. The agent runner has
+            // already flipped IsRunning to false and updated the activity
+            // item's status to "已停止"; just record the user-visible
+            // status and move on.
+            StatusMessage = "已停止。";
+        }
+        finally
+        {
+            _runCts?.Dispose();
+            _runCts = null;
+        }
     }
+
+    [RelayCommand(CanExecute = nameof(CanStopTask))]
+    private void StopTask()
+    {
+        _runCts?.Cancel();
+    }
+
+    private bool CanStopTask() => IsRunning;
 
     private bool CanSendTask() => !IsRunning;
 

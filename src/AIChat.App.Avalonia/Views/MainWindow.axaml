@@ -398,14 +398,29 @@
                                                     </StackPanel>
                                                 </Border>
                                             </StackPanel>
+                                            <!-- Send / Stop swap: same grid cell, only one
+                                                 visible at a time. Stop is enabled while
+                                                 IsRunning so a misclick on the now-disabled
+                                                 send can't accidentally fire another run. -->
                                             <Button Grid.Column="1"
                                                     Classes="send-button"
                                                     Command="{Binding SendTaskCommand}"
                                                     IsEnabled="{Binding !IsRunning}"
+                                                    IsVisible="{Binding !IsRunning}"
                                                     ToolTip.Tip="发送 (⌘↵)">
                                                 <Path Data="M5 12 L19 12 M12 5 L19 12 L12 19"
                                                       Stroke="{Binding $parent[Button].Foreground}"
                                                       StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="16" Height="16" Stretch="Uniform"/>
+                                            </Button>
+                                            <Button Grid.Column="1"
+                                                    Classes="stop-button"
+                                                    Command="{Binding StopTaskCommand}"
+                                                    IsVisible="{Binding IsRunning}"
+                                                    ToolTip.Tip="停止 (⌘.)">
+                                                <Path Data="M6 6 H18 V18 H6 Z"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="2" StrokeLineCap="Round"
                                                       Width="16" Height="16" Stretch="Uniform"/>
                                             </Button>
                                         </Grid>

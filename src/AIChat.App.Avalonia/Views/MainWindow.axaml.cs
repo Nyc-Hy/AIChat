@@ -50,6 +50,14 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘. is the platform-standard "cancel current operation"
+            // shortcut. Forwards to StopTaskCommand which is gated by
+            // CanStopTask (= IsRunning) so it does nothing when idle.
+            Gesture = new KeyGesture(Key.OemPeriod, KeyModifiers.Meta),
+            Command = viewModel.StopTaskCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {

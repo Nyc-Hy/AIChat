@@ -284,6 +284,25 @@
             <Setter Property="Background" Value="{StaticResource LineBrush}" />
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         </Style>
+        <!--
+          Stop button: same shape as the send button (36px circle) but
+          neutral surface + error-tinted foreground. Lives in the same
+          grid cell as send; the XAML swaps visibility based on
+          IsRunning.
+        -->
+        <Style Selector="Button.stop-button">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.stop-button:pointerover">
+            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
+        </Style>
 
         <!--
           Secondary button: the muted sibling of primary. Used for Reject
