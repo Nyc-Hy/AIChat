@@ -67,6 +67,34 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘L focuses the prompt input. The browser convention; also
+            // matches Slack / Discord / Linear. Routed through a small
+            // RelayCommand so the code-behind can call Focus() on the
+            // named TextBox and SelectAll() so the user can start
+            // overwriting immediately.
+            Gesture = new KeyGesture(Key.L, KeyModifiers.Meta),
+            Command = new RelayCommand(() => FocusPromptInput())
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // ⌘⇧K is Slack / Discord's "clear channel" shortcut. In our
+            // case it clears the current activity feed (ActivityFeed.Clear)
+            // and is a no-op when the agent is running so the user
+            // can't accidentally nuke an in-flight run.
+            Gesture = new KeyGesture(Key.K, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = new RelayCommand(() =>
+            {
+                if (viewModel.IsRunning)
+                {
+                    viewModel.StatusMessage = "运行中，无法清空。";
+                    return;
+                }
+                viewModel.ActivityFeed.Clear();
+                viewModel.StatusMessage = "已清空。";
+            })
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {
@@ -145,6 +173,14 @@ public partial class MainWindow : Window
     private void Close_OnClick(object? sender, RoutedEventArgs e)
     {
         Close();
+    }
+
+    private void FocusPromptInput()
+    {
+        PromptInput.Focus();
+        // SelectAll so ⌘L behaves like a browser address bar: land in
+        // the field with everything pre-selected, ready to overwrite.
+        PromptInput.SelectAll();
     }
 
     private async void ProjectButton_OnClick(object? sender, RoutedEventArgs e)
