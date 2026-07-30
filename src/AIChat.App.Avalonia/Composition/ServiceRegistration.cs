@@ -49,11 +49,14 @@ internal static class ServiceRegistration
         services.AddSingleton<IApprovalService, UIBoundApprovalService>();
         services.AddSingleton<IThemeService, FluentThemeService>();
         services.AddSingleton<IToastService, ToastService>();
-        // ProjectPicker needs a TopLevel which is only available after the
-        // window is constructed. The view code-behind sets TopLevel on
-        // the concrete AvaloniaProjectPicker once the window is ready.
+        // ProjectPicker + ClipboardService both need a TopLevel which is
+        // only available after the window is constructed. The view
+        // code-behind sets TopLevel on the concrete implementation once
+        // the window is ready.
         services.AddSingleton<AvaloniaProjectPicker>();
         services.AddSingleton<IProjectPicker>(sp => sp.GetRequiredService<AvaloniaProjectPicker>());
+        services.AddSingleton<AvaloniaClipboardService>();
+        services.AddSingleton<IClipboardService>(sp => sp.GetRequiredService<AvaloniaClipboardService>());
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
 

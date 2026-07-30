@@ -11,19 +11,27 @@ namespace AIChat.App.Avalonia.Views;
 public partial class MainWindow : Window
 {
     private readonly AvaloniaProjectPicker _picker;
+    private readonly AvaloniaClipboardService _clipboard;
     private readonly IThemeService _theme;
 
-    public MainWindow(MainWindowViewModel viewModel, AvaloniaProjectPicker picker, IThemeService theme)
+    public MainWindow(
+        MainWindowViewModel viewModel,
+        AvaloniaProjectPicker picker,
+        AvaloniaClipboardService clipboard,
+        IThemeService theme)
     {
         InitializeComponent();
         DataContext = viewModel;
         _picker = picker;
+        _clipboard = clipboard;
         _theme = theme;
-        // The picker needs the window as its TopLevel so the dialog
-        // attaches to the right window. We set it here rather than in
-        // App.axaml.cs because the constructor is the only place that has
-        // a stable reference to this.
+        // The picker and clipboard service both need the window as its
+        // TopLevel so the dialog / clipboard can attach to the right
+        // window. We set it here rather than in App.axaml.cs because the
+        // constructor is the only place that has a stable reference to
+        // this.
         _picker.TopLevel = this;
+        _clipboard.TopLevel = this;
 
         // Window-level keyboard shortcuts. The per-input shortcuts (Cmd+Enter
         // on the prompt box, arrows in the command palette) are handled in
@@ -109,10 +117,10 @@ public partial class MainWindow : Window
             // result bubble in the activity feed so the user can see
             // the available commands without leaving the composer.
             Gesture = new KeyGesture(Key.OemQuestion, KeyModifiers.Meta),
-            Command = new RelayCommand(() =>
+            Command = new RelayCommand(async () =>
             {
-                SlashCommandHandler.TryExecute("/help", viewModel, out var slashResult);
-                if (slashResult is not null)
+                var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync("/help", viewModel);
+                if (handled && slashResult is not null)
                 {
                     viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
                     viewModel.StatusMessage = slashResult.Title + "。";

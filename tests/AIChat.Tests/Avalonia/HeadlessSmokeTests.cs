@@ -29,6 +29,7 @@ public class HeadlessSmokeTests
         Assert.NotNull(host.GetService<ISettingsHolder>());
         Assert.NotNull(host.GetService<AIChat.Abstractions.Persistence.IAppRepository>());
         Assert.NotNull(host.GetService<IProjectPicker>());
+        Assert.NotNull(host.GetService<IClipboardService>());
         Assert.NotNull(host.GetService<IApprovalService>());
     }
 

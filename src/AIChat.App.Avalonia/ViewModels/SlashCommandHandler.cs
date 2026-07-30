@@ -24,19 +24,27 @@ public static class SlashCommandHandler
         "/new — 同 /clear\n" +
         "/status — 显示当前项目、模型、对话数、Context、上次运行\n" +
         "/memory — 显示当前项目的 memory 列表\n" +
+        "/copy — 复制最后一条 AI 回复到剪贴板\n" +
         "/help — 显示本帮助";
 
     // Returns true if the prompt was a slash command and the host
-    // should skip the normal agent flow. The out Result is the text
+    // should skip the normal agent flow. The returned Result is the text
     // the host renders as a system bubble in the activity feed; null
     // means the handler already performed a side effect (e.g. /clear
     // wiped the feed) and there's nothing to render.
-    public static bool TryExecute(string prompt, MainWindowViewModel host, out Result? result)
+    //
+    // Returns a value tuple because async methods can't take `out`
+    // parameters (CS1988). Callers destructure as
+    // `var (handled, result) = await SlashCommandHandler.TryExecuteAsync(...)`.
+    //
+    // Async because /copy needs to await the platform clipboard call
+    // before it can report success. The other commands still run
+    // synchronously — they simply return Task.CompletedTask.
+    public static async Task<(bool Handled, Result? Result)> TryExecuteAsync(string prompt, MainWindowViewModel host)
     {
-        result = null;
         if (string.IsNullOrEmpty(prompt) || prompt[0] != '/')
         {
-            return false;
+            return (false, null);
         }
 
         var spaceIdx = prompt.IndexOf(' ');
@@ -52,22 +60,49 @@ public static class SlashCommandHandler
                 // host doesn't echo anything into the now-empty feed.
                 host.ActivityFeed.Clear();
                 host.StatusMessage = "已清空对话。";
-                return true;
+                return (true, null);
             case "/help":
-                result = new Result("帮助", HelpBody);
-                return true;
+                return (true, new Result("帮助", HelpBody));
             case "/status":
-                result = new Result("当前状态", BuildStatus(host));
-                return true;
+                return (true, new Result("当前状态", BuildStatus(host)));
             case "/memory":
-                result = new Result("Memory", BuildMemory(host));
-                return true;
+                return (true, new Result("Memory", BuildMemory(host)));
+            case "/copy":
+                return (true, await TryCopyLastAssistantAsync(host));
             default:
-                result = new Result(
+                return (true, new Result(
                     "未知命令",
-                    $"没有 `{command}` 这个命令。输入 `/help` 查看可用命令。");
-                return true;
+                    $"没有 `{command}` 这个命令。输入 `/help` 查看可用命令。"));
         }
+    }
+
+    // /copy: find the most recent assistant bubble and put its text on the
+    // clipboard. Reports success or failure back to the host as a Result
+    // so the user sees a system bubble confirming what just happened
+    // (avoids the silent-success trap where a copy silently failed and
+    // the user later wonders why their paste is empty).
+    private static async Task<Result> TryCopyLastAssistantAsync(MainWindowViewModel host)
+    {
+        var last = host.ActivityFeed.Activity.LastOrDefault(item => item.IsAssistantBubble);
+        if (last is null)
+        {
+            return new Result("复制", "当前对话没有可复制的 AI 消息。");
+        }
+
+        var text = last.Detail;
+        if (string.IsNullOrEmpty(text))
+        {
+            return new Result("复制", "最后一条 AI 消息还是空的。");
+        }
+
+        if (!host.HasClipboardService)
+        {
+            return new Result("复制失败", "剪贴板不可用 (TopLevel 未就绪)。");
+        }
+
+        await host.CopyToClipboardAsync(text);
+        var preview = text.Length > 60 ? text[..60].Replace('\n', ' ') + "…" : text.Replace('\n', ' ');
+        return new Result("已复制", $"{text.Length} 字符: {preview}");
     }
 
     private static string BuildMemory(MainWindowViewModel host)

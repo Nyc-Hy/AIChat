@@ -39,6 +39,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ISettingsHolder _settingsHolder;
     private readonly IToastService _toast;
     private readonly IProjectPicker _projectPicker;
+    private readonly IClipboardService _clipboard;
     private readonly AgentRunnerViewModel _agentRunner;
     // CTS for the currently running agent task. New SendTaskCommand runs
     // replace it; StopTaskCommand cancels it. The token is passed into
@@ -104,6 +105,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     // (OnNoWriteModeChanged body is below; raises PromptPlaceholder in
     // addition to the existing approval + insights side effects.)
+
+    // Clipboard helpers used by the /copy slash command. HasClipboardService
+    // lets the slash handler fail gracefully when the platform clipboard
+    // isn't wired (e.g. during tests where no TopLevel has been set).
+    public bool HasClipboardService => _clipboard.IsAvailable;
+
+    public Task CopyToClipboardAsync(string text) => _clipboard.SetTextAsync(text);
 
     [ObservableProperty]
     private bool autoVerify;
@@ -252,7 +260,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IThemeService theme,
         ISettingsHolder settingsHolder,
         IToastService toast,
-        IProjectPicker projectPicker)
+        IProjectPicker projectPicker,
+        IClipboardService clipboard)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -267,6 +276,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settingsHolder = settingsHolder;
         _toast = toast;
         _projectPicker = projectPicker;
+        _clipboard = clipboard;
         _agentRunner = new AgentRunnerViewModel(
             chatService,
             toolRegistry,
@@ -499,12 +509,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        // Slash commands (/clear, /help, /status, /new) short-circuit the
-        // agent loop. The handler renders its result as a system bubble
-        // in the activity feed and clears the draft. TryExecute returns
-        // false when the prompt is not a slash command — fall through to
-        // the normal agent flow.
-        if (SlashCommandHandler.TryExecute(prompt, this, out var slashResult))
+        // Slash commands (/clear, /help, /status, /new, /copy) short-circuit
+        // the agent loop. The handler renders its result as a system bubble
+        // in the activity feed and clears the draft. TryExecuteAsync
+        // returns Handled=false when the prompt is not a slash command —
+        // fall through to the normal agent flow.
+        var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync(prompt, this);
+        if (handled)
         {
             DraftPrompt = "";
             if (slashResult is not null)
