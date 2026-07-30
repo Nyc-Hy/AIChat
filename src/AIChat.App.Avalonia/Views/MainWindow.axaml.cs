@@ -162,6 +162,36 @@ public partial class MainWindow : Window
         PromptInput.Focus();
     }
 
+    // Click outside the command palette (on the scrim) closes it. The inner
+    // Border's PointerPressed marks the event handled so the click doesn't
+    // bubble up to the scrim's handler.
+    private void CommandPaletteScrim_OnClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.IsCommandPaletteOpen = false;
+        }
+    }
+
+    private void CommandPaletteContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    // Same pattern for the settings modal.
+    private void SettingsScrim_OnClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.IsSettingsOpen = false;
+        }
+    }
+
+    private void SettingsContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
     // Prompt input: Cmd+Enter (or Ctrl+Enter on non-mac) sends. The default
     // Enter key still inserts a newline because the box is multi-line.
     private async void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
