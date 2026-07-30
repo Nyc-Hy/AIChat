@@ -17,7 +17,6 @@ using AIChat.Domain.Projects;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
 using AIChat.Storage.Json;
-using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -42,6 +41,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IProjectPicker _projectPicker;
     private AppSettings _settings = new();
 
+    // Set during bulk Activity mutations (clear + add) so the
+    // CollectionChanged handler does not flip HasConversation between
+    // Clear and the first Add. Caller recomputes the flag after the loop.
+    private bool _suppressHasConversation;
+
     [ObservableProperty]
     private string activeProvider = "正在加载...";
 
@@ -57,7 +61,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // when the underlying fields flip.
     partial void OnActiveProviderChanged(string value)
     {
-        OnPropertyChanged(nameof(HasProject));
         OnPropertyChanged(nameof(StatusBarModel));
     }
     partial void OnActiveModelChanged(string value) => OnPropertyChanged(nameof(StatusBarModel));
@@ -72,9 +75,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     private string statusMessage = "就绪。";
-
-    [ObservableProperty]
-    private string primaryActionText = "准备";
 
     [ObservableProperty]
     private bool noWriteMode;
@@ -132,7 +132,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public double ContextBudgetWidthInMini => Math.Max(0, ContextBudgetPercent * 0.8);
 
     public ObservableCollection<ActivityItemViewModel> Activity { get; } = [];
-    public ObservableCollection<string> SafetyNotes { get; } = [];
 
     // Toast surface is owned by the IToastService singleton; expose the same
     // ObservableCollection here so the MainWindow XAML can bind via DataContext.
@@ -237,7 +236,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _approvalViewModel.RequestPresented += OnApprovalPresented;
         _approvalViewModel.RequestResolved += OnApprovalResolved;
 
-        Activity.CollectionChanged += (_, _) => HasConversation = Activity.Count > 0;
+        Activity.CollectionChanged += (_, _) =>
+        {
+            if (!_suppressHasConversation)
+            {
+                HasConversation = Activity.Count > 0;
+            }
+        };
         _insights.SessionMetrics.CollectionChanged += (_, _) => UpdateContextBudget();
         _sidebar.PropertyChanged += (_, e) =>
         {
@@ -418,12 +423,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ActiveProvider = active is null ? "未配置模型" : active.Name;
         ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
         Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
-        PrimaryActionText = Readiness == "可运行" ? "发送 ⌘↵" : "准备";
         AutoVerify = _settings.AutoVerifyAgentRuns;
 
         _sidebar.Refresh(projects);
         _conversationList.Refresh(_sidebar.CurrentProject);
-        PopulateSafetyNotes();
         _provider.Refresh();
         _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
 
@@ -478,21 +481,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     partial void OnNoWriteModeChanged(bool value)
     {
         _approvalViewModel.IsReadOnly = value;
-        PopulateSafetyNotes();
         _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
     }
 
     partial void OnAutoVerifyChanged(bool value)
     {
         _settings.AutoVerifyAgentRuns = value;
-        PopulateSafetyNotes();
     }
 
     private void SeedEmptyState()
     {
-        SafetyNotes.Add("写文件、命令、测试和 Git 操作前都会请求确认。");
-        SafetyNotes.Add("只读模式会禁止修改类工具。");
-        SafetyNotes.Add("开启验证后，修改完成会自动运行检查。");
         _insights.SeedEmptyState();
     }
 
@@ -531,7 +529,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ActiveProvider = args.ProviderName;
         ActiveModel = args.ModelId;
         Readiness = "可运行";
-        PrimaryActionText = "发送 ⌘↵";
         StatusMessage = args.AlreadyExisted ? "已更新模型配置。" : "已保存模型配置。";
     }
 
@@ -552,7 +549,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             Activity.Add(new ActivityItemViewModel("模型测试", $"测试失败：{args.Message}", "失败"));
             Readiness = "需检查";
-            PrimaryActionText = "准备";
             StatusMessage = "模型连接失败。";
             return;
         }
@@ -562,7 +558,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             args.Message,
             args.IsSuccess ? "通过" : "失败"));
         Readiness = args.IsSuccess ? "可运行" : "需检查";
-        PrimaryActionText = args.IsSuccess ? "发送 ⌘↵" : "准备";
         StatusMessage = args.IsSuccess ? "模型连接正常。" : "模型连接失败。";
     }
 
@@ -590,126 +585,34 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        Activity.Clear();
-        foreach (var message in conversation.Messages.OrderBy(message => message.CreatedAt))
-        {
-            var title = message.Role == ChatRole.User ? "你" : "AIChat";
-            var status = message.CreatedAt.ToLocalTime().ToString("HH:mm");
-            Activity.Add(new ActivityItemViewModel(title, message.Content, status));
-        }
-
-        if (Activity.Count == 0)
-        {
-            Activity.Add(new ActivityItemViewModel("AIChat", "这个对话还没有消息。", "空"));
-        }
-    }
-
-    private void PopulateSafetyNotes()
-    {
-        SafetyNotes.Clear();
-        SafetyNotes.Add(NoWriteMode ? "只读模式已开启。" : "写入文件前会请求确认。");
-        SafetyNotes.Add("Shell、构建、测试和 Git 变更都需要确认。");
-        SafetyNotes.Add(AutoVerify ? "修改完成后会自动验证。" : "自动验证暂未开启。");
-    }
-
-    private async Task RunPlainTaskAsync(string prompt, AppSettings effectiveSettings)
-    {
-        IsRunning = true;
-        DraftPrompt = "";
-        var userItem = new ActivityItemViewModel("你", prompt, "已发送");
-        var assistantItem = new ActivityItemViewModel("AIChat", "正在连接模型...", "运行中");
-        Activity.Add(userItem);
-        Activity.Add(assistantItem);
-        StatusMessage = "AIChat 正在思考...";
-
-        var project = _sidebar.CurrentProject!;
-        var conversation = new Conversation
-        {
-            ProjectId = project.Id,
-            Title = prompt.Length > 80 ? prompt[..80] : prompt,
-            UpdatedAt = DateTimeOffset.Now
-        };
-        var userMessage = new ChatMessage
-        {
-            ConversationId = conversation.Id,
-            Role = ChatRole.User,
-            Content = prompt,
-            CreatedAt = DateTimeOffset.Now
-        };
-        var assistantMessage = new ChatMessage
-        {
-            ConversationId = conversation.Id,
-            Role = ChatRole.Assistant,
-            Content = "",
-            CreatedAt = DateTimeOffset.Now
-        };
-        conversation.Messages.Add(userMessage);
-        conversation.Messages.Add(assistantMessage);
-
+        // v1 bug B-4 fix: clear + bulk-insert without firing HasConversation
+        // changes in between. The CollectionChanged handler flips
+        // HasConversation for every Add; if we let it run mid-loop the empty
+        // state and the conversation panel swap multiple times in one frame.
+        // Suppress notifications for the bulk update, then recompute once.
+        _suppressHasConversation = true;
         try
         {
-            var requestFactory = new AgentRequestFactory(
-                new ConversationContextBuilder(
-                    new TokenizerContextEstimator(),
-                    new SystemPromptBuilder()));
-            var requestBuild = requestFactory.Build(new AgentRequestBuildRequest
+            Activity.Clear();
+            foreach (var message in conversation.Messages.OrderBy(message => message.CreatedAt))
             {
-                Conversation = conversation,
-                AssistantMessageId = assistantMessage.Id,
-                EffectiveSettings = effectiveSettings,
-                RuntimeSettings = RuntimeSettingsBuilder.Plain(_settings),
-                ProjectName = project.Name,
-                ProjectPath = project.Path,
-                ProjectLoadSnapshot = BuildProjectSnapshot(project),
-                PinnedContextItems = project.PinnedContext,
-                InputArtifacts = project.InputArtifacts,
-                MemoryEntries = project.Memories,
-                ProjectToolPermissionModes = project.ProjectToolPermissionModes,
-                VerificationCommands = project.VerificationCommands
-            });
-
-            assistantItem.Detail = "";
-            var receivedContent = false;
-            await foreach (var delta in _chatService.SendAsync(requestBuild.ChatRequest, effectiveSettings))
-            {
-                if (string.IsNullOrEmpty(delta.Content))
-                {
-                    continue;
-                }
-
-                receivedContent = true;
-                assistantMessage.Content += delta.Content;
-                await Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    assistantItem.Detail += delta.Content;
-                    StatusMessage = "正在接收回复...";
-                });
+                var title = message.Role == ChatRole.User ? "你" : "AIChat";
+                var status = message.CreatedAt.ToLocalTime().ToString("HH:mm");
+                Activity.Add(new ActivityItemViewModel(title, message.Content, status));
             }
 
-            if (!receivedContent)
+            if (Activity.Count == 0)
             {
-                assistantItem.Detail = "模型没有返回可见文本。";
+                Activity.Add(new ActivityItemViewModel("AIChat", "这个对话还没有消息。", "空"));
             }
-
-            assistantItem.Status = "完成";
-            conversation.UpdatedAt = DateTimeOffset.Now;
-            project.Conversations.Add(conversation);
-            project.UpdatedAt = DateTimeOffset.Now;
-            await SaveProjectsAsync();
-            _conversationList.Refresh(project, conversation.Id);
-            StatusMessage = "完成。";
-        }
-        catch (Exception ex)
-        {
-            assistantItem.Status = "失败";
-            assistantItem.Detail = $"请求失败：{ex.Message}";
-            StatusMessage = "请求失败。";
         }
         finally
         {
-            IsRunning = false;
+            _suppressHasConversation = false;
         }
+        HasConversation = Activity.Count > 0;
     }
+
 
     // PR-6: Approve / Reject commands live on ToolApprovalViewModel.
 
@@ -944,10 +847,7 @@ public sealed record ProjectCardViewModel(string Id, string Name, string Path);
 public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ViewModelBase
 {
     public string Title { get; } = title;
-    public HorizontalAlignment BubbleAlignment { get; } = GetAlignment(title);
-    public IBrush BubbleBackground { get; } = GetBackgroundBrush(title);
-    public IBrush TextForeground { get; } = GetForegroundBrush(title);
-    public double BubbleMaxWidth { get; } = title == "你" ? 620 : 760;
+    public IBrush TextForeground { get; } = TokenBrush("TextBrush");
 
     [ObservableProperty]
     private string detail = detail;
@@ -971,40 +871,6 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
 
     partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
     partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
-
-    private static HorizontalAlignment GetAlignment(string title)
-    {
-        return title switch
-        {
-            "你" => HorizontalAlignment.Right,
-            "AIChat" => HorizontalAlignment.Left,
-            _ => HorizontalAlignment.Center
-        };
-    }
-
-    // Bubble palettes route through design tokens so they flip in dark mode.
-    // User bubbles use the accent + on-accent text; assistant bubbles use the
-    // surface + body text; system bubbles use the info background.
-    private static IBrush GetBackgroundBrush(string title)
-    {
-        return title switch
-        {
-            "你" => TokenBrush("AccentBrush"),
-            "AIChat" => TokenBrush("SurfaceBrush"),
-            _ => TokenBrush("InfoBgBrush")
-        };
-    }
-
-    // v1 bug AP-3 fix: user bubble is now soft-accent (8% teal) on a white
-    // surface, NOT solid accent. The previous TextOnAccentBrush (white) on
-    // a near-white wash was effectively invisible in light mode. Use the
-    // primary text brush so the user's words read correctly.
-    private static IBrush GetForegroundBrush(string title)
-    {
-        return title == "你"
-            ? TokenBrush("TextBrush")
-            : TokenBrush("TextBrush");
-    }
 }
 
 public sealed record ProviderCardViewModel(string Name, string DefaultModel, string Status);

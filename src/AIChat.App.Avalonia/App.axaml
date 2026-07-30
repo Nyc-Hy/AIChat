@@ -482,6 +482,23 @@
         </Style>
 
         <!--
+          Bubble enter: each new conversation bubble fades in. Avalonia 12
+          can't animate RenderTransform via Style.Animations (no
+          RenderTransform animator is registered), so we animate just
+          Opacity. The slide-up effect is left to a future code-behind
+          Loaded handler; for now the opacity wave alone signals "new".
+        -->
+        <Style Selector="Grid.bubble-enter">
+            <Setter Property="Opacity" Value="0" />
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionBubble}" Easing="CubicEaseOut" FillMode="Forward">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0" /></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <!--
           Old empty-state-card and list-action shapes — kept so any
           in-flight XAML still compiles. New code should use quick-action
           and sidebar-row instead.

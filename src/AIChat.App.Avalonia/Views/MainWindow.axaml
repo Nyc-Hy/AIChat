@@ -209,7 +209,7 @@
                                             <ItemsControl ItemsSource="{Binding Activity}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
-                                                        <Grid Margin="0,0,0,12">
+                                                        <Grid Classes="bubble-enter" Margin="0,0,0,12">
                                                             <!-- AI bubble: 3-dot mark on the left, document-section card -->
                                                             <Grid IsVisible="{Binding IsAssistantBubble}"
                                                                   HorizontalAlignment="Left"
