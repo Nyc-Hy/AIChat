@@ -902,5 +902,172 @@
                 </Grid>
             </Border>
         </Border>
+
+        <!--
+          ============== Git status / diff viewer modal (Cmd+Shift+G) ==============
+          Two-column body: file list on the left (status badge + path),
+          diff viewer on the right (read-only TextBox with monospace
+          font + horizontal scroll for long lines). Refresh re-fetches
+          the change set every open. ⌘G stays as the quick /git
+          bubble for the lightweight "what just changed" glance.
+        -->
+        <Border IsVisible="{Binding IsGitStatusOpen}"
+                Background="{StaticResource ScrimBrush}"
+                PointerPressed="GitStatusScrim_OnClick">
+            <Border Background="{StaticResource SurfaceBrush}"
+                    Width="960"
+                    MaxHeight="680"
+                    Padding="{StaticResource Padding6}"
+                    CornerRadius="{StaticResource RadiusLg}"
+                    BoxShadow="{StaticResource Elevation4Shadow}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    PointerPressed="GitStatusContent_OnPointerPressed">
+                <Grid RowDefinitions="Auto,*" RowSpacing="14">
+
+                    <!-- Header: title + branch + refresh + close -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Classes="page-title">
+                                <Run Text="Git"/>
+                                <Run Text=" — "/>
+                                <Run Text="{Binding GitStatus.ProjectName}" Foreground="{StaticResource MutedBrush}"/>
+                            </TextBlock>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="分支:" Classes="muted" FontSize="12"/>
+                                <TextBlock Text="{Binding GitStatus.Branch}" Classes="body" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="chrome-button"
+                                Command="{Binding GitStatus.RefreshCommand}"
+                                ToolTip.Tip="刷新 (R)"
+                                IsEnabled="{Binding !GitStatus.IsLoading}">
+                            <Path Data="M3 12 a9 9 0 1 0 3 -6.7 M3 4 v5 h5"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="14" Height="14" Stretch="Uniform"/>
+                        </Button>
+                        <Button Grid.Column="2" Classes="chrome-button"
+                                Command="{Binding CloseGitStatusCommand}"
+                                ToolTip.Tip="关闭 (Esc)">
+                            <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round"
+                                  Width="14" Height="14" Stretch="Uniform"/>
+                        </Button>
+                    </Grid>
+
+                    <!-- Body: file list + diff viewer -->
+                    <Grid Grid.Row="1" ColumnDefinitions="320,*" ColumnSpacing="0">
+
+                        <!-- File list (left column) -->
+                        <Border Grid.Column="0"
+                                Background="{StaticResource SurfaceSunkenBrush}"
+                                BorderBrush="{StaticResource LineSoftBrush}"
+                                BorderThickness="1,1,1,1"
+                                CornerRadius="{StaticResource RadiusMd}">
+                            <Grid RowDefinitions="Auto,*">
+                                <Border Grid.Row="0"
+                                        Classes="section-divider"
+                                        Margin="0,0,0,4"
+                                        Padding="{StaticResource Padding3}">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="变更" Classes="section-title"/>
+                                        <TextBlock Grid.Column="1" Classes="muted" FontSize="11">
+                                            <Run Text="{Binding GitStatus.ChangeCount}"/>
+                                            <Run Text=" 个文件"/>
+                                        </TextBlock>
+                                    </Grid>
+                                </Border>
+                                <ScrollViewer Grid.Row="1" Padding="{StaticResource Padding2}">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock Text="{Binding GitStatus.EmptyStateMessage}"
+                                                   Classes="muted"
+                                                   HorizontalAlignment="Center"
+                                                   Margin="0,24,0,0"
+                                                   IsVisible="{Binding !GitStatus.HasChanges}"/>
+                                        <ItemsControl ItemsSource="{Binding GitStatus.Changes}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:GitFileChangeViewModel">
+                                                    <Button Classes="sidebar-row"
+                                                            Classes.selected="{Binding IsSelected}"
+                                                            Command="{Binding SelectCommand}"
+                                                            HorizontalAlignment="Stretch"
+                                                            HorizontalContentAlignment="Stretch">
+                                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                            <Border Grid.Column="0"
+                                                                    Classes="git-status-badge"
+                                                                    VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding StatusDisplay}"
+                                                                           FontSize="10"
+                                                                           FontFamily="{StaticResource FontMono}"
+                                                                           FontWeight="SemiBold"/>
+                                                            </Border>
+                                                            <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding FileName}"
+                                                                           Classes="body"
+                                                                           FontSize="12"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           MaxLines="1"/>
+                                                                <TextBlock Text="{Binding Path}"
+                                                                           Classes="muted"
+                                                                           FontSize="10"
+                                                                           TextTrimming="CharacterEllipsis"
+                                                                           MaxLines="1"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+
+                        <!-- Diff viewer (right column) -->
+                        <Border Grid.Column="1"
+                                Background="{StaticResource CodeBgBrush}"
+                                BorderBrush="{StaticResource LineSoftBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource RadiusMd}"
+                                Margin="10,0,0,0">
+                            <Grid RowDefinitions="Auto,Auto,*">
+                                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="{StaticResource Padding3}">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding GitStatus.SelectedPath}"
+                                               Classes="muted"
+                                               FontSize="11"
+                                               FontFamily="{StaticResource FontMono}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="(diff 已截断)"
+                                               Classes="muted"
+                                               FontSize="11"
+                                               Foreground="{StaticResource WarningFgBrush}"
+                                               IsVisible="{Binding GitStatus.IsDiffTruncated}"/>
+                                </Grid>
+                                <Border Grid.Row="1" Classes="section-divider" Margin="0,0,0,4"/>
+                                <ScrollViewer Grid.Row="2"
+                                              HorizontalScrollBarVisibility="Auto"
+                                              VerticalScrollBarVisibility="Auto"
+                                              Padding="{StaticResource Padding3}">
+                                    <TextBox Text="{Binding GitStatus.DiffText, Mode=OneWay}"
+                                             IsReadOnly="True"
+                                             Background="Transparent"
+                                             BorderThickness="0"
+                                             FontFamily="{StaticResource FontMono}"
+                                             FontSize="12"
+                                             Foreground="{StaticResource CodeFgBrush}"
+                                             TextWrapping="NoWrap"
+                                             AcceptsReturn="True"
+                                             CaretBrush="Transparent"/>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 </Window>

@@ -121,6 +121,14 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘⇧G opens the full git status / diff viewer modal. File
+            // list on the left, diff on the right. ⌘G stays as the
+            // quick bubble for the lightweight glance.
+            Gesture = new KeyGesture(Key.G, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = viewModel.OpenGitStatusCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘⇧K is Slack / Discord's "clear channel" shortcut. In our
             // case it clears the current activity feed (ActivityFeed.Clear)
             // and is a no-op when the agent is running so the user
@@ -169,6 +177,10 @@ public partial class MainWindow : Window
                 else if (viewModel.IsMemoryEditorOpen)
                 {
                     viewModel.IsMemoryEditorOpen = false;
+                }
+                else if (viewModel.IsGitStatusOpen)
+                {
+                    viewModel.IsGitStatusOpen = false;
                 }
             })
         });
@@ -357,6 +369,20 @@ public partial class MainWindow : Window
     }
 
     private void MemoryEditorContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    // Git status / diff viewer modal.
+    private void GitStatusScrim_OnClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.IsGitStatusOpen = false;
+        }
+    }
+
+    private void GitStatusContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         e.Handled = true;
     }

@@ -41,6 +41,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IProjectPicker _projectPicker;
     private readonly IClipboardService _clipboard;
     private readonly MemoryEditorViewModel _memoryEditor;
+    private readonly GitStatusViewModel _gitStatus;
     private readonly AIChat.Application.Workspace.IWorkspaceChangeService _workspace;
     private readonly AgentRunnerViewModel _agentRunner;
     // CTS for the currently running agent task. New SendTaskCommand runs
@@ -192,6 +193,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public MemoryEditorViewModel MemoryEditor => _memoryEditor;
 
+    // Git status / diff viewer modal. ⌘⇧G opens it; ⌘G stays as the
+    // quick /git bubble for the lightweight "what just changed"
+    // glance.
+    [ObservableProperty]
+    private bool isGitStatusOpen;
+
+    public GitStatusViewModel GitStatus => _gitStatus;
+
     // 1.0 Beta: derive the top status, breadcrumb visibility and status-bar
     // text from the same handful of fields so the XAML can stay declarative.
     // HasProject hides the project crumb when no project is selected (so
@@ -271,6 +280,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private void CloseMemoryEditor() => IsMemoryEditorOpen = false;
+
+    [RelayCommand]
+    private async Task OpenGitStatusAsync()
+    {
+        IsGitStatusOpen = true;
+        // Re-fetch every open so an agent run that just landed
+        // shows up immediately. Cheap (single git status call) and
+        // the user opened the modal because they want to see what's
+        // there right now.
+        await _gitStatus.RefreshAsync();
+    }
+
+    [RelayCommand]
+    private void CloseGitStatus() => IsGitStatusOpen = false;
 
     [RelayCommand]
     private void NewConversation()
@@ -367,6 +390,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IProjectPicker projectPicker,
         IClipboardService clipboard,
         MemoryEditorViewModel memoryEditor,
+        GitStatusViewModel gitStatus,
         AIChat.Application.Workspace.IWorkspaceChangeService workspace)
     {
         _repository = repository;
@@ -384,6 +408,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _projectPicker = projectPicker;
         _clipboard = clipboard;
         _memoryEditor = memoryEditor;
+        _gitStatus = gitStatus;
         _workspace = workspace;
         _agentRunner = new AgentRunnerViewModel(
             chatService,

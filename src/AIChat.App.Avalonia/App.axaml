@@ -446,6 +446,20 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
             <Setter Property="Padding" Value="9,4" />
         </Style>
+        <!--
+          Git status badge: tight monospace pill that shows the raw
+          "M " / "A " / "??" / "R " porcelain code so the user can
+          tell at a glance what happened to a file. Background stays
+          neutral — the text itself carries the meaning.
+        -->
+        <Style Selector="Border.git-status-badge">
+            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="MinWidth" Value="32" />
+        </Style>
         <Style Selector="Border.badge.success">
             <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
         </Style>
