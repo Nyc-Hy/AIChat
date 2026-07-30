@@ -66,15 +66,21 @@
         <!--
           ===== Focus ring =====
           WCAG 2.4.7 / 2.2.2 — every focusable surface gets a visible
-          focus indicator. Teal 500 (light) / teal 500 dark variant on
-          the focus state, 2px border.
+          focus indicator. Buttons / list items get a 2px teal border.
+          The input-floating Border is styled separately below (focus-within
+          style) so the inner TextBox doesn't fight a global
+          BorderThickness=2 that would clash with the 1px line border
+          around the composer.
         -->
         <Style Selector="Button:focus-visible,
-                          TextBox:focus-visible,
                           ListBoxItem:focus-visible,
                           ToggleSwitch:focus-visible,
                           CheckBox:focus-visible">
             <Setter Property="BorderBrush" Value="{StaticResource FocusRingBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="Border.input-floating:focus-within">
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
 
@@ -171,7 +177,7 @@
         </Style>
         <Style Selector="TextBlock.kbd-inline">
             <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
-            <Setter Property="FontSize" Value="{StaticResource FontMicro}" />
+            <Setter Property="FontSize" Value="{StaticResource FontOverline}" />
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         </Style>
 
@@ -214,8 +220,8 @@
             <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="16" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="14,12" />
         </Style>
 
         <!--

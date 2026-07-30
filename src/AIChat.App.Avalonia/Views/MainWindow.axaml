@@ -366,15 +366,18 @@
                                                  PlaceholderText="说说你想做啥…  (⌘↵ 发送)"
                                                  AcceptsReturn="True"
                                                  TextWrapping="Wrap"
-                                                 MinHeight="112"
+                                                 MinHeight="44"
                                                  Background="Transparent"
                                                  BorderThickness="0"
                                                  Padding="0"
                                                  FontSize="14"
+                                                 MaxHeight="220"
                                                  KeyDown="PromptInput_OnKeyDown"/>
 
-                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-                                            <!-- Left: + attach, model chip, icon toggle for read-only -->
+                                        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,8,0,0">
+                                            <!-- Left: + attach, model chip, icon toggle for read-only.
+                                                 Right: send button. The ⌘↵ hint lives in the
+                                                 PlaceholderText so we don't need a kbd-pill here. -->
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                 <Button Classes="icon-toggle" ToolTip.Tip="附加文件 (⌘⇧A)">
                                                     <Path Data="M12 5 V19 M5 12 H19"
@@ -382,12 +385,12 @@
                                                           StrokeThickness="1.6" StrokeLineCap="Round"
                                                           Width="14" Height="14" Stretch="Uniform"/>
                                                 </Button>
-                                                <Border Classes="model-chip">
+                                                <Border Classes="model-chip" MaxWidth="200">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}"/>
-                                                        <TextBlock Text="{Binding ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="80"/>
                                                         <TextBlock Text="·" FontSize="12" Foreground="{StaticResource MutedBrush}"/>
-                                                        <TextBlock Text="{Binding ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="140"/>
+                                                        <TextBlock Text="{Binding ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="80"/>
                                                     </StackPanel>
                                                 </Border>
                                                 <ToggleButton Classes="icon-toggle" IsChecked="{Binding NoWriteMode}" ToolTip.Tip="只读模式 (⌘⇧R)">
@@ -397,10 +400,7 @@
                                                           Width="14" Height="14" Stretch="Uniform"/>
                                                 </ToggleButton>
                                             </StackPanel>
-                                            <Border Grid.Column="1" Classes="kbd-pill" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <TextBlock Text="⌘ ⏎" Classes="kbd-inline"/>
-                                            </Border>
-                                            <Button Grid.Column="2"
+                                            <Button Grid.Column="1"
                                                     Classes="send-button"
                                                     Command="{Binding SendTaskCommand}"
                                                     IsEnabled="{Binding !IsRunning}"
