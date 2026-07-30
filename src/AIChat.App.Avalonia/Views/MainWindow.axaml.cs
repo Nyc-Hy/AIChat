@@ -77,6 +77,16 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘⇧R toggles read-only / no-write mode. The agent still
+            // reads files and searches, but every tool call that would
+            // mutate the project is blocked (and any pending one is
+            // auto-rejected without prompting the user). Useful for
+            // exploring an unfamiliar codebase.
+            Gesture = new KeyGesture(Key.R, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = new RelayCommand(() => viewModel.NoWriteMode = !viewModel.NoWriteMode)
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘⇧K is Slack / Discord's "clear channel" shortcut. In our
             // case it clears the current activity feed (ActivityFeed.Clear)
             // and is a no-op when the agent is running so the user
@@ -91,6 +101,22 @@ public partial class MainWindow : Window
                 }
                 viewModel.ActivityFeed.Clear();
                 viewModel.StatusMessage = "已清空。";
+            })
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // ⌘/ is VS Code's "show help" convention. Drops a /help
+            // result bubble in the activity feed so the user can see
+            // the available commands without leaving the composer.
+            Gesture = new KeyGesture(Key.OemQuestion, KeyModifiers.Meta),
+            Command = new RelayCommand(() =>
+            {
+                SlashCommandHandler.TryExecute("/help", viewModel, out var slashResult);
+                if (slashResult is not null)
+                {
+                    viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
+                    viewModel.StatusMessage = slashResult.Title + "。";
+                }
             })
         });
         KeyBindings.Add(new KeyBinding
