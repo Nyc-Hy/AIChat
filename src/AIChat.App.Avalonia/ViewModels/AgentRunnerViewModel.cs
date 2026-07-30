@@ -211,6 +211,9 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             _setLastAssistantStatus("失败");
             assistantItem.Detail = $"请求失败：{ex.Message}";
             _setStatusMessage("请求失败。");
+            // Re-throw so the host's SendTaskCommand catch can drop a
+            // toast — the runner never knows about the toast service.
+            throw;
         }
         finally
         {

@@ -516,8 +516,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // StopTaskCommand cancelled the run. The agent runner has
             // already flipped IsRunning to false and updated the activity
             // item's status to "已停止"; just record the user-visible
-            // status and move on.
+            // status, drop a toast so the user notices even if the
+            // window isn't focused, and move on.
             StatusMessage = "已停止。";
+            _toast.Show("任务已停止。", ToastLevel.Warning);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "请求失败。";
+            _toast.Show(ex.Message, ToastLevel.Error);
         }
         finally
         {
