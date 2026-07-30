@@ -842,7 +842,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 }
 
-public sealed record ProjectCardViewModel(string Id, string Name, string Path);
+public sealed partial class ProjectCardViewModel(string id, string name, string path) : ObservableObject
+{
+    public string Id { get; } = id;
+    public string Name { get; } = name;
+    public string Path { get; } = path;
+
+    [ObservableProperty]
+    private bool isSelected;
+}
 
 public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ViewModelBase
 {

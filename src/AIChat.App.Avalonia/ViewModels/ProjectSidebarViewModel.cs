@@ -147,6 +147,10 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
     private void ApplyProject(ProjectWorkspace? project)
     {
         CurrentProject = project;
+        foreach (var card in Projects)
+        {
+            card.IsSelected = card.Id == project?.Id;
+        }
         if (project is null)
         {
             SelectedProjectCard = null;

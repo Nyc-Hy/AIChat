@@ -41,6 +41,7 @@
                       ColumnDefinitions="Auto,*,Auto"
                       Margin="20,0,12,0"
                       ColumnSpacing="12"
+                      Background="Transparent"
                       PointerPressed="TitleBar_OnPointerPressed">
                     <!-- Brand mark: a single solid teal dot. v1.1: dropped the
                          3-dot constellation in favor of a single dot — reads
@@ -92,97 +93,86 @@
 
                     <!-- ========== Sidebar ========== -->
                     <!--
-                      v1.1: the 1px right edge is the divider between the
-                      sidebar and the main column. Stays on the sidebar (not
-                      a separate column) so the column layout doesn't have
-                      to know about a 1px gap, and the divider inherits the
-                      same Padding3 horizontal spacing as the sidebar
-                      content.
+                      v1.2 list-style sidebar (Linear / Notion look):
+                        1. Task types (5 fixed items, first one = new task)
+                        2. 项目 section — bound to Sidebar.Projects
+                        3. 最近 section — bound to ConversationList.Conversations
+                      No prominent "新对话" button, no search input, no bottom
+                      status block. Every row is icon + single-line text;
+                      selected state = soft gray rounded background.
                     -->
                     <Border Grid.Column="0"
                             Classes="rail"
-                            Padding="{StaticResource Padding3}"
+                            Padding="{StaticResource Padding2}"
                             BorderBrush="{StaticResource LineSoftBrush}"
                             BorderThickness="0,0,1,0">
-                        <Grid RowDefinitions="Auto,*,Auto">
-                            <!-- New chat + search + project + conversation list -->
-                            <StackPanel Spacing="{StaticResource Space2}">
-                                <Button Classes="primary" Command="{Binding NewConversationCommand}" HorizontalAlignment="Stretch">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Path Data="M12 5 V19 M5 12 H19"
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="2">
+
+                                <!-- 1. New task (only entry — the 4 placeholder items I added
+                                     earlier (拉取请求/站点/已安排/插件) were dropped because
+                                     they had no backing functionality. UI without
+                                     commands is just noise.) -->
+                                <Button Classes="sidebar-row" Command="{Binding NewConversationCommand}" HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path Data="M3 21 L8 14 L11 17 L21 5 M14 5 H21 V12"
                                               Stroke="{Binding $parent[Button].Foreground}"
-                                              StrokeThickness="1.8" StrokeLineCap="Round"
-                                              Width="14" Height="14" Stretch="Uniform"/>
-                                        <TextBlock Text="新对话" FontWeight="SemiBold"/>
-                                        <TextBlock Text="⌘N" Classes="kbd-inline" Opacity="0.75"/>
+                                              StrokeThickness="1.5" StrokeLineCap="Round"
+                                              Width="16" Height="16" Stretch="Uniform"
+                                              VerticalAlignment="Center"/>
+                                        <TextBlock Text="新建任务" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
 
-                                <TextBox PlaceholderText="搜索对话、项目…"
-                                         Background="{StaticResource SurfaceSunkenBrush}"
-                                         BorderThickness="0"
-                                         CornerRadius="{StaticResource RadiusSm}"
-                                         Padding="{StaticResource Padding2}"/>
+                                <!-- 2. 项目 section -->
+                                <TextBlock Text="项目" Classes="section-title" Margin="4,16,0,6"/>
+                                <ItemsControl ItemsSource="{Binding Sidebar.Projects}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProjectCardViewModel">
+                                            <Button Classes="sidebar-row"
+                                                    Tag="{Binding Id}"
+                                                    Click="ProjectButton_OnClick"
+                                                    Classes.selected="{Binding IsSelected}"
+                                                    ToolTip.Tip="{Binding Name}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Path Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.5" StrokeLineCap="Round"
+                                                          Width="16" Height="16" Stretch="Uniform"
+                                                          VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding Name}" FontFamily="{StaticResource FontSans}" FontSize="13" TextTrimming="CharacterEllipsis" MaxLines="1" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
-                                <Button Classes="sidebar-row"
-                                        Click="AddProject_OnClick"
-                                        HorizontalAlignment="Stretch"
-                                        ToolTip.Tip="选择项目目录">
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                        <Border Width="24" Height="24" CornerRadius="6" Background="{StaticResource AccentSoftBrush}">
-                                            <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
-                                                  Stroke="{StaticResource AccentBrush}"
-                                                  StrokeThickness="1.5" StrokeJoin="Round"
-                                                  Width="14" Height="14" Stretch="Uniform"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Sidebar.SelectedProjectName}" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis" MaxLines="1" FontSize="13"/>
-                                            <TextBlock Text="{Binding Sidebar.SelectedProjectPath}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="1" FontSize="11"/>
-                                        </StackPanel>
-                                    </Grid>
-                                </Button>
+                                <!-- 3. 最近 section -->
+                                <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
+                                <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ConversationCardViewModel">
+                                            <Button Classes="sidebar-row"
+                                                    Tag="{Binding Id}"
+                                                    Click="ConversationButton_OnClick"
+                                                    Classes.selected="{Binding IsSelected}"
+                                                    ToolTip.Tip="{Binding Title}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontFamily="{StaticResource FontSans}"
+                                                           FontSize="13"
+                                                           Foreground="{StaticResource Text2Brush}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxLines="1"/>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </StackPanel>
-
-                            <!-- Conversation list -->
-                            <ScrollViewer Grid.Row="1" Margin="0,8,0,0" VerticalScrollBarVisibility="Auto">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="对话" Classes="section-title" Margin="4,0,0,6"/>
-                                    <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:ConversationCardViewModel">
-                                                <Button Classes="sidebar-row"
-                                                        Tag="{Binding Id}"
-                                                        Click="ConversationButton_OnClick"
-                                                        Classes.selected="{Binding IsSelected}"
-                                                        ToolTip.Tip="{Binding Title}">
-                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
-                                                        <Ellipse Grid.Column="0" Width="6" Height="6" Fill="{StaticResource AccentBrush}"
-                                                                 VerticalAlignment="Center"
-                                                                 IsVisible="{Binding IsSelected}"/>
-                                                        <StackPanel Grid.Column="1" Spacing="2">
-                                                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1" FontSize="13"/>
-                                                            <TextBlock Text="{Binding Detail}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                                                        </StackPanel>
-                                                    </Grid>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </ScrollViewer>
-
-                            <!-- Bottom: model info + settings link -->
-                            <StackPanel Grid.Row="2" Spacing="6" Margin="0,8,0,0">
-                                <Border Classes="section-divider" Margin="0,2"/>
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="{Binding StatusBarModel}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" MaxLines="1"/>
-                                    <Button Grid.Column="1" Classes="link-button" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="打开设置">
-                                        <TextBlock Text="设置" Classes="muted" FontSize="11" FontWeight="SemiBold"/>
-                                    </Button>
-                                </Grid>
-                            </StackPanel>
-                        </Grid>
+                        </ScrollViewer>
                     </Border>
 
                     <!-- ========== Main column ========== -->
@@ -363,26 +353,35 @@
                               border. The input "lifts" off the page. Focus
                               indicator = shadow deepens one step (no blue
                               ring inside the cream block).
+
+                              5*,40*,5* = 10% / 80% / 10% of the main column
+                              width, so the composer always fills 80% of the
+                              available chat area regardless of window size.
                             -->
-                            <Grid Grid.Row="2" MaxWidth="760" HorizontalAlignment="Center">
-                                <Border Classes="input-floating">
-                                    <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+                            <Grid Grid.Row="2" ColumnDefinitions="5*,40*,5*">
+                                <Border Grid.Column="1" Classes="input-floating">
+                                    <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
                                         <TextBox x:Name="PromptInput"
                                                  Text="{Binding DraftPrompt}"
                                                  PlaceholderText="说点什么…"
                                                  AcceptsReturn="True"
                                                  TextWrapping="Wrap"
-                                                 MinHeight="56"
+                                                 Height="72"
+                                                 MaxHeight="200"
                                                  Background="Transparent"
                                                  BorderThickness="0"
-                                                 Padding="0"
+                                                 Padding="4,10,4,6"
+                                                 FontFamily="{StaticResource FontSans}"
                                                  FontSize="14"
-                                                 MaxHeight="220"
+                                                 VerticalContentAlignment="Top"
+                                                 VerticalAlignment="Top"
                                                  KeyDown="PromptInput_OnKeyDown"/>
 
-                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,8,0,0">
-                                            <!-- Left: + attach, model chip, icon toggle for read-only.
-                                                 Center: ⌘⏎ kbd hint. Right: send. -->
+                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                                            <!-- Left: + attach, model chip. Right: send. The center
+                                                 column (where ⌘⏎ used to live) is gone, and the
+                                                 read-only toggle is dropped — single teal icon
+                                                 with no label read as a stray warning badge. -->
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                                 <Button Classes="icon-toggle" ToolTip.Tip="附加文件 (⌘⇧A)">
                                                     <Path Data="M12 5 V19 M5 12 H19"
@@ -393,22 +392,13 @@
                                                 <Border Classes="model-chip" MaxWidth="200">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}"/>
-                                                        <TextBlock Text="{Binding ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="80"/>
-                                                        <TextBlock Text="·" FontSize="12" Foreground="{StaticResource MutedBrush}"/>
-                                                        <TextBlock Text="{Binding ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="80"/>
+                                                        <TextBlock Text="{Binding ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="80" FontFamily="{StaticResource FontSans}"/>
+                                                        <TextBlock Text="·" FontSize="12" Foreground="{StaticResource MutedBrush}" FontFamily="{StaticResource FontSans}"/>
+                                                        <TextBlock Text="{Binding ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="80" FontFamily="{StaticResource FontSans}"/>
                                                     </StackPanel>
                                                 </Border>
-                                                <ToggleButton Classes="icon-toggle" IsChecked="{Binding NoWriteMode}" ToolTip.Tip="只读模式 (⌘⇧R)">
-                                                    <Path Data="M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0 M12 8 v4 M12 16 v.01"
-                                                          Stroke="{Binding $parent[ToggleButton].Foreground}"
-                                                          StrokeThickness="1.5" StrokeLineCap="Round"
-                                                          Width="14" Height="14" Stretch="Uniform"/>
-                                                </ToggleButton>
                                             </StackPanel>
-                                            <Border Grid.Column="1" Classes="kbd-pill" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <TextBlock Text="⌘ ⏎" Classes="kbd-inline"/>
-                                            </Border>
-                                            <Button Grid.Column="2"
+                                            <Button Grid.Column="1"
                                                     Classes="send-button"
                                                     Command="{Binding SendTaskCommand}"
                                                     IsEnabled="{Binding !IsRunning}"

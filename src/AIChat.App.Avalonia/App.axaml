@@ -498,6 +498,21 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
+        <!--
+          Kill Avalonia 12's default TextBox focus ring. The composer's
+          floating Border handles focus via a deeper shadow
+          (Border.input-floating:focus-within). Without this, the 2px blue
+          ring shows up inside the cream block AND its corners stick past
+          the parent Border's RadiusLg rounded shape.
+
+          Selector targets every Border inside the TextBox template, not
+          just a single named part — the focus ring's actual control name
+          varies across Avalonia 12 patch versions.
+        -->
+        <Style Selector="TextBox:focus /template/ Border">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
 
         <!--
           Bubble enter: each new conversation bubble fades in. Avalonia 12
