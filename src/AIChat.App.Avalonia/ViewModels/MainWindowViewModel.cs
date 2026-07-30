@@ -477,6 +477,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // Slash commands (/clear, /help, /status, /new) short-circuit the
+        // agent loop. The handler renders its result as a system bubble
+        // in the activity feed and clears the draft. TryExecute returns
+        // false when the prompt is not a slash command — fall through to
+        // the normal agent flow.
+        if (SlashCommandHandler.TryExecute(prompt, this, out var slashResult))
+        {
+            DraftPrompt = "";
+            if (slashResult is not null)
+            {
+                ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
+                StatusMessage = slashResult.Title + "。";
+            }
+            return;
+        }
+
         _insights.PrepareContextPreview(prompt, _sidebar.CurrentProject, NoWriteMode);
 
         var effectiveSettings = ProviderSettingsService.CreateEffectiveSettings(_settings, _settings.Temperature);
