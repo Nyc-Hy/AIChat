@@ -732,5 +732,132 @@
                 </Grid>
             </Border>
         </Border>
+
+        <!--
+          ============== Memory editor modal (Cmd+Shift+M) ==============
+          Full add / delete UI for the current project's memory
+          entries. Sits between the chat feed and the settings modal
+          in the overlay stack so the most frequently used modal
+          (settings) stays the topmost.
+        -->
+        <Border IsVisible="{Binding IsMemoryEditorOpen}"
+                Background="{StaticResource ScrimBrush}"
+                PointerPressed="MemoryEditorScrim_OnClick">
+            <Border Background="{StaticResource SurfaceBrush}"
+                    Width="720"
+                    MaxHeight="640"
+                    Padding="{StaticResource Padding6}"
+                    CornerRadius="{StaticResource RadiusLg}"
+                    BoxShadow="{StaticResource Elevation4Shadow}"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    PointerPressed="MemoryEditorContent_OnPointerPressed">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="14">
+
+                    <!-- Header: title + close -->
+                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Classes="page-title">
+                                <Run Text="Memory"/>
+                                <Run Text=" — "/>
+                                <Run Text="{Binding MemoryEditor.ProjectName}" Foreground="{StaticResource MutedBrush}"/>
+                            </TextBlock>
+                            <TextBlock Text="为当前项目添加笔记 / 偏好 / 任务进度。"
+                                       Classes="muted"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="chrome-button" Command="{Binding CloseMemoryEditorCommand}" ToolTip.Tip="关闭 (Esc)">
+                            <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round"
+                                  Width="14" Height="14" Stretch="Uniform"/>
+                        </Button>
+                    </Grid>
+
+                    <!-- Add form: textbox + category dropdown + add button -->
+                    <Grid Grid.Row="1"
+                          RowDefinitions="Auto,Auto"
+                          ColumnDefinitions="*,Auto,Auto"
+                          ColumnSpacing="8" RowSpacing="6">
+                        <TextBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                 Text="{Binding MemoryEditor.NewContent, Mode=TwoWay}"
+                                 PlaceholderText="输入要记到本项目的内容..."
+                                 MinHeight="56" MaxHeight="120"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0"
+                                   Text="{Binding MemoryEditor.ErrorMessage}"
+                                   Classes="muted"
+                                   FontSize="12"
+                                   Foreground="{StaticResource ErrorFgBrush}"
+                                   IsVisible="{Binding MemoryEditor.ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   TextWrapping="Wrap"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1"
+                                  ItemsSource="{Binding MemoryEditor.AvailableCategories}"
+                                  SelectedItem="{Binding MemoryEditor.NewCategory, Mode=TwoWay}"
+                                  MinWidth="120"
+                                  VerticalAlignment="Center">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}"/>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Button Grid.Row="1" Grid.Column="2"
+                                Classes="primary"
+                                Command="{Binding MemoryEditor.AddCommand}"
+                                Content="添加"
+                                VerticalAlignment="Center"/>
+                    </Grid>
+
+                    <!-- Entries list -->
+                    <ScrollViewer Grid.Row="2">
+                        <StackPanel Spacing="8">
+                            <TextBlock IsVisible="{Binding MemoryEditor.EntryCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"
+                                       Text="(还没有记录)"
+                                       Classes="muted"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,32,0,0"/>
+                            <ItemsControl ItemsSource="{Binding MemoryEditor.Entries}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:MemoryEntryViewModel">
+                                        <Border Classes="surface" Margin="0,0,0,8">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                                <Border Grid.Column="0"
+                                                        Classes="badge"
+                                                        Padding="8,3"
+                                                        CornerRadius="{StaticResource RadiusSm}"
+                                                        VerticalAlignment="Top">
+                                                    <TextBlock Text="{Binding CategoryDisplay}"
+                                                               FontSize="11"
+                                                               FontWeight="SemiBold"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="4">
+                                                    <TextBlock Text="{Binding ContentPreview}"
+                                                               Classes="body"
+                                                               TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding UpdatedAtDisplay}"
+                                                               Classes="muted"
+                                                               FontSize="11"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="2"
+                                                        Classes="icon-toggle"
+                                                        Command="{Binding DeleteCommand}"
+                                                        ToolTip.Tip="删除"
+                                                        VerticalAlignment="Top">
+                                                    <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.4" StrokeLineCap="Round"
+                                                          Width="12" Height="12" Stretch="Uniform"/>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 </Window>

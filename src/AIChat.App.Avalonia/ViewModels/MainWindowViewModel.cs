@@ -40,6 +40,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IToastService _toast;
     private readonly IProjectPicker _projectPicker;
     private readonly IClipboardService _clipboard;
+    private readonly MemoryEditorViewModel _memoryEditor;
     private readonly AgentRunnerViewModel _agentRunner;
     // CTS for the currently running agent task. New SendTaskCommand runs
     // replace it; StopTaskCommand cancels it. The token is passed into
@@ -131,6 +132,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool isSettingsOpen;
 
+    // Memory editor modal: full add / delete UI for the current
+    // project's memory. ⌘⇧M opens it. /memory (slash) stays as a
+    // quick read-only summary in the activity feed — this is the
+    // edit surface.
+    [ObservableProperty]
+    private bool isMemoryEditorOpen;
+
+    public MemoryEditorViewModel MemoryEditor => _memoryEditor;
+
     // 1.0 Beta: derive the top status, breadcrumb visibility and status-bar
     // text from the same handful of fields so the XAML can stay declarative.
     // HasProject hides the project crumb when no project is selected (so
@@ -200,6 +210,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void CloseSettings() => IsSettingsOpen = false;
 
     [RelayCommand]
+    private void OpenMemoryEditor()
+    {
+        // Refresh the list every time the modal opens so a memory
+        // added by the agent during a run is reflected immediately.
+        _memoryEditor.Refresh();
+        IsMemoryEditorOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseMemoryEditor() => IsMemoryEditorOpen = false;
+
+    [RelayCommand]
     private void NewConversation()
     {
         ActivityFeed.Clear();
@@ -261,7 +283,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ISettingsHolder settingsHolder,
         IToastService toast,
         IProjectPicker projectPicker,
-        IClipboardService clipboard)
+        IClipboardService clipboard,
+        MemoryEditorViewModel memoryEditor)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -277,6 +300,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _toast = toast;
         _projectPicker = projectPicker;
         _clipboard = clipboard;
+        _memoryEditor = memoryEditor;
         _agentRunner = new AgentRunnerViewModel(
             chatService,
             toolRegistry,

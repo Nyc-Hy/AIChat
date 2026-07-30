@@ -95,6 +95,15 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘⇧M opens the memory editor. Add / delete the current
+            // project's memory entries. ⌘/ still surfaces the read-
+            // only /memory summary in the activity feed for the
+            // quick-glance use case.
+            Gesture = new KeyGesture(Key.M, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = viewModel.OpenMemoryEditorCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘⇧K is Slack / Discord's "clear channel" shortcut. In our
             // case it clears the current activity feed (ActivityFeed.Clear)
             // and is a no-op when the agent is running so the user
@@ -139,6 +148,10 @@ public partial class MainWindow : Window
                 else if (viewModel.IsSettingsOpen)
                 {
                     viewModel.IsSettingsOpen = false;
+                }
+                else if (viewModel.IsMemoryEditorOpen)
+                {
+                    viewModel.IsMemoryEditorOpen = false;
                 }
             })
         });
@@ -313,6 +326,20 @@ public partial class MainWindow : Window
     }
 
     private void SettingsContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
+    // Memory editor modal: same scrim / content pattern.
+    private void MemoryEditorScrim_OnClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.IsMemoryEditorOpen = false;
+        }
+    }
+
+    private void MemoryEditorContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         e.Handled = true;
     }

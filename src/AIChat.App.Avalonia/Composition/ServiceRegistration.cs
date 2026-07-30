@@ -46,6 +46,7 @@ internal static class ServiceRegistration
         services.AddSingleton<ConversationListViewModel>();
         services.AddSingleton<SessionInsightsViewModel>();
         services.AddSingleton<ToolApprovalViewModel>();
+        services.AddSingleton<MemoryEditorViewModel>();
         services.AddSingleton<IApprovalService, UIBoundApprovalService>();
         services.AddSingleton<IThemeService, FluentThemeService>();
         services.AddSingleton<IToastService, ToastService>();
