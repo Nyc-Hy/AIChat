@@ -19,6 +19,9 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://AIChat.App.Avalonia/Resources/Tokens.axaml" />
             </ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceInclude x:Key="Dark" Source="avares://AIChat.App.Avalonia/Resources/Tokens.Dark.axaml" />
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 

@@ -1,0 +1,63 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Dark-mode token overrides. Loaded by App.axaml under
+    ResourceDictionary.Theme="Dark" when RequestedThemeVariant
+    resolves to Dark. Every key in Tokens.axaml is redefined here
+    with its dark equivalent; brushes are re-derived from the
+    updated Color values via StaticResource, so any Setter that
+    references <token>Brush flips automatically.
+
+    Key      Light    Dark
+    =========================
+    Bg       #fafaf7  #0d0d10
+    Bg2      #f1ede4  #18181c
+    Surface  #ffffff  #25252c
+    Line     #e9e3d6  #2c2c34
+    Text     #18181b  #e8e8eb
+    Muted    #71717a  #8a8a92
+    Accent   #2f6f5e  #80e8c4
+    Warn     #c97b3f  #e0a16e
+    Danger   #b06367  #e08488
+    AccentBlue #2563eb #3b82f6
+  -->
+
+  <Color x:Key="BgColor">#0d0d10</Color>
+  <Color x:Key="Bg2Color">#18181c</Color>
+  <Color x:Key="SurfaceColor">#25252c</Color>
+  <Color x:Key="LineColor">#2c2c34</Color>
+  <Color x:Key="LineSoftColor">#25252c</Color>
+  <Color x:Key="TextColor">#e8e8eb</Color>
+  <Color x:Key="Text2Color">#c8c8cf</Color>
+  <Color x:Key="MutedColor">#8a8a92</Color>
+  <Color x:Key="AccentColor">#80e8c4</Color>
+  <Color x:Key="AccentSoftColor">#1480e8c4</Color>
+  <Color x:Key="WarnColor">#e0a16e</Color>
+  <Color x:Key="DangerColor">#e08488</Color>
+  <Color x:Key="AccentBlueColor">#3b82f6</Color>
+  <Color x:Key="InfoBgColor">#1a2940</Color>
+  <Color x:Key="SuccessBgColor">#0e3b21</Color>
+  <Color x:Key="WarningBgColor">#3d2e10</Color>
+  <Color x:Key="DividerColor">#2c2c34</Color>
+  <Color x:Key="HoverBgColor">#25252c</Color>
+  <Color x:Key="HoverBg2Color">#2c2c34</Color>
+  <Color x:Key="CloseHoverColor">#ff6b73</Color>
+  <Color x:Key="TextOnAccentColor">#0d0d10</Color>
+
+  <!-- Dark-mode badge foregrounds: light/dark each need an opposite-tone foreground
+       so the badge reads in both modes. Light badges get a dark text; dark badges
+       get a light text. Tokens.axaml defines BadgeFgColor=#111827 for light. -->
+  <Color x:Key="BadgeFgColor">#e8e8eb</Color>
+  <Color x:Key="SuccessBadgeFgColor">#80e8c4</Color>
+  <Color x:Key="InfoBadgeFgColor">#80b8ff</Color>
+  <Color x:Key="WarningBadgeFgColor">#e0a16e</Color>
+  <Color x:Key="AccentVariantFgColor">#80e8c4</Color>
+
+  <SolidColorBrush x:Key="BadgeFgBrush"           Color="{StaticResource BadgeFgColor}" />
+  <SolidColorBrush x:Key="SuccessBadgeFgBrush"    Color="{StaticResource SuccessBadgeFgColor}" />
+  <SolidColorBrush x:Key="InfoBadgeFgBrush"       Color="{StaticResource InfoBadgeFgColor}" />
+  <SolidColorBrush x:Key="WarningBadgeFgBrush"    Color="{StaticResource WarningBadgeFgColor}" />
+  <SolidColorBrush x:Key="AccentVariantFgBrush"  Color="{StaticResource AccentVariantFgColor}" />
+
+</ResourceDictionary>

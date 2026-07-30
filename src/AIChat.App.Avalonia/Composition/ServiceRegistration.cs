@@ -48,6 +48,7 @@ internal static class ServiceRegistration
         services.AddSingleton<ToolApprovalViewModel>();
         services.AddSingleton<IApprovalService, UIBoundApprovalService>();
         services.AddSingleton<IThemeService, FluentThemeService>();
+        services.AddSingleton<IToastService, ToastService>();
         // ProjectPicker needs a TopLevel which is only available after the
         // window is constructed. The view code-behind sets TopLevel on
         // the concrete AvaloniaProjectPicker once the window is ready.
