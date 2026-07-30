@@ -30,17 +30,22 @@ Each release also includes SHA-256 checksum files for verification.
 shasum -a 256 aichat-desktop-osx-arm64.zip
 cat aichat-desktop-osx-arm64.sha256
 
-# Unpack
-unzip aichat-desktop-osx-arm64.zip -d AIChat.app.d
-# The .app bundle is inside the archive; move it to /Applications
-mv AIChat.app.d/AIChat.app /Applications/AIChat.app
+# Unpack — the archive contains a single self-contained Mach-O binary
+# named 'aichat', plus README / LICENSE / INSTALL / LAUNCH_PLAN.
+unzip aichat-desktop-osx-arm64.zip -d aichat-desktop
+chmod +x ./aichat-desktop/aichat
+
+# Optional: install to /Applications
+mkdir -p /Applications/AIChat.app/Contents/MacOS
+mv ./aichat-desktop/aichat /Applications/AIChat.app/Contents/MacOS/aichat
+ln -sf /Applications/AIChat.app/Contents/MacOS/aichat /usr/local/bin/aichat
 
 # First launch: macOS Gatekeeper will block an unsigned binary the first time
-xattr -d com.apple.quarantine /Applications/AIChat.app 2>/dev/null || true
-open /Applications/AIChat.app
+xattr -d com.apple.quarantine /Applications/AIChat.app/Contents/MacOS/aichat 2>/dev/null || true
+/Applications/AIChat.app/Contents/MacOS/aichat
 ```
 
-If macOS still blocks the app, allow it from **System Settings → Privacy & Security**, then re-open.
+If macOS still blocks the app, allow it from **System Settings → Privacy & Security**, then re-launch.
 
 ## Linux x64
 
@@ -49,16 +54,18 @@ shasum -a 256 aichat-desktop-linux-x64.tar.gz
 cat aichat-desktop-linux-x64.sha256
 
 tar -xzf aichat-desktop-linux-x64.tar.gz
-# The unpacked tree contains aichat (ELF executable) plus README/LICENSE.
-# Run it directly, or install:
-mkdir -p ~/.local/bin ~/.local/share/applications ~/.local/share/icons
-mv aichat ~/.local/bin/aichat-desktop
+# The archive contains a single self-contained ELF binary named 'aichat'
+# plus README / LICENSE / INSTALL / LAUNCH_PLAN.
+chmod +x ./aichat-desktop/aichat
+
+# Optional: install to user-local bin and register a .desktop entry
+mkdir -p ~/.local/bin ~/.local/share/applications
+mv ./aichat-desktop/aichat ~/.local/bin/aichat
 cat > ~/.local/share/applications/aichat.desktop <<'EOF'
 [Desktop Entry]
 Type=Application
 Name=AIChat
-Exec=aichat-desktop %u
-Icon=aichat
+Exec=aichat %u
 Terminal=false
 Categories=Development;IDE;
 EOF
@@ -71,13 +78,14 @@ EOF
 Get-FileHash -Algorithm SHA256 .\aichat-desktop-win-x64.zip
 Get-Content .\aichat-desktop-win-x64.sha256
 
-# Unpack
-Expand-Archive .\aichat-desktop-win-x64.zip -DestinationPath .\AIChat
+# Unpack — the archive contains aichat.exe (self-contained PE binary)
+# plus README / LICENSE / INSTALL / LAUNCH_PLAN.
+Expand-Archive .\aichat-desktop-win-x64.zip -DestinationPath .\aichat-desktop
 
 # Optional: install to user-local app data
-$installDir = "$env:LOCALAPPDATA\AIChat"
+$installDir = "$env:LOCALAPPDATA\AIChat\bin"
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-Copy-Item .\AIChat\* $installDir -Recurse -Force
+Copy-Item .\aichat-desktop\aichat.exe $installDir -Force
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$installDir", "User")
 ```
 

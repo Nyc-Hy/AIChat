@@ -6,6 +6,11 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>AIChat.App.Avalonia</AssemblyName>
+    <RootNamespace>AIChat.App.Avalonia</RootNamespace>
+    <Product>AIChat Desktop</Product>
+    <Description>Cross-platform Vibe Coding assistant desktop application</Description>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

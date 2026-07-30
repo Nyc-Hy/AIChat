@@ -47,6 +47,19 @@ foreach ($rid in $Runtime) {
 
     Get-ChildItem -Path $publishDir -Filter "*.pdb" -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
+    # Rename the assembly-named binary to the product name 'aichat' so the
+    # CLI surface is consistent across platforms. Self-contained + single
+    # file publish ignores AppHostName, so we rename after the fact. The
+    # Avalonia XAML avares:// URIs keep the original assembly name —
+    # renaming the executable does not affect them.
+    $legacyExe = if ($IsWindows -or $env:OS -eq "Windows_NT") { "AIChat.App.Avalonia.exe" } else { "AIChat.App.Avalonia" }
+    $productExe = if ($IsWindows -or $env:OS -eq "Windows_NT") { "aichat.exe" } else { "aichat" }
+    $legacyPath = Join-Path $publishDir $legacyExe
+    $productPath = Join-Path $publishDir $productExe
+    if ((Test-Path $legacyPath) -and (-not (Test-Path $productPath))) {
+        Move-Item -LiteralPath $legacyPath -Destination $productPath
+    }
+
     switch ($packExt) {
         "tar.gz" {
             tar -czf $archivePath -C $publishDir .
