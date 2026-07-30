@@ -23,47 +23,45 @@
 
     <!--
       Layered overlay stack (back to front):
-        1. Main surface (titlebar + 2-col content + status bar)
+        1. Main surface (slim titlebar + 2-col content + status bar)
         2. Toasts (bottom-right)
         3. Command palette (top-anchored modal, search-first)
         4. Settings modal (centered, provider config form)
         5. Tool approval modal (centered, blocks until resolved)
+
+      1.0 Beta redesign focus:
+        - Conversation is the hero (max 720px centered, alternating user/AI bubbles)
+        - Empty state is a large card grid with quick actions + kbd hints
+        - Input is a floating composer (14px corners + soft shadow) at the bottom
+        - Status bar is a single mono line with inline context meter
     -->
     <Grid>
         <Border Background="{StaticResource BgBrush}" CornerRadius="18" ClipToBounds="True">
-            <Grid RowDefinitions="48,*,32">
+            <Grid RowDefinitions="52,*,32">
 
-                <!-- ============== Titlebar ============== -->
+                <!-- ============== Titlebar (slim) ============== -->
                 <Grid Grid.Row="0"
-                      ColumnDefinitions="*,Auto"
+                      ColumnDefinitions="Auto,*,Auto"
                       Margin="20,0,12,0"
-                      ColumnSpacing="18"
+                      ColumnSpacing="12"
                       Background="Transparent"
                       PointerPressed="TitleBar_OnPointerPressed">
-                    <!-- Breadcrumb: brand + project (when one is selected) -->
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Path Data="M4 4 L20 4 L20 20 L4 20 Z M8 8 H16 V16 H8 Z"
-                              Stroke="{StaticResource MutedBrush}"
-                              StrokeThickness="1.5"
-                              Width="18" Height="18"
-                              Stretch="Uniform"
-                              VerticalAlignment="Center"/>
-                        <TextBlock Text="AIChat" Classes="body" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock Text="/"
-                                   Classes="muted"
-                                   VerticalAlignment="Center"
-                                   IsVisible="{Binding HasProject}"/>
-                        <TextBlock Text="{Binding Sidebar.SelectedProjectName}"
-                                   Classes="body"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
-                                   MaxWidth="320"
-                                   IsVisible="{Binding HasProject}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border Width="26" Height="26" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
+                            <TextBlock Text="AI"
+                                       FontFamily="{StaticResource FontSans}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="AIChat" FontFamily="{StaticResource FontSans}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- Window actions: theme, settings, min, max, close -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+                    <!-- Center: minimal — no breadcrumb, project name shows in the page header below -->
+                    <StackPanel Grid.Column="1"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
                         <Button Classes="chrome-button" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="切换主题 (⌘⇧T)">
                             <Path Data="M12 4 V2 M12 22 V20 M4 12 H2 M22 12 H20 M5.5 5.5 L4.1 4.1 M19.9 19.9 L18.5 18.5 M5.5 18.5 L4.1 19.9 M19.9 4.1 L18.5 5.5 M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8"
                                   Stroke="{Binding $parent[Button].Foreground}"
@@ -97,53 +95,86 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- ============== Main: 2-col (sidebar 240 + flex) ============== -->
-                <Grid Grid.Row="1" ColumnDefinitions="240,*" Margin="14,6,14,6" ColumnSpacing="14">
+                <!-- ============== Main: 2-col (sidebar 260 + flex) ============== -->
+                <Grid Grid.Row="1" ColumnDefinitions="260,*" Margin="14,4,14,6" ColumnSpacing="14">
 
                     <!-- ========== Sidebar ========== -->
-                    <Border Grid.Column="0" Classes="rail">
-                        <Grid RowDefinitions="Auto,*">
-                            <!-- Top: new conversation + project -->
-                            <StackPanel Spacing="12">
-                                <Button Classes="primary" Command="{Binding NewConversationCommand}" HorizontalAlignment="Stretch">
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Path Data="M12 5 V19 M5 12 H19"
-                                              Stroke="{Binding $parent[Button].Foreground}"
-                                              StrokeThickness="1.6" StrokeLineCap="Round"
-                                              Width="14" Height="14" Stretch="Uniform"/>
-                                        <TextBlock Text="新建对话" FontWeight="SemiBold"/>
-                                        <TextBlock Text="⌘N" Classes="kbd-inline" Opacity="0.7"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Classes="list-action" Click="AddProject_OnClick" HorizontalAlignment="Stretch">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
-                                              Stroke="{StaticResource MutedBrush}"
-                                              StrokeThickness="1.4" StrokeJoin="Round"
-                                              Width="14" Height="14" Stretch="Uniform"/>
-                                        <TextBlock Text="添加项目"/>
-                                    </StackPanel>
-                                </Button>
+                    <Border Grid.Column="0" Classes="rail" Padding="14">
+                        <Grid RowDefinitions="Auto,*,Auto">
+                            <!-- New chat button (primary, with + icon) -->
+                            <Button Classes="primary" Command="{Binding NewConversationCommand}" HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Path Data="M12 5 V19 M5 12 H19"
+                                          Stroke="{Binding $parent[Button].Foreground}"
+                                          StrokeThickness="1.8" StrokeLineCap="Round"
+                                          Width="14" Height="14" Stretch="Uniform"/>
+                                    <TextBlock Text="新对话" FontWeight="SemiBold"/>
+                                    <Border Classes="kbd-pill" Margin="6,0,0,0" VerticalAlignment="Center" Background="Transparent" BorderThickness="0" Padding="0">
+                                        <TextBlock Text="⌘N" Classes="kbd-inline" Opacity="0.65"/>
+                                    </Border>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Project selector (when no project selected, this is the call to action) -->
+                            <StackPanel Grid.Row="1" Spacing="12" Margin="0,18,0,0">
+                                <StackPanel Spacing="6" IsVisible="{Binding HasProject}">
+                                    <TextBlock Text="项目" Classes="section-title"/>
+                                    <Button Classes="sidebar-row" Click="AddProject_OnClick" HorizontalAlignment="Stretch" ToolTip.Tip="选择项目目录">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Sidebar.SelectedProjectName}" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Sidebar.SelectedProjectPath}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <StackPanel Spacing="6" IsVisible="{Binding !HasProject}">
+                                    <TextBlock Text="项目" Classes="section-title"/>
+                                    <Button Classes="quick-action" Click="AddProject_OnClick" HorizontalAlignment="Stretch">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
+                                                <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
+                                                      Stroke="{StaticResource AccentBrush}"
+                                                      StrokeThickness="1.5" StrokeJoin="Round"
+                                                      Width="16" Height="16" Stretch="Uniform"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="添加项目" FontWeight="SemiBold" Classes="body"/>
+                                                <TextBlock Text="选一个本地代码仓库" Classes="muted" FontSize="11"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="对话" Classes="section-title"/>
+                                    <ScrollViewer MaxHeight="380" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:ConversationCardViewModel">
+                                                    <Button Classes="sidebar-row" Tag="{Binding Id}" Click="ConversationButton_OnClick" ToolTip.Tip="{Binding Title}" Background="{Binding Background}">
+                                                        <StackPanel Spacing="2">
+                                                            <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                                            <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
                             </StackPanel>
 
-                            <!-- Middle: conversation list -->
-                            <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="最近对话" Classes="section-title" Margin="2,0,0,8"/>
-                                    <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="vm:ConversationCardViewModel">
-                                                <Button Classes="list-action" Tag="{Binding Id}" Click="ConversationButton_OnClick" Margin="0,0,0,4" ToolTip.Tip="{Binding Title}" Background="{Binding Background}">
-                                                    <StackPanel Spacing="2">
-                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                                                        <TextBlock Text="{Binding Detail}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                                                    </StackPanel>
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </ScrollViewer>
+                            <!-- Bottom: settings + model info -->
+                            <StackPanel Grid.Row="2" Spacing="10" Margin="0,12,0,0">
+                                <Border Classes="section-divider" Margin="0,2"/>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,2,0,0">
+                                    <TextBlock Text="{Binding StatusBarModel}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Classes="link-button" Command="{Binding OpenSettingsCommand}" Cursor="Hand" Padding="0" ToolTip.Tip="打开设置">
+                                        <TextBlock Text="设置" Classes="muted" FontSize="11" FontWeight="SemiBold"/>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -152,160 +183,236 @@
 
                         <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
 
-                            <!-- Compact top status: project + readiness + context -->
-                            <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                            <!-- Page header (compact) -->
+                            <Grid ColumnDefinitions="*,Auto" Margin="6,4,6,0">
                                 <StackPanel Spacing="2" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Greeting}" Classes="page-title"/>
-                                    <TextBlock Text="{Binding SubGreeting}" Classes="muted"/>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasProject}">
+                                        <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
+                                              Stroke="{StaticResource MutedBrush}"
+                                              StrokeThickness="1.4" StrokeJoin="Round"
+                                              Width="14" Height="14" Stretch="Uniform"
+                                              VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding Sidebar.SelectedProjectName}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Greeting}" Classes="hero-title"/>
+                                    <TextBlock Text="{Binding SubGreeting}" Classes="muted" FontSize="13" TextWrapping="Wrap" MaxWidth="640" Margin="0,2,0,0"/>
                                 </StackPanel>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <Border Classes="badge" IsVisible="{Binding !HasProject}">
-                                        <TextBlock Text="未选择项目" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}"/>
-                                    </Border>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
                                     <Border Classes="badge success" IsVisible="{Binding IsReady}">
                                         <TextBlock Text="可运行" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SuccessBadgeFgBrush}"/>
                                     </Border>
                                     <Border Classes="badge warning" IsVisible="{Binding NeedsConfiguration}">
                                         <TextBlock Text="需要密钥" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningBadgeFgBrush}"/>
                                     </Border>
+                                    <Border Classes="badge" IsVisible="{Binding !HasProject}">
+                                        <TextBlock Text="未选择项目" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}"/>
+                                    </Border>
                                 </StackPanel>
                             </Grid>
 
-                            <!-- Conversation: empty state OR scrollable bubbles -->
+                            <!-- Conversation: empty state OR bubbles -->
                             <Border Grid.Row="1" Classes="panel" Padding="0">
                                 <Panel>
-                                    <!-- Real conversation: bubbles, centered, max-width 760 -->
+                                    <!-- Real conversation: bubbles, centered, max-width 720 -->
                                     <Grid IsVisible="{Binding HasConversation}">
-                                        <ScrollViewer Padding="{StaticResource Space6}">
+                                        <ScrollViewer Padding="20,16">
                                             <ItemsControl ItemsSource="{Binding Activity}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
-                                                        <StackPanel HorizontalAlignment="{Binding BubbleAlignment}" MaxWidth="760" Margin="0,0,0,14" Spacing="4">
-                                                            <Grid ColumnDefinitions="*,Auto">
-                                                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold" FontSize="12"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" FontSize="11" Margin="10,0,0,0"/>
+                                                        <Grid Margin="0,0,0,14">
+                                                            <!-- AI bubble: icon avatar on the left, surface card -->
+                                                            <Grid IsVisible="{Binding IsAssistantBubble}"
+                                                                  HorizontalAlignment="Left"
+                                                                  MaxWidth="720"
+                                                                  ColumnDefinitions="Auto,*"
+                                                                  ColumnSpacing="10">
+                                                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}" VerticalAlignment="Top">
+                                                                    <TextBlock Text="AI"
+                                                                               FontSize="11" FontWeight="SemiBold"
+                                                                               Foreground="{StaticResource AccentBrush}"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <StackPanel Grid.Column="1" Spacing="4">
+                                                                    <Grid ColumnDefinitions="*,Auto">
+                                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold" FontSize="12"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" FontSize="11" Margin="10,0,0,0"/>
+                                                                    </Grid>
+                                                                    <Border Classes="bubble-ai">
+                                                                        <Panel>
+                                                                            <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
+                                                                                                        Markdown="{Binding Detail}"
+                                                                                                        Foreground="{Binding TextForeground}"
+                                                                                                        TextWrapping="Wrap"/>
+                                                                            <StackPanel IsVisible="{Binding IsThinking}"
+                                                                                        Orientation="Horizontal" Spacing="5"
+                                                                                        VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                                                <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
+                                                                                    <Ellipse.Styles>
+                                                                                        <Style Selector="Ellipse">
+                                                                                            <Style.Animations>
+                                                                                                <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut">
+                                                                                                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                                                                                                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                                                                                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                                                                                                </Animation>
+                                                                                            </Style.Animations>
+                                                                                        </Style>
+                                                                                    </Ellipse.Styles>
+                                                                                </Ellipse>
+                                                                                <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
+                                                                                    <Ellipse.Styles>
+                                                                                        <Style Selector="Ellipse">
+                                                                                            <Style.Animations>
+                                                                                                <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.2">
+                                                                                                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                                                                                                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                                                                                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                                                                                                </Animation>
+                                                                                            </Style.Animations>
+                                                                                        </Style>
+                                                                                    </Ellipse.Styles>
+                                                                                </Ellipse>
+                                                                                <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
+                                                                                    <Ellipse.Styles>
+                                                                                        <Style Selector="Ellipse">
+                                                                                            <Style.Animations>
+                                                                                                <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.4">
+                                                                                                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                                                                                                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                                                                                                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                                                                                                </Animation>
+                                                                                            </Style.Animations>
+                                                                                        </Style>
+                                                                                    </Ellipse.Styles>
+                                                                                </Ellipse>
+                                                                            </StackPanel>
+                                                                        </Panel>
+                                                                    </Border>
+                                                                </StackPanel>
                                                             </Grid>
-                                                            <Border Background="{Binding BubbleBackground}"
-                                                                    CornerRadius="12"
-                                                                    Padding="14,10">
-                                                                <Panel>
-                                                                    <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
-                                                                                                Markdown="{Binding Detail}"
+
+                                                            <!-- User bubble: right-aligned, accent soft card -->
+                                                            <StackPanel IsVisible="{Binding IsUserBubble}"
+                                                                        HorizontalAlignment="Right"
+                                                                        MaxWidth="640"
+                                                                        Spacing="4">
+                                                                <TextBlock Text="{Binding Status}" Classes="muted" FontSize="11" HorizontalAlignment="Right"/>
+                                                                <Border Classes="bubble-user" MaxWidth="640">
+                                                                    <controls:MarkdownTextBlock Markdown="{Binding Detail}"
                                                                                                 Foreground="{Binding TextForeground}"
                                                                                                 TextWrapping="Wrap"/>
-                                                                    <StackPanel IsVisible="{Binding IsThinking}"
-                                                                                Orientation="Horizontal"
-                                                                                Spacing="5"
-                                                                                VerticalAlignment="Center"
-                                                                                HorizontalAlignment="Left">
-                                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
-                                                                            <Ellipse.Styles>
-                                                                                <Style Selector="Ellipse">
-                                                                                    <Style.Animations>
-                                                                                        <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut">
-                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
-                                                                                            <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
-                                                                                        </Animation>
-                                                                                    </Style.Animations>
-                                                                                </Style>
-                                                                            </Ellipse.Styles>
-                                                                        </Ellipse>
-                                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
-                                                                            <Ellipse.Styles>
-                                                                                <Style Selector="Ellipse">
-                                                                                    <Style.Animations>
-                                                                                        <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.2">
-                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
-                                                                                            <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
-                                                                                        </Animation>
-                                                                                    </Style.Animations>
-                                                                                </Style>
-                                                                            </Ellipse.Styles>
-                                                                        </Ellipse>
-                                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
-                                                                            <Ellipse.Styles>
-                                                                                <Style Selector="Ellipse">
-                                                                                    <Style.Animations>
-                                                                                        <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.4">
-                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
-                                                                                            <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
-                                                                                        </Animation>
-                                                                                    </Style.Animations>
-                                                                                </Style>
-                                                                            </Ellipse.Styles>
-                                                                        </Ellipse>
-                                                                    </StackPanel>
-                                                                </Panel>
-                                                            </Border>
-                                                        </StackPanel>
+                                                                </Border>
+                                                            </StackPanel>
+
+                                                            <!-- System / tool message: centered, no bubble -->
+                                                            <StackPanel IsVisible="{Binding IsSystemBubble}"
+                                                                        HorizontalAlignment="Center"
+                                                                        MaxWidth="640"
+                                                                        Spacing="4">
+                                                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold" FontSize="12" HorizontalAlignment="Center"/>
+                                                                <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Grid>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </ScrollViewer>
                                     </Grid>
 
-                                    <!-- Empty state: hero card, centered. Click a tile to fill the prompt. -->
+                                    <!-- Empty state: hero card with quick actions + kbd hints -->
                                     <StackPanel IsVisible="{Binding !HasConversation}"
-                                                Spacing="24"
+                                                Spacing="28"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
-                                                MaxWidth="560">
-                                        <StackPanel Spacing="6" HorizontalAlignment="Center">
+                                                MaxWidth="600">
+                                        <StackPanel Spacing="8" HorizontalAlignment="Center">
                                             <TextBlock Text="Ask AIChat anything"
-                                                       FontFamily="{StaticResource FontSans}"
-                                                       FontWeight="SemiBold"
-                                                       FontSize="26"
-                                                       Foreground="{StaticResource TextBrush}"
+                                                       Classes="hero-title"
                                                        HorizontalAlignment="Center"/>
                                             <TextBlock Text="用自然语言描述目标。AIChat 会先读上下文，碰到写文件、命令、Git 操作时会请你确认。"
                                                        Classes="muted"
+                                                       FontSize="13"
                                                        TextWrapping="Wrap"
                                                        TextAlignment="Center"
                                                        HorizontalAlignment="Center"
-                                                       MaxWidth="480"/>
+                                                       MaxWidth="460"/>
                                         </StackPanel>
 
-                                        <ItemsControl>
+                                        <ItemsControl HorizontalAlignment="Center">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <UniformGrid Rows="2" Columns="2"/>
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
-                                            <Button Classes="empty-state-card" Tag="检查发布前风险并修复失败的测试" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Spacing="4">
-                                                    <TextBlock Text="发布前检查" FontWeight="SemiBold" Classes="body"/>
-                                                    <TextBlock Text="跑测试、找风险、生成修复建议" Classes="muted" TextWrapping="Wrap"/>
+                                            <Button Classes="quick-action" Width="280" Height="92" Tag="检查发布前风险并修复失败的测试" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="24" Height="24" CornerRadius="6" Background="{StaticResource AccentSoftBrush}">
+                                                            <Path Data="M5 12 l4 4 L19 6"
+                                                                  Stroke="{StaticResource AccentBrush}"
+                                                                  StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                  Width="14" Height="14" Stretch="Uniform"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Text="发布前检查" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="跑测试、找风险、生成修复建议" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="32,0,0,0"/>
                                                 </StackPanel>
                                             </Button>
-                                            <Button Classes="empty-state-card" Tag="重构 UserDialog，把 prompt 模板抽到独立文件" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Spacing="4">
-                                                    <TextBlock Text="重构" FontWeight="SemiBold" Classes="body"/>
-                                                    <TextBlock Text="按目标拆分大函数、提取模块" Classes="muted" TextWrapping="Wrap"/>
+                                            <Button Classes="quick-action" Width="280" Height="92" Tag="重构 UserDialog，把 prompt 模板抽到独立文件" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="24" Height="24" CornerRadius="6" Background="{StaticResource AccentSoftBrush}">
+                                                            <Path Data="M12 20 H21 M16.5 3.5 a2.121 2.121 0 0 1 3 3 L7 19 L4 20 L5 17 L16.5 3.5 z"
+                                                                  Stroke="{StaticResource AccentBrush}"
+                                                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                  Width="14" Height="14" Stretch="Uniform"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Text="重构" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="按目标拆分大函数、提取模块" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="32,0,0,0"/>
                                                 </StackPanel>
                                             </Button>
-                                            <Button Classes="empty-state-card" Tag="整理 README，把功能、快捷键、构建步骤写清楚" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Spacing="4">
-                                                    <TextBlock Text="写文档" FontWeight="SemiBold" Classes="body"/>
-                                                    <TextBlock Text="README、CHANGELOG、AGENTS.md" Classes="muted" TextWrapping="Wrap"/>
+                                            <Button Classes="quick-action" Width="280" Height="92" Tag="整理 README，把功能、快捷键、构建步骤写清楚" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="24" Height="24" CornerRadius="6" Background="{StaticResource AccentSoftBrush}">
+                                                            <Path Data="M14 2 H6 a2 2 0 0 0 -2 2 v16 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V8 z M14 2 v6 h6"
+                                                                  Stroke="{StaticResource AccentBrush}"
+                                                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                  Width="14" Height="14" Stretch="Uniform"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Text="写文档" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="README、CHANGELOG、AGENTS.md" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="32,0,0,0"/>
                                                 </StackPanel>
                                             </Button>
-                                            <Button Classes="empty-state-card" Tag="解释一下当前项目结构和核心数据流" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Spacing="4">
-                                                    <TextBlock Text="理解项目" FontWeight="SemiBold" Classes="body"/>
-                                                    <TextBlock Text="先建立项目地图再动手" Classes="muted" TextWrapping="Wrap"/>
+                                            <Button Classes="quick-action" Width="280" Height="92" Tag="解释一下当前项目结构和核心数据流" Click="EmptyStateCard_OnClick">
+                                                <StackPanel Spacing="6">
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <Border Width="24" Height="24" CornerRadius="6" Background="{StaticResource AccentSoftBrush}">
+                                                            <Path Data="M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0 M12 6 V12 L16 14"
+                                                                  Stroke="{StaticResource AccentBrush}"
+                                                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                  Width="14" Height="14" Stretch="Uniform"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <TextBlock Text="理解项目" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="先建立项目地图再动手" Classes="muted" FontSize="12" TextWrapping="Wrap" Margin="32,0,0,0"/>
                                                 </StackPanel>
                                             </Button>
                                         </ItemsControl>
 
                                         <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <TextBlock Text="提示" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
                                             <Border Classes="kbd-pill">
                                                 <TextBlock Text="⌘K" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
                                             </Border>
                                             <TextBlock Text="命令面板" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
-                                            <Border Classes="kbd-pill" Margin="10,0,0,0">
+                                            <Border Classes="kbd-pill" Margin="8,0,0,0">
                                                 <TextBlock Text="⌘↵" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
                                             </Border>
                                             <TextBlock Text="发送" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
@@ -314,37 +421,51 @@
                                 </Panel>
                             </Border>
 
-                            <!-- Input area: centered, max-width 860 -->
-                            <Border Grid.Row="2" Classes="input-shell" MaxWidth="860" HorizontalAlignment="Stretch">
-                                <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
-                                    <TextBox x:Name="PromptInput"
-                                             Text="{Binding DraftPrompt}"
-                                             PlaceholderText="Ask anything…"
-                                             AcceptsReturn="True"
-                                             TextWrapping="Wrap"
-                                             MinHeight="96"
-                                             KeyDown="PromptInput_OnKeyDown"/>
+                            <!-- Floating input composer (the main action) -->
+                            <Grid Grid.Row="2" MaxWidth="860" HorizontalAlignment="Stretch">
+                                <Border Classes="input-floating">
+                                    <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+                                        <TextBox x:Name="PromptInput"
+                                                 Text="{Binding DraftPrompt}"
+                                                 PlaceholderText="Ask anything…"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="100"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 Padding="0"
+                                                 FontSize="14"
+                                                 KeyDown="PromptInput_OnKeyDown"/>
 
-                                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                                            <ToggleSwitch IsChecked="{Binding NoWriteMode}" OnContent="" OffContent="" ToolTip.Tip="只读模式"/>
-                                            <TextBlock Text="只读" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
-                                            <ToggleSwitch IsChecked="{Binding AutoVerify}" OnContent="" OffContent="" Margin="6,0,0,0" ToolTip.Tip="修改后自动验证"/>
-                                            <TextBlock Text="验证" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="写文件、命令、测试、Git 操作都会先确认。"
-                                                   Classes="muted"
-                                                   FontSize="12"
-                                                   VerticalAlignment="Center"
-                                                   HorizontalAlignment="Center"/>
-                                        <Button Grid.Column="2"
-                                                Classes="primary"
-                                                Command="{Binding SendTaskCommand}"
-                                                Content="{Binding PrimaryActionText}"/>
+                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <!-- Model chip + safety toggles -->
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                <Border Classes="model-chip" Background="{StaticResource Bg2Brush}" CornerRadius="999" Padding="10,5" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}"/>
+                                                        <TextBlock Text="{Binding ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="·" FontSize="12" Foreground="{StaticResource MutedBrush}"/>
+                                                        <TextBlock Text="{Binding ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="160"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <ToggleSwitch IsChecked="{Binding NoWriteMode}" OnContent="" OffContent="" ToolTip.Tip="只读模式 (⌘⇧R)"/>
+                                                <TextBlock Text="只读" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="" Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+                                            <Button Grid.Column="2"
+                                                    Classes="send-button"
+                                                    Command="{Binding SendTaskCommand}"
+                                                    IsEnabled="{Binding !IsRunning}"
+                                                    ToolTip.Tip="发送 (⌘↵)">
+                                                <Path Data="M5 12 L19 12 M12 5 L19 12 L12 19"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="16" Height="16" Stretch="Uniform"/>
+                                            </Button>
+                                        </Grid>
                                     </Grid>
-                                </Grid>
-                            </Border>
+                                </Border>
+                            </Grid>
                         </Grid>
 
                         <!-- Tool approval modal (centered overlay) -->
@@ -355,7 +476,7 @@
                                     Background="{StaticResource SurfaceBrush}"
                                     Width="640"
                                     MaxHeight="540"
-                                    Padding="{StaticResource Space6}"
+                                    Padding="{StaticResource Padding6}"
                                     CornerRadius="{StaticResource RadiusLg}"
                                     BoxShadow="{StaticResource ModalShadow}"
                                     VerticalAlignment="Center"
@@ -366,7 +487,7 @@
                                     </Border>
                                     <TextBlock Grid.Row="1" Text="{Binding Approval.PendingApprovalTitle}" Classes="page-title"/>
                                     <TextBlock Grid.Row="2" Text="{Binding Approval.PendingApprovalSummary}" Classes="body" TextWrapping="Wrap"/>
-                                    <Border Grid.Row="3" Background="{StaticResource HoverBgBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="{StaticResource Space3}" MaxHeight="220">
+                                    <Border Grid.Row="3" Background="{StaticResource HoverBgBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="{StaticResource Padding3}" MaxHeight="220">
                                         <ScrollViewer>
                                             <TextBlock Text="{Binding Approval.PendingApprovalPreview}" Classes="body" TextWrapping="Wrap" FontFamily="{StaticResource FontMono}"/>
                                         </ScrollViewer>
@@ -383,14 +504,13 @@
 
                 <!-- ============== Status bar (mono, single line) ============== -->
                 <Border Grid.Row="2" Background="{StaticResource Bg2Brush}">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="16">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="14">
                         <TextBlock Text="{Binding StatusMessage}"
                                    FontFamily="{StaticResource FontMono}"
                                    FontSize="11"
                                    Foreground="{StaticResource MutedBrush}"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"/>
-                        <!-- Inline context meter: 4px bar + percent label -->
                         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
                             <Border Background="{StaticResource HoverBgBrush}" CornerRadius="2" Height="3" Width="80" ClipToBounds="True" VerticalAlignment="Center">
                                 <Border Background="{StaticResource AccentBrush}" CornerRadius="2" Height="3" HorizontalAlignment="Left" Width="{Binding ContextBudgetWidthInMini}"/>
@@ -450,7 +570,7 @@
             <Border Background="{StaticResource SurfaceBrush}"
                     Width="640"
                     MaxHeight="480"
-                    Padding="{StaticResource Space3}"
+                    Padding="{StaticResource Padding3}"
                     CornerRadius="{StaticResource RadiusLg}"
                     BoxShadow="{StaticResource ModalShadow}"
                     VerticalAlignment="Top"
@@ -520,7 +640,7 @@
             <Border Background="{StaticResource SurfaceBrush}"
                     Width="720"
                     MaxHeight="600"
-                    Padding="{StaticResource Space6}"
+                    Padding="{StaticResource Padding6}"
                     CornerRadius="{StaticResource RadiusLg}"
                     BoxShadow="{StaticResource ModalShadow}"
                     VerticalAlignment="Center"

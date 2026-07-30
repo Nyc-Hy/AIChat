@@ -9,10 +9,9 @@
     </Application.DataTemplates>
 
     <!--
-      Token dictionary — every color / spacing / radius / font value in
-      the styles below references a key defined here. To re-skin the
-      whole app, edit Resources/Tokens.axaml (or swap in
-      Resources/Tokens.Dark.axaml under RequestedThemeVariant="Dark").
+      Token dictionaries. Tokens.axaml carries the light-mode base; the
+      dark theme dictionary gets merged in automatically when the app's
+      RequestedThemeVariant resolves to Dark.
     -->
     <Application.Resources>
         <ResourceDictionary>
@@ -28,28 +27,152 @@
     <Application.Styles>
         <FluentTheme />
 
+        <!-- ===== Window defaults ===== -->
         <Style Selector="Window">
             <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+            <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
         </Style>
 
-        <!-- ===== Text ===== -->
-        <Style Selector="TextBlock.section-title">
-            <Setter Property="FontSize" Value="{StaticResource FontSm}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        <!--
+          ===== Global transitions =====
+          Every interactive element gets a 100ms BrushTransition on its
+          background / foreground / border so hover / focus / press states
+          feel smooth rather than instant. The press scale uses
+          RenderTransform + TransformOperationsTransition. This single
+          block is the highest-impact "feels premium" change in the app.
+        -->
+        <Style Selector="Button">
+            <Setter Property="RenderTransform" Value="scale(1.0)" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource MotionFast}" Easing="CubicEaseOut" />
+                    <BrushTransition Property="Background" Duration="{StaticResource MotionFast}" />
+                    <BrushTransition Property="Foreground" Duration="{StaticResource MotionFast}" />
+                    <BrushTransition Property="BorderBrush" Duration="{StaticResource MotionFast}" />
+                </Transitions>
+            </Setter>
         </Style>
-        <Style Selector="TextBlock.page-title">
-            <Setter Property="FontSize" Value="{StaticResource FontXl}" />
+        <Style Selector="Button:pressed">
+            <Setter Property="RenderTransform" Value="scale(0.97)" />
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="{StaticResource MotionFast}" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <!--
+          ===== Focus ring =====
+          WCAG 2.4.7 / 2.2.2 — every focusable surface gets a visible
+          focus indicator. Teal 500 (light) / teal 500 dark variant on
+          the focus state, 2px border.
+        -->
+        <Style Selector="Button:focus-visible,
+                          TextBox:focus-visible,
+                          ListBoxItem:focus-visible,
+                          ToggleSwitch:focus-visible,
+                          CheckBox:focus-visible">
+            <Setter Property="BorderBrush" Value="{StaticResource FocusRingBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+
+        <!--
+          ===== Typography — type ramp =====
+          Every text style below references a Font* token. The legacy
+          section-title / body / muted / page-title / hero-title / kbd-inline
+          selectors stay (back-compat for XAML that's mid-refactor), but
+          the canonical names are t-display / t-h1 / t-h2 / t-h3 / t-body-l
+          / t-body-m / t-body-s / t-caption / t-overline / t-micro.
+        -->
+        <Style Selector="TextBlock.t-display">
+            <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+            <Setter Property="FontSize" Value="{StaticResource FontDisplay}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="LineHeight" Value="44" />
+            <Setter Property="LetterSpacing" Value="{StaticResource TrackingDisplay}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.t-h1">
+            <Setter Property="FontSize" Value="{StaticResource FontH1}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LineHeight" Value="34" />
+            <Setter Property="LetterSpacing" Value="-0.4" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.t-h2">
+            <Setter Property="FontSize" Value="{StaticResource FontH2}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="-0.3" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.t-h3">
+            <Setter Property="FontSize" Value="{StaticResource FontH3}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
         </Style>
-        <Style Selector="TextBlock.body">
+        <Style Selector="TextBlock.t-body-l">
+            <Setter Property="FontSize" Value="{StaticResource FontBodyL}" />
+            <Setter Property="LineHeight" Value="24" />
             <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
-            <Setter Property="FontSize" Value="{StaticResource FontBase}" />
+        </Style>
+        <Style Selector="TextBlock.t-body-s">
+            <Setter Property="FontSize" Value="{StaticResource FontBodyS}" />
+            <Setter Property="LineHeight" Value="19" />
+            <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+        </Style>
+        <Style Selector="TextBlock.t-caption">
+            <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
+            <Setter Property="LineHeight" Value="17" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.t-overline">
+            <Setter Property="FontSize" Value="{StaticResource FontOverline}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.66" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.t-micro">
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+            <Setter Property="FontSize" Value="{StaticResource FontMicro}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+
+        <!-- Back-compat aliases (kept while XAML migrates to t-*). -->
+        <Style Selector="TextBlock.section-title">
+            <Setter Property="FontSize" Value="{StaticResource FontOverline}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.66" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.body">
+            <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
+            <Setter Property="LineHeight" Value="21" />
+            <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
         </Style>
         <Style Selector="TextBlock.muted">
+            <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
-            <Setter Property="FontSize" Value="{StaticResource FontSm}" />
+        </Style>
+        <Style Selector="TextBlock.page-title">
+            <Setter Property="FontSize" Value="{StaticResource FontH1}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.hero-title">
+            <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="{StaticResource FontDisplay}" />
+            <Setter Property="LineHeight" Value="44" />
+            <Setter Property="LetterSpacing" Value="{StaticResource TrackingDisplay}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.kbd-inline">
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+            <Setter Property="FontSize" Value="{StaticResource FontMicro}" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         </Style>
 
         <!-- ===== Surfaces (Border) ===== -->
@@ -57,28 +180,185 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="{StaticResource Space4}" />
+            <Setter Property="Padding" Value="{StaticResource Padding4}" />
         </Style>
         <Style Selector="Border.surface">
-            <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
-            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-            <Setter Property="Padding" Value="{StaticResource Space3}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
         <Style Selector="Border.rail">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="14" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
         <Style Selector="Border.input-shell">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="{StaticResource Space3}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
+        <!--
+          Floating input shell: the main chat-composer that anchors at the
+          bottom of the main column. Borderless — the FloatingShadow alone
+          communicates "this is a chat surface, not a form". 14px corner
+          radius + the shadow make it feel like a paper card lifted off
+          the page. Matches the v0 / ChatGPT / Claude pattern.
+        -->
+        <Style Selector="Border.input-floating">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+            <Setter Property="BoxShadow" Value="{StaticResource Elevation3Shadow}" />
+        </Style>
+
+        <!--
+          Conversation bubbles. User = soft-accent right-aligned card with
+          dark text (NOT white on a 8% wash — that was the v1 bug AP-3).
+          AI = transparent + hairline bottom rule so it reads as a document
+          section. System = no bubble, just text.
+        -->
+        <Style Selector="Border.bubble-user">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Accent100Brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+        </Style>
+        <Style Selector="Border.bubble-ai">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="0,0,0,12" />
+        </Style>
+        <Style Selector="Border.bubble-system">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <!--
+          Send button: 36x36 with the accent as background. The hover state
+          uses a SOLID darker accent (AccentHoverBrush), not Opacity — that
+          was the v1 bug B-1 follow-up. The :disabled variant pulls back
+          to a muted background so the user knows they can't send while
+          the model is running.
+        -->
+        <Style Selector="Button.send-button">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.send-button:pointerover">
+            <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+        </Style>
+        <Style Selector="Button.send-button:disabled">
+            <Setter Property="Background" Value="{StaticResource LineBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+
+        <!--
+          Secondary button: the muted sibling of primary. Used for Reject
+          in tool approval, 测试连接 in settings, Cancel-style actions.
+          Surface background with a hairline border, dark text. Hover
+          deepens the background.
+        -->
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.secondary:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Icon toggle: 28x28 square with an icon. Cursor / Claude pattern
+          for boolean controls that should be lightweight. The :checked
+          variant pulls the icon into the accent color.
+        -->
+        <Style Selector="Button.icon-toggle">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.icon-toggle:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.icon-toggle:checked">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Empty-state quick action card: ~280x76 (icon + title only, no
+          description — the full prompt lives in ToolTip.Tip). 1px hairline
+          border, hover deepens the background and tints the border with
+          the accent.
+        -->
+        <Style Selector="Button.quick-action">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+        </Style>
+        <Style Selector="Button.quick-action:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Sidebar conversation row: quiet background, no border, generous
+          padding. The .selected class tints the row with the soft accent
+          so the user knows which conversation is open.
+        -->
+        <Style Selector="Button.sidebar-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="{StaticResource Padding2}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+        <Style Selector="Button.sidebar-row:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-row.selected">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+        </Style>
+
+        <!-- Model chip: small flat rectangle with a status dot + name. -->
+        <Style Selector="Border.model-chip">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+
         <Style Selector="Border.section-divider">
-            <Setter Property="Background" Value="{StaticResource DividerBrush}" />
+            <Setter Property="Background" Value="{StaticResource LineSoftBrush}" />
             <Setter Property="Height" Value="1" />
             <Setter Property="Margin" Value="0,16" />
         </Style>
@@ -86,7 +366,7 @@
         <!-- ===== Badges ===== -->
         <Style Selector="Border.badge">
             <Setter Property="Background" Value="{StaticResource InfoBgBrush}" />
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusFull}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
             <Setter Property="Padding" Value="9,4" />
         </Style>
         <Style Selector="Border.badge.success">
@@ -94,6 +374,44 @@
         </Style>
         <Style Selector="Border.badge.warning">
             <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
+        </Style>
+
+        <!--
+          Thinking dots. The 3 Ellipses share the .thinking-dot class; the
+          second / third Ellipses also carry .delay-1 / .delay-2 to stagger
+          the animation. The previous in-template <Ellipse.Styles><Style
+          Selector="Ellipse"> was a no-op because Style inside Ellipse.Styles
+          only matches *descendants*. This is the v1 bug B-1 fix.
+        -->
+        <Style Selector="Ellipse.thinking-dot">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Fill" Value="{StaticResource MutedBrush}" />
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse.thinking-dot.delay-1">
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0:0:0.2">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse.thinking-dot.delay-2">
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0:0:0.4">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
         </Style>
 
         <!-- ===== List ===== -->
@@ -118,54 +436,55 @@
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="{StaticResource Space3}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
         <Style Selector="Button.list-action:pointerover">
-            <Setter Property="Background" Value="{StaticResource HoverBgBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
         </Style>
         <Style Selector="Button.primary">
-            <Setter Property="Background" Value="{StaticResource AccentBlueBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
             <Setter Property="Padding" Value="16,10" />
             <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
         </Style>
         <Style Selector="Button.chrome-button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="9" />
-            <Setter Property="Width" Value="44" />
-            <Setter Property="Height" Value="34" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="32" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="FontSize" Value="17" />
             <Setter Property="FontWeight" Value="Normal" />
         </Style>
         <Style Selector="Button.chrome-button:pointerover">
-            <Setter Property="Background" Value="{StaticResource HoverBg2Brush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
             <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
         </Style>
         <Style Selector="Button.chrome-button.close:pointerover">
-            <Setter Property="Background" Value="{StaticResource CloseHoverBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
+            <Setter Property="Background" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
         </Style>
 
         <!-- ===== Inputs ===== -->
         <Style Selector="TextBox">
-            <Setter Property="Background" Value="{StaticResource HoverBgBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
             <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
-            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
 
         <!--
-          1.0 Beta additions: empty-state card (welcome tiles), link button
-          (text-only nav), keyboard pill (the small ⌘K / Esc / ⌘, chips),
-          and a quieter command-list ListBox that hides the default selection
-          background so the user can scan the items cleanly.
+          Old empty-state-card and list-action shapes — kept so any
+          in-flight XAML still compiles. New code should use quick-action
+          and sidebar-row instead.
         -->
         <Style Selector="Button.empty-state-card">
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
@@ -177,7 +496,7 @@
             <Setter Property="Margin" Value="0,0,8,8" />
         </Style>
         <Style Selector="Button.empty-state-card:pointerover">
-            <Setter Property="Background" Value="{StaticResource HoverBgBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
         </Style>
 
@@ -192,17 +511,12 @@
         </Style>
 
         <Style Selector="Border.kbd-pill">
-            <Setter Property="Background" Value="{StaticResource Bg2Brush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-        <Style Selector="TextBlock.kbd-inline">
-            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         </Style>
 
         <Style Selector="ListBox.command-list ListBoxItem">
@@ -212,7 +526,7 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
         </Style>
         <Style Selector="ListBox.command-list ListBoxItem:pointerover">
-            <Setter Property="Background" Value="{StaticResource HoverBgBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
         </Style>
         <Style Selector="ListBox.command-list ListBoxItem:selected">
             <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />

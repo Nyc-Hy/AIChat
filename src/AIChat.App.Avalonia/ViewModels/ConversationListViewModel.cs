@@ -141,6 +141,7 @@ public sealed partial class ConversationListViewModel : ViewModelBase
         foreach (var item in Conversations)
         {
             item.Background = item.Id == conversation?.Id ? SelectedColor : UnselectedColor;
+            item.IsSelected = item.Id == conversation?.Id;
         }
 
         SelectedConversationCard = conversation;

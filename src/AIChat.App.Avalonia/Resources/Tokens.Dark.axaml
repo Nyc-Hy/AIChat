@@ -3,70 +3,80 @@
 
   <!--
     Dark-mode token overrides. Loaded by App.axaml under
-    ResourceDictionary.Theme="Dark" when RequestedThemeVariant
-    resolves to Dark. Every key in Tokens.axaml is redefined here
-    with its dark equivalent; brushes are re-derived from the
-    updated Color values via StaticResource, so any Setter that
-    references <token>Brush flips automatically.
-
-    Key      Light    Dark
-    =========================
-    Bg       #fafaf7  #0d0d10
-    Bg2      #f1ede4  #18181c
-    Surface  #ffffff  #25252c
-    Line     #e9e3d6  #2c2c34
-    Text     #18181b  #e8e8eb
-    Muted    #71717a  #8a8a92
-    Accent   #2f6f5e  #80e8c4
-    Warn     #c97b3f  #e0a16e
-    Danger   #b06367  #e08488
-    AccentBlue #2563eb #3b82f6
+    ResourceDictionary.ThemeDictionaries when RequestedThemeVariant resolves
+    to Dark. Every Color and BoxShadows key from Tokens.axaml is redefined
+    here with its dark equivalent; brushes are re-derived from the updated
+    Color values via StaticResource so any Setter that references
+    <token>Brush flips automatically.
   -->
 
+  <!-- 1. Surface ladder — Material-3-style tonal steps, ~3-4 L* apart. -->
   <Color x:Key="BgColor">#0d0d10</Color>
-  <Color x:Key="Bg2Color">#18181c</Color>
-  <Color x:Key="SurfaceColor">#25252c</Color>
-  <Color x:Key="LineColor">#2c2c34</Color>
-  <Color x:Key="LineSoftColor">#25252c</Color>
+  <Color x:Key="SurfaceSunkenColor">#131318</Color>
+  <Color x:Key="SurfaceColor">#1c1c22</Color>
+  <Color x:Key="SurfaceRaisedColor">#232329</Color>
+  <Color x:Key="SurfaceOverlayColor">#2b2b33</Color>
+
+  <!-- 2. Line ladder — dark borders need more luminance contrast to read. -->
+  <Color x:Key="LineColor">#34343c</Color>
+  <Color x:Key="LineSoftColor">#2a2a31</Color>
+  <Color x:Key="LineStrongColor">#3d3d46</Color>
+
+  <!-- 3. Text ladder — same names, dark equivalents. -->
   <Color x:Key="TextColor">#e8e8eb</Color>
-  <Color x:Key="Text2Color">#c8c8cf</Color>
-  <Color x:Key="MutedColor">#8a8a92</Color>
+  <Color x:Key="Text2Color">#d8d8df</Color>
+  <Color x:Key="MutedColor">#9a9aa3</Color>
+
+  <!-- 4. Accent ramp (teal) — dark variant. -->
+  <Color x:Key="Accent50Color">#0e2620</Color>
+  <Color x:Key="Accent100Color">#133a31</Color>
+  <Color x:Key="Accent200Color">#1a4f42</Color>
+  <Color x:Key="Accent300Color">#236856</Color>
+  <Color x:Key="Accent400Color">#4d9a82</Color>
   <Color x:Key="AccentColor">#80e8c4</Color>
-  <Color x:Key="AccentSoftColor">#1480e8c4</Color>
-  <Color x:Key="WarnColor">#e0a16e</Color>
-  <Color x:Key="DangerColor">#e08488</Color>
-  <Color x:Key="AccentBlueColor">#3b82f6</Color>
+  <Color x:Key="Accent600Color">#a3edd1</Color>
+  <Color x:Key="Accent700Color">#c2f3de</Color>
+  <Color x:Key="Accent800Color">#d8f7e8</Color>
+  <Color x:Key="Accent900Color">#e9faf2</Color>
+  <Color x:Key="AccentSoftColor">#2F80e8c4</Color>
+  <Color x:Key="AccentHoverColor">#a3edd1</Color>
+  <Color x:Key="AccentActiveColor">#c2f3de</Color>
+  <Color x:Key="AccentFgColor">#0d0d10</Color>
+
+  <!-- 5. Status — dark variants. -->
   <Color x:Key="InfoBgColor">#1a2940</Color>
+  <Color x:Key="InfoFgColor">#80b8ff</Color>
+  <Color x:Key="InfoBorderColor">#2c4566</Color>
   <Color x:Key="SuccessBgColor">#0e3b21</Color>
+  <Color x:Key="SuccessFgColor">#80e8c4</Color>
+  <Color x:Key="SuccessBorderColor">#1d6a45</Color>
   <Color x:Key="WarningBgColor">#3d2e10</Color>
-  <Color x:Key="DividerColor">#2c2c34</Color>
-  <Color x:Key="HoverBgColor">#25252c</Color>
-  <Color x:Key="HoverBg2Color">#2c2c34</Color>
-  <Color x:Key="CloseHoverColor">#ff6b73</Color>
-  <Color x:Key="TextOnAccentColor">#0d0d10</Color>
-  <!-- Dark scrim is heavier because the surface is already very dark; bumping
-       the alpha keeps the modal readable on top of a window with a dim photo
-       or a busy activity stream behind. -->
+  <Color x:Key="WarningFgColor">#e0a16e</Color>
+  <Color x:Key="WarningBorderColor">#7c5a1f</Color>
+  <Color x:Key="ErrorBgColor">#2a1517</Color>
+  <Color x:Key="ErrorFgColor">#e08488</Color>
+  <Color x:Key="ErrorBorderColor">#6b3a3d</Color>
+
+  <!-- 6. Special. -->
+  <Color x:Key="CodeBgColor">#131318</Color>
+  <Color x:Key="CodeFgColor">#c2f3de</Color>
+  <Color x:Key="HeroGradientStartColor">#0d0d10</Color>
+  <Color x:Key="HeroGradientEndColor">#1a2030</Color>
   <Color x:Key="ScrimColor">#B0000000</Color>
-  <!-- Dark shadows: pure black with a higher alpha so the lift is visible
-       against the very dark surfaces. -->
-  <BoxShadows x:Key="ModalShadow">0 24 64 0 #80000000, 0 0 0 1 #30000000</BoxShadows>
-  <BoxShadows x:Key="ToastShadow">0 8 24 0 #60000000</BoxShadows>
+  <Color x:Key="FocusRingColor">#80e8c4</Color>
 
-  <!-- Dark-mode badge foregrounds: light/dark each need an opposite-tone foreground
-       so the badge reads in both modes. Light badges get a dark text; dark badges
-       get a light text. Tokens.axaml defines BadgeFgColor=#111827 for light. -->
-  <Color x:Key="BadgeFgColor">#e8e8eb</Color>
-  <Color x:Key="SuccessBadgeFgColor">#80e8c4</Color>
-  <Color x:Key="InfoBadgeFgColor">#80b8ff</Color>
-  <Color x:Key="WarningBadgeFgColor">#e0a16e</Color>
-  <Color x:Key="AccentVariantFgColor">#80e8c4</Color>
+  <!-- 12. Elevation — dark shadows need higher alpha to read on dark bg. -->
+  <BoxShadows x:Key="Elevation0Shadow">0 0 0 0 #00000000</BoxShadows>
+  <BoxShadows x:Key="Elevation1Shadow">0 1 2 0 #40000000, 0 0 0 1 #1A000000</BoxShadows>
+  <BoxShadows x:Key="Elevation2Shadow">0 4 12 0 #50000000, 0 0 0 1 #1A000000</BoxShadows>
+  <BoxShadows x:Key="Elevation3Shadow">0 8 24 0 #60000000, 0 0 0 1 #20000000</BoxShadows>
+  <BoxShadows x:Key="Elevation4Shadow">0 16 40 0 #70000000, 0 0 0 1 #24000000</BoxShadows>
+  <BoxShadows x:Key="Elevation5Shadow">0 24 64 0 #80000000, 0 0 0 1 #30000000</BoxShadows>
+  <BoxShadows x:Key="ElevationToastShadow">0 4 12 0 #50000000, 0 0 0 1 #30000000</BoxShadows>
 
-  <SolidColorBrush x:Key="BadgeFgBrush"           Color="{StaticResource BadgeFgColor}" />
-  <SolidColorBrush x:Key="SuccessBadgeFgBrush"    Color="{StaticResource SuccessBadgeFgColor}" />
-  <SolidColorBrush x:Key="InfoBadgeFgBrush"       Color="{StaticResource InfoBadgeFgColor}" />
-  <SolidColorBrush x:Key="WarningBadgeFgBrush"    Color="{StaticResource WarningBadgeFgColor}" />
-  <SolidColorBrush x:Key="AccentVariantFgBrush"  Color="{StaticResource AccentVariantFgColor}" />
-  <SolidColorBrush x:Key="ScrimBrush"             Color="{StaticResource ScrimColor}" />
+  <!-- Backward-compatible aliases -->
+  <BoxShadows x:Key="ModalShadow">0 16 40 0 #70000000, 0 0 0 1 #24000000</BoxShadows>
+  <BoxShadows x:Key="ToastShadow">0 4 12 0 #50000000, 0 0 0 1 #30000000</BoxShadows>
+  <BoxShadows x:Key="FloatingShadow">0 8 24 0 #60000000, 0 0 0 1 #20000000</BoxShadows>
 
 </ResourceDictionary>

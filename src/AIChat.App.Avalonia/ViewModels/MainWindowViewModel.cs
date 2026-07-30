@@ -146,7 +146,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // keyboard shortcuts (Cmd+K, Cmd+,). Both flip a single bool so the
     // XAML only has to react to one property change.
     [RelayCommand]
-    private void OpenCommandPalette() => IsCommandPaletteOpen = true;
+    private void OpenCommandPalette()
+    {
+        // v1 bug B-2 fix: reset palette state on every open. Previously the
+        // second open inherited the previous search text and selected index
+        // because the palette's own IsOpen was never written (only this
+        // VM's IsCommandPaletteOpen was), so the OnIsOpenChanged partial
+        // hook in CommandPaletteViewModel never ran.
+        CommandPalette.SearchText = "";
+        CommandPalette.SelectedIndex = 0;
+        IsCommandPaletteOpen = true;
+    }
 
     [RelayCommand]
     private void CloseCommandPalette() => IsCommandPaletteOpen = false;
@@ -951,6 +961,14 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
     // in flight.
     public bool IsThinking => Title == "AIChat" && string.IsNullOrEmpty(Detail) && Status == "运行中";
 
+    // Bubble classification: the 1.0 Beta redesign needs three distinct
+    // bubble styles (user right-aligned, AI with avatar, system centered),
+    // and the XAML can't switch on Title in a binding. These flags make
+    // the templates declarative.
+    public bool IsUserBubble => Title == "你";
+    public bool IsAssistantBubble => Title == "AIChat";
+    public bool IsSystemBubble => !IsUserBubble && !IsAssistantBubble;
+
     partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
     partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
 
@@ -977,10 +995,14 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
         };
     }
 
+    // v1 bug AP-3 fix: user bubble is now soft-accent (8% teal) on a white
+    // surface, NOT solid accent. The previous TextOnAccentBrush (white) on
+    // a near-white wash was effectively invisible in light mode. Use the
+    // primary text brush so the user's words read correctly.
     private static IBrush GetForegroundBrush(string title)
     {
         return title == "你"
-            ? TokenBrush("TextOnAccentBrush")
+            ? TokenBrush("TextBrush")
             : TokenBrush("TextBrush");
     }
 }
