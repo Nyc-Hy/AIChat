@@ -29,7 +29,6 @@
     <ProjectReference Include="..\..\src\AIChat.Providers.OpenAI\AIChat.Providers.OpenAI.csproj" />
     <ProjectReference Include="..\..\src\AIChat.Providers.Anthropic\AIChat.Providers.Anthropic.csproj" />
     <ProjectReference Include="..\..\src\AIChat.Storage.Json\AIChat.Storage.Json.csproj" />
-    <ProjectReference Include="..\..\src\AIChat.Cli\AIChat.Cli.csproj" />
     <ProjectReference Include="..\..\src\AIChat.App.Avalonia\AIChat.App.Avalonia.csproj" />
   </ItemGroup>
 
