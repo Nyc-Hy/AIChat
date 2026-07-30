@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
 using CommunityToolkit.Mvvm.Input;
@@ -79,6 +80,24 @@ public partial class MainWindow : Window
                 }
             })
         });
+
+        // Auto-scroll the conversation view to the bottom whenever a new
+        // activity item arrives. The user is most often following along
+        // live, and the alternative (manually scrolling after every
+        // bubble lands) makes the conversation feel sluggish.
+        // Clear is the only mutation that should NOT scroll — it resets
+        // the view before the next conversation starts.
+        viewModel.ActivityFeed.Activity.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            {
+                // Use a small post to let the ItemsControl realise the new
+                // container before we ask for the scroll offset.
+                Dispatcher.UIThread.Post(() =>
+                    ConversationScroll.ScrollToEnd(),
+                    DispatcherPriority.Background);
+            }
+        };
 
         // Focus the command-palette search input every time the palette opens
         // so the user can start typing immediately.

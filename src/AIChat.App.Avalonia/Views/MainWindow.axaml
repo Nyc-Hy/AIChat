@@ -206,7 +206,7 @@
                                 <Panel>
                                     <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline -->
                                     <Grid IsVisible="{Binding ActivityFeed.HasConversation}">
-                                        <ScrollViewer Padding="20,12">
+                                        <ScrollViewer x:Name="ConversationScroll" Padding="20,12">
                                             <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
