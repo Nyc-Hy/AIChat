@@ -80,10 +80,16 @@ public static class SlashCommandHandler
         var conversationCount = host.ConversationList.Conversations.Count;
         var conversationLine = $"对话数: {conversationCount}";
 
+        // ContextBudgetPercent is the rough fraction of the
+        // approximate 64K context window the current run has used.
+        // It's the only number the user really needs to decide
+        // whether to start a new conversation or compact.
+        var contextLine = $"Context: {host.ContextBudgetPercent}%";
+
         var status = string.IsNullOrWhiteSpace(host.StatusMessage)
             ? "状态: 就绪"
             : $"状态: {host.StatusMessage}";
 
-        return string.Join("\n", projectLine, modelLine, conversationLine, status);
+        return string.Join("\n", projectLine, modelLine, conversationLine, contextLine, status);
     }
 }

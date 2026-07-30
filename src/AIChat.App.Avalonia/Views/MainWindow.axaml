@@ -363,7 +363,7 @@
                                     <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
                                         <TextBox x:Name="PromptInput"
                                                  Text="{Binding DraftPrompt}"
-                                                 PlaceholderText="说点什么…"
+                                                 PlaceholderText="说点什么…  (试试 /help 查看命令)"
                                                  AcceptsReturn="True"
                                                  TextWrapping="Wrap"
                                                  Height="72"
