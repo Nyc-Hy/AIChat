@@ -40,6 +40,16 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            Gesture = new KeyGesture(Key.N, KeyModifiers.Meta),
+            Command = viewModel.NewConversationCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.T, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = viewModel.ToggleThemeCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {
@@ -64,11 +74,6 @@ public partial class MainWindow : Window
                 CommandSearchInput.Focus();
             }
         };
-    }
-
-    private void ToggleTheme_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _theme.CycleToNext();
     }
 
     private void TitleBar_OnPointerPressed(object? sender, PointerPressedEventArgs e)

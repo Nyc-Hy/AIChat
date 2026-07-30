@@ -22,54 +22,58 @@
     </Design.DataContext>
 
     <!--
-      Top-level overlay stack (back to front):
-        1. Main surface (titlebar + content + status bar)
+      Layered overlay stack (back to front):
+        1. Main surface (titlebar + 2-col content + status bar)
         2. Toasts (bottom-right)
-        3. Command palette (centered top, search-first)
+        3. Command palette (top-anchored modal, search-first)
         4. Settings modal (centered, provider config form)
         5. Tool approval modal (centered, blocks until resolved)
-
-      Each overlay is a Grid row in the same root Grid; IsVisible gates
-      visibility AND hit-testing so the underlying UI is unclickable while
-      the overlay is open.
     -->
     <Grid>
         <Border Background="{StaticResource BgBrush}" CornerRadius="18" ClipToBounds="True">
-            <Grid RowDefinitions="56,*,28">
+            <Grid RowDefinitions="48,*,32">
 
-                <!-- ============== Titlebar (breadcrumb + window actions) ============== -->
+                <!-- ============== Titlebar ============== -->
                 <Grid Grid.Row="0"
                       ColumnDefinitions="*,Auto"
                       Margin="20,0,12,0"
                       ColumnSpacing="18"
                       Background="Transparent"
                       PointerPressed="TitleBar_OnPointerPressed">
-                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <!-- Breadcrumb: brand + project (when one is selected) -->
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <Path Data="M4 4 L20 4 L20 20 L4 20 Z M8 8 H16 V16 H8 Z"
                               Stroke="{StaticResource MutedBrush}"
                               StrokeThickness="1.5"
-                              Width="20" Height="20"
+                              Width="18" Height="18"
                               Stretch="Uniform"
                               VerticalAlignment="Center"/>
                         <TextBlock Text="AIChat" Classes="body" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <TextBlock Text="/" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding Sidebar.SelectedProjectName}" Classes="body" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="280"/>
-                        <TextBlock Text="/" Classes="muted" VerticalAlignment="Center"/>
-                        <TextBlock Text="Ask" Classes="body" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="/"
+                                   Classes="muted"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{Binding HasProject}"/>
+                        <TextBlock Text="{Binding Sidebar.SelectedProjectName}"
+                                   Classes="body"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="320"
+                                   IsVisible="{Binding HasProject}"/>
                     </StackPanel>
 
+                    <!-- Window actions: theme, settings, min, max, close -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
-                        <!-- Cmd+K entrypoint is now the primary nav surface. -->
-                        <Button Classes="chrome-button" Command="{Binding OpenCommandPaletteCommand}" ToolTip.Tip="命令面板 (⌘K)">
-                            <Path Data="M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z"
-                                  Stroke="{Binding $parent[Button].Foreground}"
-                                  StrokeThickness="1.6" StrokeJoin="Round"
-                                  Width="16" Height="16" Stretch="Uniform"/>
-                        </Button>
-                        <Button Classes="chrome-button" Click="ToggleTheme_OnClick" ToolTip.Tip="切换主题">
+                        <Button Classes="chrome-button" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="切换主题 (⌘⇧T)">
                             <Path Data="M12 4 V2 M12 22 V20 M4 12 H2 M22 12 H20 M5.5 5.5 L4.1 4.1 M19.9 19.9 L18.5 18.5 M5.5 18.5 L4.1 19.9 M19.9 4.1 L18.5 5.5 M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8"
                                   Stroke="{Binding $parent[Button].Foreground}"
                                   StrokeThickness="1.6" StrokeLineCap="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <Button Classes="chrome-button" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="设置 (⌘,)">
+                            <Path Data="M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeJoin="Round"
                                   Width="16" Height="16" Stretch="Uniform"/>
                         </Button>
                         <Button Classes="chrome-button" Click="Minimize_OnClick" ToolTip.Tip="最小化">
@@ -93,138 +97,105 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- ============== Main content (2-column: sidebar + flex) ============== -->
-                <Grid Grid.Row="1" ColumnDefinitions="280,*" Margin="18,8,18,8" ColumnSpacing="14">
+                <!-- ============== Main: 2-col (sidebar 240 + flex) ============== -->
+                <Grid Grid.Row="1" ColumnDefinitions="240,*" Margin="14,6,14,6" ColumnSpacing="14">
 
-                    <!-- ========== Sidebar: project + history ========== -->
+                    <!-- ========== Sidebar ========== -->
                     <Border Grid.Column="0" Classes="rail">
-                        <Grid RowDefinitions="Auto,Auto,*,Auto">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="当前项目" Classes="section-title"/>
-                                <TextBlock Text="{Binding Sidebar.SelectedProjectName}" Classes="page-title" TextWrapping="Wrap"/>
-                                <TextBlock Text="{Binding Sidebar.SelectedProjectPath}" Classes="muted" TextWrapping="Wrap"/>
-                                <Button Content="添加项目" Click="AddProject_OnClick" HorizontalAlignment="Stretch" Margin="0,10,0,0"/>
-                            </StackPanel>
-
-                            <ScrollViewer Grid.Row="1" MaxHeight="120" Margin="0,14,0,8" HorizontalScrollBarVisibility="Disabled">
-                                <ItemsControl ItemsSource="{Binding Sidebar.Projects}" HorizontalAlignment="Stretch">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ProjectCardViewModel">
-                                            <Button Classes="list-action" Tag="{Binding Id}" Click="ProjectButton_OnClick" Margin="0,0,0,8" ToolTip.Tip="{Binding Name}">
-                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                                    <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Grid.Column="1" Text="切换" Classes="muted"/>
-                                                </Grid>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-
-                            <StackPanel Grid.Row="2" Spacing="12" Margin="0,6,0,0">
-                                <StackPanel Spacing="5">
-                                    <TextBlock Text="项目状态" Classes="section-title"/>
-                                    <TextBlock Text="{Binding Sidebar.ProjectHealth}" Classes="muted" TextWrapping="Wrap"/>
-                                </StackPanel>
-
-                                <Border Classes="section-divider" Margin="0,2"/>
-
-                                <TextBlock Text="最近对话" Classes="section-title"/>
-                                <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ConversationCardViewModel">
-                                            <Button Classes="list-action" Tag="{Binding Id}" Click="ConversationButton_OnClick" Margin="0,0,0,8" ToolTip.Tip="{Binding Title}" Background="{Binding Background}">
-                                                <StackPanel Spacing="3">
-                                                    <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Detail}" Classes="muted"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-
-                            <StackPanel Grid.Row="3" Spacing="6" Margin="0,12,0,0">
-                                <Border Classes="badge" HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding ActiveProvider}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}"/>
-                                </Border>
-                                <TextBlock Text="{Binding ActiveModel}" Classes="muted" TextWrapping="Wrap"/>
-                                <Button Classes="link-button"
-                                        Command="{Binding OpenSettingsCommand}"
-                                        HorizontalAlignment="Left"
-                                        Margin="0,4,0,0"
-                                        Cursor="Hand">
-                                    <TextBlock Text="设置 / 切换模型  ⌘," Classes="muted" FontWeight="SemiBold"/>
+                        <Grid RowDefinitions="Auto,*">
+                            <!-- Top: new conversation + project -->
+                            <StackPanel Spacing="12">
+                                <Button Classes="primary" Command="{Binding NewConversationCommand}" HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <Path Data="M12 5 V19 M5 12 H19"
+                                              Stroke="{Binding $parent[Button].Foreground}"
+                                              StrokeThickness="1.6" StrokeLineCap="Round"
+                                              Width="14" Height="14" Stretch="Uniform"/>
+                                        <TextBlock Text="新建对话" FontWeight="SemiBold"/>
+                                        <TextBlock Text="⌘N" Classes="kbd-inline" Opacity="0.7"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="list-action" Click="AddProject_OnClick" HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
+                                              Stroke="{StaticResource MutedBrush}"
+                                              StrokeThickness="1.4" StrokeJoin="Round"
+                                              Width="14" Height="14" Stretch="Uniform"/>
+                                        <TextBlock Text="添加项目"/>
+                                    </StackPanel>
                                 </Button>
                             </StackPanel>
+
+                            <!-- Middle: conversation list -->
+                            <ScrollViewer Grid.Row="1" Margin="0,16,0,0" VerticalScrollBarVisibility="Auto">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="最近对话" Classes="section-title" Margin="2,0,0,8"/>
+                                    <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ConversationCardViewModel">
+                                                <Button Classes="list-action" Tag="{Binding Id}" Click="ConversationButton_OnClick" Margin="0,0,0,4" ToolTip.Tip="{Binding Title}" Background="{Binding Background}">
+                                                    <StackPanel Spacing="2">
+                                                        <TextBlock Text="{Binding Title}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                                        <TextBlock Text="{Binding Detail}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>
                     </Border>
 
                     <!-- ========== Main column ========== -->
                     <Grid Grid.Column="1">
 
-                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14">
+                        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10">
 
-                            <!-- Page title + session metrics -->
-                            <StackPanel Spacing="12">
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock Text="今天要完成什么？" Classes="page-title"/>
-                                        <TextBlock Text="输入目标后，AIChat 会读取项目上下文并在风险操作前询问你。" Classes="muted"/>
-                                    </StackPanel>
-                                    <Border Grid.Column="1" Classes="badge success" VerticalAlignment="Top">
-                                        <TextBlock Text="{Binding Readiness}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource SuccessBadgeFgBrush}"/>
+                            <!-- Compact top status: project + readiness + context -->
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Greeting}" Classes="page-title"/>
+                                    <TextBlock Text="{Binding SubGreeting}" Classes="muted"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <Border Classes="badge" IsVisible="{Binding !HasProject}">
+                                        <TextBlock Text="未选择项目" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentBlueBrush}"/>
                                     </Border>
-                                </Grid>
+                                    <Border Classes="badge success" IsVisible="{Binding IsReady}">
+                                        <TextBlock Text="可运行" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SuccessBadgeFgBrush}"/>
+                                    </Border>
+                                    <Border Classes="badge warning" IsVisible="{Binding NeedsConfiguration}">
+                                        <TextBlock Text="需要密钥" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningBadgeFgBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
 
-                                <ItemsControl ItemsSource="{Binding SessionInsights.SessionMetrics}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <UniformGrid Rows="1"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:SessionMetricViewModel">
-                                            <Border Background="{StaticResource SurfaceBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,8,0" ToolTip.Tip="{Binding Tooltip}">
-                                                <StackPanel Spacing="2">
-                                                    <TextBlock Text="{Binding Label}" Classes="muted" TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Value}" Classes="body" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-
-                            <!-- Conversation panel: real bubbles OR empty state -->
-                            <Border Grid.Row="1" Classes="panel" Padding="{StaticResource Space3}">
+                            <!-- Conversation: empty state OR scrollable bubbles -->
+                            <Border Grid.Row="1" Classes="panel" Padding="0">
                                 <Panel>
-                                    <Grid IsVisible="{Binding HasConversation}" RowDefinitions="Auto,*">
-                                        <TextBlock Text="对话" Classes="section-title"/>
-                                        <ScrollViewer Grid.Row="1">
+                                    <!-- Real conversation: bubbles, centered, max-width 760 -->
+                                    <Grid IsVisible="{Binding HasConversation}">
+                                        <ScrollViewer Padding="{StaticResource Space6}">
                                             <ItemsControl ItemsSource="{Binding Activity}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
-                                                        <StackPanel HorizontalAlignment="{Binding BubbleAlignment}" MaxWidth="{Binding BubbleMaxWidth}" Margin="0,0,0,14" Spacing="5">
+                                                        <StackPanel HorizontalAlignment="{Binding BubbleAlignment}" MaxWidth="760" Margin="0,0,0,14" Spacing="4">
                                                             <Grid ColumnDefinitions="*,Auto">
-                                                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Margin="10,0,0,0"/>
+                                                                <TextBlock Text="{Binding Title}" Foreground="{StaticResource MutedBrush}" FontWeight="SemiBold" FontSize="12"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" FontSize="11" Margin="10,0,0,0"/>
                                                             </Grid>
-                                                            <Border Background="{Binding BubbleBackground}" CornerRadius="14" Padding="14,11">
+                                                            <Border Background="{Binding BubbleBackground}"
+                                                                    CornerRadius="12"
+                                                                    Padding="14,10">
                                                                 <Panel>
                                                                     <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
                                                                                                 Markdown="{Binding Detail}"
                                                                                                 Foreground="{Binding TextForeground}"
                                                                                                 TextWrapping="Wrap"/>
-                                                                    <!--
-                                                                      Thinking indicator: three pulsing dots shown only while the
-                                                                      assistant bubble is waiting for the first content delta.
-                                                                      All three dots share the same animation; they pulse in unison
-                                                                      which reads as a single "thinking" wave.
-                                                                    -->
                                                                     <StackPanel IsVisible="{Binding IsThinking}"
                                                                                 Orientation="Horizontal"
-                                                                                Spacing="6"
+                                                                                Spacing="5"
                                                                                 VerticalAlignment="Center"
                                                                                 HorizontalAlignment="Left">
                                                                         <Ellipse Width="6" Height="6" Fill="{StaticResource MutedBrush}">
@@ -232,9 +203,9 @@
                                                                                 <Style Selector="Ellipse">
                                                                                     <Style.Animations>
                                                                                         <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut">
-                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
                                                                                             <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
                                                                                         </Animation>
                                                                                     </Style.Animations>
                                                                                 </Style>
@@ -245,9 +216,9 @@
                                                                                 <Style Selector="Ellipse">
                                                                                     <Style.Animations>
                                                                                         <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.2">
-                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
                                                                                             <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
                                                                                         </Animation>
                                                                                     </Style.Animations>
                                                                                 </Style>
@@ -258,9 +229,9 @@
                                                                                 <Style Selector="Ellipse">
                                                                                     <Style.Animations>
                                                                                         <Animation Duration="0:0:1.2" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0.4">
-                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
                                                                                             <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
-                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.3"/></KeyFrame>
+                                                                                            <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
                                                                                         </Animation>
                                                                                     </Style.Animations>
                                                                                 </Style>
@@ -276,25 +247,25 @@
                                         </ScrollViewer>
                                     </Grid>
 
-                                    <!-- Empty state: shown when no conversation yet. Suggested actions become
-                                         a single-click "fill the input and send" shortcut. -->
+                                    <!-- Empty state: hero card, centered. Click a tile to fill the prompt. -->
                                     <StackPanel IsVisible="{Binding !HasConversation}"
-                                                Spacing="20"
+                                                Spacing="24"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
-                                                MaxWidth="520">
+                                                MaxWidth="560">
                                         <StackPanel Spacing="6" HorizontalAlignment="Center">
                                             <TextBlock Text="Ask AIChat anything"
                                                        FontFamily="{StaticResource FontSans}"
                                                        FontWeight="SemiBold"
-                                                       FontSize="22"
+                                                       FontSize="26"
                                                        Foreground="{StaticResource TextBrush}"
                                                        HorizontalAlignment="Center"/>
-                                            <TextBlock Text="用自然语言描述你的目标。AIChat 会先读上下文，碰到写文件、命令、Git 操作时会请你确认。"
+                                            <TextBlock Text="用自然语言描述目标。AIChat 会先读上下文，碰到写文件、命令、Git 操作时会请你确认。"
                                                        Classes="muted"
                                                        TextWrapping="Wrap"
                                                        TextAlignment="Center"
-                                                       HorizontalAlignment="Center"/>
+                                                       HorizontalAlignment="Center"
+                                                       MaxWidth="480"/>
                                         </StackPanel>
 
                                         <ItemsControl>
@@ -328,47 +299,46 @@
                                                 </StackPanel>
                                             </Button>
                                         </ItemsControl>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <Border Classes="kbd-pill">
+                                                <TextBlock Text="⌘K" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                                            </Border>
+                                            <TextBlock Text="命令面板" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+                                            <Border Classes="kbd-pill" Margin="10,0,0,0">
+                                                <TextBlock Text="⌘↵" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                                            </Border>
+                                            <TextBlock Text="发送" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Panel>
                             </Border>
 
-                            <!-- Input area (with context budget bar + keyboard hints) -->
-                            <Border Grid.Row="2" Classes="input-shell">
-                                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                            <!-- Input area: centered, max-width 860 -->
+                            <Border Grid.Row="2" Classes="input-shell" MaxWidth="860" HorizontalAlignment="Stretch">
+                                <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
                                     <TextBox x:Name="PromptInput"
                                              Text="{Binding DraftPrompt}"
-                                             PlaceholderText="例如：检查发布前风险，修复失败测试，整理 README…  (⌘K 命令面板，⌘↵ 发送)"
+                                             PlaceholderText="Ask anything…"
                                              AcceptsReturn="True"
                                              TextWrapping="Wrap"
-                                             MinHeight="82"
+                                             MinHeight="96"
                                              KeyDown="PromptInput_OnKeyDown"/>
 
-                                    <!-- Context budget bar: shows estimated input tokens vs. ~64K cap. -->
-                                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="10">
-                                        <Border Background="{StaticResource HoverBgBrush}"
-                                                CornerRadius="3"
-                                                Height="4"
-                                                VerticalAlignment="Center"
-                                                ClipToBounds="True">
-                                            <Border Background="{StaticResource AccentBrush}"
-                                                    CornerRadius="3"
-                                                    Height="4"
-                                                    HorizontalAlignment="Left"
-                                                    Width="{Binding ContextBudgetWidth}"/>
-                                        </Border>
+                                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                            <ToggleSwitch IsChecked="{Binding NoWriteMode}" OnContent="" OffContent="" ToolTip.Tip="只读模式"/>
+                                            <TextBlock Text="只读" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+                                            <ToggleSwitch IsChecked="{Binding AutoVerify}" OnContent="" OffContent="" Margin="6,0,0,0" ToolTip.Tip="修改后自动验证"/>
+                                            <TextBlock Text="验证" Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                         <TextBlock Grid.Column="1"
+                                                   Text="写文件、命令、测试、Git 操作都会先确认。"
                                                    Classes="muted"
-                                                   FontFamily="{StaticResource FontMono}"
-                                                   FontSize="11"
-                                                   Text="{Binding ContextBudgetPercent, StringFormat={}{0}% 上下文}"
-                                                   VerticalAlignment="Center"/>
-                                    </Grid>
-
-                                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                        <TextBlock Text="写文件、命令、测试、Git 操作都会先确认。"
-                                                   Classes="muted"
-                                                   VerticalAlignment="Center"/>
-                                        <Button Grid.Column="1"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center"/>
+                                        <Button Grid.Column="2"
                                                 Classes="primary"
                                                 Command="{Binding SendTaskCommand}"
                                                 Content="{Binding PrimaryActionText}"/>
@@ -376,47 +346,6 @@
                                 </Grid>
                             </Border>
                         </Grid>
-
-                        <!-- Context sheet (bottom-right, always visible) -->
-                        <Border Classes="rail"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Bottom"
-                                Width="320"
-                                Padding="{StaticResource Space4}">
-                            <StackPanel Spacing="10">
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Text="上下文" Classes="section-title"/>
-                                </Grid>
-
-                                <ItemsControl ItemsSource="{Binding SessionInsights.ContextPreview}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:ContextPreviewItemViewModel">
-                                            <Grid ColumnDefinitions="68,*" ColumnSpacing="8" Margin="0,3">
-                                                <TextBlock Text="{Binding Label}" Classes="muted"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding Detail}" Classes="body" TextWrapping="Wrap"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <Border Classes="section-divider" Margin="0,2"/>
-
-                                <TextBlock Text="安全策略" Classes="section-title"/>
-                                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" Margin="0,4,0,4">
-                                    <TextBlock Text="只读模式" Classes="body" VerticalAlignment="Center"/>
-                                    <CheckBox Grid.Column="1" IsChecked="{Binding NoWriteMode}"/>
-                                    <TextBlock Grid.Row="1" Text="修改后验证" Classes="body" VerticalAlignment="Center"/>
-                                    <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoVerify}"/>
-                                </Grid>
-                                <ItemsControl ItemsSource="{Binding SafetyNotes}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}" Classes="muted" Margin="0,3" TextWrapping="Wrap"/>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
 
                         <!-- Tool approval modal (centered overlay) -->
                         <Border IsVisible="{Binding Approval.HasPendingApproval}"
@@ -452,13 +381,36 @@
                     </Grid>
                 </Grid>
 
-                <!-- ============== Status bar (mono, bottom) ============== -->
+                <!-- ============== Status bar (mono, single line) ============== -->
                 <Border Grid.Row="2" Background="{StaticResource Bg2Brush}">
                     <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="16">
-                        <TextBlock Text="{Binding StatusMessage}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Column="1" Text="·" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="{Binding ActiveProvider}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
-                        <TextBlock Grid.Column="3" Text="{Binding ActiveModel}" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="240"/>
+                        <TextBlock Text="{Binding StatusMessage}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <!-- Inline context meter: 4px bar + percent label -->
+                        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
+                            <Border Background="{StaticResource HoverBgBrush}" CornerRadius="2" Height="3" Width="80" ClipToBounds="True" VerticalAlignment="Center">
+                                <Border Background="{StaticResource AccentBrush}" CornerRadius="2" Height="3" HorizontalAlignment="Left" Width="{Binding ContextBudgetWidthInMini}"/>
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ContextBudgetPercent, StringFormat={}{0}%}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Grid.Column="2" Text="·" FontFamily="{StaticResource FontMono}" FontSize="11" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="3"
+                                   Text="{Binding StatusBarModel}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="11"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="320"/>
                     </Grid>
                 </Border>
             </Grid>
@@ -504,7 +456,6 @@
                     VerticalAlignment="Top"
                     Margin="0,80,0,0">
                 <Grid RowDefinitions="Auto,*">
-                    <!-- Search input: focused by default. Bound to CommandPalette.SearchText. -->
                     <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                         <Path Grid.Column="0"
                               Data="M11 19 a8 8 0 1 0 0 -16 a8 8 0 1 0 0 16 M21 21 L16.65 16.65"

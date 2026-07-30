@@ -51,6 +51,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string readiness = "检查中";
 
+    // Computed view-state properties derive from the observables above. Avalonia
+    // bindings do not pick up changes to plain CLR properties; we re-raise
+    // PropertyChanged manually so the breadcrumb / greeting / status bar update
+    // when the underlying fields flip.
+    partial void OnActiveProviderChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasProject));
+        OnPropertyChanged(nameof(StatusBarModel));
+    }
+    partial void OnActiveModelChanged(string value) => OnPropertyChanged(nameof(StatusBarModel));
+    partial void OnReadinessChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsReady));
+        OnPropertyChanged(nameof(NeedsConfiguration));
+    }
+
     [ObservableProperty]
     private string draftPrompt = "";
 
@@ -84,6 +100,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool hasConversation;
 
+    // 1.0 Beta: derive the top status, breadcrumb visibility and status-bar
+    // text from the same handful of fields so the XAML can stay declarative.
+    // HasProject hides the project crumb when no project is selected (so
+    // the breadcrumb doesn't read "AIChat / 未配置路径"). IsReady /
+    // NeedsConfiguration drive the compact status pills.
+    public bool HasProject => !string.IsNullOrWhiteSpace(Sidebar.SelectedProjectName)
+                              && Sidebar.SelectedProjectName != "未配置路径";
+
+    public bool IsReady => Readiness == "可运行";
+    public bool NeedsConfiguration => Readiness == "需要密钥" || Readiness == "需检查";
+
+    public string Greeting => HasProject ? "今天要完成什么？" : "选一个项目开始";
+    public string SubGreeting => HasProject
+        ? "输入目标后，AIChat 会读取项目上下文并在风险操作前询问你。"
+        : "添加本地代码仓库，让 AIChat 读取上下文后再开始任务。";
+
+    public string StatusBarModel => string.IsNullOrEmpty(ActiveModel)
+        ? ActiveProvider
+        : $"{ActiveProvider} · {ActiveModel}";
+
     // Approximate context window. 64K covers GPT-4 / Claude / DeepSeek with
     // a single number so the input-area progress bar reads consistently.
     // Will become per-model once the provider API reports the real cap.
@@ -91,11 +127,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private int contextBudgetPercent;
 
-    // Width in DIPs for the context budget bar. The container is 320px wide;
-    // we expose the computed width so the XAML can bind directly without
-    // needing a percent→width converter. Min width 0 keeps the bar hidden
-    // until the first estimate arrives.
-    public double ContextBudgetWidth => Math.Max(0, ContextBudgetPercent * 3.2);
+    // Width in DIPs for the inline context meter in the status bar. The mini
+    // bar is 80px wide so the percent→width factor is 0.8.
+    public double ContextBudgetWidthInMini => Math.Max(0, ContextBudgetPercent * 0.8);
 
     public ObservableCollection<ActivityItemViewModel> Activity { get; } = [];
     public ObservableCollection<string> SafetyNotes { get; } = [];
@@ -122,6 +156,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [RelayCommand]
     private void CloseSettings() => IsSettingsOpen = false;
+
+    [RelayCommand]
+    private void NewConversation()
+    {
+        ShowNewConversation();
+        StatusMessage = "新对话。";
+    }
+
+    [RelayCommand]
+    private void ToggleTheme() => _theme.CycleToNext();
 
     // PR-2: provider config surface is delegated to a dedicated view-model.
     public ProviderConfigViewModel Provider => _provider;
@@ -185,6 +229,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         Activity.CollectionChanged += (_, _) => HasConversation = Activity.Count > 0;
         _insights.SessionMetrics.CollectionChanged += (_, _) => UpdateContextBudget();
+        _sidebar.PropertyChanged += (_, e) =>
+        {
+            // SelectedProjectName drives HasProject, Greeting and SubGreeting;
+            // re-raise them so the breadcrumb / page title update.
+            if (e.PropertyName == nameof(ProjectSidebarViewModel.SelectedProjectName))
+            {
+                OnPropertyChanged(nameof(HasProject));
+                OnPropertyChanged(nameof(Greeting));
+                OnPropertyChanged(nameof(SubGreeting));
+            }
+        };
         RegisterCommandPaletteCommands();
 
         SeedEmptyState();
@@ -242,7 +297,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 "清空当前活动，开始一个全新会话",
                 "⌘ N",
                 "M12 5 V19 M5 12 H19",
-                () => { ShowNewConversation(); return Task.FromResult(true); }),
+                () => { NewConversation(); return Task.FromResult(true); }),
             new CommandItem(
                 "添加项目",
                 "从本地选择一个新的代码仓库",
@@ -502,13 +557,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     // PR-4: replaced by ConversationListViewModel.
+    //
+    // "New conversation" used to seed a placeholder activity item. With the
+    // 1.0 Beta empty state that placeholder is redundant (the hero card
+    // already explains how to start a task) and it was breaking the
+    // HasConversation toggle — Activity.Count was always 1, so the empty
+    // state never showed. Clear and let the XAML fall through to the
+    // hero card.
     private void ShowNewConversation()
     {
         Activity.Clear();
-        Activity.Add(new ActivityItemViewModel(
-            "AIChat",
-            "描述你希望完成的结果。AIChat 会先读取上下文，涉及风险操作时再请求确认。",
-            "新对话"));
     }
 
     // Loads a conversation's messages into the activity feed. Called by
