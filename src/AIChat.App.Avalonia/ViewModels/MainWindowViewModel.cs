@@ -94,6 +94,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private bool noWriteMode;
 
+    // Placeholder text for the prompt TextBox. Changes when read-only
+    // mode is toggled so the user always knows whether their next
+    // message can mutate the project. ⌘⇧R toggles the mode (and
+    // therefore the placeholder).
+    public string PromptPlaceholder => NoWriteMode
+        ? "只读模式 — 探索 / 提问，不修改项目 (⌘⇧R 切换)"
+        : "说点什么…  (试试 /help 查看命令)";
+
+    // (OnNoWriteModeChanged body is below; raises PromptPlaceholder in
+    // addition to the existing approval + insights side effects.)
+
     [ObservableProperty]
     private bool autoVerify;
 
@@ -585,6 +596,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         _approvalViewModel.IsReadOnly = value;
         _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
+        OnPropertyChanged(nameof(PromptPlaceholder));
     }
 
     partial void OnAutoVerifyChanged(bool value)
