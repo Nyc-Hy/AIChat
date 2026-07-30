@@ -38,6 +38,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IApprovalService _approval;
     private readonly IThemeService _theme;
     private readonly ISettingsHolder _settingsHolder;
+    private readonly IToastService _toast;
     private AppSettings _settings = new();
 
     [ObservableProperty]
@@ -74,6 +75,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<ActivityItemViewModel> Activity { get; } = [];
     public ObservableCollection<string> SafetyNotes { get; } = [];
 
+    // Toast surface is owned by the IToastService singleton; expose the same
+    // ObservableCollection here so the MainWindow XAML can bind via DataContext.
+    public ObservableCollection<ToastItem> Toasts => _toast.Toasts;
+
     // PR-2: provider config surface is delegated to a dedicated view-model.
     public ProviderConfigViewModel Provider => _provider;
 
@@ -107,7 +112,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToolApprovalViewModel approvalViewModel,
         IApprovalService approval,
         IThemeService theme,
-        ISettingsHolder settingsHolder)
+        ISettingsHolder settingsHolder,
+        IToastService toast)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -120,6 +126,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _approval = approval;
         _theme = theme;
         _settingsHolder = settingsHolder;
+        _toast = toast;
 
         _provider.Saved += OnProviderSaved;
         _provider.TestStarted += OnProviderTestStarted;
@@ -709,12 +716,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
 public sealed record ProjectCardViewModel(string Id, string Name, string Path);
 
-public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ObservableObject
+public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ViewModelBase
 {
     public string Title { get; } = title;
     public HorizontalAlignment BubbleAlignment { get; } = GetAlignment(title);
-    public IBrush BubbleBackground { get; } = Brush.Parse(GetBackground(title));
-    public IBrush TextForeground { get; } = Brush.Parse(GetForeground(title));
+    public IBrush BubbleBackground { get; } = GetBackgroundBrush(title);
+    public IBrush TextForeground { get; } = GetForegroundBrush(title);
     public double BubbleMaxWidth { get; } = title == "你" ? 620 : 760;
 
     [ObservableProperty]
@@ -733,19 +740,24 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
         };
     }
 
-    private static string GetBackground(string title)
+    // Bubble palettes route through design tokens so they flip in dark mode.
+    // User bubbles use the accent + on-accent text; assistant bubbles use the
+    // surface + body text; system bubbles use the info background.
+    private static IBrush GetBackgroundBrush(string title)
     {
         return title switch
         {
-            "你" => "#2563EB",
-            "AIChat" => "#FFFFFF",
-            _ => "#EAF2FF"
+            "你" => TokenBrush("AccentBrush"),
+            "AIChat" => TokenBrush("SurfaceBrush"),
+            _ => TokenBrush("InfoBgBrush")
         };
     }
 
-    private static string GetForeground(string title)
+    private static IBrush GetForegroundBrush(string title)
     {
-        return title == "你" ? "#FFFFFF" : "#111827";
+        return title == "你"
+            ? TokenBrush("TextOnAccentBrush")
+            : TokenBrush("TextBrush");
     }
 }
 

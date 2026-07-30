@@ -44,6 +44,14 @@
   <Color x:Key="HoverBg2Color">#2c2c34</Color>
   <Color x:Key="CloseHoverColor">#ff6b73</Color>
   <Color x:Key="TextOnAccentColor">#0d0d10</Color>
+  <!-- Dark scrim is heavier because the surface is already very dark; bumping
+       the alpha keeps the modal readable on top of a window with a dim photo
+       or a busy activity stream behind. -->
+  <Color x:Key="ScrimColor">#B0000000</Color>
+  <!-- Dark shadows: pure black with a higher alpha so the lift is visible
+       against the very dark surfaces. -->
+  <BoxShadows x:Key="ModalShadow">0 24 64 0 #80000000, 0 0 0 1 #30000000</BoxShadows>
+  <BoxShadows x:Key="ToastShadow">0 8 24 0 #60000000</BoxShadows>
 
   <!-- Dark-mode badge foregrounds: light/dark each need an opposite-tone foreground
        so the badge reads in both modes. Light badges get a dark text; dark badges
@@ -59,5 +67,6 @@
   <SolidColorBrush x:Key="InfoBadgeFgBrush"       Color="{StaticResource InfoBadgeFgColor}" />
   <SolidColorBrush x:Key="WarningBadgeFgBrush"    Color="{StaticResource WarningBadgeFgColor}" />
   <SolidColorBrush x:Key="AccentVariantFgBrush"  Color="{StaticResource AccentVariantFgColor}" />
+  <SolidColorBrush x:Key="ScrimBrush"             Color="{StaticResource ScrimColor}" />
 
 </ResourceDictionary>

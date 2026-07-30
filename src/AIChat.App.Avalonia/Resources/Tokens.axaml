@@ -60,6 +60,14 @@
   <SolidColorBrush x:Key="HoverBg2Brush"    Color="{StaticResource HoverBg2Color}" />
   <SolidColorBrush x:Key="CloseHoverBrush"  Color="{StaticResource CloseHoverColor}" />
   <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccentColor}" />
+  <!-- Scrim (modal backdrop): 50% opaque ink that darkens whatever is behind
+       the centered dialog. Hex with alpha is the Avalonia-friendly way. -->
+  <SolidColorBrush x:Key="ScrimBrush" Color="#80000000" />
+
+  <!-- Shadow tokens. Light mode shadow is gentle; dark mode shadow is heavier
+       because there's no light surface to lift off of. -->
+  <BoxShadows x:Key="ModalShadow">0 24 64 0 #40000000, 0 0 0 1 #10000000</BoxShadows>
+  <BoxShadows x:Key="ToastShadow">0 8 24 0 #30000000</BoxShadows>
 
   <!-- ===== Spacing (Thickness for padding / margin, double for grid lengths) ===== -->
   <Thickness x:Key="Space1">4</Thickness>
