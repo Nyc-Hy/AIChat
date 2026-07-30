@@ -251,12 +251,22 @@
                                                                         MaxWidth="720"
                                                                         Spacing="4">
                                                                 <TextBlock Text="{Binding Status}" Classes="muted" FontSize="11" HorizontalAlignment="Right"/>
-                                                                <Border Classes="bubble-user" MaxWidth="720">
+                                                                <!-- User bubble is a Button (not a Border) so the
+                                                                     user can click it to copy the message back into
+                                                                     the input for editing + resending. The
+                                                                     bubble-user class still drives the visual so the
+                                                                     affordance looks identical to the read-only
+                                                                     variant. -->
+                                                                <Button Classes="bubble-user"
+                                                                        MaxWidth="720"
+                                                                        Tag="{Binding Detail}"
+                                                                        Click="EditUserBubble_OnClick"
+                                                                        ToolTip.Tip="点击编辑">
                                                                     <controls:MarkdownTextBlock Markdown="{Binding Detail}"
                                                                                                 Foreground="{Binding TextForeground}"
                                                                                                 FontSize="14"
                                                                                                 TextWrapping="Wrap"/>
-                                                                </Border>
+                                                                </Button>
                                                             </StackPanel>
 
                                                             <!-- System / tool message: centered, no bubble -->

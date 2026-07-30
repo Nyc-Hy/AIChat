@@ -209,6 +209,26 @@ public partial class MainWindow : Window
         PromptInput.SelectAll();
     }
 
+    // Edit previous user message: copy the bubble's Detail back into
+    // the prompt input and focus it. The user can tweak the text and
+    // press Enter to send again. The old bubble stays in the feed (so
+    // the conversation history is preserved); the new send adds a
+    // fresh user bubble above the assistant's response.
+    private void EditUserBubble_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string text } ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.DraftPrompt = text;
+        PromptInput.Focus();
+        // Put the caret at the end rather than selecting all — the
+        // user clicked to edit, not to replace wholesale.
+        PromptInput.CaretIndex = text.Length;
+    }
+
     private async void ProjectButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string projectId } ||

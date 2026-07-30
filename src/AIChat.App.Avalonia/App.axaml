@@ -248,6 +248,28 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
         </Style>
+        <!--
+          Same visual when the bubble is a Button (clickable for
+          'edit previous message'). Inherits the same background /
+          border / radius / padding so the two containers look
+          identical, and adds the click-affordance details:
+          HorizontalContentAlignment=Left so wrapping reads naturally,
+          IBeam cursor so it looks like text-editable, hover
+          background deepens one step.
+        -->
+        <Style Selector="Button.bubble-user">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Accent100Brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Cursor" Value="IBeam" />
+        </Style>
+        <Style Selector="Button.bubble-user:pointerover">
+            <Setter Property="Background" Value="{StaticResource Accent100Brush}" />
+        </Style>
         <Style Selector="Border.bubble-ai">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
