@@ -444,9 +444,22 @@
                                                                    TextTrimming="CharacterEllipsis"
                                                                    MaxLines="1"
                                                                    VerticalAlignment="Center"/>
+                                                        <!-- Status + duration flip colour based on the
+                                                             outcome (see the sub-agent-status styles
+                                                             in App.axaml). Running rows read as
+                                                             "active" in accent; completed in green;
+                                                             failed / budget / cancelled fade to the
+                                                             matching status tone. -->
                                                         <TextBlock Grid.Column="2"
                                                                    Text="{Binding DurationDisplay}"
-                                                                   Classes="muted"
+                                                                   Classes="sub-agent-status"
+                                                                   Classes.running="{Binding IsRunning}"
+                                                                   Classes.completed="{Binding IsCompleted}"
+                                                                   Classes.failed="{Binding IsFailed}"
+                                                                   Classes.budget="{Binding IsBudgetExceeded}"
+                                                                   Classes.cancelled="{Binding IsCancelled}"
+                                                                   Classes.skipped="{Binding IsSkipped}"
+                                                                   FontFamily="{StaticResource FontMono}"
                                                                    FontSize="11"
                                                                    VerticalAlignment="Center"/>
                                                     </Grid>

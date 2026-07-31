@@ -461,6 +461,35 @@
             <Setter Property="MinWidth" Value="32" />
         </Style>
         <!--
+          Sub-agent status colour map. The plan panel renders a row
+          per dispatched sub-agent; the row's status text + duration
+          flip foreground colour based on the StatusKind class the
+          VM attaches. Kept here (theming) rather than on the VM so
+          the colour palette stays centralised.
+
+          running     — accent (in flight, attention-grabbing)
+          completed   — success green
+          failed      — error red
+          budget      — warning orange (tool budget hit)
+          cancelled   — muted gray (user stopped)
+          skipped     — muted gray (coordinator declined)
+        -->
+        <Style Selector="TextBlock.sub-agent-status.running">
+            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.completed">
+            <Setter Property="Foreground" Value="{StaticResource SuccessFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.failed">
+            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.budget">
+            <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.cancelled, TextBlock.sub-agent-status.skipped, TextBlock.sub-agent-status.other">
+            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+        </Style>
+        <!--
           Pending image attachment: 56x56 square thumbnail that sits
           above the prompt. Hairline border + a small remove X in
           the top-right corner. Subtle background so the thumbnail

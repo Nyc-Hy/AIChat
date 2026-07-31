@@ -36,6 +36,23 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
     public bool IsCompleted => Status.Equals("Completed", StringComparison.OrdinalIgnoreCase);
     public bool IsFailed => Status.Equals("Failed", StringComparison.OrdinalIgnoreCase);
     public bool IsSkipped => Status.Equals("Skipped", StringComparison.OrdinalIgnoreCase);
+    public bool IsBudgetExceeded => Status.Equals("BudgetExceeded", StringComparison.OrdinalIgnoreCase);
+    public bool IsCancelled => Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase);
+
+    // Coarse status bucket the XAML uses as a class selector so the
+    // status pill / duration text can be coloured by outcome. Keeps
+    // the colour map in App.axaml (theming concern) rather than
+    // embedding brushes in the view-model.
+    public string StatusKind => Status.ToLowerInvariant() switch
+    {
+        "running" => "running",
+        "completed" => "completed",
+        "failed" => "failed",
+        "skipped" => "skipped",
+        "budgetexceeded" => "budget",
+        "cancelled" => "cancelled",
+        _ => "other"
+    };
 
     public SubAgentRunViewModel(AgentSubAgentRun run)
     {
@@ -59,6 +76,9 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
         OnPropertyChanged(nameof(IsCompleted));
         OnPropertyChanged(nameof(IsFailed));
         OnPropertyChanged(nameof(IsSkipped));
+        OnPropertyChanged(nameof(IsBudgetExceeded));
+        OnPropertyChanged(nameof(IsCancelled));
+        OnPropertyChanged(nameof(StatusKind));
     }
 
     // Match the naming AgentHarness uses for the explorer template.

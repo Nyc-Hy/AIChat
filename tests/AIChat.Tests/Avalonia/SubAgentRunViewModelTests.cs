@@ -125,6 +125,37 @@ public class SubAgentRunViewModelTests
         Assert.Equal("2m 0s", vm.DurationDisplay);
     }
 
+    [Theory]
+    [InlineData("Running", "running", true, false, false, false, false, false)]
+    [InlineData("Completed", "completed", false, true, false, false, false, false)]
+    [InlineData("Failed", "failed", false, false, true, false, false, false)]
+    [InlineData("Cancelled", "cancelled", false, false, false, false, true, false)]
+    [InlineData("Skipped", "skipped", false, false, false, false, false, true)]
+    [InlineData("BudgetExceeded", "budget", false, false, false, true, false, false)]
+    [InlineData("SomethingUnknown", "other", false, false, false, false, false, false)]
+    public void StatusKind_MapsToCssClassAndFlag(
+        string status,
+        string expectedKind,
+        bool isRunning,
+        bool isCompleted,
+        bool isFailed,
+        bool isBudget,
+        bool isCancelled,
+        bool isSkipped)
+    {
+        var run = NewRun(templateId: "explorer", task: "x");
+        run.Status = status;
+        var vm = new SubAgentRunViewModel(run);
+
+        Assert.Equal(expectedKind, vm.StatusKind);
+        Assert.Equal(isRunning, vm.IsRunning);
+        Assert.Equal(isCompleted, vm.IsCompleted);
+        Assert.Equal(isFailed, vm.IsFailed);
+        Assert.Equal(isBudget, vm.IsBudgetExceeded);
+        Assert.Equal(isCancelled, vm.IsCancelled);
+        Assert.Equal(isSkipped, vm.IsSkipped);
+    }
+
     private static AgentSubAgentRun NewRun(string templateId, string task, DateTimeOffset? startedAt = null, string summary = "")
     {
         return new AgentSubAgentRun
