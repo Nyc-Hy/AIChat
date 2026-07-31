@@ -3,8 +3,6 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.Views;
-using AIChat.Abstractions.Persistence;
-using AIChat.Abstractions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace AIChat.App.Avalonia;
