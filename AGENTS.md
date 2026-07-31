@@ -57,11 +57,16 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 | ⌘L | 聚焦 prompt（SelectAll） |
 | ⌘⇧K | 清空对话（运行中禁用） |
 | ⌘⇧R | 切换只读 / no-write 模式 |
-| ⌘/ | 显示 /help |
-| ⌘V | 粘贴图片 → pending attachment（⌘↵ 一起送） |
+| ⌘⇧V | 切换自动验证 |
+| ⌘⇧C | `/copy` — 复制最后一条 AI 回复 |
+| ⌘⇧M | 打开 memory editor modal |
+| ⌘O | 添加项目（打开 folder picker） |
+| ⌘T | 测试当前模型（连接性测试） |
 | ⌘G | `/git` — 当前分支 + 变更列表（bubble） |
 | ⌘⇧G | 打开 git status / diff viewer modal |
-| ⌘⇧M | 打开 memory editor modal |
+| ⌘/ | 显示 /help |
+| F5 | 刷新状态（重读本地项目 + 对话） |
+| ⌘V | 粘贴图片 → pending attachment（⌘↵ 一起送） |
 | Esc | 关闭命令面板 / 设置 / memory / git modal（按优先级） |
 
 ### Slash 命令
@@ -117,7 +122,7 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 
 ## 代码 pitfall 类（2026-07-31 清理 wave 总结）
 
-本轮（commits `798c03d`..`65cc00b`）系统性扫出来的 bug 模式，下次写新 VM / 新 XAML 之前先看一遍。
+本轮（commits `798c03d`..`65cc00b` + 第二轮 `c46272e`..`3dee14a`）系统性扫出来的 bug 模式，下次写新 VM / 新 XAML 之前先看一遍。
 
 ### 1. PropertyChanged propagation gap
 
@@ -167,9 +172,21 @@ Avalonia binding 只在源属性 `PropertyChanged` 时重求值。**派生属性
 
 描述"已删的代码"为什么删 / 它做了什么。git log 已经有完整 history，源码里再写一次就是噪音。`SessionInsightsViewModel` 删的时候留下的 3 段 `(no-op metrics update — see comment on the event-handler version above...)` 全部清除。下次大块 delete 时，**注释也一起删**，不要留指向幽灵代码的指针。
 
+### 7. 跨线程 UI 突变（thread-safety）
+
+`async IAsyncEnumerable`（`AgentHarness.RunAsync`）的 `await foreach` 消费者可能跑在非 UI 线程。`[ObservableProperty]` 的 setter、绑定的 `ObservableCollection` 的 `Add/Remove/Clear`、`OnPropertyChanged(nameof(...))` 都要在 UI 线程上执行。**Avalonia 抛 "Collection was modified during enumeration" 或默默丢掉 PropertyChanged 都属于这一类**。
+
+- `AgentRunnerViewModel.ApplyAgentEventAsync` 的三个 `_updatePlan` 调用（StepAdded / SubAgentCompleted / ToolResult）以前直接 fire 在 harness 的 worker 线程上 → 状态栏的计划面板偶尔显示陈旧。修法：抽 `UpdatePlanOnUiThreadAsync(plan)` helper 把 `Dispatcher.UIThread.InvokeAsync` 收成一处
+- `RecomputeContextInputTokensAsync` 是 fire-and-forget（`OnDraftPromptChanged` / `OnNoWriteModeChanged` / `OnSidebarProjectSelected` / `OnSidebarProjectAdded` / `SendTaskAsync` / `RefreshAsync` 都 `_ =` 它），body 里有两个 `Task.Run`（file index + context router），任何一个抛（perms / 卸载的盘）就会让 app 直接 crash。**async void / fire-and-forget 路径的每个 body 都得 try/catch 一次**，跟 847a598 的 XAML handler 同级
+
 ## 测试基线
 
-`621 → 693`，本轮加了 4 个 `SlashCommandHandlerTests`（走完整 DI 图，覆盖 `MainWindowViewModel` 的 4 个 slash 命令），还锁住了 DI 漏注册 bug。下次给新加的 service 写测试时，跟着 `AppHost.Build()` + `GetRequiredService<T>()` 模式走，能间接把整个 ctor 链跑一遍。
+`621 → 693`，覆盖：
+- 4 个 `SlashCommandHandlerTests`（走完整 DI 图，覆盖 `MainWindowViewModel` 的 4 个 slash 命令），还锁住了 DI 漏注册 bug
+- 1 个 `MemoryEditorViewModelTests` 锁住 `[NotifyCanExecuteChangedFor(AddCommand)]` on `ErrorMessage`（add 失败后 Add 按钮立刻灰着，再敲字就重新亮）
+- 1 个 `GitStatusViewModelTests` 锁住 `LastUpdatedDisplay` + `HasLastUpdated` 的 OnLastUpdatedChanged re-raise
+
+下次给新加的 service 写测试时，跟着 `AppHost.Build()` + `GetRequiredService<T>()` 模式走，能间接把整个 ctor 链跑一遍。
 
 ## 已知遗留（不动）
 
