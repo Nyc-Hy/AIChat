@@ -85,6 +85,56 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘O opens a folder picker so the user can add a new
+            // project. Surfaces the action the palette was already
+            // advertising (the palette item's shortcut column said
+            // '⌘ O' but no keybinding existed).
+            Gesture = new KeyGesture(Key.O, KeyModifiers.Meta),
+            Command = new RelayCommand(() => AddProject_OnClick(this, new RoutedEventArgs()))
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // ⌘T runs a connection test against the current model.
+            // Same shape as the palette's "测试当前模型" entry
+            // (which was also claiming the shortcut without backing).
+            Gesture = new KeyGesture(Key.T, KeyModifiers.Meta),
+            Command = new RelayCommand(async () =>
+                await viewModel.Provider.TestProviderCommand.ExecuteAsync(null))
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // ⌘⇧M opens the memory editor. The palette item was
+            // already advertising the shortcut; the binding closes
+            // the gap so the user can rely on either surface.
+            Gesture = new KeyGesture(Key.M, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = viewModel.OpenMemoryEditorCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // ⌘⇧G opens the git status / diff viewer. Same as the
+            // palette item; previously the binding was missing.
+            Gesture = new KeyGesture(Key.G, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = new RelayCommand(async () => await viewModel.OpenGitStatusAsync())
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            // ⌘⇧C copies the last AI reply. Mirrors /copy — same
+            // handler, same status feedback (system bubble +
+            // status-bar message). The palette was advertising this
+            // shortcut without a binding.
+            Gesture = new KeyGesture(Key.C, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = new RelayCommand(async () =>
+            {
+                var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync("/copy", viewModel);
+                if (handled && slashResult is not null)
+                {
+                    viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "命令");
+                    viewModel.StatusMessage = slashResult.Title + "。";
+                }
+            })
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘L focuses the prompt input. The browser convention; also
             // matches Slack / Discord / Linear. Routed through a small
             // RelayCommand so the code-behind can call Focus() on the

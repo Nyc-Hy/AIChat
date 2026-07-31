@@ -296,7 +296,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void CloseMemoryEditor() => IsMemoryEditorOpen = false;
 
     [RelayCommand]
-    private async Task OpenGitStatusAsync()
+    public async Task OpenGitStatusAsync()
     {
         IsGitStatusOpen = true;
         // Re-fetch every open so an agent run that just landed
