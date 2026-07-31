@@ -379,6 +379,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // multi-step research / verification work without scrolling the
     // activity feed. Cleared on every new SendTaskCommand.
     public System.Collections.ObjectModel.ObservableCollection<SubAgentRunViewModel> SubAgentRuns { get; } = [];
+    // The plan panel's sub-section binds IsVisible to this. HasPlan has
+    // the same derived-from-collection shape and we re-raise it in
+    // UpdatePlan; this flag is re-raised in UpsertSubAgentRun and
+    // through the clearSubAgentRuns callback below. Without those
+    // re-raises the binding stays stale (the XAML never gets a
+    // PropertyChanged("HasSubAgentRuns") event).
     public bool HasSubAgentRuns => SubAgentRuns.Count > 0;
 
     // Upsert from the runner: started events add a new row, completed
@@ -452,7 +458,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             setLastAssistantStatus: value => LastAssistantStatus = value,
             updatePlan: plan => UpdatePlan(plan),
             upsertSubAgent: run => UpsertSubAgentRun(run),
-            clearSubAgentRuns: () => SubAgentRuns.Clear(),
+            // Re-raise HasSubAgentRuns after Clear so the sub-section
+            // of the plan panel collapses back to hidden when a new
+            // SendTaskCommand starts. Without this the IsVisible
+            // binding stays at its last-true value until the next
+            // sub-agent event lands and UpsertSubAgentRun fires
+            // its own re-raise.
+            clearSubAgentRuns: () =>
+            {
+                SubAgentRuns.Clear();
+                OnPropertyChanged(nameof(HasSubAgentRuns));
+            },
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode);
 
