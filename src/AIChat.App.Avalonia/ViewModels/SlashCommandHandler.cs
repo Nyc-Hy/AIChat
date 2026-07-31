@@ -22,7 +22,7 @@ public static class SlashCommandHandler
         "可用命令:\n" +
         "/clear — 清空当前对话\n" +
         "/new — 同 /clear\n" +
-        "/status — 显示当前项目、模型、对话数、Context、上次运行\n" +
+        "/status — 显示当前项目、模型、对话数、Context、上次运行、安全策略\n" +
         "/memory — 显示当前项目的 memory 列表\n" +
         "/git — 显示当前项目的 git 状态\n" +
         "/copy — 复制最后一条 AI 回复到剪贴板\n" +
@@ -169,6 +169,21 @@ public static class SlashCommandHandler
         // whether to start a new conversation or compact.
         var contextLine = $"Context: {host.ContextBudgetPercent}%";
 
+        // Safety policy: surface the two user-controlled toggles so
+        // the user can verify state without opening settings. Empty
+        // by default; only emit a line when the toggle is on so the
+        // ambient "everything default" /status output stays tight.
+        var safety = new List<string>();
+        if (host.NoWriteMode)
+        {
+            safety.Add("只读");
+        }
+        if (host.AutoVerify)
+        {
+            safety.Add("自动验证");
+        }
+        var safetyLine = safety.Count == 0 ? null : "安全策略: " + string.Join(" + ", safety);
+
         var status = string.IsNullOrWhiteSpace(host.StatusMessage)
             ? "状态: 就绪"
             : $"状态: {host.StatusMessage}";
@@ -181,7 +196,7 @@ public static class SlashCommandHandler
             ? null
             : $"上次运行: {host.LastAssistantStatus}";
 
-        var lines = new[] { projectLine, modelLine, conversationLine, contextLine, lastRunLine, status }
+        var lines = new[] { projectLine, modelLine, conversationLine, contextLine, safetyLine, lastRunLine, status }
             .Where(line => line is not null);
         return string.Join("\n", lines);
     }
