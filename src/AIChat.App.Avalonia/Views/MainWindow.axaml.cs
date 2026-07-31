@@ -234,6 +234,23 @@ public partial class MainWindow : Window
 
         viewModel.ActivityFeed.Activity.CollectionChanged += (_, e) =>
         {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+            {
+                // Clear() (e.g. /new, /clear, the sidebar "新对话"
+                // button) fires Reset. Snap the scroll back to the
+                // top of the freshly-empty feed and reset the
+                // at-bottom flag so the next bubble added lands
+                // visibly — without this, the ScrollViewer's
+                // preserved offset would point past the end of the
+                // new content, and the auto-scroll branch below
+                // would stay disabled (at-bottom was false from
+                // the previous conversation).
+                _isUserAtBottom = true;
+                Dispatcher.UIThread.Post(() =>
+                    ConversationScroll.ScrollToHome(),
+                    DispatcherPriority.Background);
+                return;
+            }
             if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add)
             {
                 return;
