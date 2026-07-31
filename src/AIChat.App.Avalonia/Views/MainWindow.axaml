@@ -219,6 +219,22 @@
                                     <Border Classes="badge warning" IsVisible="{Binding NeedsConfiguration}">
                                         <TextBlock Text="需要密钥" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningBadgeFgBrush}"/>
                                     </Border>
+                                    <!--
+                                      Persistent indicator for the two user-controlled
+                                      toggles (read-only, auto-verify). The settings
+                                      modal hides these CheckBoxes inside a long
+                                      form, so the steady-state UI needs to surface
+                                      the active state here. Mirrors the git-status
+                                      pattern of small "is X" pills.
+                                    -->
+                                    <Border Classes="badge" IsVisible="{Binding NoWriteMode}"
+                                            ToolTip.Tip="只读模式已开启 — 写入类工具会被自动拒绝 (⌘⇧R 切换)">
+                                        <TextBlock Text="只读" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                                    </Border>
+                                    <Border Classes="badge" IsVisible="{Binding AutoVerify}"
+                                            ToolTip.Tip="修改完成后自动运行项目验证命令 (⌘⇧V 切换)">
+                                        <TextBlock Text="自动验证" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentFgBrush}"/>
+                                    </Border>
                                 </StackPanel>
                             </Grid>
 
