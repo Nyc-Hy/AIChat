@@ -42,10 +42,23 @@ public sealed partial class PendingAttachmentsViewModel : ViewModelBase
 
     static PendingAttachmentsViewModel()
     {
-        // Best-effort pre-create; the directory is also created on
-        // first save so this is purely a hint to the OS that we own
-        // the path.
-        try { Directory.CreateDirectory(StorageDirectory); } catch { /* best effort */ }
+        // Best-effort cleanup of stale files from a previous run
+        // (the user pasted an image but the app crashed / the user
+        // force-quit before sending). The directory exists for
+        // IN-FLIGHT attachments only — anything left behind on
+        // startup is abandoned and safe to delete.
+        try
+        {
+            if (Directory.Exists(StorageDirectory))
+            {
+                foreach (var stale in Directory.GetFiles(StorageDirectory, "pasted-*.png"))
+                {
+                    try { File.Delete(stale); } catch { /* best effort */ }
+                }
+            }
+            Directory.CreateDirectory(StorageDirectory);
+        }
+        catch { /* best effort */ }
     }
 
     // Add a pasted image. Saves the bitmap bytes to disk and
