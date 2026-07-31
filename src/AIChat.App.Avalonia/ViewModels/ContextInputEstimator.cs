@@ -7,7 +7,7 @@ namespace AIChat.App.Avalonia.ViewModels;
 // produced the real context pack. Kept in the ViewModels project
 // (rather than AIChat.Application) because it's purely a
 // presentation-layer number — Application has no other consumer.
-internal static class ContextInputEstimator
+public static class ContextInputEstimator
 {
     // Reserved for the system prompt + tool schema. Matches the
     // 1500 the previous SessionInsightsViewModel used; the number
