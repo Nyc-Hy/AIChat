@@ -106,6 +106,33 @@ public class MemoryEditorViewModelTests
     }
 
     [Fact]
+    public async Task AddCommand_DisablesItselfAfterValidationError()
+    {
+        // CanAdd includes "ErrorMessage is null or empty" so a failed
+        // add (secret detection, validation rule, ...) must immediately
+        // disable the Add button — otherwise the user can click it
+        // repeatedly and just see the same red error every time. The
+        // [NotifyCanExecuteChangedFor] on ErrorMessage is what makes
+        // this work without OnNewContentChanged having to fire first.
+        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var (vm, _, _) = CreateViewModel(currentProject: project);
+
+        vm.NewContent = "my API_KEY=sk-abcdef12345";
+        await vm.AddCommand.ExecuteAsync(null);
+
+        // ErrorMessage is now non-null, the content is still
+        // non-empty — the user has no way to know the button is
+        // disabled unless CanExecute re-evaluates.
+        Assert.NotNull(vm.ErrorMessage);
+        Assert.False(vm.AddCommand.CanExecute(null));
+
+        // Typing again clears ErrorMessage via OnNewContentChanged
+        // and the button re-enables.
+        vm.NewContent = "real content this time";
+        Assert.True(vm.AddCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task DeleteAsync_RemovesEntryAndSaves()
     {
         var entry = new MemoryEntry
