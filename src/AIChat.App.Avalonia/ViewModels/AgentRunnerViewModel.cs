@@ -349,7 +349,23 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     assistantMessage.Content += agentEvent.Content;
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        assistantItem.Detail += agentEvent.Content;
+                        // First content delta after the "正在启动
+                        // 任务..." placeholder: clear the placeholder
+                        // (replace, don't append) so the rendered
+                        // markdown shows the model's actual response
+                        // rather than "正在启动任务...Hello there...".
+                        // Subsequent deltas append as usual. The flag
+                        // lives on the bubble itself so the lambda
+                        // doesn't have to carry per-run state.
+                        if (!assistantItem.HasReceivedFirstContent)
+                        {
+                            assistantItem.Detail = agentEvent.Content;
+                            assistantItem.HasReceivedFirstContent = true;
+                        }
+                        else
+                        {
+                            assistantItem.Detail += agentEvent.Content;
+                        }
                         _setStatusMessage("正在接收回复...");
                         // The previous SessionInsightsViewModel.UpdateMetrics call
             // here maintained a stack of output / tool-round / runtime

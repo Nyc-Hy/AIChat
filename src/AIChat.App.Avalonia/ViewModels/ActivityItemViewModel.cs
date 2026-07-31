@@ -39,6 +39,15 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
     public bool IsAssistantBubble => Title == "AIChat";
     public bool IsSystemBubble => !IsUserBubble && !IsAssistantBubble;
 
+    // Set by the agent runner when the first content delta lands for
+    // this bubble, so the runner can REPLACE the "正在启动任务..."
+    // placeholder rather than appending to it (which would render as
+    // "正在启动任务...Hello there..." in the markdown view). Stays
+    // false for non-assistant bubbles — they never have a streaming
+    // placeholder to clear.
+    [ObservableProperty]
+    private bool hasReceivedFirstContent;
+
     partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
     partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
 }
