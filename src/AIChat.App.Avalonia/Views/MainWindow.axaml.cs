@@ -105,6 +105,16 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // ⌘⇧V toggles auto-verify. The page-header pill surfaces the
+            // current state; this is the keyboard shortcut to flip it.
+            // Matches the (⌘⇧V 切换) hint in the pill tooltip and the
+            // palette item's shortcut column — both were already
+            // claiming the shortcut but the binding was missing.
+            Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = new RelayCommand(() => viewModel.AutoVerify = !viewModel.AutoVerify)
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘⇧M opens the memory editor. Add / delete the current
             // project's memory entries. ⌘/ still surfaces the read-
             // only /memory summary in the activity feed for the
