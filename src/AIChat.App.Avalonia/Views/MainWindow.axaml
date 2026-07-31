@@ -174,6 +174,13 @@
                                                            Foreground="{StaticResource Text2Brush}"
                                                            TextTrimming="CharacterEllipsis"
                                                            MaxLines="1"/>
+                                                <Button.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="删除对话"
+                                                                  Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ConversationList.RemoveConversationCommand}"
+                                                                  CommandParameter="{Binding Id}"/>
+                                                    </MenuFlyout>
+                                                </Button.ContextFlyout>
                                             </Button>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>

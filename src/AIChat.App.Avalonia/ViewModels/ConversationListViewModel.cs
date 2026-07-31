@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AIChat.Abstractions.Persistence;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -19,6 +20,7 @@ public sealed partial class ConversationListViewModel : ViewModelBase
     private const string SelectedColor = "#FFFFFF";
     private const string UnselectedColor = "#FFFFFF00";
 
+    private readonly IAppRepository _repository;
     private bool _isApplyingConversationSelection;
     private ProjectWorkspace? _currentProject;
 
@@ -28,6 +30,11 @@ public sealed partial class ConversationListViewModel : ViewModelBase
     public ObservableCollection<ConversationCardViewModel> Conversations { get; } = [];
 
     public event EventHandler<ConversationSelectedEventArgs>? ConversationSelected;
+
+    public ConversationListViewModel(IAppRepository repository)
+    {
+        _repository = repository;
+    }
 
     // Replaces the conversation list with the project's recent
     // conversations. If the project is null or has no conversations,
@@ -156,5 +163,61 @@ public sealed partial class ConversationListViewModel : ViewModelBase
         }
 
         SelectConversation(value.Id);
+    }
+
+    // Removes the conversation with the given id from the current
+    // project. The activity feed and conversation list both
+    // refresh — the conversation list drops the row, the activity
+    // feed switches to a fresh "new conversation" prompt via
+    // ConversationSelected.
+    //
+    // The project JSON is the source of truth; AgentRunnerViewModel
+    // re-reads from the repo on the next SendTaskCommand. Any
+    // pending run on this conversation would already be over by
+    // the time the user reaches for the right-click menu, so we
+    // don't worry about mid-run cancellation.
+    [RelayCommand]
+    public async Task RemoveConversationAsync(string? conversationId)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId) ||
+            conversationId == NewConversationId ||
+            _currentProject is null)
+        {
+            return;
+        }
+
+        var target = _currentProject.Conversations.FirstOrDefault(conversation =>
+            string.Equals(conversation.Id, conversationId, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            return;
+        }
+
+        _currentProject.Conversations.Remove(target);
+
+        // Save the updated project list back to the repo. Mirrors
+        // the pattern AgentRunnerViewModel.SaveProjectsAsync uses
+        // after a run lands a memory update.
+        var projects = (await _repository.LoadProjectsAsync()).ToList();
+        var index = projects.FindIndex(project => project.Id == _currentProject.Id);
+        if (index >= 0)
+        {
+            projects[index] = _currentProject;
+        }
+        else
+        {
+            projects.Add(_currentProject);
+        }
+        await _repository.SaveProjectsAsync(projects);
+
+        // Refresh the list so the deleted row disappears, then
+        // re-emit ConversationSelected with null so the host's
+        // activity feed switches to the "new conversation" prompt.
+        Refresh(_currentProject);
+        ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
+        {
+            Conversation = null,
+            StatusMessage = $"已删除对话：{target.Title}"
+        });
     }
 }
