@@ -1147,12 +1147,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         return Task.CompletedTask;
     }
 
-    [RelayCommand]
-    private void SaveProvider() => _ = _provider.SaveProviderCommand.ExecuteAsync(null);
-
-    [RelayCommand]
-    private void TestProvider() => _ = _provider.TestProviderCommand.ExecuteAsync(null);
-
     // PR-2: handlers for events raised by ProviderConfigViewModel. They keep
     // the parent VM's display state in sync without re-architecting the
     // cross-VM contract.
