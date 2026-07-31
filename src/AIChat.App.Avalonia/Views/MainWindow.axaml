@@ -188,9 +188,16 @@
                         <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{StaticResource Space3}">
 
                             <!-- Slim page header: just project breadcrumb + readiness pill. No hero.
-                                 Hero lives in the empty state so the conversation starts at the top. -->
+                                 Hero lives in the empty state so the conversation starts at the top.
+                                 The breadcrumb's tooltip surfaces ProjectHealth (whether
+                                 AGENTS.md exists, how many verification commands the project
+                                 carries, etc.) — visible on hover so the steady state stays
+                                 quiet but the user can verify "is this project ready?" without
+                                 dropping to a terminal. -->
                             <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
-                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding HasProject}">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                            IsVisible="{Binding HasProject}"
+                                            ToolTip.Tip="{Binding Sidebar.ProjectHealth}">
                                     <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
                                           Stroke="{StaticResource MutedBrush}"
                                           StrokeThickness="1.4" StrokeJoin="Round"
