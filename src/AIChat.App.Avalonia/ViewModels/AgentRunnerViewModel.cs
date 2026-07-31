@@ -213,7 +213,16 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             var run = conversation.AgentRuns.LastOrDefault();
             if (run is not null)
             {
-                _activityFeed.Add("本次运行", BuildRunSummary(run), "完成");
+                // Pass isReadOnly so a no-write run with 0 changes
+                // can be tagged in the summary — the user sent a
+                // refactor / fix / add request, the agent did all
+                // the planning, nothing landed, and the "改 0 个
+                // 文件" line by itself doesn't tell them whether
+                // the agent's plan was a no-op or whether read-only
+                // mode silently swallowed every write. Tagging the
+                // line in the summary keeps the cause visible
+                // without an extra system bubble.
+                _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite), "完成");
             }
             conversation.UpdatedAt = DateTimeOffset.Now;
             project.Conversations.Add(conversation);
@@ -391,13 +400,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     // surfaced when the run actually used them — silent otherwise so
     // a simple chat exchange doesn't look heavier than it was.
     //
-    // Verification line was previously rendered by the (now deleted)
-    // SessionInsightsViewModel as 'X/Y 通过'; bringing it back here
-    // so the user can see whether auto-verify actually passed
-    // without opening the agent log. The previous status bar
-    // context meter is the only other consumer of Verifications, and
-    // it shows the same X/Y format — keeping the two in sync.
-    public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run)
+    // The caller passes isReadOnly so a no-write run that touched
+    // zero files can carry a "只读" tag — the user sent a refactor
+    // prompt, the agent did all the planning, nothing landed, and
+    // "改 0 个文件" by itself doesn't tell them whether to flip
+    // read-only off and retry or whether the agent decided the
+    // task was already done. The tag makes the cause visible
+    // without an extra system bubble.
+    public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run, bool isReadOnly = false)
     {
         var fileChangeCount = run.FileChanges?.Count ?? 0;
         var toolCount = run.ToolCallCount;
@@ -424,6 +434,10 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         if (verificationCount > 0)
         {
             parts.Add($"验证 {verificationPassed}/{verificationCount} 通过");
+        }
+        if (isReadOnly && fileChangeCount == 0 && toolCount > 0)
+        {
+            parts.Add("只读模式");
         }
         parts.Add(duration);
 

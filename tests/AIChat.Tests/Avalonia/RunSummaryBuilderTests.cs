@@ -188,4 +188,79 @@ public class RunSummaryBuilderTests
 
         Assert.Equal("2s", summary);
     }
+
+    [Fact]
+    public void BuildSummary_ReadOnlyRunWithNoFileChanges_TagsReadOnly()
+    {
+        // The user toggled no-write mode, the agent ran a refactor
+        // prompt, the harness did 5 tool calls of read-only work but
+        // nothing got written. The "改 0 个文件" line alone doesn't
+        // distinguish "agent decided no changes were needed" from
+        // "read-only mode silently swallowed every write" — the
+        // "只读模式" tag makes the cause visible so the user knows
+        // to flip the toggle and retry.
+        var startedAt = DateTimeOffset.UtcNow.AddSeconds(-7);
+        var run = new AgentRun
+        {
+            Id = "r1",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddSeconds(7),
+            FileChanges = [],
+            ToolCallCount = 5,
+            SubAgentRuns = []
+        };
+
+        var summary = AgentRunnerViewModel.BuildRunSummary(run, isReadOnly: true);
+
+        Assert.Equal("用 5 次工具 · 只读模式 · 7s", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_ReadOnlyRunWithFileChanges_DoesNotTag()
+    {
+        // Counter-test: a read-only run that DID write something
+        // (impossible by config, but the runtime settings are advisory
+        // and the UI shouldn't second-guess a real file-change count).
+        // The tag is reserved for the "ran but couldn't write"
+        // diagnostic case, so a read-only run with actual changes
+        // stays clean.
+        var startedAt = DateTimeOffset.UtcNow.AddSeconds(-3);
+        var run = new AgentRun
+        {
+            Id = "r1",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddSeconds(3),
+            FileChanges = new() { new() { Path = "src/Foo.cs" } },
+            ToolCallCount = 2,
+            SubAgentRuns = []
+        };
+
+        var summary = AgentRunnerViewModel.BuildRunSummary(run, isReadOnly: true);
+
+        Assert.Equal("改 1 个文件 · 用 2 次工具 · 3s", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_ReadOnlyRunWithoutTools_DoesNotTag()
+    {
+        // A read-only run with no tool calls at all (e.g. a
+        // question-only prompt) shouldn't carry the tag — there's
+        // nothing in the summary to explain away. The condition
+        // requires toolCount > 0 so the tag has a context to land
+        // in.
+        var startedAt = DateTimeOffset.UtcNow.AddSeconds(-1);
+        var run = new AgentRun
+        {
+            Id = "r1",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddSeconds(1),
+            FileChanges = [],
+            ToolCallCount = 0,
+            SubAgentRuns = []
+        };
+
+        var summary = AgentRunnerViewModel.BuildRunSummary(run, isReadOnly: true);
+
+        Assert.Equal("1s", summary);
+    }
 }
