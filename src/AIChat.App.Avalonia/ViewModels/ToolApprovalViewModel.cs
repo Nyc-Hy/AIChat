@@ -95,6 +95,16 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanResolve))]
     private void Approve() => Resolve(ToolApprovalDecision.Approve());
 
+    // "Allow for this session" — the same tool (same ToolCall.Id
+    // matches, but in practice any write of the same name) is allowed
+    // for the rest of the run. The agent loop turns this into a
+    // SessionAllowed event and the tool's preflight check skips the
+    // approval request on subsequent calls. Saves the user from
+    // approving five read_file calls in a row, or a long edit_file
+    // run that needs to make many writes.
+    [RelayCommand(CanExecute = nameof(CanResolve))]
+    private void ApproveForSession() => Resolve(ToolApprovalDecision.Approve(allowForSession: true));
+
     [RelayCommand(CanExecute = nameof(CanResolve))]
     private void Reject() => Resolve(ToolApprovalDecision.Reject("已在界面中拒绝。"));
 

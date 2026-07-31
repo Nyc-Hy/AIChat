@@ -387,6 +387,26 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // Tool approval modal: window-modal so the user can't queue another
+    // prompt while a write is pending. The scrim click rejects (the
+    // user clicking outside the dialog is functionally a "no, don't
+    // do that" gesture). The agent loop's PresentRequestAsync is
+    // still awaiting on the TCS, so this resolves it with a Reject
+    // and the run ends.
+    private void ToolApprovalScrim_OnClick(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel &&
+            viewModel.Approval.RejectCommand.CanExecute(null))
+        {
+            viewModel.Approval.RejectCommand.Execute(null);
+        }
+    }
+
+    private void ToolApprovalContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+    }
+
     // Prompt input: Cmd+Enter (or Ctrl+Enter on non-mac) sends. The default
     // Enter key still inserts a newline because the box is multi-line.
     // Cmd+V / Ctrl+V intercepts the paste when the clipboard has an

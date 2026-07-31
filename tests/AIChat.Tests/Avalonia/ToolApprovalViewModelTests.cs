@@ -76,6 +76,22 @@ public class ToolApprovalViewModelTests
 
         var decision = await task;
         Assert.True(decision.IsApproved);
+        Assert.False(decision.AllowForSession);
+        Assert.False(vm.HasPendingApproval);
+    }
+
+    [Fact]
+    public async Task ApproveForSessionCommand_ResolvesWithSessionAllow()
+    {
+        var vm = new ToolApprovalViewModel { IsReadOnly = false };
+        var request = NewRequest("write_file");
+
+        var task = vm.PresentRequestAsync(request, CancellationToken.None);
+        vm.ApproveForSessionCommand.Execute(null);
+
+        var decision = await task;
+        Assert.True(decision.IsApproved);
+        Assert.True(decision.AllowForSession);
         Assert.False(vm.HasPendingApproval);
     }
 
