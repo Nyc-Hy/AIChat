@@ -220,38 +220,6 @@ public class GitStatusViewModelTests
     }
 
     [Fact]
-    public async Task StatusKind_MapsPorcelainCodes()
-    {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
-        var changeSet = new WorkspaceChangeSet
-        {
-            Branch = "## main",
-            Changes =
-            [
-                new WorkspaceChange { Status = "M ", Path = "modified.cs" },
-                new WorkspaceChange { Status = "A ", Path = "added.cs" },
-                new WorkspaceChange { Status = "D ", Path = "deleted.cs" },
-                new WorkspaceChange { Status = "R ", Path = "renamed.cs" },
-                new WorkspaceChange { Status = "??", Path = "untracked.cs" }
-            ]
-        };
-        var workspace = Mock.Of<IWorkspaceChangeService>();
-        Mock.Get(workspace)
-            .Setup(w => w.GetChangesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(changeSet);
-        var (vm, _, _) = CreateViewModel(currentProject: project, workspace: workspace);
-
-        await vm.RefreshAsync();
-
-        var byPath = vm.Changes.ToDictionary(c => c.Path);
-        Assert.Equal("modified", byPath["modified.cs"].StatusKind);
-        Assert.Equal("added", byPath["added.cs"].StatusKind);
-        Assert.Equal("deleted", byPath["deleted.cs"].StatusKind);
-        Assert.Equal("renamed", byPath["renamed.cs"].StatusKind);
-        Assert.Equal("untracked", byPath["untracked.cs"].StatusKind);
-    }
-
-    [Fact]
     public async Task IsX_FlagsMatchStatusKind_ForXamlClassBinding()
     {
         // The XAML binds one Classes.X per IsX flag so the git-status-badge

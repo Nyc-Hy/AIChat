@@ -245,29 +245,30 @@ public sealed partial class GitStatusViewModel : ViewModelBase
 
 // Per-row VM. The display status collapses the raw "M " / "??"
 // porcelain codes into the human-readable string the user already
-// sees in the /git bubble. The colour of the per-status badge is
-// chosen by the XAML from StatusKind so theming stays in the view
-// layer.
+// sees in the /git bubble. The per-status class on the badge
+// (modified / added / deleted / untracked / renamed / copied /
+// conflict) is chosen by the XAML from the matching IsX bool, so
+// the colour map stays in the view layer.
 public sealed partial class GitFileChangeViewModel : ObservableObject
 {
     public string Path { get; }
     public string FileName { get; }
     public string StatusDisplay { get; }
-    public string StatusKind { get; }
 
     // Per-status flags the XAML binds as class selectors so the
     // git-status-badge style can colour the background + foreground
-    // by outcome. One flag per StatusKind value (no "other" — that
-    // case keeps the neutral default style). The flags don't need
-    // INotifyPropertyChanged because they're derived from
-    // StatusKind, which is set once in the constructor.
-    public bool IsModified => StatusKind == "modified";
-    public bool IsAdded => StatusKind == "added";
-    public bool IsDeleted => StatusKind == "deleted";
-    public bool IsUntracked => StatusKind == "untracked";
-    public bool IsRenamed => StatusKind == "renamed";
-    public bool IsCopied => StatusKind == "copied";
-    public bool IsConflict => StatusKind == "conflict";
+    // by outcome. One flag per recognised porcelain status (no
+    // "other" — that case keeps the neutral default style). The
+    // flags are computed once in the constructor from the porcelain
+    // code, so they never flip after construction and don't need
+    // INotifyPropertyChanged.
+    public bool IsModified { get; }
+    public bool IsAdded { get; }
+    public bool IsDeleted { get; }
+    public bool IsUntracked { get; }
+    public bool IsRenamed { get; }
+    public bool IsCopied { get; }
+    public bool IsConflict { get; }
 
     // Back-reference so the row's Command can call into the
     // view-model's diff-loading path without bubbling up to the
@@ -283,7 +284,14 @@ public sealed partial class GitFileChangeViewModel : ObservableObject
         Path = change.Path;
         FileName = System.IO.Path.GetFileName(change.Path);
         StatusDisplay = change.DisplayStatus;
-        StatusKind = ClassifyStatus(change);
+        var kind = ClassifyStatus(change);
+        IsModified = kind == "modified";
+        IsAdded = kind == "added";
+        IsDeleted = kind == "deleted";
+        IsUntracked = kind == "untracked";
+        IsRenamed = kind == "renamed";
+        IsCopied = kind == "copied";
+        IsConflict = kind == "conflict";
     }
 
     [RelayCommand]
