@@ -21,6 +21,12 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
     public DateTimeOffset StartedAt { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRunning))]
+    [NotifyPropertyChangedFor(nameof(IsCompleted))]
+    [NotifyPropertyChangedFor(nameof(IsFailed))]
+    [NotifyPropertyChangedFor(nameof(IsSkipped))]
+    [NotifyPropertyChangedFor(nameof(IsBudgetExceeded))]
+    [NotifyPropertyChangedFor(nameof(IsCancelled))]
     private string status;
 
     [ObservableProperty]
@@ -57,12 +63,12 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
         ToolCallCount = run.ToolCallCount;
         Summary = string.IsNullOrWhiteSpace(run.Summary) ? null : run.Summary;
         DurationDisplay = FormatDuration(StartedAt, run.CompletedAt);
-        OnPropertyChanged(nameof(IsRunning));
-        OnPropertyChanged(nameof(IsCompleted));
-        OnPropertyChanged(nameof(IsFailed));
-        OnPropertyChanged(nameof(IsSkipped));
-        OnPropertyChanged(nameof(IsBudgetExceeded));
-        OnPropertyChanged(nameof(IsCancelled));
+        // The Is* booleans re-raise automatically via
+        // [NotifyPropertyChangedFor] on the Status field above, so
+        // no manual OnPropertyChanged calls are needed here. The
+        // previous explicit re-raises were a workaround for the
+        // missing attribute — keep this comment as the breadcrumb
+        // if anyone ever needs to revisit the propagation rules.
     }
 
     // Match the naming AgentHarness uses for the explorer template.
