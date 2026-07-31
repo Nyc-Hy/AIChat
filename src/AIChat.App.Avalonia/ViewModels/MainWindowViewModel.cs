@@ -527,6 +527,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // (= 'new' or unknown id) clears the pointer so we don't
         // land on a stale id after the user explicitly starts fresh.
         _settings.LastActiveConversationId = args.Conversation?.Id ?? "";
+        // Fire-and-forget the save. Best-effort — a failed write
+        // means we lose the restore pointer for one session but
+        // nothing else breaks. async void is unsafe in event
+        // handlers, hence the explicit ContinueWith to swallow any
+        // exception the await might surface.
+        _ = _repository.SaveSettingsAsync(_settings)
+            .ContinueWith(task =>
+            {
+                _ = task.Exception; // observe + discard
+            }, TaskScheduler.Default);
         StatusMessage = args.StatusMessage;
     }
 
