@@ -1050,6 +1050,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // could shift the estimate: project selection, prompt keystrokes,
     // and no-write toggle. Cheap because the router + file-index
     // builder cache internally; running on every keystroke is fine.
+    //
+    // Every caller fires this without awaiting (it's a
+    // status-bar polish, not a hard dependency), so an unhandled
+    // exception here would crash the app the same way the
+    // d8dddbc / 847a598 async-void crash chain taught us to
+    // avoid. Swallow + surface via StatusMessage so the user
+    // sees what happened and the meter just stops updating for
+    // the rest of the session.
     private async Task RecomputeContextInputTokensAsync(string goal)
     {
         var project = _sidebar.CurrentProject;
@@ -1059,19 +1067,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        var resolvedGoal = string.IsNullOrWhiteSpace(goal) ? "项目概览" : goal.Trim();
-        var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500));
-        var contextPack = await Task.Run(() => new ContextRouter().Route(new ContextRouterRequest
+        try
         {
-            Goal = resolvedGoal,
-            Phase = AgentRunPhase.GatheringContext,
-            FileIndex = fileIndex,
-            PinnedItems = project.PinnedContext,
-            InputArtifacts = project.InputArtifacts,
-            MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
-            MaxTokens = 900
-        }));
-        InputTokens = ContextInputEstimator.Estimate(contextPack.EstimatedTokens, resolvedGoal);
+            var resolvedGoal = string.IsNullOrWhiteSpace(goal) ? "项目概览" : goal.Trim();
+            var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500));
+            var contextPack = await Task.Run(() => new ContextRouter().Route(new ContextRouterRequest
+            {
+                Goal = resolvedGoal,
+                Phase = AgentRunPhase.GatheringContext,
+                FileIndex = fileIndex,
+                PinnedItems = project.PinnedContext,
+                InputArtifacts = project.InputArtifacts,
+                MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
+                MaxTokens = 900
+            }));
+            InputTokens = ContextInputEstimator.Estimate(contextPack.EstimatedTokens, resolvedGoal);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Context 估算失败：{ex.Message}";
+        }
     }
 
     // PR-3: project list, selection, and add logic live in ProjectSidebarViewModel.
