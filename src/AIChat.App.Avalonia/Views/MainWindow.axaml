@@ -305,21 +305,39 @@
                                         </ScrollViewer>
                                     </Grid>
 
-                                    <!-- Empty state: lean — hero + 4 quick-action cards. No sub-greeting, no kbd-hint row.
-                                         ToolTip.Tip on each card shows the full prompt. -->
+                                    <!-- Empty state: hero (with sub-greeting) + 4 quick-action
+                                         cards. The hero copy switches on HasProject so the
+                                         user gets actionable guidance whether they've added
+                                         a project or not; the quick-action cards only show
+                                         when a project is loaded because their prompts
+                                         reference project-specific work (release checks,
+                                         "explain this codebase", etc.) and would be hollow
+                                         without one. ToolTip.Tip on each card shows the
+                                         full prompt. -->
                                     <StackPanel IsVisible="{Binding !ActivityFeed.HasConversation}"
                                                 Spacing="32"
                                                 VerticalAlignment="Center"
                                                 HorizontalAlignment="Center"
                                                 MaxWidth="620">
                                         <StackPanel Spacing="8" HorizontalAlignment="Center">
-                                            <!-- v1.1: less AI-startup, more "real person tool" — short, casual, no "ask AIChat" framing. -->
-                                            <TextBlock Text="想做点什么？"
+                                            <!-- Hero + sub-greeting bound to Greeting /
+                                                 SubGreeting so the copy changes when the
+                                                 project selection flips (less AI-startup,
+                                                 more "real person tool"). -->
+                                            <TextBlock Text="{Binding Greeting}"
                                                        Classes="hero-title"
                                                        HorizontalAlignment="Center"/>
+                                            <TextBlock Text="{Binding SubGreeting}"
+                                                       Classes="muted"
+                                                       FontSize="13"
+                                                       HorizontalAlignment="Center"
+                                                       TextAlignment="Center"
+                                                       MaxWidth="460"
+                                                       TextWrapping="Wrap"/>
                                         </StackPanel>
 
-                                        <ItemsControl HorizontalAlignment="Center">
+                                        <ItemsControl HorizontalAlignment="Center"
+                                                      IsVisible="{Binding HasProject}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
                                                     <UniformGrid Rows="2" Columns="2"/>
