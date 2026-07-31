@@ -516,6 +516,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void OnConversationSelected(object? sender, ConversationSelectedEventArgs args)
     {
         ActivityFeed.LoadConversation(args.Conversation);
+        // Persist the selection so the next launch can restore the
+        // same conversation. AppSettings.LastActiveConversationId
+        // has been a real schema field since the AppSettings file
+        // landed but no code read it — Refresh() in
+        // ConversationListViewModel already accepts a
+        // preferredConversationId, and AgentRunnerViewModel uses it
+        // to highlight a freshly-created conversation; restore-from-
+        // settings is the last consumer to wire up. null args
+        // (= 'new' or unknown id) clears the pointer so we don't
+        // land on a stale id after the user explicitly starts fresh.
+        _settings.LastActiveConversationId = args.Conversation?.Id ?? "";
         StatusMessage = args.StatusMessage;
     }
 
@@ -669,7 +680,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         AutoVerify = _settings.AutoVerifyAgentRuns;
 
         _sidebar.Refresh(projects);
-        _conversationList.Refresh(_sidebar.CurrentProject);
+        // Restore the last-active conversation if its id still
+        // matches a conversation on the current project.
+        // ConversationListViewModel.Refresh already handles the
+        // "preferred id not found" case by falling back to the most
+        // recent conversation / "new" placeholder, so a stale id
+        // from a deleted conversation degrades silently rather
+        // than throwing.
+        _conversationList.Refresh(_sidebar.CurrentProject, _settings.LastActiveConversationId);
         _provider.Refresh();
         _ = RecomputeContextInputTokensAsync(DraftPrompt);
 
