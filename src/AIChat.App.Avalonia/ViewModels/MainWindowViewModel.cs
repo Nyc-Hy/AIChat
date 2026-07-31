@@ -916,6 +916,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         PlanItems.Clear();
         if (plan is null)
         {
+            // The XAML's plan panel binds IsVisible to HasPlan — raise
+            // it here too, otherwise the panel never collapses back
+            // hidden after the agent's last run finishes and clears
+            // the plan. (Same reason for the two other derived
+            // properties: their PropertyChanged only fires when the
+            // observable source flips, and PlanItems.Clear() / Add()
+            // are collection events, not per-property notifications.)
+            OnPropertyChanged(nameof(HasPlan));
             OnPropertyChanged(nameof(PlanCompletedCount));
             OnPropertyChanged(nameof(PlanProgressText));
             return;
@@ -928,6 +936,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 Status = item.Status
             });
         }
+        // HasPlan is the IsVisible for the whole plan panel — without
+        // raising it the panel stays hidden the whole session because
+        // PlanItems.Add() is a collection event, not a "HasPlan"
+        // PropertyChanged. The XAML only re-evaluates IsVisible on
+        // "HasPlan" notifications.
+        OnPropertyChanged(nameof(HasPlan));
         OnPropertyChanged(nameof(PlanCompletedCount));
         OnPropertyChanged(nameof(PlanProgressText));
     }
