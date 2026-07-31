@@ -44,7 +44,6 @@ internal static class ServiceRegistration
         services.AddSingleton<ProviderConfigViewModel>();
         services.AddSingleton<ProjectSidebarViewModel>();
         services.AddSingleton<ConversationListViewModel>();
-        services.AddSingleton<SessionInsightsViewModel>();
         services.AddSingleton<ToolApprovalViewModel>();
         services.AddSingleton<MemoryEditorViewModel>();
         services.AddSingleton<GitStatusViewModel>();

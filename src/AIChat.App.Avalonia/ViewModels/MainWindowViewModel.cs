@@ -32,7 +32,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ProviderConfigViewModel _provider;
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly ConversationListViewModel _conversationList;
-    private readonly SessionInsightsViewModel _insights;
     private readonly ToolApprovalViewModel _approvalViewModel;
     private readonly IApprovalService _approval;
     private readonly IThemeService _theme;
@@ -232,8 +231,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // a single number so the input-area progress bar reads consistently.
     // Will become per-model once the provider API reports the real cap.
     private const int ApproximateContextWindow = 64_000;
+
+    // Estimated input tokens for the current prompt against the current
+    // project (context router output + prompt + system/tool schema
+    // budget). Recomputed on project change, on every prompt keystroke,
+    // and at run start so the status-bar context meter is always
+    // current. The runner pushes a final value via the setInputTokens
+    // callback at BeginRun so the meter reflects the actual request
+    // the agent will send (not just the host's pre-build estimate).
     [ObservableProperty]
-    private int contextBudgetPercent;
+    [NotifyPropertyChangedFor(nameof(ContextBudgetPercent))]
+    private int inputTokens;
+
+    public int ContextBudgetPercent =>
+        (int)Math.Clamp(InputTokens * 100.0 / ApproximateContextWindow, 0, 100);
 
     // Width in DIPs for the inline context meter in the status bar. The mini
     // bar is 80px wide so the percent→width factor is 0.8.
@@ -325,10 +336,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // to ConversationSelected events to load messages.
     public ConversationListViewModel ConversationList => _conversationList;
 
-    // PR-5: right-rail "session insights" (context preview + live metrics)
-    // live in a dedicated view-model.
-    public SessionInsightsViewModel SessionInsights => _insights;
-
     // PR-6: tool approval dialog and Approve / Reject commands live in a
     // dedicated view-model. The IApprovalService is what the agent
     // harness depends on; the service is a thin facade over the VM.
@@ -406,7 +413,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ProviderConfigViewModel provider,
         ProjectSidebarViewModel sidebar,
         ConversationListViewModel conversationList,
-        SessionInsightsViewModel insights,
         ToolApprovalViewModel approvalViewModel,
         IApprovalService approval,
         IThemeService theme,
@@ -424,7 +430,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _provider = provider;
         _sidebar = sidebar;
         _conversationList = conversationList;
-        _insights = insights;
         _approvalViewModel = approvalViewModel;
         _approval = approval;
         _theme = theme;
@@ -441,11 +446,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             approval,
             repository,
             ActivityFeed,
-            insights,
             sidebar,
             conversationList,
             setIsRunning: value => IsRunning = value,
             setStatusMessage: value => StatusMessage = value,
+            setInputTokens: value => InputTokens = value,
             clearDraftPrompt: () => DraftPrompt = "",
             setLastAssistantStatus: value => LastAssistantStatus = value,
             updatePlan: plan => UpdatePlan(plan),
@@ -463,7 +468,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _approvalViewModel.RequestPresented += OnApprovalPresented;
         _approvalViewModel.RequestResolved += OnApprovalResolved;
 
-        _insights.SessionMetrics.CollectionChanged += (_, _) => UpdateContextBudget();
         _sidebar.PropertyChanged += (_, e) =>
         {
             // SelectedProjectName drives HasProject, Greeting and SubGreeting;
@@ -484,14 +488,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void OnSidebarProjectSelected(object? sender, ProjectSelectionChangedEventArgs args)
     {
         _conversationList.Refresh(_sidebar.CurrentProject);
-        _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
+        _ = RecomputeContextInputTokensAsync(DraftPrompt);
         StatusMessage = args.StatusMessage;
     }
 
     private void OnSidebarProjectAdded(object? sender, ProjectAddedEventArgs args)
     {
         _conversationList.Refresh(_sidebar.CurrentProject);
-        _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
+        _ = RecomputeContextInputTokensAsync(DraftPrompt);
         StatusMessage = args.StatusMessage;
     }
 
@@ -578,36 +582,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ]);
     }
 
-    // Called whenever the session insights re-render. Recomputes the
-    // context budget percentage for the input-area progress bar.
-    private void UpdateContextBudget()
-    {
-        var approx = (ApproximateContextWindow > 0) ? ApproximateContextWindow : 1;
-        var inputTokens = _insights.SessionMetrics.Count >= 2
-            ? ParseTokenCount(_insights.SessionMetrics[1].Value)
-            : 0;
-        var percent = (int)Math.Clamp(inputTokens * 100.0 / approx, 0, 100);
-        ContextBudgetPercent = percent;
-    }
-
-    private static int ParseTokenCount(string text)
-    {
-        if (string.IsNullOrEmpty(text) || text == "—")
-        {
-            return 0;
-        }
-        var trimmed = text.Replace(",", "").Trim();
-        if (trimmed.EndsWith("K", StringComparison.OrdinalIgnoreCase))
-        {
-            if (double.TryParse(trimmed[..^1], out var k)) return (int)(k * 1000);
-        }
-        if (trimmed.EndsWith("M", StringComparison.OrdinalIgnoreCase))
-        {
-            if (double.TryParse(trimmed[..^1], out var m)) return (int)(m * 1_000_000);
-        }
-        return int.TryParse(trimmed, out var n) ? n : 0;
-    }
-
     private void OnApprovalPresented(object? sender, ToolApprovalPresentedEventArgs args)
     {
         ActivityFeed.Add(
@@ -648,7 +622,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _sidebar.Refresh(projects);
         _conversationList.Refresh(_sidebar.CurrentProject);
         _provider.Refresh();
-        _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
+        _ = RecomputeContextInputTokensAsync(DraftPrompt);
 
         if (ActivityFeed.Activity.Count == 0)
         {
@@ -746,7 +720,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
-        _insights.PrepareContextPreview(prompt, _sidebar.CurrentProject, NoWriteMode);
+        _ = RecomputeContextInputTokensAsync(prompt);
 
         var effectiveSettings = ProviderSettingsService.CreateEffectiveSettings(_settings, _settings.Temperature);
         var validation = ProviderConfigurationValidator.ValidateEffectiveSettings(effectiveSettings);
@@ -950,13 +924,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnDraftPromptChanged(string value)
     {
-        _insights.PrepareContextPreview(value, _sidebar.CurrentProject, NoWriteMode);
+        _ = RecomputeContextInputTokensAsync(value);
     }
 
     partial void OnNoWriteModeChanged(bool value)
     {
         _approvalViewModel.IsReadOnly = value;
-        _insights.PrepareContextPreview(DraftPrompt, _sidebar.CurrentProject, NoWriteMode);
+        _ = RecomputeContextInputTokensAsync(DraftPrompt);
         OnPropertyChanged(nameof(PromptPlaceholder));
     }
 
@@ -967,7 +941,46 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void SeedEmptyState()
     {
-        _insights.SeedEmptyState();
+        // No-op placeholder kept for the constructor ordering. The
+        // previous insights view-model used SeedEmptyState to drop a
+        // couple of placeholder rows into its now-dead ContextPreview
+        // + SessionMetrics collections; the only thing still wired
+        // was the input-tokens side effect, which we now drive from
+        // RecomputeContextInputTokensAsync below. Calling it here
+        // keeps the "load → seed → refresh" constructor rhythm.
+        _ = RecomputeContextInputTokensAsync(DraftPrompt);
+    }
+
+    // Re-runs the context router for the current project + goal and
+    // updates InputTokens. The only consumer is the status-bar
+    // context meter (the "input" cell of the now-deleted metrics
+    // strip was the only thing it actually read), so this method is
+    // called on every event that could shift the estimate: project
+    // selection, prompt keystrokes, and no-write toggle. Cheap
+    // because the router + file-index builder cache internally;
+    // running on every keystroke is fine.
+    private async Task RecomputeContextInputTokensAsync(string goal)
+    {
+        var project = _sidebar.CurrentProject;
+        if (project is null || string.IsNullOrWhiteSpace(project.Path) || !Directory.Exists(project.Path))
+        {
+            InputTokens = 0;
+            return;
+        }
+
+        var resolvedGoal = string.IsNullOrWhiteSpace(goal) ? "项目概览" : goal.Trim();
+        var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500));
+        var contextPack = await Task.Run(() => new ContextRouter().Route(new ContextRouterRequest
+        {
+            Goal = resolvedGoal,
+            Phase = AgentRunPhase.GatheringContext,
+            FileIndex = fileIndex,
+            PinnedItems = project.PinnedContext,
+            InputArtifacts = project.InputArtifacts,
+            MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
+            MaxTokens = 900
+        }));
+        InputTokens = ContextInputEstimator.Estimate(contextPack.EstimatedTokens, resolvedGoal);
     }
 
     // PR-3: project list, selection, and add logic live in ProjectSidebarViewModel.

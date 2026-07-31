@@ -21,12 +21,12 @@ namespace AIChat.App.Avalonia.ViewModels;
 // owns the user-facing SendTaskCommand (validation + entry point) and
 // cross-VM coordination.
 //
-// The host's IsRunning / StatusMessage / DraftPrompt stay the source of
-// truth for the XAML bindings; the runner writes through the small set of
-// Action/Func callbacks passed in. All other dependencies (activity feed,
-// insights, sidebar, conversation list, repository, chat service, tool
-// registry, approval service) are held directly because the runner is the
-// sole writer of those during a run.
+// The host's IsRunning / StatusMessage / DraftPrompt / InputTokens stay the
+// source of truth for the XAML bindings; the runner writes through the
+// small set of Action/Func callbacks passed in. All other dependencies
+// (activity feed, sidebar, conversation list, repository, chat service,
+// tool registry, approval service) are held directly because the runner
+// is the sole writer of those during a run.
 public sealed partial class AgentRunnerViewModel : ObservableObject
 {
     private readonly IChatCompletionService _chatService;
@@ -34,7 +34,6 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     private readonly IApprovalService _approval;
     private readonly IAppRepository _repository;
     private readonly ActivityFeedViewModel _activityFeed;
-    private readonly SessionInsightsViewModel _insights;
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly ConversationListViewModel _conversationList;
 
@@ -44,6 +43,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     // the observable here.
     private readonly Action<bool> _setIsRunning;
     private readonly Action<string> _setStatusMessage;
+    private readonly Action<int> _setInputTokens;
     private readonly Action _clearDraftPrompt;
     private readonly Action<string> _setLastAssistantStatus;
     private readonly Action<AIChat.Domain.Chat.AgentPlan?> _updatePlan;
@@ -58,11 +58,11 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         IApprovalService approval,
         IAppRepository repository,
         ActivityFeedViewModel activityFeed,
-        SessionInsightsViewModel insights,
         ProjectSidebarViewModel sidebar,
         ConversationListViewModel conversationList,
         Action<bool> setIsRunning,
         Action<string> setStatusMessage,
+        Action<int> setInputTokens,
         Action clearDraftPrompt,
         Action<string> setLastAssistantStatus,
         Action<AIChat.Domain.Chat.AgentPlan?> updatePlan,
@@ -76,11 +76,11 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         _approval = approval;
         _repository = repository;
         _activityFeed = activityFeed;
-        _insights = insights;
         _sidebar = sidebar;
         _conversationList = conversationList;
         _setIsRunning = setIsRunning;
         _setStatusMessage = setStatusMessage;
+        _setInputTokens = setInputTokens;
         _clearDraftPrompt = clearDraftPrompt;
         _setLastAssistantStatus = setLastAssistantStatus;
         _updatePlan = updatePlan;
@@ -165,10 +165,18 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 RequestToolApprovalAsync = _approval.RequestApprovalAsync
             });
 
-            _insights.BeginRun(
-                prompt,
+            // Push the authoritative input-tokens estimate to the host
+            // so the status-bar context meter reflects what the agent
+            // is actually about to send (the host's pre-build estimate
+            // was based on a separate router call). The previous
+            // SessionInsightsViewModel.BeginRun also touched a stack
+            // of dead metrics (output, tool rounds, runtime, …) that
+            // nothing read; the only consumer that survived was the
+            // input-tokens cell the status bar read, which is now the
+            // single source of truth here.
+            _setInputTokens(ContextInputEstimator.Estimate(
                 requestBuild.ContextPack?.EstimatedTokens ?? 0,
-                project.VerificationCommands.Count);
+                prompt));
 
             var harness = new AgentHarness(
                 new AgentRunner(_chatService, new AgentToolCatalog(_toolRegistry.All)));
@@ -195,7 +203,9 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
             assistantItem.Status = "完成";
             _setLastAssistantStatus("完成");
-            _insights.UpdateMetrics(conversation.AgentRuns.LastOrDefault(), assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
+            // (no-op metrics update — see comment on the event-handler
+            // version above; the only surviving consumer was the
+            // status-bar input-tokens meter, which doesn't change here)
             // Drop a "本次运行" summary bubble into the activity feed
             // so the user can see at a glance what happened — file
             // count, tool call count, duration — without opening the
@@ -284,7 +294,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                             "正在读取",
                             FriendlyToolSummary(agentEvent.ToolCall.Name),
                             "工具");
-                        _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
+                        // The previous SessionInsightsViewModel.UpdateMetrics call
+            // here maintained a stack of output / tool-round / runtime
+            // metrics that the now-deleted right-rail insights surface
+            // used to display. None of those callers survived the 1.0
+            // redesign (the right rail was removed for the Linear /
+            // Notion feel), so the only thing this event actually
+            // needed to do for the surviving status-bar meter was… no
+            // input-tokens change here. Drop the call entirely.
                     });
                 }
 
@@ -325,7 +342,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     {
                         assistantItem.Detail += agentEvent.Content;
                         _setStatusMessage("正在接收回复...");
-                        _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
+                        // The previous SessionInsightsViewModel.UpdateMetrics call
+            // here maintained a stack of output / tool-round / runtime
+            // metrics that the now-deleted right-rail insights surface
+            // used to display. None of those callers survived the 1.0
+            // redesign (the right rail was removed for the Linear /
+            // Notion feel), so the only thing this event actually
+            // needed to do for the surviving status-bar meter was… no
+            // input-tokens change here. Drop the call entirely.
                     });
                 }
 
@@ -334,7 +358,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     _setStatusMessage(agentEvent.Run?.CompletionReason is { Length: > 0 } reason ? reason : "运行完成。");
-                    _insights.UpdateMetrics(agentEvent.Run, assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
+                    // The previous SessionInsightsViewModel.UpdateMetrics call
+            // here maintained a stack of output / tool-round / runtime
+            // metrics that the now-deleted right-rail insights surface
+            // used to display. None of those callers survived the 1.0
+            // redesign (the right rail was removed for the Linear /
+            // Notion feel), so the only thing this event actually
+            // needed to do for the surviving status-bar meter was… no
+            // input-tokens change here. Drop the call entirely.
                 });
                 break;
         }
