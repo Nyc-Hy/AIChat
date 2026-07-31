@@ -12,15 +12,23 @@ namespace AIChat.App.Avalonia.ViewModels;
 // The IsX flags derive from Title + Detail + Status rather than
 // from an enum, so the strings stay free-form and the XAML stays
 // declarative.
-public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ViewModelBase
+public sealed partial class ActivityItemViewModel : ViewModelBase
 {
-    public string Title { get; } = title;
+    [ObservableProperty]
+    private string title = "";
 
     [ObservableProperty]
-    private string detail = detail;
+    private string detail = "";
 
     [ObservableProperty]
-    private string status = status;
+    private string status = "";
+
+    public ActivityItemViewModel(string title, string detail, string status)
+    {
+        Title = title;
+        Detail = detail;
+        Status = status;
+    }
 
     // The "thinking" state is: an assistant bubble that has not yet received
     // any content from the model. The XAML renders three animated dots
@@ -47,4 +55,15 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
 
     partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
     partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
+    partial void OnTitleChanged(string value)
+    {
+        // Title drives the bubble classification (IsUserBubble /
+        // IsAssistantBubble / IsSystemBubble) and the thinking
+        // state, so a Title flip must re-raise all of them or
+        // the XAML re-render uses the old classification.
+        OnPropertyChanged(nameof(IsUserBubble));
+        OnPropertyChanged(nameof(IsAssistantBubble));
+        OnPropertyChanged(nameof(IsSystemBubble));
+        OnPropertyChanged(nameof(IsThinking));
+    }
 }

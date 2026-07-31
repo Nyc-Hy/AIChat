@@ -88,4 +88,34 @@ public class ActivityItemViewModelTests
         vm.HasReceivedFirstContent = true;
         Assert.True(vm.HasReceivedFirstContent);
     }
+
+    [Fact]
+    public void Title_FlipReRaisesIsXBubbles_AndIsThinking()
+    {
+        // The host reuses ActivityItemViewModel rows for tool-approval
+        // bubbles (dad6989, the earlier approval/test in-place update
+        // sweep) and may flip Title from "需要确认" to "已允许操作"
+        // when the user resolves. Title is the single source of truth
+        // for IsUserBubble / IsAssistantBubble / IsSystemBubble +
+        // IsThinking — without an explicit re-raise, the XAML
+        // re-render keeps the old classification (the bubble that
+        // started as a centered system row would stay system-styled
+        // even after Title flipped to a user-facing row, etc).
+        var vm = new ActivityItemViewModel("需要确认", "summary", "等待");
+        Assert.True(vm.IsSystemBubble);
+        Assert.False(vm.IsUserBubble);
+        Assert.False(vm.IsAssistantBubble);
+
+        var reRaised = new System.Collections.Generic.HashSet<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not null) reRaised.Add(e.PropertyName);
+        };
+
+        vm.Title = "已允许操作";
+        Assert.Contains(nameof(ActivityItemViewModel.IsSystemBubble), reRaised);
+        Assert.Contains(nameof(ActivityItemViewModel.IsUserBubble), reRaised);
+        Assert.Contains(nameof(ActivityItemViewModel.IsAssistantBubble), reRaised);
+        Assert.Contains(nameof(ActivityItemViewModel.IsThinking), reRaised);
+    }
 }

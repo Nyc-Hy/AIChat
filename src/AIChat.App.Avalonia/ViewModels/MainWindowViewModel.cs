@@ -654,19 +654,35 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void OnApprovalPresented(object? sender, ToolApprovalPresentedEventArgs args)
     {
-        ActivityFeed.Add(
+        _activeApprovalBubble = new ActivityItemViewModel(
             "需要确认",
             args.Request.Preview.Summary,
             "等待");
+        ActivityFeed.Add(_activeApprovalBubble);
         StatusMessage = args.StatusMessage;
     }
 
     private void OnApprovalResolved(object? sender, ToolApprovalResolvedEventArgs args)
     {
-        ActivityFeed.Add(new ActivityItemViewModel(
-            args.Decision.IsApproved ? "已允许操作" : "已拒绝操作",
-            args.Decision.IsApproved ? "AIChat 可以继续。" : args.Decision.Reason,
-            args.Decision.IsApproved ? "已允许" : "已拒绝"));
+        var title = args.Decision.IsApproved ? "已允许操作" : "已拒绝操作";
+        var detail = args.Decision.IsApproved ? "AIChat 可以继续。" : args.Decision.Reason;
+        var status = args.Decision.IsApproved ? "已允许" : "已拒绝";
+
+        // Update the bubble the presented handler dropped, if it's
+        // still in the feed. If the feed was cleared between
+        // presented and resolved, fall through to a fresh row.
+        if (_activeApprovalBubble is { } bubble &&
+            ActivityFeed.Activity.Contains(bubble))
+        {
+            bubble.Title = title;
+            bubble.Detail = detail;
+            bubble.Status = status;
+        }
+        else
+        {
+            ActivityFeed.Add(new ActivityItemViewModel(title, detail, status));
+        }
+        _activeApprovalBubble = null;
     }
 
     [RelayCommand]
@@ -1175,6 +1191,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // the assistant bubble (HasReceivedFirstContent + Detail +=
     // ContentDelta).
     private ActivityItemViewModel? _activeTestBubble;
+
+    // Same in-place update pattern for tool-approval bubbles:
+    // OnApprovalPresented drops '需要确认 / 等待', OnApprovalResolved
+    // would otherwise drop a second '已允许操作 / 已允许' or
+    // '已拒绝操作 / 已拒绝' row. The first row's status stayed
+    // '等待' forever after the user decided — the approval modal
+    // is the primary surface, so the stale bubble is more noise
+    // than information. Track the row, mutate it on resolve.
+    private ActivityItemViewModel? _activeApprovalBubble;
 
     private void OnProviderTestStarted(object? sender, ProviderTestStartedEventArgs args)
     {
