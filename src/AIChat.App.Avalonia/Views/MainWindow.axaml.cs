@@ -329,7 +329,7 @@ public partial class MainWindow : Window
             if (e.PropertyName == nameof(MainWindowViewModel.IsCommandPaletteOpen) &&
                 viewModel.IsCommandPaletteOpen)
             {
-                CommandSearchInput.Focus();
+                CommandPalette.FocusSearchInput();
             }
         };
     }
@@ -482,66 +482,15 @@ public partial class MainWindow : Window
     }
 
     // Same pattern for the settings modal.
-    private void SettingsScrim_OnClick(object? sender, PointerPressedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.IsSettingsOpen = false;
-        }
-    }
+    // Memory editor modal: extracted to Views/Controls/MemoryEditorView.
 
-    private void SettingsContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        e.Handled = true;
-    }
+    // Git status / diff viewer modal: extracted to Views/Controls/GitStatusView.
 
-    // Memory editor modal: same scrim / content pattern.
-    private void MemoryEditorScrim_OnClick(object? sender, PointerPressedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.IsMemoryEditorOpen = false;
-        }
-    }
-
-    private void MemoryEditorContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
-    // Git status / diff viewer modal.
-    private void GitStatusScrim_OnClick(object? sender, PointerPressedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel)
-        {
-            viewModel.IsGitStatusOpen = false;
-        }
-    }
-
-    private void GitStatusContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        e.Handled = true;
-    }
-
-    // Tool approval modal: window-modal so the user can't queue another
-    // prompt while a write is pending. The scrim click rejects (the
-    // user clicking outside the dialog is functionally a "no, don't
-    // do that" gesture). The agent loop's PresentRequestAsync is
-    // still awaiting on the TCS, so this resolves it with a Reject
-    // and the run ends.
-    private void ToolApprovalScrim_OnClick(object? sender, PointerPressedEventArgs e)
-    {
-        if (DataContext is MainWindowViewModel viewModel &&
-            viewModel.Approval.RejectCommand.CanExecute(null))
-        {
-            viewModel.Approval.RejectCommand.Execute(null);
-        }
-    }
-
-    private void ToolApprovalContent_OnPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        e.Handled = true;
-    }
+    // Tool approval modal: extracted to Views/Controls/ToolApprovalView.
+    // The scrim click rejects (the user clicking outside the dialog is
+    // functionally a "no, don't do that" gesture). The agent loop's
+    // PresentRequestAsync is still awaiting on the TCS, so this
+    // resolves it with a Reject and the run ends.
 
     // Wraps an async event-handler body so any uncaught exception
     // becomes a user-visible status message + log instead of an

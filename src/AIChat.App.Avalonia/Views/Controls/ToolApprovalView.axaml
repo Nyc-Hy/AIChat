@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="AIChat.App.Avalonia.Views.Controls.ToolApprovalView">
+    <Border Background="{StaticResource ScrimBrush}"
+            PointerPressed="ToolApprovalScrim_OnClick">
+        <Border Background="{StaticResource SurfaceBrush}"
+                Width="560"
+                MaxHeight="480"
+                Padding="{StaticResource Padding6}"
+                CornerRadius="{StaticResource RadiusLg}"
+                BoxShadow="{StaticResource Elevation5Shadow}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                PointerPressed="ToolApprovalContent_OnPointerPressed">
+            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="12">
+                <StackPanel Grid.Row="0" Spacing="4">
+                    <TextBlock Classes="page-title" Text="需要你的确认"/>
+                    <TextBlock Text="AIChat 想执行一个会改变项目状态的操作。请查看下方预览后决定。"
+                               Classes="muted"/>
+                </StackPanel>
+
+                <Border Grid.Row="1" Classes="section-divider" Margin="0,2"/>
+
+                <StackPanel Grid.Row="2" Spacing="4">
+                    <TextBlock Text="{Binding Approval.PendingApprovalTitle}"
+                               Classes="section-title"/>
+                    <TextBlock Text="{Binding Approval.PendingApprovalSummary}"
+                               Classes="body"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                <Border Grid.Row="3"
+                        Background="{StaticResource CodeBgBrush}"
+                        BorderBrush="{StaticResource LineSoftBrush}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource RadiusMd}"
+                        Padding="{StaticResource Padding3}">
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding Approval.PendingApprovalPreview}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="12"
+                                   Foreground="{StaticResource CodeFgBrush}"
+                                   TextWrapping="NoWrap"/>
+                    </ScrollViewer>
+                </Border>
+
+                <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                    <Button Classes="secondary"
+                            Command="{Binding Approval.RejectCommand}"
+                            Content="拒绝"/>
+                    <Button Classes="secondary"
+                            Command="{Binding Approval.ApproveCommand}"
+                            Content="允许一次"/>
+                    <Button Classes="primary"
+                            Command="{Binding Approval.ApproveForSessionCommand}"
+                            Content="本会话内允许"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

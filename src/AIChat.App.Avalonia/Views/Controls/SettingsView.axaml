@@ -1,0 +1,196 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="AIChat.App.Avalonia.Views.Controls.SettingsView">
+    <Border Background="{StaticResource ScrimBrush}"
+            PointerPressed="SettingsScrim_OnClick">
+        <Border Background="{StaticResource SurfaceBrush}"
+                Width="720"
+                MaxHeight="600"
+                Padding="{StaticResource Padding6}"
+                CornerRadius="{StaticResource RadiusLg}"
+                BoxShadow="{StaticResource Elevation4Shadow}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                PointerPressed="SettingsContent_OnPointerPressed">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="16">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="设置" Classes="page-title"/>
+                        <TextBlock Text="配置模型提供方、API Key 和默认行为。" Classes="muted"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="chrome-button" Command="{Binding CloseSettingsCommand}" ToolTip.Tip="关闭 (Esc)">
+                        <Path Data="M6 6 L18 18 M18 6 L6 18"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              StrokeThickness="1.6" StrokeLineCap="Round"
+                              Width="14" Height="14" Stretch="Uniform"/>
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1">
+                    <StackPanel Spacing="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="模型提供方" Classes="section-title"/>
+                            <ComboBox ItemsSource="{Binding Provider.ProviderTemplates}"
+                                      SelectedItem="{Binding Provider.SelectedProviderTemplate}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProviderTemplateViewModel">
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" RowSpacing="10" ColumnSpacing="10">
+                            <TextBox Grid.Row="0" Grid.Column="0"
+                                     Text="{Binding Provider.ProviderApiKey}"
+                                     PlaceholderText="API Key"
+                                     PasswordChar="●"/>
+                            <TextBox Grid.Row="0" Grid.Column="1"
+                                     Text="{Binding Provider.ProviderModel}"
+                                     PlaceholderText="模型 ID"/>
+                            <TextBox Grid.Row="1" Grid.ColumnSpan="2"
+                                     Text="{Binding Provider.ProviderBaseUrl}"
+                                     PlaceholderText="Base URL"/>
+                        </Grid>
+
+                        <Border Classes="section-divider" Margin="0,2"/>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="可用的提供方" Classes="section-title"/>
+                            <ItemsControl ItemsSource="{Binding Provider.AdvancedProviders}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProviderCardViewModel">
+                                        <Button Classes="provider-card"
+                                                Command="{Binding SelectCommand}"
+                                                Classes.active="{Binding IsActive}"
+                                                HorizontalAlignment="Stretch"
+                                                HorizontalContentAlignment="Stretch">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding Name}" Classes="body" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Border Classes="section-divider" Margin="0,2"/>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="安全策略" Classes="section-title"/>
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8">
+                                <TextBlock Text="只读模式" Classes="body" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" IsChecked="{Binding NoWriteMode}"/>
+                                <TextBlock Grid.Row="1" Text="修改后自动验证" Classes="body" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding Settings.AutoVerify}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <Border Classes="section-divider" Margin="0,2"/>
+
+                        <!--
+                          默认行为: mirrors the AppSettings schema fields
+                          the user can tweak. The SettingsViewModel owns
+                          the per-field OnXxxChanged partials that write
+                          through to AppSettings + fire a fire-and-forget
+                          save. TextBoxes (no NumericUpDown) keep the
+                          dependency surface narrow; the load-time
+                          normalization in AdvancedSettingsService.Normalize
+                          clamps out-of-range values on the next launch.
+                        -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="默认行为" Classes="section-title"/>
+                            <Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                                <TextBlock Text="Temperature" Classes="body" VerticalAlignment="Center"
+                                           ToolTip.Tip="0 = 严格按 top token；2 = 自由发散。多数场景 0.3 即可。"/>
+                                <TextBox Grid.Column="1" Text="{Binding Settings.Temperature}" />
+
+                                <TextBlock Grid.Row="1" Text="最大输出 tokens" Classes="body" VerticalAlignment="Center"
+                                           ToolTip.Tip="单次回复的 token 上限。Anthropic 与 OpenAI 兼容协议都按这个值。"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Settings.MaxOutputTokens}" />
+
+                                <TextBlock Grid.Row="2" Text="重试次数" Classes="body" VerticalAlignment="Center"
+                                           ToolTip.Tip="瞬时 429 / 5xx 错误时的重试次数。" />
+                                <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Settings.RetryMaxAttempts}" />
+
+                                <TextBlock Grid.Row="3" Text="自动修复轮数" Classes="body" VerticalAlignment="Center"
+                                           ToolTip.Tip="自动验证失败后允许 AIChat 自我修复的轮数。0 = 不修。" />
+                                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Settings.MaxAutoFixRounds}" />
+
+                                <TextBlock Grid.Row="4" Text="使用分词器估算" Classes="body" VerticalAlignment="Center"
+                                           ToolTip.Tip="开启 → SharpToken 精确估算；关闭 → 字符/3.6 启发式。更准但启动慢一点。" />
+                                <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding Settings.UseTokenizerEstimation}" />
+
+                                <TextBlock Grid.Row="5" Text="执行模式" Classes="body" VerticalAlignment="Center"
+                                           ToolTip.Tip="预设：标准（默认）、快速（小改动不开规划）、深度（开规划 + 自动验证）。" />
+                                <ComboBox Grid.Row="5" Grid.Column="1"
+                                          ItemsSource="{Binding Settings.AgentExecutionModeOptions}"
+                                          SelectedItem="{Binding Settings.AgentExecutionMode}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AgentExecutionModeOption">
+                                            <TextBlock Text="{Binding Label}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </StackPanel>
+
+                        <Border Classes="section-divider" Margin="0,2"/>
+
+                        <!--
+                          工具权限: per-tool permission mode. The host
+                          rebuilds the rows in SettingsViewModel.Refresh
+                          from the tool registry's metadata; each row's
+                          SelectedMode dropdown writes through
+                          OnToolRowPropertyChanged into
+                          _settings.ToolPermissionModes (or removes the
+                          entry when set to Disabled). The
+                          ToolModeOption record provides the user-facing
+                          label so the dropdown shows "禁用 / 自动放行
+                          （只读） / 每次确认 / 本会话放行" instead of
+                          the raw enum.
+                        -->
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="工具权限" Classes="section-title"/>
+                            <ItemsControl ItemsSource="{Binding Settings.Tools}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ToolSettingViewModel">
+                                        <Grid ColumnDefinitions="160,*" Margin="0,4" ColumnSpacing="12">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}" Classes="body" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding Category}" Classes="muted" FontSize="11"/>
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1"
+                                                      ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Settings.ToolModeOptions}"
+                                                      SelectedItem="{Binding SelectedMode}"
+                                                      HorizontalAlignment="Stretch">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ToolModeOption">
+                                                        <TextBlock Text="{Binding Label}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                    <Button Classes="secondary" Command="{Binding Provider.TestProviderCommand}" Content="测试连接"/>
+                    <Button Classes="primary" Command="{Binding Provider.SaveProviderCommand}" Content="保存配置"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>
