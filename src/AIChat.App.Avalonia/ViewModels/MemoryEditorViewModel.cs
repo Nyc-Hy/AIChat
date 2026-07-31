@@ -40,6 +40,7 @@ public sealed partial class MemoryEditorViewModel : ViewModelBase
     private MemoryCategory newCategory = MemoryCategory.Project;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(AddCommand))]
     private string? errorMessage;
 
     // The "无项目" message shows when the user opens the editor
