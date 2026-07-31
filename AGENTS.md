@@ -114,3 +114,66 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 - **功能完整度对标 ClaudeCode**:agent loop、工具执行、代码编辑、流式响应、上下文管理、tool approval,这些不是 nice-to-have,是产品本身
 - **美学对标 Linear / Notion**:私人工具感、企业级克制,不要 SaaS / AI-startup 调性
 - 任何"加新东西"的决定都要先回答:背后有真功能吗?没有就删掉,UI 没功能就是噪音
+
+## 代码 pitfall 类（2026-07-31 清理 wave 总结）
+
+本轮（commits `798c03d`..`65cc00b`）系统性扫出来的 bug 模式，下次写新 VM / 新 XAML 之前先看一遍。
+
+### 1. PropertyChanged propagation gap
+
+Avalonia binding 只在源属性 `PropertyChanged` 时重求值。**派生属性需要显式 re-raise**，否则 UI 卡在初始值。
+
+- `[ObservableProperty]` 源 → 用 `[NotifyPropertyChangedFor(nameof(Derived))]`，例：
+  - `InputTokens` → `ContextBudgetPercent` + `ContextBudgetWidthInMini`（状态栏进度条）
+  - `LastAssistantStatus` + `IsRunning` → `CanRetry`（retry 按钮 IsVisible）
+  - `HasPendingApproval` → `ApproveCommand` + `RejectCommand` + **`ApproveForSessionCommand`**（漏过最后这个就 session-allow 按钮永远灰着）
+  - `UnseenMessageCount` → `HasUnseenMessages` + **`UnseenMessageLabel`**（pill 文本不显示数字）
+- `ObservableCollection` 源（Clear/Add/Remove）→ mutation 后**手动 `OnPropertyChanged(nameof(Derived))`**，例：
+  - `PlanItems.Clear/Add` 后 re-raise `HasPlan` + `PlanCompletedCount` + `PlanProgressText`（plan 面板不显示）
+  - `SubAgentRuns.Clear` 后 re-raise `HasSubAgentRuns`（sub-agent 区域不消失）
+  - `OnPropertyChanged` callback 里订阅外部事件（`sidebar.PropertyChanged`）→ re-raise `IsAvailable` / `ProjectName` / `EmptyStateMessage`
+- 集合方法（`Remove` / `Clear` / 重新 `Add`）→ 都得记得 re-raise
+- **不会出 PropertyChanged 的 collection-only 变化要手动 fire** —— 之前 `SeedEmptyState()` 和 `RefreshAsync()` 并发 fire `_ = RecomputeContextInputTokensAsync(...)`，两个 fire-and-forget 互相覆盖，删掉冗余的那个就消除了竞态
+
+### 2. Schema "set but never bound"
+
+`AppSettings` 字段加了、normalize 了、persistence 保留了、但**构造点忘了读**——schema 撒谎。
+
+本轮找到并修：
+- `UseTokenizerEstimation`（`AgentRunnerViewModel.RunAsync` 之前直接 `new TokenizerContextEstimator()`）
+- `LastActiveConversationId`（`MainWindowViewModel.RefreshAsync` 没传给 `_conversationList.Refresh` 的 preferredConversationId；`OnConversationSelected` 也要回写）
+- `RetryMaxAttempts`（`new AgentRunner(...)` 之前没传 `retryPolicy`）
+- `MaxOutputTokens` for OpenAI 路径（`payload` 构造时没塞 max_tokens；Anthropic 路径 OK）
+
+下次新加 schema 字段，写完三件事后第四件必须做：
+1. 在 `AppSettings.cs` 加属性
+2. 在 `ProtectedSettingsSerializer.Clone` 加 clone 一行
+3. 在 `AdvancedSettingsService` / `ProviderSettingsService` 加 normalize 一行
+4. **找到构造点把字段读进去**——grep `new <Constructor>` 的调用点，看哪些 hardcode 了默认值要换成读字段
+
+### 3. DI 漏注册
+
+`IWorkspaceChangeService` 自 `dad7384` / `8712d63` 引入但没人注册到 DI，`MainWindowViewModel` / `GitStatusViewModel` 都在 ctor 注入，app 启动 `GetRequiredService<MainWindow>()` 直接抛 `InvalidOperationException`——**app 打不开**。`SlashCommandHandlerTests` 走完整 `AppHost.Build()` DI 图能锁住这类 bug，下次新加 service 时顺手在 `AppHostTests` 加一行 `GetService<T>()` 断言。
+
+### 4. 状态混淆（state confusion）
+
+事件 handler 不该改不属于自己语义的状态。`OnProviderTestStarted` / `OnProviderTestCompleted` 改 `IsRunning`（agent-run 状态）→ 测试时 send/stop 按钮乱跳 + 用户跑 agent 时点测试会导致 IsRunning 被 clobber → 第二个 run 能并发开。**写新事件 handler 之前先问：我要改的字段名跟我这个事件语义匹配吗？**
+
+### 5. UI 承诺 → 实际 binding
+
+`ToolTip.Tip="..."` / `Shortcut="..."` / palette 的 `Shortcut` 列 / page header 的 pill → 都得对得上一个**实际**触发代码（`KeyBindings.Add` / `Command` / partial void）。本轮 sweep 找到 6 个 mismatch（⌘O / ⌘T / ⌘⇧M 重复 / ⌘⇧G 重复 / ⌘⇧C / ⌘⇧V），全部接上了。下次新加快捷键 / 按钮承诺，**两件事要一起做**：XAML tooltip + `KeyBindings.Add` 或 `Command=` binding，写完 grep 一遍确认两边都有。
+
+### 6. 墓碑注释（tombstone comments）
+
+描述"已删的代码"为什么删 / 它做了什么。git log 已经有完整 history，源码里再写一次就是噪音。`SessionInsightsViewModel` 删的时候留下的 3 段 `(no-op metrics update — see comment on the event-handler version above...)` 全部清除。下次大块 delete 时，**注释也一起删**，不要留指向幽灵代码的指针。
+
+## 测试基线
+
+`621 → 693`，本轮加了 4 个 `SlashCommandHandlerTests`（走完整 DI 图，覆盖 `MainWindowViewModel` 的 4 个 slash 命令），还锁住了 DI 漏注册 bug。下次给新加的 service 写测试时，跟着 `AppHost.Build()` + `GetRequiredService<T>()` 模式走，能间接把整个 ctor 链跑一遍。
+
+## 已知遗留（不动）
+
+- **Planned-but-unwired 子系统**：`Application/Audit/*`、`Application/Diagnostics/*`、`Application/Agents/Benchmark/*`、`WorkspaceChangeService.RestoreFileAsync` / `CommitAsync`、`AgentRun.QualityScore` / `StrategySuggestion` / `AcceptanceNote` 等十几个字段——按"风险高于收益"判断，没动。**任何删除 / 重构之前先 grep `已删的子系统名` 确认没人读**。
+- **Dark mode 视觉验证**：需要 GUI 跑起来看，agent 没访问。
+- **TextBox 高度 cosmetic**：低优先级。
+
