@@ -196,6 +196,15 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             assistantItem.Status = "完成";
             _setLastAssistantStatus("完成");
             _insights.UpdateMetrics(conversation.AgentRuns.LastOrDefault(), assistantMessage.Content, _sidebar.CurrentProject?.VerificationCommands.Count ?? 0);
+            // Drop a "本次运行" summary bubble into the activity feed
+            // so the user can see at a glance what happened — file
+            // count, tool call count, duration — without opening the
+            // git modal or scrolling through tool cards.
+            var run = conversation.AgentRuns.LastOrDefault();
+            if (run is not null)
+            {
+                _activityFeed.Add("本次运行", BuildRunSummary(run), "完成");
+            }
             conversation.UpdatedAt = DateTimeOffset.Now;
             project.Conversations.Add(conversation);
             project.UpdatedAt = DateTimeOffset.Now;
@@ -342,6 +351,52 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             "update_plan" => "正在更新任务计划",
             _ => $"正在使用 {toolName}"
         };
+    }
+
+    // Build the "本次运行" summary the host drops into the activity
+    // feed right after a run lands. Keeps to one line of plain text
+    // so the system bubble stays scannable: files / tools / duration.
+    // Explorer / worker sub-agent counts are surfaced when the run
+    // actually used them — silent otherwise so a simple chat
+    // exchange doesn't look heavier than it was.
+    public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run)
+    {
+        var fileChangeCount = run.FileChanges?.Count ?? 0;
+        var toolCount = run.ToolCallCount;
+        var duration = run.CompletedAt.HasValue
+            ? FormatDuration(run.CompletedAt.Value - run.StartedAt)
+            : "未知时长";
+        var subAgentCount = run.SubAgentRuns?.Count ?? 0;
+
+        var parts = new List<string>();
+        if (fileChangeCount > 0)
+        {
+            parts.Add($"改 {fileChangeCount} 个文件");
+        }
+        if (toolCount > 0)
+        {
+            parts.Add($"用 {toolCount} 次工具");
+        }
+        if (subAgentCount > 0)
+        {
+            parts.Add($"派 {subAgentCount} 个子 Agent");
+        }
+        parts.Add(duration);
+
+        return string.Join(" · ", parts);
+    }
+
+    private static string FormatDuration(TimeSpan span)
+    {
+        if (span.TotalSeconds < 1)
+        {
+            return "<1s";
+        }
+        if (span.TotalSeconds < 60)
+        {
+            return $"{(int)span.TotalSeconds}s";
+        }
+        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
     }
 
     private async Task SaveProjectsAsync()
