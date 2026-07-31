@@ -237,6 +237,20 @@ public sealed partial class GitFileChangeViewModel : ObservableObject
     public string StatusDisplay { get; }
     public string StatusKind { get; }
 
+    // Per-status flags the XAML binds as class selectors so the
+    // git-status-badge style can colour the background + foreground
+    // by outcome. One flag per StatusKind value (no "other" — that
+    // case keeps the neutral default style). The flags don't need
+    // INotifyPropertyChanged because they're derived from
+    // StatusKind, which is set once in the constructor.
+    public bool IsModified => StatusKind == "modified";
+    public bool IsAdded => StatusKind == "added";
+    public bool IsDeleted => StatusKind == "deleted";
+    public bool IsUntracked => StatusKind == "untracked";
+    public bool IsRenamed => StatusKind == "renamed";
+    public bool IsCopied => StatusKind == "copied";
+    public bool IsConflict => StatusKind == "conflict";
+
     // Back-reference so the row's Command can call into the
     // view-model's diff-loading path without bubbling up to the
     // ItemsControl's DataContext.

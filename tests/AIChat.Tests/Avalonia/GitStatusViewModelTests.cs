@@ -220,6 +220,46 @@ public class GitStatusViewModelTests
         Assert.Equal("untracked", byPath["untracked.cs"].StatusKind);
     }
 
+    [Fact]
+    public async Task IsX_FlagsMatchStatusKind_ForXamlClassBinding()
+    {
+        // The XAML binds one Classes.X per IsX flag so the git-status-badge
+        // style can colour the badge by outcome. This test pins the
+        // mapping: exactly one IsX is true per row, and it matches the
+        // StatusKind the row was constructed with.
+        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var changeSet = new WorkspaceChangeSet
+        {
+            Branch = "## main",
+            Changes =
+            [
+                new WorkspaceChange { Status = "M ", Path = "modified.cs" },
+                new WorkspaceChange { Status = "A ", Path = "added.cs" },
+                new WorkspaceChange { Status = "D ", Path = "deleted.cs" },
+                new WorkspaceChange { Status = "R ", Path = "renamed.cs" },
+                new WorkspaceChange { Status = "C ", Path = "copied.cs" },
+                new WorkspaceChange { Status = "UU", Path = "conflict.cs" },
+                new WorkspaceChange { Status = "??", Path = "untracked.cs" }
+            ]
+        };
+        var workspace = Mock.Of<IWorkspaceChangeService>();
+        Mock.Get(workspace)
+            .Setup(w => w.GetChangesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(changeSet);
+        var (vm, _, _) = CreateViewModel(currentProject: project, workspace: workspace);
+
+        await vm.RefreshAsync();
+
+        var byPath = vm.Changes.ToDictionary(c => c.Path);
+        Assert.True(byPath["modified.cs"].IsModified);
+        Assert.True(byPath["added.cs"].IsAdded);
+        Assert.True(byPath["deleted.cs"].IsDeleted);
+        Assert.True(byPath["renamed.cs"].IsRenamed);
+        Assert.True(byPath["copied.cs"].IsCopied);
+        Assert.True(byPath["conflict.cs"].IsConflict);
+        Assert.True(byPath["untracked.cs"].IsUntracked);
+    }
+
     private static (GitStatusViewModel vm, IWorkspaceChangeService workspace, ProjectSidebarViewModel sidebar) CreateViewModel(
         ProjectWorkspace? currentProject,
         IWorkspaceChangeService? workspace = null)

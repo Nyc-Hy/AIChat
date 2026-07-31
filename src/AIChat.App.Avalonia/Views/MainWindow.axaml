@@ -1081,6 +1081,13 @@
                                                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                                                             <Border Grid.Column="0"
                                                                     Classes="git-status-badge"
+                                                                    Classes.modified="{Binding IsModified}"
+                                                                    Classes.added="{Binding IsAdded}"
+                                                                    Classes.deleted="{Binding IsDeleted}"
+                                                                    Classes.untracked="{Binding IsUntracked}"
+                                                                    Classes.renamed="{Binding IsRenamed}"
+                                                                    Classes.copied="{Binding IsCopied}"
+                                                                    Classes.conflict="{Binding IsConflict}"
                                                                     VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding StatusDisplay}"
                                                                            FontSize="10"

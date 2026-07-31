@@ -449,8 +449,11 @@
         <!--
           Git status badge: tight monospace pill that shows the raw
           "M " / "A " / "??" / "R " porcelain code so the user can
-          tell at a glance what happened to a file. Background stays
-          neutral — the text itself carries the meaning.
+          tell at a glance what happened to a file. The default
+          style is a neutral cream surface; per-status class selectors
+          below recolour the badge + its inner text by outcome so the
+          user can scan a long change list and pick out the "deleted"
+          and "conflict" rows without reading the code.
         -->
         <Style Selector="Border.git-status-badge">
             <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
@@ -459,6 +462,41 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="MinWidth" Value="32" />
+        </Style>
+        <Style Selector="Border.git-status-badge.modified">
+            <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.modified > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.added">
+            <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource SuccessBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.added > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource SuccessFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.deleted, Border.git-status-badge.conflict">
+            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource ErrorBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.deleted > TextBlock, Border.git-status-badge.conflict > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.untracked">
+            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Accent300Brush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.untracked > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.renamed, Border.git-status-badge.copied">
+            <Setter Property="Background" Value="{StaticResource InfoBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource InfoBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.renamed > TextBlock, Border.git-status-badge.copied > TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource InfoFgBrush}" />
         </Style>
         <!--
           Sub-agent status colour map. The plan panel renders a row
