@@ -1100,7 +1100,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void OnProviderTestStarted(object? sender, ProviderTestStartedEventArgs args)
     {
-        IsRunning = true;
+        // Don't touch IsRunning here — that's the agent-run
+        // indicator driving send/stop button visibility, the
+        // status-bar context meter, and CanRetry / CanStopTask.
+        // A connection test is a one-shot background probe; it
+        // shares none of those surfaces. The earlier code set
+        // IsRunning = true here (and back to false in
+        // OnProviderTestCompleted), which made the send / stop
+        // button pair flip-flop while a test was in flight —
+        // confusing at best, and dangerous when the user
+        // happened to be running an agent at the same time:
+        // the test completion would clobber IsRunning back to
+        // false, the send button would re-enable, and the user
+        // could kick off a second agent run against a
+        // still-in-flight first one. Activity feed + status
+        // bar are the right place for the test progress UI.
         StatusMessage = $"正在测试 {args.ProviderName}...";
         ActivityFeed.Add(
             "模型测试",
@@ -1110,7 +1124,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void OnProviderTestCompleted(object? sender, ProviderTestCompletedEventArgs args)
     {
-        IsRunning = false;
+        // Don't touch IsRunning here either — see the long comment
+        // on OnProviderTestStarted. The pair of IsRunning flips
+        // around the test is the surface bug: a connection test
+        // is not an agent run and must not touch the agent
+        // surface state.
         if (args.Exception is not null)
         {
             ActivityFeed.Add("模型测试", $"测试失败：{args.Message}", "失败");
