@@ -513,17 +513,13 @@
                                                  KeyDown="PromptInput_OnKeyDown"/>
 
                                         <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
-                                            <!-- Left: + attach, model chip. Right: send. The center
-                                                 column (where ⌘⏎ used to live) is gone, and the
-                                                 read-only toggle is dropped — single teal icon
-                                                 with no label read as a stray warning badge. -->
+                                            <!-- Left: model chip. Right: send. The + attach
+                                                 button used to live here but had no backing
+                                                 command — the user has @file for text paths
+                                                 and ⌘V for images, which cover every
+                                                 attachment use case. Dropped per the "UI
+                                                 without a command is just noise" rule. -->
                                             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                <Button Classes="icon-toggle" ToolTip.Tip="附加文件 (⌘⇧A)">
-                                                    <Path Data="M12 5 V19 M5 12 H19"
-                                                          Stroke="{Binding $parent[Button].Foreground}"
-                                                          StrokeThickness="1.6" StrokeLineCap="Round"
-                                                          Width="14" Height="14" Stretch="Uniform"/>
-                                                </Button>
                                                 <Border Classes="model-chip" MaxWidth="200">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}"/>
