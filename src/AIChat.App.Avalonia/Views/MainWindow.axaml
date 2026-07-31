@@ -459,8 +459,44 @@
 
                             <Grid Grid.Row="3" ColumnDefinitions="5*,40*,5*">
                                 <Border Grid.Column="1" Classes="input-floating">
-                                    <Grid RowDefinitions="Auto,Auto" RowSpacing="4">
+                                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                                        <!-- Pending image attachments: shown above the prompt
+                                             whenever the user has pasted an image with ⌘V. Each
+                                             row is a small thumbnail with a remove X. Collapses
+                                             to zero height when empty. -->
+                                        <ItemsControl Grid.Row="0"
+                                                      ItemsSource="{Binding PendingAttachments.Attachments}"
+                                                      IsVisible="{Binding PendingAttachments.HasAttachments}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:PendingAttachmentViewModel">
+                                                    <Border Classes="pending-attachment"
+                                                            ToolTip.Tip="{Binding FileName}">
+                                                        <Panel>
+                                                            <Image Source="{Binding Thumbnail}"
+                                                                   Width="56" Height="56"
+                                                                   Stretch="UniformToFill"/>
+                                                            <Button Classes="pending-attachment-remove"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).PendingAttachments.RemoveCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    ToolTip.Tip="移除">
+                                                                <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                                      StrokeThickness="1.6" StrokeLineCap="Round"
+                                                                      Width="10" Height="10" Stretch="Uniform"/>
+                                                            </Button>
+                                                        </Panel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
                                         <TextBox x:Name="PromptInput"
+                                                 Grid.Row="1"
                                                  Text="{Binding DraftPrompt}"
                                                  PlaceholderText="{Binding PromptPlaceholder}"
                                                  AcceptsReturn="True"
@@ -476,7 +512,7 @@
                                                  VerticalAlignment="Top"
                                                  KeyDown="PromptInput_OnKeyDown"/>
 
-                                        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                                        <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
                                             <!-- Left: + attach, model chip. Right: send. The center
                                                  column (where ⌘⏎ used to live) is gone, and the
                                                  read-only toggle is dropped — single teal icon

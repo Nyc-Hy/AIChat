@@ -193,6 +193,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public MemoryEditorViewModel MemoryEditor => _memoryEditor;
 
+    // Pending image attachments (paste-into-prompt). The user pastes
+    // an image with ⌘V while the prompt is focused; the view code-
+    // behind saves the bitmap and adds a row to this collection. The
+    // thumbnails show above the composer; on send the host materialises
+    // InputArtifact records and wires them into the chat request.
+    public PendingAttachmentsViewModel PendingAttachments { get; } = new();
+
     // Git status / diff viewer modal. ⌘⇧G opens it; ⌘G stays as the
     // quick /git bubble for the lightweight "what just changed"
     // glance.
@@ -740,6 +747,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             return;
         }
 
+        // Promote any pasted-image attachments to InputArtifacts on
+        // the current project so the agent loop can pick them up
+        // (AgentRequestFactory reads project.InputArtifacts and
+        // attaches image content parts to the latest user message
+        // for vision-capable models). The PNG files are already on
+        // disk in the pending-attachments folder — we just record
+        // them and clean up the UI strip. Project-level scope means
+        // the artifacts survive the conversation boundary (the user
+        // can prune via the project settings if they want).
+        if (PendingAttachments.Count > 0)
+        {
+            await PromotePendingAttachmentsAsync(_sidebar.CurrentProject);
+        }
+
         // Replace any prior CTS. A new run cancels nothing — the user
         // already chose to start a fresh one, so the old token has no
         // listener any more.
@@ -781,6 +802,86 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void StopTask()
     {
         _runCts?.Cancel();
+    }
+
+    // Convert every pending image attachment into a project-level
+    // InputArtifact so the agent loop can attach the image content
+    // to the next user message. Each artifact is materialised via
+    // InputArtifactService (which classifies kind + builds the
+    // summary) and persisted via InputArtifactFileStore (which
+    // copies the file to the project's managed artifacts folder and
+    // records storedPath in the metadata). The project list is
+    // re-saved so the change is durable across restarts.
+    //
+    // Pending attachment rows are cleared at the end of the method
+    // — the on-disk files have been copied to the project's
+    // managed location, and the temporary files are removed when
+    // the PendingAttachmentViewModel is disposed.
+    private async Task PromotePendingAttachmentsAsync(AIChat.Domain.Projects.ProjectWorkspace project)
+    {
+        if (PendingAttachments.Count == 0)
+        {
+            return;
+        }
+
+        var artifactService = new AIChat.Application.Artifacts.InputArtifactService();
+        var fileStore = new AIChat.Application.Artifacts.InputArtifactFileStore();
+        var snapshots = PendingAttachments.Attachments.ToList();
+
+        foreach (var attachment in snapshots)
+        {
+            try
+            {
+                var bytes = await File.ReadAllBytesAsync(attachment.FilePath);
+                var request = new AIChat.Application.Artifacts.InputArtifactCreateRequest
+                {
+                    ProjectId = project.Id,
+                    ConversationId = "",
+                    MessageId = "",
+                    FileName = attachment.FileName,
+                    MimeType = "image/png",
+                    ContentText = "",
+                    FileBytes = bytes,
+                    Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["source"] = "pasted-image",
+                    },
+                };
+                var artifact = artifactService.Create(request);
+                await fileStore.StoreBytesAsync(artifact, bytes, ".png");
+                project.InputArtifacts.Add(artifact);
+            }
+            catch (Exception ex)
+            {
+                // Single bad file shouldn't kill the whole send —
+                // surface it as a system bubble and continue with
+                // the rest.
+                ActivityFeed.Add(
+                    "附加失败",
+                    $"{attachment.FileName}: {ex.Message}",
+                    "附件");
+            }
+        }
+
+        // Persist the updated project (with the new artifacts) so
+        // the change survives an app restart. Mirror the pattern
+        // AgentRunnerViewModel uses after a run lands memory updates.
+        var projects = (await _repository.LoadProjectsAsync()).ToList();
+        var index = projects.FindIndex(p => p.Id == project.Id);
+        if (index >= 0)
+        {
+            projects[index] = project;
+        }
+        else
+        {
+            projects.Add(project);
+        }
+        await _repository.SaveProjectsAsync(projects);
+
+        // Drop the UI rows (Dispose deletes the temp files; the
+        // managed copies in the artifact store are now the source
+        // of truth).
+        PendingAttachments.Clear();
     }
 
     // Rebuild PlanItems from the current AgentPlan. Called by the

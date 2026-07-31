@@ -26,4 +26,17 @@ public class AvaloniaClipboardServiceTests
         // the write so tests stay headless and deterministic.
         await service.SetTextAsync("hello");
     }
+
+    [Fact]
+    public async Task TryGetBitmapAsync_WithoutTopLevel_ReturnsNull()
+    {
+        var service = new AvaloniaClipboardService();
+
+        var bitmap = await service.TryGetBitmapAsync();
+
+        // No TopLevel wired → no clipboard to read from. Image paste
+        // gracefully no-ops (the host treats null as "clipboard has
+        // no image, fall through to default text paste").
+        Assert.Null(bitmap);
+    }
 }

@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Media.Imaging;
 
 namespace AIChat.App.Avalonia.Composition;
 
@@ -30,5 +31,21 @@ public sealed class AvaloniaClipboardService : IClipboardService
         }
 
         return clipboard.SetValueAsync(DataFormat.Text, text);
+    }
+
+    public async Task<Bitmap?> TryGetBitmapAsync()
+    {
+        var clipboard = TopLevel?.Clipboard;
+        if (clipboard is null)
+        {
+            return null;
+        }
+
+        // ClipboardExtensions.TryGetBitmapAsync hides the IAsyncDataTransfer
+        // dance: it asks the clipboard for an image and decodes it
+        // (PNG / JPEG / etc.) into a Bitmap. The IAsyncDataTransfer
+        // returned by the clipboard MUST be disposed by the caller —
+        // TryGetBitmapAsync handles that internally.
+        return await clipboard.TryGetBitmapAsync();
     }
 }

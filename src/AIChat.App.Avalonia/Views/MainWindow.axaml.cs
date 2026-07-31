@@ -389,8 +389,32 @@ public partial class MainWindow : Window
 
     // Prompt input: Cmd+Enter (or Ctrl+Enter on non-mac) sends. The default
     // Enter key still inserts a newline because the box is multi-line.
+    // Cmd+V / Ctrl+V intercepts the paste when the clipboard has an
+    // image: text pastes fall through to the default TextBox handler
+    // (we don't touch them), image pastes are saved as pending
+    // attachments and shown above the input.
     private async void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Image paste: intercept ⌘V / Ctrl+V when the clipboard has
+        // an image. The default TextBox paste handler would do
+        // nothing for a non-text payload, but consuming the key event
+        // explicitly makes the contract obvious.
+        if (e.Key == Key.V &&
+            (e.KeyModifiers.HasFlag(KeyModifiers.Meta) ||
+             e.KeyModifiers.HasFlag(KeyModifiers.Control)) &&
+            DataContext is MainWindowViewModel promptVm &&
+            _clipboard.IsAvailable)
+        {
+            var bitmap = await _clipboard.TryGetBitmapAsync();
+            if (bitmap is not null)
+            {
+                e.Handled = true;
+                promptVm.PendingAttachments.AddPastedImage(bitmap);
+                bitmap.Dispose();
+                return;
+            }
+        }
+
         if (e.Key != Key.Enter)
         {
             return;

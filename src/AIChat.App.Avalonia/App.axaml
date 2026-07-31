@@ -460,6 +460,37 @@
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="MinWidth" Value="32" />
         </Style>
+        <!--
+          Pending image attachment: 56x56 square thumbnail that sits
+          above the prompt. Hairline border + a small remove X in
+          the top-right corner. Subtle background so the thumbnail
+          reads as "this is going to travel with the next message",
+          not a permanent card.
+        -->
+        <Style Selector="Border.pending-attachment">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Width" Value="56" />
+            <Setter Property="Height" Value="56" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Button.pending-attachment-remove">
+            <Setter Property="Background" Value="{StaticResource ScrimBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,2,2,0" />
+        </Style>
+        <Style Selector="Button.pending-attachment-remove:pointerover">
+            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+        </Style>
         <Style Selector="Border.badge.success">
             <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
         </Style>
