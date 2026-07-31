@@ -641,7 +641,8 @@
                                    Foreground="{StaticResource MutedBrush}"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
-                                   MaxWidth="480"/>
+                                   MaxWidth="480"
+                                   ToolTip.Tip="{Binding StatusMessage}"/>
                         <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
                             <Border Background="{StaticResource LineBrush}" CornerRadius="2" Height="3" Width="80" ClipToBounds="True" VerticalAlignment="Center">
                                 <Border Background="{StaticResource AccentBrush}" CornerRadius="2" Height="3" HorizontalAlignment="Left" Width="{Binding ContextBudgetWidthInMini}"/>
