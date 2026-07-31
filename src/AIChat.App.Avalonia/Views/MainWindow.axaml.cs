@@ -218,6 +218,15 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // F5 is the conventional "refresh" key and the palette's
+            // "刷新状态" entry advertises it in the shortcut column.
+            // Without this binding the palette was promising a shortcut
+            // that did nothing on keypress.
+            Gesture = new KeyGesture(Key.F5),
+            Command = viewModel.RefreshCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {
