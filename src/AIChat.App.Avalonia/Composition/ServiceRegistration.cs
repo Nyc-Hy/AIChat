@@ -4,6 +4,7 @@ using AIChat.App.Avalonia.ViewModels;
 using AIChat.App.Avalonia.Views;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Tools;
+using AIChat.Application.Workspace;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
 using AIChat.Storage.Json;
@@ -19,6 +20,14 @@ internal static class ServiceRegistration
         // Local JSON persistence. Registered against the abstraction so tests
         // can swap in an in-memory implementation later.
         services.AddSingleton<IAppRepository, JsonAppRepository>();
+
+        // Git-backed workspace change / diff service. MainWindowViewModel
+        // (for the /git bubble) and GitStatusViewModel (for the modal
+        // file list + diff) both consume IWorkspaceChangeService — if
+        // it isn't registered here, GetRequiredService<MainWindow>()
+        // blows up at startup. Singleton because the service is a
+        // pure facade over Process.Start; no per-request state.
+        services.AddSingleton<IWorkspaceChangeService, WorkspaceChangeService>();
 
         // Tool registry. CreateDefault() is the same call the ViewModel used
         // before; keep behaviour identical for this PR.

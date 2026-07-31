@@ -151,8 +151,15 @@ public static class SlashCommandHandler
 
     private static string BuildStatus(MainWindowViewModel host)
     {
+        // SelectedProjectName is "未选择项目" when no project is loaded
+        // and "未配置路径" when the project has no on-disk path. Map
+        // both to the (未选择) summary so the user gets one consistent
+        // "nothing selected" line instead of "项目: 未选择项目" or
+        // "项目: 未配置路径" (both read awkwardly).
         var project = host.Sidebar.SelectedProjectName;
-        var projectLine = string.IsNullOrWhiteSpace(project) || project == "未配置路径"
+        var projectLine = string.IsNullOrWhiteSpace(project) ||
+                          project == "未选择项目" ||
+                          project == "未配置路径"
             ? "项目: (未选择)"
             : $"项目: {project}";
 
