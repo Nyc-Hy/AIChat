@@ -902,6 +902,102 @@
                                     <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoVerify}"/>
                                 </Grid>
                             </StackPanel>
+
+                            <Border Classes="section-divider" Margin="0,2"/>
+
+                            <!--
+                              默认行为: mirrors the AppSettings schema fields
+                              the user can tweak. Each control binds to a
+                              MainWindowViewModel mirror property; the
+                              OnXxxChanged partial writes through to
+                              _settings and fires a fire-and-forget save
+                              so the choice survives a quit + relaunch.
+                              The XAML uses simple TextBoxes / CheckBoxes
+                              instead of NumericUpDown to keep the
+                              dependency surface narrow (no extra
+                              package, no extra style) — the load-time
+                              normalization in
+                              AdvancedSettingsService.Normalize clamps
+                              out-of-range values on the next launch.
+                            -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="默认行为" Classes="section-title"/>
+                                <Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                                    <TextBlock Text="Temperature" Classes="body" VerticalAlignment="Center"
+                                               ToolTip.Tip="0 = 严格按 top token；2 = 自由发散。多数场景 0.3 即可。"/>
+                                    <TextBox Grid.Column="1" Text="{Binding Temperature}" />
+
+                                    <TextBlock Grid.Row="1" Text="最大输出 tokens" Classes="body" VerticalAlignment="Center"
+                                               ToolTip.Tip="单次回复的 token 上限。Anthropic 与 OpenAI 兼容协议都按这个值。"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MaxOutputTokens}" />
+
+                                    <TextBlock Grid.Row="2" Text="重试次数" Classes="body" VerticalAlignment="Center"
+                                               ToolTip.Tip="瞬时 429 / 5xx 错误时的重试次数。" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding RetryMaxAttempts}" />
+
+                                    <TextBlock Grid.Row="3" Text="自动修复轮数" Classes="body" VerticalAlignment="Center"
+                                               ToolTip.Tip="自动验证失败后允许 AIChat 自我修复的轮数。0 = 不修。" />
+                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding MaxAutoFixRounds}" />
+
+                                    <TextBlock Grid.Row="4" Text="使用分词器估算" Classes="body" VerticalAlignment="Center"
+                                               ToolTip.Tip="开启 → SharpToken 精确估算；关闭 → 字符/3.6 启发式。更准但启动慢一点。" />
+                                    <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding UseTokenizerEstimation}" />
+
+                                    <TextBlock Grid.Row="5" Text="执行模式" Classes="body" VerticalAlignment="Center"
+                                               ToolTip.Tip="预设：标准（默认）、快速（小改动不开规划）、深度（开规划 + 自动验证）。" />
+                                    <ComboBox Grid.Row="5" Grid.Column="1"
+                                              ItemsSource="{Binding AgentExecutionModeOptions}"
+                                              SelectedItem="{Binding AgentExecutionMode}"
+                                              HorizontalAlignment="Stretch">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:AgentExecutionModeOption">
+                                                <TextBlock Text="{Binding Label}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </Grid>
+                            </StackPanel>
+
+                            <Border Classes="section-divider" Margin="0,2"/>
+
+                            <!--
+                              工具权限: per-tool permission mode. The host
+                              rebuilds the rows in RefreshAsync from the
+                              tool registry's metadata; each row's
+                              SelectedMode dropdown writes through
+                              OnToolRowPropertyChanged into
+                              _settings.ToolPermissionModes (or removes
+                              the entry when set to Disabled). The
+                              ToolPermissionModeOption record provides
+                              the user-facing label so the dropdown
+                              shows "禁用 / 自动放行（只读） / 每次确认
+                              / 本会话放行" instead of the raw enum.
+                            -->
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="工具权限" Classes="section-title"/>
+                                <ItemsControl ItemsSource="{Binding Tools}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ToolSettingViewModel">
+                                            <Grid ColumnDefinitions="160,*" Margin="0,4" ColumnSpacing="12">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayName}" Classes="body" FontWeight="SemiBold"/>
+                                                    <TextBlock Text="{Binding Category}" Classes="muted" FontSize="11"/>
+                                                </StackPanel>
+                                                <ComboBox Grid.Column="1"
+                                                          ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ToolModeOptions}"
+                                                          SelectedItem="{Binding SelectedMode}"
+                                                          HorizontalAlignment="Stretch">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ToolModeOption">
+                                                            <TextBlock Text="{Binding Label}"/>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
 
