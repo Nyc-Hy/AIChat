@@ -17,7 +17,6 @@ using AIChat.Domain.Projects;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
 using AIChat.Storage.Json;
-using Avalonia.Media;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -1096,43 +1095,4 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // SaveProjectsAsync, and BuildProjectSnapshot all moved to
     // AgentRunnerViewModel. The host VM only validates input and calls
     // _agentRunner.RunAsync(prompt, effectiveSettings).
-}
-
-public sealed partial class ProjectCardViewModel(string id, string name, string path) : ObservableObject
-{
-    public string Id { get; } = id;
-    public string Name { get; } = name;
-    public string Path { get; } = path;
-
-    [ObservableProperty]
-    private bool isSelected;
-}
-
-public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ViewModelBase
-{
-    public string Title { get; } = title;
-    public IBrush TextForeground { get; } = TokenBrush("TextBrush");
-
-    [ObservableProperty]
-    private string detail = detail;
-
-    [ObservableProperty]
-    private string status = status;
-
-    // The "thinking" state is: an assistant bubble that has not yet received
-    // any content from the model. The XAML renders three animated dots
-    // instead of the detail markdown, so the user always knows the run is
-    // in flight.
-    public bool IsThinking => Title == "AIChat" && string.IsNullOrEmpty(Detail) && Status == "运行中";
-
-    // Bubble classification: the 1.0 Beta redesign needs three distinct
-    // bubble styles (user right-aligned, AI with avatar, system centered),
-    // and the XAML can't switch on Title in a binding. These flags make
-    // the templates declarative.
-    public bool IsUserBubble => Title == "你";
-    public bool IsAssistantBubble => Title == "AIChat";
-    public bool IsSystemBubble => !IsUserBubble && !IsAssistantBubble;
-
-    partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
-    partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
 }
