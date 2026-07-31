@@ -392,6 +392,27 @@
             <Setter Property="Padding" Value="6,2" />
             <Setter Property="MinWidth" Value="32" />
         </Style>
+
+        <!--
+          Toast severity stripe: a 3px left edge in the level's
+          status colour, so the user can tell warning/error apart
+          from ambient info without reading the message. Matches
+          the per-status colour map used by the git status badge
+          and the sub-agent status row so the whole app reads as
+          one status language.
+        -->
+        <Style Selector="Border.toast-success">
+            <Setter Property="BorderBrush" Value="{StaticResource SuccessBorderBrush}" />
+            <Setter Property="BorderThickness" Value="3,1,1,1" />
+        </Style>
+        <Style Selector="Border.toast-warning">
+            <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />
+            <Setter Property="BorderThickness" Value="3,1,1,1" />
+        </Style>
+        <Style Selector="Border.toast-error">
+            <Setter Property="BorderBrush" Value="{StaticResource ErrorBorderBrush}" />
+            <Setter Property="BorderThickness" Value="3,1,1,1" />
+        </Style>
         <Style Selector="Border.git-status-badge.modified">
             <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />

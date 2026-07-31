@@ -703,6 +703,15 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="composition:ToastItem">
+                    <!--
+                      Toast surface: a thin coloured stripe on the
+                      left of the border communicates the severity
+                      (info / success / warning / error). The default
+                      level has no stripe (info reads as ambient;
+                      the user doesn't need a green/red flash for a
+                      routine "任务已停止" message — the icon would
+                      be overkill for Linear/Notion feel).
+                    -->
                     <Border Background="{StaticResource SurfaceBrush}"
                             BorderBrush="{StaticResource LineBrush}"
                             BorderThickness="1"
@@ -710,7 +719,10 @@
                             Padding="{StaticResource Padding3}"
                             MinWidth="240"
                             MaxWidth="380"
-                            BoxShadow="{StaticResource ElevationToastShadow}">
+                            BoxShadow="{StaticResource ElevationToastShadow}"
+                            Classes.toast-success="{Binding IsSuccess}"
+                            Classes.toast-warning="{Binding IsWarning}"
+                            Classes.toast-error="{Binding IsError}">
                         <TextBlock Text="{Binding Message}" Classes="body" TextWrapping="Wrap"/>
                     </Border>
                 </DataTemplate>

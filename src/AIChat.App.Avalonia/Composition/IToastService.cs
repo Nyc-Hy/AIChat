@@ -31,4 +31,16 @@ public sealed class ToastItem
     public string Message { get; init; } = "";
     public ToastLevel Level { get; init; } = ToastLevel.Info;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+
+    // Per-level flags the XAML uses to colour the toast by severity.
+    // One IsX per ToastLevel value; the XAML's Border picks up the
+    // matching .toast-<level> class and the App.axaml style draws a
+    // thin left-side stripe in the level's status colour so the user
+    // can tell at a glance whether the message is a heads-up (info),
+    // a confirmation (success), a "watch out" (warning), or a
+    // "something broke" (error).
+    public bool IsInfo => Level == ToastLevel.Info;
+    public bool IsSuccess => Level == ToastLevel.Success;
+    public bool IsWarning => Level == ToastLevel.Warning;
+    public bool IsError => Level == ToastLevel.Error;
 }
