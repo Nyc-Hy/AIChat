@@ -29,7 +29,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly ConversationListViewModel _conversationList;
     private readonly ToolApprovalViewModel _approvalViewModel;
-    private readonly IApprovalService _approval;
     private readonly IThemeService _theme;
     private readonly ISettingsHolder _settingsHolder;
     private readonly IToastService _toast;
@@ -433,7 +432,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _sidebar = sidebar;
         _conversationList = conversationList;
         _approvalViewModel = approvalViewModel;
-        _approval = approval;
         _theme = theme;
         _settingsHolder = settingsHolder;
         _toast = toast;
