@@ -1,4 +1,5 @@
 using AIChat.Abstractions.Configuration;
+using AIChat.Abstractions.Context;
 using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
@@ -144,9 +145,21 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             var runtimeSettings = noWrite
                 ? RuntimeSettingsBuilder.ReadOnly(settings, _toolRegistry)
                 : RuntimeSettingsBuilder.Gui(settings, _toolRegistry);
+            // AppSettings.UseTokenizerEstimation has been a real schema
+            // field since PR-3 but the construction site always passed
+            // a TokenizerContextEstimator — the flag was set, never
+            // bound. Honor the setting now: false → simple chars-based
+            // heuristic (faster, no SharpToken dependency, but rougher
+            // numbers); true → tokenizer (default, billing-grade).
+            // The default value on a fresh AppSettings is true so the
+            // observable behaviour is unchanged unless the user
+            // explicitly flips the flag.
+            var contextEstimator = settings.UseTokenizerEstimation
+                ? (IContextEstimator)new TokenizerContextEstimator()
+                : new SimpleContextEstimator();
             var requestFactory = new AgentRequestFactory(
                 new ConversationContextBuilder(
-                    new TokenizerContextEstimator(),
+                    contextEstimator,
                     new SystemPromptBuilder()));
             var requestBuild = requestFactory.Build(new AgentRequestBuildRequest
             {
