@@ -21,6 +21,7 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApproveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApproveForSessionCommand))]
     [NotifyCanExecuteChangedFor(nameof(RejectCommand))]
     private bool hasPendingApproval;
 
