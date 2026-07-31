@@ -1164,6 +1164,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         StatusMessage = args.AlreadyExisted ? "已更新模型配置。" : "已保存模型配置。";
     }
 
+    // Tracks the "正在连接 X" bubble dropped by OnProviderTestStarted
+    // so the completion handler can update it in place (Detail + Status)
+    // instead of appending a second bubble. The earlier shape was
+    // 'add a '正在连接/运行中' bubble on start, add a second
+    // '测试通过/失败' bubble on completion' — which left the first
+    // bubble stuck at '运行中' forever, so the user saw two
+    // model-test rows for every test: a stale in-flight one and
+    // the real outcome. Same pattern AgentRunnerViewModel uses for
+    // the assistant bubble (HasReceivedFirstContent + Detail +=
+    // ContentDelta).
+    private ActivityItemViewModel? _activeTestBubble;
+
     private void OnProviderTestStarted(object? sender, ProviderTestStartedEventArgs args)
     {
         // Don't touch IsRunning here — that's the agent-run
@@ -1182,10 +1194,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // still-in-flight first one. Activity feed + status
         // bar are the right place for the test progress UI.
         StatusMessage = $"正在测试 {args.ProviderName}...";
-        ActivityFeed.Add(
+        _activeTestBubble = new ActivityItemViewModel(
             "模型测试",
             $"正在连接 {args.ProviderName} ({args.ModelId})",
             "运行中");
+        ActivityFeed.Add(_activeTestBubble);
     }
 
     private void OnProviderTestCompleted(object? sender, ProviderTestCompletedEventArgs args)
@@ -1195,18 +1208,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // around the test is the surface bug: a connection test
         // is not an agent run and must not touch the agent
         // surface state.
-        if (args.Exception is not null)
-        {
-            ActivityFeed.Add("模型测试", $"测试失败：{args.Message}", "失败");
-            Readiness = "需检查";
-            StatusMessage = "模型连接失败。";
-            return;
-        }
+        var status = args.Exception is not null
+            ? "失败"
+            : args.IsSuccess ? "通过" : "失败";
+        var detail = args.Exception is not null
+            ? $"测试失败：{args.Message}"
+            : args.Message;
 
-        ActivityFeed.Add(
-            "模型测试",
-            args.Message,
-            args.IsSuccess ? "通过" : "失败");
+        // Update the bubble the started handler dropped, if it's
+        // still in the feed. The feed could have been cleared
+        // (/clear, /new, "新对话" button) between started and
+        // completed — in which case the field is stale, fall
+        // through to adding a fresh row.
+        if (_activeTestBubble is { } bubble &&
+            ActivityFeed.Activity.Contains(bubble))
+        {
+            bubble.Detail = detail;
+            bubble.Status = status;
+        }
+        else
+        {
+            ActivityFeed.Add("模型测试", detail, status);
+        }
+        _activeTestBubble = null;
+
         Readiness = args.IsSuccess ? "可运行" : "需检查";
         StatusMessage = args.IsSuccess ? "模型连接正常。" : "模型连接失败。";
     }
