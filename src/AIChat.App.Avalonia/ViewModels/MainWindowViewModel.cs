@@ -298,9 +298,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     // Per-row PropertyChanged → host settings. Only SelectedMode
     // changes need to flow back; the other fields are immutable
-    // after construction. The handler writes through to
-    // _settings.ToolPermissionModes + EnabledToolIds so the next
-    // run picks up the override.
+    // after construction. The handler writes through to both
+    // _settings.ToolPermissionModes AND _settings.EnabledToolIds
+    // — Disabled removes the tool from the enabled list so the
+    // model never sees it in the system prompt's AllowedTools
+    // (without this it would still be advertised and the tool
+    // gate would have to reject it at call time, which is a
+    // no-op but wastes a model turn).
     private void OnToolRowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(ToolSettingViewModel.SelectedMode))
@@ -314,17 +318,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (row.SelectedMode == ToolPermissionMode.Disabled)
         {
-            // Disabled means the tool is not enabled at all. The
-            // settings service derives EnabledToolIds from
-            // ToolPermissionModes (entries with Disabled are
-            // excluded), so leaving the entry in the dictionary
-            // with value Disabled is enough — but to keep the
-            // JSON clean we drop the entry entirely.
+            // Disabled is the absence semantic. Drop the
+            // ToolPermissionModes entry (the absence is the
+            // signal; a stored Disabled value would just be
+            // redundant) and remove the tool from EnabledToolIds
+            // so the system prompt's tool list doesn't include
+            // it. Re-enabling (picking any other mode) re-adds
+            // the id to EnabledToolIds in the else branch.
             _settings.ToolPermissionModes.Remove(row.Id);
+            _settings.EnabledToolIds.RemoveAll(id =>
+                string.Equals(id, row.Id, StringComparison.OrdinalIgnoreCase));
         }
         else
         {
             _settings.ToolPermissionModes[row.Id] = row.SelectedMode;
+            // Disabled is the only "off" state — every other
+            // mode is "on but with a different gate". Ensure
+            // the id is in EnabledToolIds so the model's
+            // AllowedTools list includes it.
+            if (!_settings.EnabledToolIds.Any(id =>
+                    string.Equals(id, row.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                _settings.EnabledToolIds.Add(row.Id);
+            }
         }
         SaveSettingsFireAndForget();
     }
