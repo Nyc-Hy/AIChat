@@ -574,6 +574,41 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     return true;
                 }),
             new CommandItem(
+                "打开 Memory 编辑器",
+                "查看、添加、删除当前项目的 memory 记录",
+                "⌘ ⇧ M",
+                "M4 4 H20 V20 H4 Z M4 9 H20 M9 9 V20",
+                () => { OpenMemoryEditor(); return Task.FromResult(true); }),
+            new CommandItem(
+                "打开 Git 状态",
+                "查看当前项目的修改文件与 diff",
+                "⌘ ⇧ G",
+                "M3 12 a9 9 0 1 0 3 -6.7 M3 4 v5 h5",
+                async () =>
+                {
+                    await OpenGitStatusAsync();
+                    return true;
+                }),
+            new CommandItem(
+                "复制最后一条 AI 回复",
+                "把最近一条 assistant 消息放到剪贴板",
+                "⌘ ⇧ C",
+                "M9 5 H7 a2 2 0 0 0 -2 2 v12 a2 2 0 0 0 2 2 h10 a2 2 0 0 0 2 -2 V7 a2 2 0 0 0 -2 -2 h-2 M9 5 a2 2 0 0 1 2 -2 h2 a2 2 0 0 1 2 2 v0 a2 2 0 0 1 -2 2 h-2 a2 2 0 0 1 -2 -2 z",
+                async () =>
+                {
+                    // Same shape as the /copy slash command so the
+                    // palette and the prompt input give identical
+                    // feedback (system bubble confirms + char count).
+                    var prompt = "/copy";
+                    var (handled, result) = await AIChat.App.Avalonia.ViewModels.SlashCommandHandler.TryExecuteAsync(prompt, this);
+                    if (handled && result is not null)
+                    {
+                        ActivityFeed.Add(new ActivityItemViewModel(result.Title, result.Body, "命令"));
+                        StatusMessage = result.Title + "。";
+                    }
+                    return true;
+                }),
+            new CommandItem(
                 "显示命令面板",
                 "搜索命令、动作、设置",
                 "⌘ K",
