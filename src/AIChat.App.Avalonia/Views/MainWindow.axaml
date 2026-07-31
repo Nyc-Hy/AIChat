@@ -271,7 +271,7 @@
                                                                         <Panel>
                                                                             <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
                                                                                                         Markdown="{Binding Detail}"
-                                                                                                        Foreground="{Binding TextForeground}"
+                                                                                                        Foreground="{StaticResource TextBrush}"
                                                                                                         FontSize="14"
                                                                                                         TextWrapping="Wrap"/>
                                                                             <StackPanel IsVisible="{Binding IsThinking}" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Left">
@@ -302,7 +302,7 @@
                                                                         Click="EditUserBubble_OnClick"
                                                                         ToolTip.Tip="点击编辑">
                                                                     <controls:MarkdownTextBlock Markdown="{Binding Detail}"
-                                                                                                Foreground="{Binding TextForeground}"
+                                                                                                Foreground="{StaticResource TextBrush}"
                                                                                                 FontSize="14"
                                                                                                 TextWrapping="Wrap"/>
                                                                 </Button>

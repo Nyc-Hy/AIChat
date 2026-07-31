@@ -1,5 +1,3 @@
-using AIChat.App.Avalonia.Composition;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AIChat.App.Avalonia.ViewModels;
@@ -17,7 +15,6 @@ namespace AIChat.App.Avalonia.ViewModels;
 public sealed partial class ActivityItemViewModel(string title, string detail, string status) : ViewModelBase
 {
     public string Title { get; } = title;
-    public IBrush TextForeground { get; } = TokenBrush("TextBrush");
 
     [ObservableProperty]
     private string detail = detail;

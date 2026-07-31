@@ -27,10 +27,8 @@ public interface IToastService
 
 public sealed class ToastItem
 {
-    public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string Message { get; init; } = "";
     public ToastLevel Level { get; init; } = ToastLevel.Info;
-    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
     // Per-level flags the XAML uses to colour the toast by severity.
     // One IsX per ToastLevel value; the XAML's Border picks up the
