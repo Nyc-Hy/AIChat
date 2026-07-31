@@ -238,14 +238,13 @@ public partial class MainWindow : Window
             {
                 // Clear() (e.g. /new, /clear, the sidebar "新对话"
                 // button) fires Reset. Snap the scroll back to the
-                // top of the freshly-empty feed and reset the
-                // at-bottom flag so the next bubble added lands
-                // visibly — without this, the ScrollViewer's
-                // preserved offset would point past the end of the
-                // new content, and the auto-scroll branch below
-                // would stay disabled (at-bottom was false from
-                // the previous conversation).
+                // top of the freshly-empty feed, reset the
+                // at-bottom flag, and zero the unseen counter so
+                // the "↓ N 条新消息" pill doesn't reappear the
+                // moment the panel becomes visible again on the
+                // next send.
                 _isUserAtBottom = true;
+                viewModel.ClearUnseenMessageCount();
                 Dispatcher.UIThread.Post(() =>
                     ConversationScroll.ScrollToHome(),
                     DispatcherPriority.Background);
