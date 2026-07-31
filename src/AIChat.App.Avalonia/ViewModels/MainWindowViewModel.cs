@@ -165,9 +165,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private bool autoVerify;
 
     [ObservableProperty]
-    private bool showAdvanced;
-
-    [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendTaskCommand))]
     [NotifyPropertyChangedFor(nameof(CanRetry))]
     private bool isRunning;
