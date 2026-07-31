@@ -6,6 +6,7 @@ using AIChat.App.Avalonia.Composition;
 using AIChat.Application.Agents;
 using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
+using AIChat.Application.Llm.Resilience;
 using AIChat.Application.Prompting;
 using AIChat.Application.Projects;
 using AIChat.Application.Tools;
@@ -191,8 +192,24 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 requestBuild.ContextPack?.EstimatedTokens ?? 0,
                 prompt));
 
+            // AppSettings.RetryMaxAttempts is a real schema field
+            // (clamped by AdvancedSettingsService.Normalize on every
+            // load, persisted through ProtectedSettingsSerializer),
+            // but the construction site at AgentRunnerViewModel
+            // always used the default 'new RetryPolicy()' which has
+            // 3 hard-coded — the field was a schema property with no
+            // observable effect. Wire it through now: a user who
+            // bumps retries to 5 in their settings file actually
+            // gets 5 retries. The default value on a fresh
+            // AppSettings is 3 so observable behaviour is unchanged
+            // unless the user explicitly edits the value.
+            var toolCatalog = new AgentToolCatalog(_toolRegistry.All);
             var harness = new AgentHarness(
-                new AgentRunner(_chatService, new AgentToolCatalog(_toolRegistry.All)));
+                new AgentRunner(
+                    _chatService,
+                    toolCatalog,
+                    new ToolExecutionService(toolCatalog),
+                    retryPolicy: new RetryPolicy(maxRetries: settings.RetryMaxAttempts)));
             assistantItem.Detail = "";
             await foreach (var agentEvent in harness.RunAsync(new AgentHarnessRunRequest
             {
