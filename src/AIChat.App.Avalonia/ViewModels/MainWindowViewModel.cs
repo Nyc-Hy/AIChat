@@ -712,156 +712,185 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanSendTask))]
     private async Task SendTaskAsync()
     {
-        var prompt = DraftPrompt.Trim();
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            ActivityFeed.Add("需要任务", "先描述你希望 AIChat 完成什么。", "等待");
-            StatusMessage = "请先输入任务。";
-            return;
-        }
-
-        // Slash commands (/clear, /help, /status, /new, /copy) short-circuit
-        // the agent loop. The handler renders its result as a system bubble
-        // in the activity feed and clears the draft. TryExecuteAsync
-        // returns Handled=false when the prompt is not a slash command —
-        // fall through to the normal agent flow.
-        var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync(prompt, this);
-        if (handled)
-        {
-            DraftPrompt = "";
-            if (slashResult is not null)
-            {
-                ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
-                StatusMessage = slashResult.Title + "。";
-            }
-            return;
-        }
-
-        // @file references: pull @path tokens out of the prompt, read
-        // the file contents, and drop a system bubble per attachment
-        // so the user can see what got inlined. Warnings (file not
-        // found, too large) render as their own system bubble so the
-        // user gets feedback rather than a silent skip. The cleaned
-        // prompt (with the @tokens stripped) plus a context block
-        // listing the attached file contents is what the agent sees.
-        var projectRoot = _sidebar.CurrentProject?.Path;
-        var parsed = PromptAttachmentParser.Parse(prompt, projectRoot);
-        foreach (var attachment in parsed.Attachments)
-        {
-            var preview = attachment.Content.Length > 200
-                ? attachment.Content[..200] + "…"
-                : attachment.Content;
-            ActivityFeed.Add(
-                $"📎 {attachment.ResolvedPath}  ({attachment.ByteCount} 字节)",
-                preview,
-                "附件");
-        }
-        foreach (var warning in parsed.Warnings)
-        {
-            ActivityFeed.Add(
-                $"⚠ {warning.OriginalToken}",
-                warning.Message,
-                "附件");
-        }
-
-        // Build the prompt the agent actually sees: cleaned user
-        // question + a labelled context block listing every attached
-        // file's content. Empty if the prompt was just @file
-        // references — in that case the user has seen the system
-        // bubbles; nothing more to do.
-        if (parsed.Attachments.Count > 0)
-        {
-            var contextBlock = new System.Text.StringBuilder();
-            contextBlock.AppendLine("Attached files (use these for context):");
-            foreach (var attachment in parsed.Attachments)
-            {
-                contextBlock.AppendLine();
-                contextBlock.AppendLine($"--- {attachment.ResolvedPath} ---");
-                contextBlock.Append(attachment.Content);
-            }
-            prompt = string.IsNullOrWhiteSpace(parsed.CleanPrompt)
-                ? contextBlock.ToString()
-                : contextBlock + Environment.NewLine + Environment.NewLine + parsed.CleanPrompt;
-        }
-        else
-        {
-            prompt = parsed.CleanPrompt;
-        }
-
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            // The prompt was just @file references; nothing to send
-            // to the agent. DraftPrompt is already cleared below.
-            StatusMessage = "已附加文件。";
-            DraftPrompt = "";
-            return;
-        }
-
-        _ = RecomputeContextInputTokensAsync(prompt);
-
-        var effectiveSettings = ProviderSettingsService.CreateEffectiveSettings(_settings, _settings.Temperature);
-        var validation = ProviderConfigurationValidator.ValidateEffectiveSettings(effectiveSettings);
-        if (!validation.IsValid || effectiveSettings is null)
-        {
-            var message = validation.Errors.FirstOrDefault()?.Message ?? "发送前需要配置模型密钥。";
-            ActivityFeed.Add("需要配置模型", message, "已阻止");
-            StatusMessage = message;
-            return;
-        }
-
-        if (_sidebar.CurrentProject is null || string.IsNullOrWhiteSpace(_sidebar.CurrentProject.Path))
-        {
-            ActivityFeed.Add("需要项目", "发送前请先选择或初始化项目。", "已阻止");
-            StatusMessage = "当前没有可运行的项目。";
-            return;
-        }
-
-        // Promote any pasted-image attachments to InputArtifacts on
-        // the current project so the agent loop can pick them up
-        // (AgentRequestFactory reads project.InputArtifacts and
-        // attaches image content parts to the latest user message
-        // for vision-capable models). The PNG files are already on
-        // disk in the pending-attachments folder — we just record
-        // them and clean up the UI strip. Project-level scope means
-        // the artifacts survive the conversation boundary (the user
-        // can prune via the project settings if they want).
-        if (PendingAttachments.Count > 0)
-        {
-            await PromotePendingAttachmentsAsync(_sidebar.CurrentProject);
-        }
-
-        // Replace any prior CTS. A new run cancels nothing — the user
-        // already chose to start a fresh one, so the old token has no
-        // listener any more.
-        _runCts?.Dispose();
-        _runCts = new CancellationTokenSource();
-
-        // Remember the prompt so a failed/cancelled run can be retried
-        // without retyping. RetryLastTask only fires when this is set AND
-        // the last run's status was 失败 or 已停止 (CanRetry).
-        _lastUserPrompt = prompt;
-
+        // The whole send path needs to surface failures to the user
+        // instead of letting them escape the RelayCommand. The ⌘↵
+        // keyboard path goes through MainWindow.SafeRun (try/catch
+        // wrapper), but the XAML send button calls Command.Execute
+        // directly — any uncaught exception in the async lambda
+        // becomes an unhandled-task exception on the dispatcher. The
+        // inner try/catch below only covers the agent run; promote
+        // the body into a try/finally that always restores IsRunning
+        // and reset the per-send CTS so a partial failure can't leave
+        // the host in a stuck-running state.
         try
         {
-            await _agentRunner.RunAsync(prompt, effectiveSettings, _runCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // StopTaskCommand cancelled the run. The agent runner has
-            // already flipped IsRunning to false and updated the activity
-            // item's status to "已停止"; just record the user-visible
-            // status, drop a toast so the user notices even if the
-            // window isn't focused, and move on.
-            StatusMessage = "已停止。";
-            _toast.Show("任务已停止。", ToastLevel.Warning);
+            var prompt = DraftPrompt.Trim();
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                ActivityFeed.Add("需要任务", "先描述你希望 AIChat 完成什么。", "等待");
+                StatusMessage = "请先输入任务。";
+                return;
+            }
+
+            // Slash commands (/clear, /help, /status, /new, /copy) short-circuit
+            // the agent loop. The handler renders its result as a system bubble
+            // in the activity feed and clears the draft. TryExecuteAsync
+            // returns Handled=false when the prompt is not a slash command —
+            // fall through to the normal agent flow.
+            var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync(prompt, this);
+            if (handled)
+            {
+                DraftPrompt = "";
+                if (slashResult is not null)
+                {
+                    ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
+                    StatusMessage = slashResult.Title + "。";
+                }
+                return;
+            }
+
+            // @file references: pull @path tokens out of the prompt, read
+            // the file contents, and drop a system bubble per attachment
+            // so the user can see what got inlined. Warnings (file not
+            // found, too large) render as their own system bubble so the
+            // user gets feedback rather than a silent skip. The cleaned
+            // prompt (with the @tokens stripped) plus a context block
+            // listing the attached file contents is what the agent sees.
+            var projectRoot = _sidebar.CurrentProject?.Path;
+            var parsed = PromptAttachmentParser.Parse(prompt, projectRoot);
+            foreach (var attachment in parsed.Attachments)
+            {
+                var preview = attachment.Content.Length > 200
+                    ? attachment.Content[..200] + "…"
+                    : attachment.Content;
+                ActivityFeed.Add(
+                    $"📎 {attachment.ResolvedPath}  ({attachment.ByteCount} 字节)",
+                    preview,
+                    "附件");
+            }
+            foreach (var warning in parsed.Warnings)
+            {
+                ActivityFeed.Add(
+                    $"⚠ {warning.OriginalToken}",
+                    warning.Message,
+                    "附件");
+            }
+
+            // Build the prompt the agent actually sees: cleaned user
+            // question + a labelled context block listing every attached
+            // file's content. Empty if the prompt was just @file
+            // references — in that case the user has seen the system
+            // bubbles; nothing more to do.
+            if (parsed.Attachments.Count > 0)
+            {
+                var contextBlock = new System.Text.StringBuilder();
+                contextBlock.AppendLine("Attached files (use these for context):");
+                foreach (var attachment in parsed.Attachments)
+                {
+                    contextBlock.AppendLine();
+                    contextBlock.AppendLine($"--- {attachment.ResolvedPath} ---");
+                    contextBlock.Append(attachment.Content);
+                }
+                prompt = string.IsNullOrWhiteSpace(parsed.CleanPrompt)
+                    ? contextBlock.ToString()
+                    : contextBlock + Environment.NewLine + Environment.NewLine + parsed.CleanPrompt;
+            }
+            else
+            {
+                prompt = parsed.CleanPrompt;
+            }
+
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                // The prompt was just @file references; nothing to send
+                // to the agent. DraftPrompt is already cleared below.
+                StatusMessage = "已附加文件。";
+                DraftPrompt = "";
+                return;
+            }
+
+            _ = RecomputeContextInputTokensAsync(prompt);
+
+            var effectiveSettings = ProviderSettingsService.CreateEffectiveSettings(_settings, _settings.Temperature);
+            var validation = ProviderConfigurationValidator.ValidateEffectiveSettings(effectiveSettings);
+            if (!validation.IsValid || effectiveSettings is null)
+            {
+                var message = validation.Errors.FirstOrDefault()?.Message ?? "发送前需要配置模型密钥。";
+                ActivityFeed.Add("需要配置模型", message, "已阻止");
+                StatusMessage = message;
+                return;
+            }
+
+            if (_sidebar.CurrentProject is null || string.IsNullOrWhiteSpace(_sidebar.CurrentProject.Path))
+            {
+                ActivityFeed.Add("需要项目", "发送前请先选择或初始化项目。", "已阻止");
+                StatusMessage = "当前没有可运行的项目。";
+                return;
+            }
+
+            // Promote any pasted-image attachments to InputArtifacts on
+            // the current project so the agent loop can pick them up
+            // (AgentRequestFactory reads project.InputArtifacts and
+            // attaches image content parts to the latest user message
+            // for vision-capable models). The PNG files are already on
+            // disk in the pending-attachments folder — we just record
+            // them and clean up the UI strip. Project-level scope means
+            // the artifacts survive the conversation boundary (the user
+            // can prune via the project settings if they want).
+            if (PendingAttachments.Count > 0)
+            {
+                await PromotePendingAttachmentsAsync(_sidebar.CurrentProject);
+            }
+
+            // Replace any prior CTS. A new run cancels nothing — the user
+            // already chose to start a fresh one, so the old token has no
+            // listener any more.
+            _runCts?.Dispose();
+            _runCts = new CancellationTokenSource();
+
+            // Remember the prompt so a failed/cancelled run can be retried
+            // without retyping. RetryLastTask only fires when this is set AND
+            // the last run's status was 失败 or 已停止 (CanRetry).
+            _lastUserPrompt = prompt;
+
+            try
+            {
+                await _agentRunner.RunAsync(prompt, effectiveSettings, _runCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // StopTaskCommand cancelled the run. The agent runner has
+                // already flipped IsRunning to false and updated the activity
+                // item's status to "已停止"; just record the user-visible
+                // status, drop a toast so the user notices even if the
+                // window isn't focused, and move on.
+                StatusMessage = "已停止。";
+                _toast.Show("任务已停止。", ToastLevel.Warning);
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = "请求失败。";
+                _toast.Show(ex.Message, ToastLevel.Error);
+            }
         }
         catch (Exception ex)
         {
+            // Catch-all for any failure before the agent run kicks off
+            // (file copy for a pasted image, settings file write for
+            // the project, …). Without this the user would see a
+            // crashed app or a silently stuck IsRunning state. Show
+            // the same surface the inner catch uses so the failure
+            // path is consistent.
             StatusMessage = "请求失败。";
             _toast.Show(ex.Message, ToastLevel.Error);
         }
         finally
         {
+            // Always release the per-send CTS so a failed run doesn't
+            // strand the host. The agent runner flips IsRunning back
+            // to false in its own finally; this finally is the
+            // outer guarantee that even a pre-run throw leaves the
+            // host in a clean state.
             _runCts?.Dispose();
             _runCts = null;
         }
