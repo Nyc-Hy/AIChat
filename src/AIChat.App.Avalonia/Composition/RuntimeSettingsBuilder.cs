@@ -10,25 +10,6 @@ namespace AIChat.App.Avalonia.Composition;
 // inflating the UI.
 public static class RuntimeSettingsBuilder
 {
-    // Plain chat: no tools at all, single-shot request.
-    public static AppSettings Plain(AppSettings source) => new()
-    {
-        ProviderId = source.ProviderId,
-        ProtocolId = source.ProtocolId,
-        ProviderName = source.ProviderName,
-        BaseUrl = source.BaseUrl,
-        ApiKey = source.ApiKey,
-        Model = source.Model,
-        Temperature = source.Temperature,
-        ModelContextLimit = source.ModelContextLimit,
-        ModelSupportsVision = source.ModelSupportsVision,
-        MaxOutputTokens = source.MaxOutputTokens,
-        AgentExecutionMode = source.AgentExecutionMode,
-        AgentMaxToolRounds = source.AgentMaxToolRounds,
-        EnabledToolIds = [],
-        ToolPermissionModes = []
-    };
-
     // Read-only mode: only read-only tools are enabled, with a tighter
     // round budget so a stuck agent doesn't burn the whole budget.
     public static AppSettings ReadOnly(AppSettings source, AgentToolRegistry registry)
