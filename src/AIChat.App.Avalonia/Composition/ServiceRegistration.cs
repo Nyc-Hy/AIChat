@@ -51,6 +51,7 @@ internal static class ServiceRegistration
         // single MainWindow and the ViewModel owns cross-cutting state
         // (selected project, conversation, pending approval, run metrics).
         services.AddSingleton<ProviderConfigViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<ProjectSidebarViewModel>();
         services.AddSingleton<ConversationListViewModel>();
         services.AddSingleton<ToolApprovalViewModel>();

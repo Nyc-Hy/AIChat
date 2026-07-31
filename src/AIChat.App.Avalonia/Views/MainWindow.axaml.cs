@@ -146,7 +146,7 @@ public partial class MainWindow : Window
             // palette item's shortcut column — both were already
             // claiming the shortcut but the binding was missing.
             Gesture = new KeyGesture(Key.V, KeyModifiers.Meta | KeyModifiers.Shift),
-            Command = new RelayCommand(() => viewModel.AutoVerify = !viewModel.AutoVerify)
+            Command = new RelayCommand(() => viewModel.Settings.AutoVerify = !viewModel.Settings.AutoVerify)
         });
         KeyBindings.Add(new KeyBinding
         {

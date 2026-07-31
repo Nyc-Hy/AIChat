@@ -231,7 +231,7 @@
                                             ToolTip.Tip="只读模式已开启 — 写入类工具会被自动拒绝 (⌘⇧R 切换)">
                                         <TextBlock Text="只读" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
                                     </Border>
-                                    <Border Classes="badge" IsVisible="{Binding AutoVerify}"
+                                    <Border Classes="badge" IsVisible="{Binding Settings.AutoVerify}"
                                             ToolTip.Tip="修改完成后自动运行项目验证命令 (⌘⇧V 切换)">
                                         <TextBlock Text="自动验证" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource AccentFgBrush}"/>
                                     </Border>
@@ -952,7 +952,7 @@
                                     <TextBlock Text="只读模式" Classes="body" VerticalAlignment="Center"/>
                                     <CheckBox Grid.Column="1" IsChecked="{Binding NoWriteMode}"/>
                                     <TextBlock Grid.Row="1" Text="修改后自动验证" Classes="body" VerticalAlignment="Center"/>
-                                    <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoVerify}"/>
+                                    <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding Settings.AutoVerify}"/>
                                 </Grid>
                             </StackPanel>
 
@@ -978,29 +978,29 @@
                                 <Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
                                     <TextBlock Text="Temperature" Classes="body" VerticalAlignment="Center"
                                                ToolTip.Tip="0 = 严格按 top token；2 = 自由发散。多数场景 0.3 即可。"/>
-                                    <TextBox Grid.Column="1" Text="{Binding Temperature}" />
+                                    <TextBox Grid.Column="1" Text="{Binding Settings.Temperature}" />
 
                                     <TextBlock Grid.Row="1" Text="最大输出 tokens" Classes="body" VerticalAlignment="Center"
                                                ToolTip.Tip="单次回复的 token 上限。Anthropic 与 OpenAI 兼容协议都按这个值。"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MaxOutputTokens}" />
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Settings.MaxOutputTokens}" />
 
                                     <TextBlock Grid.Row="2" Text="重试次数" Classes="body" VerticalAlignment="Center"
                                                ToolTip.Tip="瞬时 429 / 5xx 错误时的重试次数。" />
-                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding RetryMaxAttempts}" />
+                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Settings.RetryMaxAttempts}" />
 
                                     <TextBlock Grid.Row="3" Text="自动修复轮数" Classes="body" VerticalAlignment="Center"
                                                ToolTip.Tip="自动验证失败后允许 AIChat 自我修复的轮数。0 = 不修。" />
-                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding MaxAutoFixRounds}" />
+                                    <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Settings.MaxAutoFixRounds}" />
 
                                     <TextBlock Grid.Row="4" Text="使用分词器估算" Classes="body" VerticalAlignment="Center"
                                                ToolTip.Tip="开启 → SharpToken 精确估算；关闭 → 字符/3.6 启发式。更准但启动慢一点。" />
-                                    <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding UseTokenizerEstimation}" />
+                                    <CheckBox Grid.Row="4" Grid.Column="1" IsChecked="{Binding Settings.UseTokenizerEstimation}" />
 
                                     <TextBlock Grid.Row="5" Text="执行模式" Classes="body" VerticalAlignment="Center"
                                                ToolTip.Tip="预设：标准（默认）、快速（小改动不开规划）、深度（开规划 + 自动验证）。" />
                                     <ComboBox Grid.Row="5" Grid.Column="1"
-                                              ItemsSource="{Binding AgentExecutionModeOptions}"
-                                              SelectedItem="{Binding AgentExecutionMode}"
+                                              ItemsSource="{Binding Settings.AgentExecutionModeOptions}"
+                                              SelectedItem="{Binding Settings.AgentExecutionMode}"
                                               HorizontalAlignment="Stretch">
                                         <ComboBox.ItemTemplate>
                                             <DataTemplate x:DataType="vm:AgentExecutionModeOption">
@@ -1028,7 +1028,7 @@
                             -->
                             <StackPanel Spacing="8">
                                 <TextBlock Text="工具权限" Classes="section-title"/>
-                                <ItemsControl ItemsSource="{Binding Tools}">
+                                <ItemsControl ItemsSource="{Binding Settings.Tools}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ToolSettingViewModel">
                                             <Grid ColumnDefinitions="160,*" Margin="0,4" ColumnSpacing="12">
@@ -1037,7 +1037,7 @@
                                                     <TextBlock Text="{Binding Category}" Classes="muted" FontSize="11"/>
                                                 </StackPanel>
                                                 <ComboBox Grid.Column="1"
-                                                          ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ToolModeOptions}"
+                                                          ItemsSource="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Settings.ToolModeOptions}"
                                                           SelectedItem="{Binding SelectedMode}"
                                                           HorizontalAlignment="Stretch">
                                                     <ComboBox.ItemTemplate>

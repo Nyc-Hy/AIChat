@@ -185,7 +185,7 @@ public static class SlashCommandHandler
         {
             safety.Add("只读");
         }
-        if (host.AutoVerify)
+        if (host.Settings.AutoVerify)
         {
             safety.Add("自动验证");
         }

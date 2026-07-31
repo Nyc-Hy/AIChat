@@ -26,6 +26,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly AgentToolRegistry _toolRegistry;
     private readonly IChatCompletionService _chatService;
     private readonly ProviderConfigViewModel _provider;
+    private readonly SettingsViewModel _settingsViewModel;
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly ConversationListViewModel _conversationList;
     private readonly ToolApprovalViewModel _approvalViewModel;
@@ -160,200 +161,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         return string.Join("\n", lines);
     }
 
-    [ObservableProperty]
-    private bool autoVerify;
-
-    // AppSettings knobs the user can tweak from the settings modal.
-    // Each OnXxxChanged partial writes through to _settings and
-    // fires a fire-and-forget save so the choice survives a quit +
-    // relaunch. Same pattern as OnAutoVerifyChanged above; the
-    // partials are the only writers — the constructor / RefreshAsync
-    // are the only readers (used to seed the ObservableProperty after
-    // a settings load).
-    //
-    // These fields are the host-level mirror of the schema. The
-    // providers / runner read _settings directly (not these
-    // observables) — the mirrors are pure UI affordances so the
-    // XAML can two-way bind without a value converter per field.
-
-    [ObservableProperty]
-    private double temperature;
-
-    partial void OnTemperatureChanged(double value)
-    {
-        // Skip the redundant save on the initial load: RefreshAsync
-        // assigns Temperature = _settings.Temperature to seed the
-        // mirror, and writing the same value back through the
-        // settings service + JSON serializer is pure churn.
-        if (_settings.Temperature == value)
-        {
-            return;
-        }
-        _settings.Temperature = value;
-        SaveSettingsFireAndForget();
-    }
-
-    [ObservableProperty]
-    private int maxOutputTokens;
-
-    partial void OnMaxOutputTokensChanged(int value)
-    {
-        if (_settings.MaxOutputTokens == value)
-        {
-            return;
-        }
-        _settings.MaxOutputTokens = value;
-        SaveSettingsFireAndForget();
-    }
-
-    [ObservableProperty]
-    private int retryMaxAttempts;
-
-    partial void OnRetryMaxAttemptsChanged(int value)
-    {
-        if (_settings.RetryMaxAttempts == value)
-        {
-            return;
-        }
-        _settings.RetryMaxAttempts = value;
-        SaveSettingsFireAndForget();
-    }
-
-    [ObservableProperty]
-    private bool useTokenizerEstimation;
-
-    partial void OnUseTokenizerEstimationChanged(bool value)
-    {
-        if (_settings.UseTokenizerEstimation == value)
-        {
-            return;
-        }
-        _settings.UseTokenizerEstimation = value;
-        SaveSettingsFireAndForget();
-    }
-
-    [ObservableProperty]
-    private int maxAutoFixRounds;
-
-    partial void OnMaxAutoFixRoundsChanged(int value)
-    {
-        if (_settings.MaxAutoFixRounds == value)
-        {
-            return;
-        }
-        _settings.MaxAutoFixRounds = value;
-        SaveSettingsFireAndForget();
-    }
-
-    // Agent execution mode is a preset that cascades into
-    // MaxAutoFixRounds + AutoVerify + the four AgentAdaptive*
-    // booleans via AgentExecutionModePolicy.Apply. The OnXxxChanged
-    // partial applies the cascade, then mirrors the cascaded
-    // values back into the host observables so the XAML re-renders
-    // the dependent fields. The mirror partials' skip-if-same-value
-    // guard makes the cascade writes redundant-safe (one extra save
-    // for the mode change, no per-field redundant saves).
-    [ObservableProperty]
-    private AgentExecutionMode agentExecutionMode = AgentExecutionMode.Standard;
-
-    partial void OnAgentExecutionModeChanged(AgentExecutionMode value)
-    {
-        if (_settings.AgentExecutionMode == value)
-        {
-            return;
-        }
-        AgentExecutionModePolicy.Apply(_settings, value);
-        // Cascade-resync the dependent mirrors. Each mirror partial
-        // sees _settings already updated by Apply, so the equality
-        // check trips and the per-field save is suppressed — only
-        // the outer SaveSettingsFireAndForget below lands.
-        MaxAutoFixRounds = _settings.MaxAutoFixRounds;
-        AutoVerify = _settings.AutoVerifyAgentRuns;
-        SaveSettingsFireAndForget();
-    }
-
-    // Tool permission matrix. The backend's EnabledToolIds +
-    // ToolPermissionModes dictionaries are loaded on every run by
-    // ToolSettingsService.Normalize. The XAML binds to this
-    // collection (one row per tool) and the user-facing dropdown
-    // writes back through OnToolRowPropertyChanged into
-    // _settings.ToolPermissionModes. Disabled = removed from
-    // EnabledToolIds; AllowForSession = same as ConfirmEachTime
-    // for the run but the user is opting into session scope.
-    public ObservableCollection<ToolSettingViewModel> Tools { get; } = [];
-
-    // Display lists for the two ComboBoxes in the settings modal.
-    // Static so the ItemsSource binding doesn't churn on every
-    // refresh. The user-facing label lives on the option record
-    // (not the enum) so we can localise without re-spelling the
-    // enum's ToString().
-    public IReadOnlyList<AgentExecutionModeOption> AgentExecutionModeOptions { get; } =
-    [
-        new(AgentExecutionMode.Standard, "标准 — 默认单 Agent 循环"),
-        new(AgentExecutionMode.Fast, "快速 — 小改动不开规划"),
-        new(AgentExecutionMode.Deep, "深度 — 开规划 + 自动验证"),
-    ];
-
-    public IReadOnlyList<ToolModeOption> ToolModeOptions { get; } = ToolSettingViewModel.AllModes;
-
-    // Per-row PropertyChanged → host settings. Only SelectedMode
-    // changes need to flow back; the other fields are immutable
-    // after construction. The handler writes through to both
-    // _settings.ToolPermissionModes AND _settings.EnabledToolIds
-    // — Disabled removes the tool from the enabled list so the
-    // model never sees it in the system prompt's AllowedTools
-    // (without this it would still be advertised and the tool
-    // gate would have to reject it at call time, which is a
-    // no-op but wastes a model turn).
-    private void OnToolRowPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName != nameof(ToolSettingViewModel.SelectedMode))
-        {
-            return;
-        }
-        if (sender is not ToolSettingViewModel row)
-        {
-            return;
-        }
-
-        if (row.SelectedMode == ToolPermissionMode.Disabled)
-        {
-            // Disabled is the absence semantic. Drop the
-            // ToolPermissionModes entry (the absence is the
-            // signal; a stored Disabled value would just be
-            // redundant) and remove the tool from EnabledToolIds
-            // so the system prompt's tool list doesn't include
-            // it. Re-enabling (picking any other mode) re-adds
-            // the id to EnabledToolIds in the else branch.
-            _settings.ToolPermissionModes.Remove(row.Id);
-            _settings.EnabledToolIds.RemoveAll(id =>
-                string.Equals(id, row.Id, StringComparison.OrdinalIgnoreCase));
-        }
-        else
-        {
-            _settings.ToolPermissionModes[row.Id] = row.SelectedMode;
-            // Disabled is the only "off" state — every other
-            // mode is "on but with a different gate". Ensure
-            // the id is in EnabledToolIds so the model's
-            // AllowedTools list includes it.
-            if (!_settings.EnabledToolIds.Any(id =>
-                    string.Equals(id, row.Id, StringComparison.OrdinalIgnoreCase)))
-            {
-                _settings.EnabledToolIds.Add(row.Id);
-            }
-        }
-        SaveSettingsFireAndForget();
-    }
-
-    // Shared fire-and-forget save for the per-field partials above.
-    private void SaveSettingsFireAndForget()
-    {
-        _ = _repository.SaveSettingsAsync(_settings)
-            .ContinueWith(task =>
-            {
-                _ = task.Exception; // observe + discard
-            }, TaskScheduler.Default);
-    }
+    // AppSettings schema mirrors (Temperature, MaxOutputTokens,
+    // RetryMaxAttempts, UseTokenizerEstimation, MaxAutoFixRounds,
+    // AgentExecutionMode, AutoVerify, Tools permission matrix) live in
+    // SettingsViewModel now — see the Settings property above. The host
+    // no longer carries these fields. XAML binds to Settings.X for each.
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendTaskCommand))]
@@ -512,6 +324,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // PR-2: provider config surface is delegated to a dedicated view-model.
     public ProviderConfigViewModel Provider => _provider;
 
+    // 1.0 refactor: AppSettings schema mirrors (Temperature, MaxOutputTokens,
+    // AgentExecutionMode, AutoVerify, tool permission matrix) live in a
+    // dedicated view-model. The host keeps the cross-cutting concerns
+    // (project + conversation + activity + run state) and exposes Settings
+    // as a sub-VM the XAML can bind to. Schema writes go through
+    // SettingsViewModel.OnXxxChanged partials, which fire-and-forget save
+    // via the shared IAppRepository.
+    public SettingsViewModel Settings => _settingsViewModel;
+
     // PR-3: project list / selection lives in a dedicated view-model. The
     // current project is exposed as a public property (CurrentProject) so
     // the rest of the app can read it without going through events.
@@ -604,6 +425,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         AgentToolRegistry toolRegistry,
         IChatCompletionService chatService,
         ProviderConfigViewModel provider,
+        SettingsViewModel settingsViewModel,
         ProjectSidebarViewModel sidebar,
         ConversationListViewModel conversationList,
         ToolApprovalViewModel approvalViewModel,
@@ -621,6 +443,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _toolRegistry = toolRegistry;
         _chatService = chatService;
         _provider = provider;
+        _settingsViewModel = settingsViewModel;
         _sidebar = sidebar;
         _conversationList = conversationList;
         _approvalViewModel = approvalViewModel;
@@ -784,7 +607,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 "修改完成后自动运行检查命令",
                 "⌘ ⇧ V",
                 "M5 12 l4 4 L19 6",
-                () => { AutoVerify = !AutoVerify; return Task.FromResult(true); }),
+                () => { _settingsViewModel.AutoVerify = !_settingsViewModel.AutoVerify; return Task.FromResult(true); }),
             new CommandItem(
                 "测试当前模型",
                 "发起一次连接性测试，确认 API Key 有效",
@@ -899,45 +722,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             ActiveProvider = active is null ? "未配置模型" : active.Name;
             ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
             Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
-            AutoVerify = _settings.AutoVerifyAgentRuns;
 
-            // Seed the host-level mirrors from the just-loaded +
-            // normalized settings. Each OnXxxChanged partial above
-            // would re-fire SaveSettingsAsync on these assignments,
-            // which is harmless but wasteful — set the backing field
-            // via the partial-friendly path by writing to _settings
-            // first and reading back into the mirror. (Direct mirror
-            // assignment fires the partial; mirror-from-settings
-            // doesn't.) Net: one redundant save per field avoided.
-            // The XAML re-evaluates on the mirror change either way.
-            Temperature = _settings.Temperature;
-            MaxOutputTokens = _settings.MaxOutputTokens;
-            RetryMaxAttempts = _settings.RetryMaxAttempts;
-            UseTokenizerEstimation = _settings.UseTokenizerEstimation;
-            MaxAutoFixRounds = _settings.MaxAutoFixRounds;
-            AgentExecutionMode = _settings.AgentExecutionMode;
-
-            // Rebuild the per-tool settings rows. The registry's
-            // AllWithMetadata is the source of truth for which tools
-            // exist + their default modes; the per-row SelectedMode
-            // is seeded from _settings.ToolPermissionModes (or the
-            // registry default if the user hasn't overridden).
-            Tools.Clear();
-            foreach (var (tool, metadata) in _toolRegistry.AllWithMetadata())
-            {
-                var effective = _settings.ToolPermissionModes.TryGetValue(
-                    metadata.ToolId, out var configured) ? configured : metadata.DefaultPermissionMode;
-                var row = new ToolSettingViewModel(
-                    metadata.ToolId,
-                    tool.Definition.Name,
-                    metadata.Category,
-                    metadata.DefaultPermissionMode)
-                {
-                    SelectedMode = effective
-                };
-                row.PropertyChanged += OnToolRowPropertyChanged;
-                Tools.Add(row);
-            }
+            // The settings-modal mirror (Temperature / MaxOutputTokens /
+            // AgentExecutionMode / AutoVerify / Tools permission matrix)
+            // is owned by SettingsViewModel. Its Refresh() seeds the
+            // mirrors from _settingsHolder.Current; the per-field
+            // skip-if-same-value guards on the OnXxxChanged partials
+            // keep the load-time assignment from firing a save. The
+            // page-header pill and the settings modal both bind to
+            // Settings.AutoVerify, so the host doesn't need a local
+            // mirror anymore.
+            _settingsViewModel.Refresh();
 
             _sidebar.Refresh(projects);
             // Restore the last-active conversation if its id still
@@ -1307,25 +1102,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _approvalViewModel.IsReadOnly = value;
         _ = RecomputeContextInputTokensAsync(DraftPrompt);
         OnPropertyChanged(nameof(PromptPlaceholder));
-    }
-
-    partial void OnAutoVerifyChanged(bool value)
-    {
-        _settings.AutoVerifyAgentRuns = value;
-        // Fire-and-forget the save. The user toggled the setting from
-        // the palette (⌘⇧V), the page-header pill, or the settings
-        // modal — they expect the choice to survive a quit + relaunch.
-        // Same fire-and-forget pattern as the conversation-restore
-        // save in OnConversationSelected: a failed write means the
-        // setting stays at its in-memory value for this session but
-        // nothing else breaks. async void is unsafe in property
-        // partials (they're sync), so the explicit ContinueWith
-        // observes the task and discards its exception.
-        _ = _repository.SaveSettingsAsync(_settings)
-            .ContinueWith(task =>
-            {
-                _ = task.Exception; // observe + discard
-            }, TaskScheduler.Default);
     }
 
     // Re-runs the context router for the current project + goal and
