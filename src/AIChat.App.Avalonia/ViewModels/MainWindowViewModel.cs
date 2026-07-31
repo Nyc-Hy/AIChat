@@ -1028,6 +1028,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     partial void OnAutoVerifyChanged(bool value)
     {
         _settings.AutoVerifyAgentRuns = value;
+        // Fire-and-forget the save. The user toggled the setting from
+        // the palette (⌘⇧V), the page-header pill, or the settings
+        // modal — they expect the choice to survive a quit + relaunch.
+        // Same fire-and-forget pattern as the conversation-restore
+        // save in OnConversationSelected: a failed write means the
+        // setting stays at its in-memory value for this session but
+        // nothing else breaks. async void is unsafe in property
+        // partials (they're sync), so the explicit ContinueWith
+        // observes the task and discards its exception.
+        _ = _repository.SaveSettingsAsync(_settings)
+            .ContinueWith(task =>
+            {
+                _ = task.Exception; // observe + discard
+            }, TaskScheduler.Default);
     }
 
     // Re-runs the context router for the current project + goal and
