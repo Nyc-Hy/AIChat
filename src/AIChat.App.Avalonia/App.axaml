@@ -474,7 +474,7 @@
         <Style Selector="TextBlock.sub-agent-status.budget">
             <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
         </Style>
-        <Style Selector="TextBlock.sub-agent-status.cancelled, TextBlock.sub-agent-status.skipped, TextBlock.sub-agent-status.other">
+        <Style Selector="TextBlock.sub-agent-status.cancelled, TextBlock.sub-agent-status.skipped">
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         </Style>
         <!--
