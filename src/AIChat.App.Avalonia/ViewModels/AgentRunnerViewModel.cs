@@ -4,7 +4,6 @@ using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
 using AIChat.Application.Agents;
-using AIChat.Application.Agents.Coordinator;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Resilience;
 using AIChat.Application.Prompting;
@@ -17,18 +16,19 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
-// Owns the inner agent loop: building the AgentHarness, streaming events,
-// updating the activity feed, and persisting the conversation when the run
-// finishes. Extracted from MainWindowViewModel in PR-13 so the host VM only
-// owns the user-facing SendTaskCommand (validation + entry point) and
-// cross-VM coordination.
+// Wraps the agent loop (AgentHarness) for the host. The host
+// (via AgentHostViewModel) owns all run-state — IsRunning,
+// StatusMessage, InputTokens, LastAssistantStatus, DraftPrompt,
+// PlanItems, SubAgentRuns — and the runner writes to those
+// properties directly instead of through 10+ Action/Func
+// callbacks. The few fields that live on the host instead of
+// AgentHost (StatusMessage, AppSettings, NoWriteMode) are read
+// through the host's public properties.
 //
-// The host's IsRunning / StatusMessage / DraftPrompt / InputTokens stay the
-// source of truth for the XAML bindings; the runner writes through the
-// small set of Action/Func callbacks passed in. All other dependencies
-// (activity feed, sidebar, conversation list, repository, chat service,
-// tool registry, approval service) are held directly because the runner
-// is the sole writer of those during a run.
+// The runner's only other collaborators (activity feed, sidebar,
+// conversation list, repository, chat service, tool registry,
+// approval service) are held directly because the runner is the
+// sole writer of those during a run.
 public sealed partial class AgentRunnerViewModel : ObservableObject
 {
     private readonly IChatCompletionService _chatService;
@@ -38,21 +38,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     private readonly ActivityFeedViewModel _activityFeed;
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly ConversationListViewModel _conversationList;
-
-    // Host-owned state setters. The host's IsRunning is what the XAML
-    // binds to (and the CanExecute on SendTaskCommand depends on it), so
-    // the runner writes through these callbacks instead of duplicating
-    // the observable here.
-    private readonly Action<bool> _setIsRunning;
-    private readonly Action<string> _setStatusMessage;
-    private readonly Action<int> _setInputTokens;
-    private readonly Action _clearDraftPrompt;
-    private readonly Action<string> _setLastAssistantStatus;
-    private readonly Action<AIChat.Domain.Chat.AgentPlan?> _updatePlan;
-    private readonly Action<AIChat.Domain.Chat.AgentSubAgentRun> _upsertSubAgent;
-    private readonly Action _clearSubAgentRuns;
-    private readonly Func<AppSettings> _getSettings;
-    private readonly Func<bool> _getNoWriteMode;
+    private readonly AgentHostViewModel _host;
 
     public AgentRunnerViewModel(
         IChatCompletionService chatService,
@@ -62,16 +48,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         ActivityFeedViewModel activityFeed,
         ProjectSidebarViewModel sidebar,
         ConversationListViewModel conversationList,
-        Action<bool> setIsRunning,
-        Action<string> setStatusMessage,
-        Action<int> setInputTokens,
-        Action clearDraftPrompt,
-        Action<string> setLastAssistantStatus,
-        Action<AIChat.Domain.Chat.AgentPlan?> updatePlan,
-        Action<AIChat.Domain.Chat.AgentSubAgentRun> upsertSubAgent,
-        Action clearSubAgentRuns,
-        Func<AppSettings> getSettings,
-        Func<bool> getNoWriteMode)
+        AgentHostViewModel host)
     {
         _chatService = chatService;
         _toolRegistry = toolRegistry;
@@ -80,40 +57,33 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         _activityFeed = activityFeed;
         _sidebar = sidebar;
         _conversationList = conversationList;
-        _setIsRunning = setIsRunning;
-        _setStatusMessage = setStatusMessage;
-        _setInputTokens = setInputTokens;
-        _clearDraftPrompt = clearDraftPrompt;
-        _setLastAssistantStatus = setLastAssistantStatus;
-        _updatePlan = updatePlan;
-        _upsertSubAgent = upsertSubAgent;
-        _clearSubAgentRuns = clearSubAgentRuns;
-        _getSettings = getSettings;
-        _getNoWriteMode = getNoWriteMode;
+        _host = host;
     }
 
-    // Entry point. The host has already validated the prompt, settings,
-    // and project; this method assumes all preconditions hold.
+    // Entry point. The host has already validated the prompt,
+    // settings, and project; this method assumes all preconditions
+    // hold.
     //
-    // The host owns the CancellationTokenSource and exposes a StopTaskCommand
-    // that cancels it. The token is forwarded to AgentHarness.RunAsync so
-    // the inner loop halts at the next await point. OperationCanceledException
-    // is caught here and surfaces as a "已停止" status on the assistant
-    // bubble rather than a "失败" one.
+    // The host owns the CancellationTokenSource and exposes a
+    // StopTaskCommand that cancels it. The token is forwarded to
+    // AgentHarness.RunAsync so the inner loop halts at the next
+    // await point. OperationCanceledException is caught here and
+    // surfaces as a "已停止" status on the assistant bubble rather
+    // than a "失败" one.
     public async Task RunAsync(string prompt, AppSettings effectiveSettings, CancellationToken cancellationToken = default)
     {
-        _setIsRunning(true);
-        _clearDraftPrompt();
-        _clearSubAgentRuns();
+        _host.IsRunning = true;
+        _host.DraftPrompt = "";
+        _host.ClearSubAgentRuns();
         var userItem = new ActivityItemViewModel("你", prompt, "已发送");
         var assistantItem = new ActivityItemViewModel(
             "AIChat",
-            _getNoWriteMode() ? "正在以只读模式启动..." : "正在启动任务...",
+            _host.GetNoWriteMode() ? "正在以只读模式启动..." : "正在启动任务...",
             "运行中");
-        _setLastAssistantStatus("运行中");
+        _host.LastAssistantStatus = "运行中";
         _activityFeed.Add(userItem);
         _activityFeed.Add(assistantItem);
-        _setStatusMessage("AIChat 正在读取上下文...");
+        _host.SetStatusMessage("AIChat 正在读取上下文...");
 
         var project = _sidebar.CurrentProject!;
         var conversation = new Conversation
@@ -141,20 +111,21 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
         try
         {
-            var settings = _getSettings();
-            var noWrite = _getNoWriteMode();
+            var settings = _host.GetSettings();
+            var noWrite = _host.GetNoWriteMode();
             var runtimeSettings = noWrite
                 ? RuntimeSettingsBuilder.ReadOnly(settings, _toolRegistry)
                 : RuntimeSettingsBuilder.Gui(settings, _toolRegistry);
-            // AppSettings.UseTokenizerEstimation has been a real schema
-            // field since PR-3 but the construction site always passed
-            // a TokenizerContextEstimator — the flag was set, never
-            // bound. Honor the setting now: false → simple chars-based
-            // heuristic (faster, no SharpToken dependency, but rougher
-            // numbers); true → tokenizer (default, billing-grade).
-            // The default value on a fresh AppSettings is true so the
-            // observable behaviour is unchanged unless the user
-            // explicitly flips the flag.
+            // AppSettings.UseTokenizerEstimation has been a real
+            // schema field since PR-3 but the construction site
+            // always passed a TokenizerContextEstimator — the flag
+            // was set, never bound. Honor the setting now: false →
+            // simple chars-based heuristic (faster, no SharpToken
+            // dependency, but rougher numbers); true → tokenizer
+            // (default, billing-grade). The default value on a
+            // fresh AppSettings is true so the observable behaviour
+            // is unchanged unless the user explicitly flips the
+            // flag.
             var contextEstimator = settings.UseTokenizerEstimation
                 ? (IContextEstimator)new TokenizerContextEstimator()
                 : new SimpleContextEstimator();
@@ -179,30 +150,27 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 RequestToolApprovalAsync = _approval.RequestApprovalAsync
             });
 
-            // Push the authoritative input-tokens estimate to the host
-            // so the status-bar context meter reflects what the agent
-            // is actually about to send (the host's pre-build estimate
-            // was based on a separate router call). The previous
-            // SessionInsightsViewModel.BeginRun also touched a stack
-            // of dead metrics (output, tool rounds, runtime, …) that
-            // nothing read; the only consumer that survived was the
-            // input-tokens cell the status bar read, which is now the
-            // single source of truth here.
-            _setInputTokens(ContextInputEstimator.Estimate(
+            // Push the authoritative input-tokens estimate to the
+            // host so the status-bar context meter reflects what
+            // the agent is actually about to send (the host's
+            // pre-build estimate was based on a separate router
+            // call).
+            _host.InputTokens = ContextInputEstimator.Estimate(
                 requestBuild.ContextPack?.EstimatedTokens ?? 0,
-                prompt));
+                prompt);
 
             // AppSettings.RetryMaxAttempts is a real schema field
-            // (clamped by AdvancedSettingsService.Normalize on every
-            // load, persisted through ProtectedSettingsSerializer),
-            // but the construction site at AgentRunnerViewModel
-            // always used the default 'new RetryPolicy()' which has
-            // 3 hard-coded — the field was a schema property with no
-            // observable effect. Wire it through now: a user who
-            // bumps retries to 5 in their settings file actually
-            // gets 5 retries. The default value on a fresh
-            // AppSettings is 3 so observable behaviour is unchanged
-            // unless the user explicitly edits the value.
+            // (clamped by AdvancedSettingsService.Normalize on
+            // every load, persisted through
+            // ProtectedSettingsSerializer), but the construction
+            // site at AgentRunnerViewModel always used the default
+            // 'new RetryPolicy()' which has 3 hard-coded — the
+            // field was a schema property with no observable
+            // effect. Wire it through now: a user who bumps
+            // retries to 5 in their settings file actually gets 5
+            // retries. The default value on a fresh AppSettings
+            // is 3 so observable behaviour is unchanged unless the
+            // user explicitly edits the value.
             var toolCatalog = new AgentToolCatalog(_toolRegistry.All);
             var harness = new AgentHarness(
                 new AgentRunner(
@@ -232,23 +200,25 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             }
 
             assistantItem.Status = "完成";
-            _setLastAssistantStatus("完成");
-            // Drop a "本次运行" summary bubble into the activity feed
-            // so the user can see at a glance what happened — file
-            // count, tool call count, duration — without opening the
-            // git modal or scrolling through tool cards.
+            _host.LastAssistantStatus = "完成";
+            // Drop a "本次运行" summary bubble into the activity
+            // feed so the user can see at a glance what happened
+            // — file count, tool call count, duration — without
+            // opening the git modal or scrolling through tool
+            // cards.
             var run = conversation.AgentRuns.LastOrDefault();
             if (run is not null)
             {
-                // Pass isReadOnly so a no-write run with 0 changes
-                // can be tagged in the summary — the user sent a
-                // refactor / fix / add request, the agent did all
-                // the planning, nothing landed, and the "改 0 个
-                // 文件" line by itself doesn't tell them whether
-                // the agent's plan was a no-op or whether read-only
-                // mode silently swallowed every write. Tagging the
-                // line in the summary keeps the cause visible
-                // without an extra system bubble.
+                // Pass isReadOnly so a no-write run with 0
+                // changes can be tagged in the summary — the
+                // user sent a refactor / fix / add request, the
+                // agent did all the planning, nothing landed,
+                // and the "改 0 个文件" line by itself doesn't
+                // tell them whether the agent's plan was a no-op
+                // or whether read-only mode silently swallowed
+                // every write. Tagging the line in the summary
+                // keeps the cause visible without an extra system
+                // bubble.
                 _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite), "完成");
             }
             conversation.UpdatedAt = DateTimeOffset.Now;
@@ -256,33 +226,35 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             project.UpdatedAt = DateTimeOffset.Now;
             await SaveProjectsAsync();
             _conversationList.Refresh(project, conversation.Id);
-            _setStatusMessage("完成。");
+            _host.SetStatusMessage("完成。");
         }
         catch (OperationCanceledException)
         {
             assistantItem.Status = "已停止";
-            _setLastAssistantStatus("已停止");
+            _host.LastAssistantStatus = "已停止";
             if (string.IsNullOrEmpty(assistantItem.Detail))
             {
                 assistantItem.Detail = "本次运行已停止。";
             }
-            // Re-throw so the host's SendTaskCommand can set its own
-            // status message; the host owns the user-facing status bar.
+            // Re-throw so the host's SendTaskCommand can set
+            // its own status message; the host owns the
+            // user-facing status bar.
             throw;
         }
         catch (Exception ex)
         {
             assistantItem.Status = "失败";
-            _setLastAssistantStatus("失败");
+            _host.LastAssistantStatus = "失败";
             assistantItem.Detail = $"请求失败：{ex.Message}";
-            _setStatusMessage("请求失败。");
-            // Re-throw so the host's SendTaskCommand catch can drop a
-            // toast — the runner never knows about the toast service.
+            _host.SetStatusMessage("请求失败。");
+            // Re-throw so the host's SendTaskCommand catch can
+            // drop a toast — the runner never knows about the
+            // toast service.
             throw;
         }
         finally
         {
-            _setIsRunning(false);
+            _host.IsRunning = false;
         }
     }
 
@@ -294,29 +266,30 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         switch (agentEvent.Type)
         {
             case AgentHarnessEventType.StepAdded:
-                // The harness updates Run.Plan whenever the agent adds
-                // a step. Forward the latest plan to the host so the
-                // plan panel stays in sync. The harness yields events
-                // on whatever thread the LLM stream resumes on, so
-                // every host-state mutation (including the plan list
-                // and the sub-agent rows) is marshalled to the UI
-                // thread first — mutating an ItemsControl-bound
+                // The harness updates Run.Plan whenever the agent
+                // adds a step. Forward the latest plan to the host
+                // so the plan panel stays in sync. The harness
+                // yields events on whatever thread the LLM stream
+                // resumes on, so every host-state mutation
+                // (including the plan list and the sub-agent
+                // rows) is marshalled to the UI thread first —
+                // mutating an ItemsControl-bound
                 // ObservableCollection from a thread-pool thread
                 // throws or corrupts the render.
                 await UpdatePlanOnUiThreadAsync(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.SubAgentStarted:
             case AgentHarnessEventType.SubAgentCompleted:
-                // Sub-agent runs are surfaced as a sub-section of the
-                // plan panel (template + task + status + duration).
-                // Upsert so the started event creates the row and the
-                // completed event updates the same row in place. Both
-                // the upsert and the plan refresh run on the UI
-                // thread — the harness event may have arrived on a
-                // worker thread.
+                // Sub-agent runs are surfaced as a sub-section of
+                // the plan panel (template + task + status +
+                // duration). Upsert so the started event creates
+                // the row and the completed event updates the
+                // same row in place. Both the upsert and the plan
+                // refresh run on the UI thread — the harness
+                // event may have arrived on a worker thread.
                 if (agentEvent.SubAgentRun is not null)
                 {
-                    await Dispatcher.UIThread.InvokeAsync(() => _upsertSubAgent(agentEvent.SubAgentRun));
+                    await Dispatcher.UIThread.InvokeAsync(() => _host.UpsertSubAgentRun(agentEvent.SubAgentRun));
                 }
                 await UpdatePlanOnUiThreadAsync(agentEvent.Run?.Plan);
                 break;
@@ -325,7 +298,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 {
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        _setStatusMessage(agentEvent.PhaseTransition.Summary);
+                        _host.SetStatusMessage(agentEvent.PhaseTransition.Summary);
                     });
                 }
 
@@ -364,12 +337,13 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     });
                 }
 
-                // update_plan mutates Run.Plan directly and emits a
-                // ToolResult rather than a StepAdded, so the plan
-                // panel won't see the new items unless we forward
-                // here too. Cheap to do on every ToolResult — the
-                // host just clears + re-adds the same items. Same
-                // UI-thread dispatch as StepAdded above.
+                // update_plan mutates Run.Plan directly and emits
+                // a ToolResult rather than a StepAdded, so the
+                // plan panel won't see the new items unless we
+                // forward here too. Cheap to do on every
+                // ToolResult — the host just clears + re-adds the
+                // same items. Same UI-thread dispatch as
+                // StepAdded above.
                 await UpdatePlanOnUiThreadAsync(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.ContentDelta:
@@ -378,13 +352,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     assistantMessage.Content += agentEvent.Content;
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        // First content delta after the "正在启动
-                        // 任务..." placeholder: clear the placeholder
-                        // (replace, don't append) so the rendered
-                        // markdown shows the model's actual response
-                        // rather than "正在启动任务...Hello there...".
-                        // Subsequent deltas append as usual. The flag
-                        // lives on the bubble itself so the lambda
+                        // First content delta after the "正在
+                        // 启动任务..." placeholder: clear the
+                        // placeholder (replace, don't append) so
+                        // the rendered markdown shows the model's
+                        // actual response rather than "正在启动
+                        // 任务...Hello there...". Subsequent
+                        // deltas append as usual. The flag lives
+                        // on the bubble itself so the lambda
                         // doesn't have to carry per-run state.
                         if (!assistantItem.HasReceivedFirstContent)
                         {
@@ -395,7 +370,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                         {
                             assistantItem.Detail += agentEvent.Content;
                         }
-                        _setStatusMessage("正在接收回复...");
+                        _host.SetStatusMessage("正在接收回复...");
                     });
                 }
 
@@ -403,27 +378,29 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             case AgentHarnessEventType.RunCompleted:
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    _setStatusMessage(agentEvent.Run?.CompletionReason is { Length: > 0 } reason ? reason : "运行完成。");
+                    _host.SetStatusMessage(agentEvent.Run?.CompletionReason is { Length: > 0 } reason ? reason : "运行完成。");
                 });
                 break;
         }
     }
 
-    // Marshal a plan refresh to the UI thread. The harness event loop
-    // yields on whatever thread the underlying LLM stream resumes on
-    // (typically a thread-pool thread after an HTTP read), but the
-    // host's PlanItems is an ObservableCollection bound to a panel in
-    // the MainWindow XAML. Mutating it from a non-UI thread is unsafe
-    // — Avalonia either throws "Collection was modified during
-    // enumeration" on the render side, or silently drops the change
-    // and the user sees a stale plan. Every other host-state mutation
-    // in ApplyAgentEventAsync is already wrapped in an explicit
+    // Marshal a plan refresh to the UI thread. The harness event
+    // loop yields on whatever thread the underlying LLM stream
+    // resumes on (typically a thread-pool thread after an HTTP
+    // read), but the host's PlanItems is an ObservableCollection
+    // bound to a panel in the MainWindow XAML. Mutating it from a
+    // non-UI thread is unsafe — Avalonia either throws
+    // "Collection was modified during enumeration" on the render
+    // side, or silently drops the change and the user sees a
+    // stale plan. Every other host-state mutation in
+    // ApplyAgentEventAsync is already wrapped in an explicit
     // Dispatcher.UIThread.InvokeAsync for the same reason; this
-    // helper keeps the plan dispatch next to the others instead of
-    // three identical lambda blocks scattered through the switch.
+    // helper keeps the plan dispatch next to the others instead
+    // of three identical lambda blocks scattered through the
+    // switch.
     private async Task UpdatePlanOnUiThreadAsync(AIChat.Domain.Chat.AgentPlan? plan)
     {
-        await Dispatcher.UIThread.InvokeAsync(() => _updatePlan(plan));
+        await Dispatcher.UIThread.InvokeAsync(() => _host.UpdatePlan(plan));
     }
 
     private static string FriendlyToolSummary(string toolName)
@@ -439,20 +416,21 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         };
     }
 
-    // Build the "本次运行" summary the host drops into the activity
-    // feed right after a run lands. Keeps to one line of plain text
-    // so the system bubble stays scannable: files / tools / duration.
-    // Explorer / worker sub-agent counts + verification results are
-    // surfaced when the run actually used them — silent otherwise so
-    // a simple chat exchange doesn't look heavier than it was.
+    // Build the "本次运行" summary the host drops into the
+    // activity feed right after a run lands. Keeps to one line
+    // of plain text so the system bubble stays scannable: files
+    // / tools / duration. Explorer / worker sub-agent counts +
+    // verification results are surfaced when the run actually
+    // used them — silent otherwise so a simple chat exchange
+    // doesn't look heavier than it was.
     //
-    // The caller passes isReadOnly so a no-write run that touched
-    // zero files can carry a "只读" tag — the user sent a refactor
-    // prompt, the agent did all the planning, nothing landed, and
-    // "改 0 个文件" by itself doesn't tell them whether to flip
-    // read-only off and retry or whether the agent decided the
-    // task was already done. The tag makes the cause visible
-    // without an extra system bubble.
+    // The caller passes isReadOnly so a no-write run that
+    // touched zero files can carry a "只读" tag — the user sent
+    // a refactor prompt, the agent did all the planning,
+    // nothing landed, and "改 0 个文件" by itself doesn't tell
+    // them whether to flip read-only off and retry or whether
+    // the agent decided the task was already done. The tag
+    // makes the cause visible without an extra system bubble.
     public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run, bool isReadOnly = false)
     {
         var fileChangeCount = run.FileChanges?.Count ?? 0;

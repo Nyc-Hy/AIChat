@@ -38,25 +38,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly MemoryEditorViewModel _memoryEditor;
     private readonly GitStatusViewModel _gitStatus;
     private readonly AIChat.Application.Workspace.IWorkspaceChangeService _workspace;
-    private readonly AgentRunnerViewModel _agentRunner;
-    // CTS for the currently running agent task. New SendTaskCommand runs
-    // replace it; StopTaskCommand cancels it. The token is passed into
-    // AgentRunner.RunAsync and forwarded to AgentHarness so cancellation
-    // halts the inner loop at the next await point.
-    private CancellationTokenSource? _runCts;
+    private readonly AgentHostViewModel _agentHost;
 
-    // The last user prompt that survived validation. Used by RetryLastTask
-    // so a failed/cancelled run can be re-sent without retyping.
-    private string _lastUserPrompt = "";
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanRetry))]
-    private string lastAssistantStatus = "";
-
-    public bool CanRetry =>
-        !string.IsNullOrEmpty(_lastUserPrompt)
-        && !IsRunning
-        && (LastAssistantStatus is "失败" or "已停止");
+    // lastAssistantStatus + CanRetry + _lastUserPrompt all moved
+    // to AgentHostViewModel — see the AgentHost property. The host
+    // doesn't need a local mirror; XAML binds to
+    // AgentHost.CanRetry / AgentHost.LastAssistantStatus.
 
     private AppSettings _settings = new();
 
@@ -101,8 +88,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ? "只读模式 — 探索 / 提问，不修改项目 (⌘⇧R 切换)"
         : "说点什么…  (试试 /help 查看命令)";
 
-    // (OnNoWriteModeChanged body is below; raises PromptPlaceholder in
-    // addition to the approval side effect.)
+    partial void OnNoWriteModeChanged(bool value)
+    {
+        _approvalViewModel.IsReadOnly = value;
+        // The no-write toggle shifts which tools the agent can see,
+        // which shifts the system prompt size, which shifts the
+        // context estimate — recompute the meter on toggle. Host
+        // owns NoWriteMode; AgentHost owns the recompute.
+        _ = _agentHost.RecomputeContextInputTokensAsync(_agentHost.DraftPrompt);
+        OnPropertyChanged(nameof(PromptPlaceholder));
+    }
 
     // Clipboard helpers used by the /copy slash command. HasClipboardService
     // lets the slash handler fail gracefully when the platform clipboard
@@ -167,10 +162,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // SettingsViewModel now — see the Settings property above. The host
     // no longer carries these fields. XAML binds to Settings.X for each.
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SendTaskCommand))]
-    [NotifyPropertyChangedFor(nameof(CanRetry))]
-    private bool isRunning;
+    // The run state (IsRunning, LastAssistantStatus, InputTokens,
+    // DraftPrompt, PendingAttachments, PlanItems, SubAgentRuns) and
+    // the send / stop / retry commands live in AgentHostViewModel —
+    // see the AgentHost property. The host keeps the cross-cutting
+    // concerns (sidebar / conversation wiring, approval bubbles,
+    // modals, settings surface) and reads / writes a small
+    // Action/Func bridge for the host-owned state the agent runner
+    // touches (StatusMessage, AppSettings, NoWriteMode).
 
     // 1.0 Beta: command palette + settings modal overlays. The toggles flip
     // a Border's IsVisible in the MainWindow XAML.
@@ -188,13 +187,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private bool isMemoryEditorOpen;
 
     public MemoryEditorViewModel MemoryEditor => _memoryEditor;
-
-    // Pending image attachments (paste-into-prompt). The user pastes
-    // an image with ⌘V while the prompt is focused; the view code-
-    // behind saves the bitmap and adds a row to this collection. The
-    // thumbnails show above the composer; on send the host materialises
-    // InputArtifact records and wires them into the chat request.
-    public PendingAttachmentsViewModel PendingAttachments { get; } = new();
 
     // Git status / diff viewer modal. ⌘⇧G opens it; ⌘G stays as the
     // quick /git bubble for the lightweight "what just changed"
@@ -224,29 +216,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ? ActiveProvider
         : $"{ActiveProvider} · {ActiveModel}";
 
-    // Approximate context window. 64K covers GPT-4 / Claude / DeepSeek with
-    // a single number so the input-area progress bar reads consistently.
-    // Will become per-model once the provider API reports the real cap.
-    private const int ApproximateContextWindow = 64_000;
-
-    // Estimated input tokens for the current prompt against the current
-    // project (context router output + prompt + system/tool schema
-    // budget). Recomputed on project change, on every prompt keystroke,
-    // and at run start so the status-bar context meter is always
-    // current. The runner pushes a final value via the setInputTokens
-    // callback at BeginRun so the meter reflects the actual request
-    // the agent will send (not just the host's pre-build estimate).
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ContextBudgetPercent))]
-    [NotifyPropertyChangedFor(nameof(ContextBudgetWidthInMini))]
-    private int inputTokens;
-
-    public int ContextBudgetPercent =>
-        (int)Math.Clamp(InputTokens * 100.0 / ApproximateContextWindow, 0, 100);
-
-    // Width in DIPs for the inline context meter in the status bar. The mini
-    // bar is 80px wide so the percent→width factor is 0.8.
-    public double ContextBudgetWidthInMini => Math.Max(0, ContextBudgetPercent * 0.8);
+    // Approximate context window + estimated input tokens + the
+    // status-bar context meter all moved to AgentHostViewModel
+    // (it's the run state). The XAML binds through AgentHost.
 
     // PR-12: conversation activity feed is its own view-model. The XAML
     // binds to ActivityFeed.Activity / ActivityFeed.HasConversation.
@@ -333,6 +305,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // via the shared IAppRepository.
     public SettingsViewModel Settings => _settingsViewModel;
 
+    // 1.0 refactor: agent run state (SendTask / StopTask / RetryLastTask,
+    // IsRunning, LastAssistantStatus, InputTokens, DraftPrompt,
+    // PendingAttachments, PlanItems, SubAgentRuns) lives in a dedicated
+    // sub-VM. The host keeps the cross-cutting glue (sidebar / conversation
+    // wiring, approval bubbles, modals, settings surface) and exposes
+    // AgentHost for XAML binding. The host bridges the three pieces of
+    // shared state (StatusMessage, AppSettings, NoWriteMode) into AgentHost
+    // through a small Action/Func bridge.
+    public AgentHostViewModel AgentHost => _agentHost;
+
     // PR-3: project list / selection lives in a dedicated view-model. The
     // current project is exposed as a public property (CurrentProject) so
     // the rest of the app can read it without going through events.
@@ -348,21 +330,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // harness depends on; the service is a thin facade over the VM.
     public ToolApprovalViewModel Approval => _approvalViewModel;
 
-    // PR-13: the inner agent loop (harness, event streaming, conversation
-    // persistence) lives in its own view-model. The host VM owns only the
-    // user-facing SendTaskCommand and validation; once those pass the
-    // runner takes over.
-    public AgentRunnerViewModel AgentRunner => _agentRunner;
-
-    // The current agent plan (the task list the agent built via
-    // update_plan). Items are rebuilt every time the harness emits a
-    // StepAdded event, so the XAML sees an ObservableCollection it can
-    // ItemsControl-bind. Empty when the agent isn't running or hasn't
-    // created a plan yet.
-    public System.Collections.ObjectModel.ObservableCollection<PlanItemViewModel> PlanItems { get; } = [];
-    public bool HasPlan => PlanItems.Count > 0;
-    public int PlanCompletedCount => PlanItems.Count(item => item.IsCompleted);
-    public string PlanProgressText => $"{PlanCompletedCount} / {PlanItems.Count}";
+    // 1.0 refactor: the inner agent loop (harness, event streaming,
+    // conversation persistence) and the run state (SendTask /
+    // StopTask / RetryLastTask, IsRunning, LastAssistantStatus,
+    // InputTokens, DraftPrompt, PendingAttachments, PlanItems,
+    // SubAgentRuns) all live in AgentHostViewModel. The host
+    // exposes AgentHost for XAML binding and feeds the host-owned
+    // state (StatusMessage, AppSettings, NoWriteMode) into it
+    // through a small bridge.
 
     // Count of new activity bubbles that landed while the user was
     // scrolled up reading history. The conversation view only
@@ -382,43 +357,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public void IncrementUnseenMessageCount() => UnseenMessageCount++;
     public void ClearUnseenMessageCount() => UnseenMessageCount = 0;
-
-    // Sub-agent runs dispatched by the harness during a run (currently
-    // just the read-only explorer template — the coordinator skips
-    // every other template). Surfaced in the plan panel as a sub-
-    // section so the user can see the agent is making progress on
-    // multi-step research / verification work without scrolling the
-    // activity feed. Cleared on every new SendTaskCommand.
-    public System.Collections.ObjectModel.ObservableCollection<SubAgentRunViewModel> SubAgentRuns { get; } = [];
-    // The plan panel's sub-section binds IsVisible to this. HasPlan has
-    // the same derived-from-collection shape and we re-raise it in
-    // UpdatePlan; this flag is re-raised in UpsertSubAgentRun and
-    // through the clearSubAgentRuns callback below. Without those
-    // re-raises the binding stays stale (the XAML never gets a
-    // PropertyChanged("HasSubAgentRuns") event).
-    public bool HasSubAgentRuns => SubAgentRuns.Count > 0;
-
-    // Upsert from the runner: started events add a new row, completed
-    // events update the matching row by Id. The harness emits both
-    // events per sub-agent, so this is the only place the collection
-    // gets touched.
-    public void UpsertSubAgentRun(AIChat.Domain.Chat.AgentSubAgentRun run)
-    {
-        if (run is null)
-        {
-            return;
-        }
-        var existing = SubAgentRuns.FirstOrDefault(item => item.Id == run.Id);
-        if (existing is null)
-        {
-            SubAgentRuns.Add(new SubAgentRunViewModel(run));
-        }
-        else
-        {
-            existing.Update(run);
-        }
-        OnPropertyChanged(nameof(HasSubAgentRuns));
-    }
 
     public MainWindowViewModel(
         IAppRepository repository,
@@ -455,34 +393,34 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _memoryEditor = memoryEditor;
         _gitStatus = gitStatus;
         _workspace = workspace;
-        _agentRunner = new AgentRunnerViewModel(
+
+        // Construct the agent host (which in turn owns the
+        // AgentRunnerViewModel + the per-run CTS + the run state).
+        // The bridge delegates (setStatusMessage, getSettings,
+        // getNoWriteMode) are the only host-owned state the runner
+        // touches — everything else the runner writes to lives
+        // inside AgentHost.
+        _agentHost = new AgentHostViewModel(
             chatService,
             toolRegistry,
             approval,
             repository,
-            ActivityFeed,
             sidebar,
             conversationList,
-            setIsRunning: value => IsRunning = value,
+            ActivityFeed,
+            toast,
             setStatusMessage: value => StatusMessage = value,
-            setInputTokens: value => InputTokens = value,
-            clearDraftPrompt: () => DraftPrompt = "",
-            setLastAssistantStatus: value => LastAssistantStatus = value,
-            updatePlan: plan => UpdatePlan(plan),
-            upsertSubAgent: run => UpsertSubAgentRun(run),
-            // Re-raise HasSubAgentRuns after Clear so the sub-section
-            // of the plan panel collapses back to hidden when a new
-            // SendTaskCommand starts. Without this the IsVisible
-            // binding stays at its last-true value until the next
-            // sub-agent event lands and UpsertSubAgentRun fires
-            // its own re-raise.
-            clearSubAgentRuns: () =>
-            {
-                SubAgentRuns.Clear();
-                OnPropertyChanged(nameof(HasSubAgentRuns));
-            },
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode);
+
+        // The slash-command handler is a small static helper that
+        // currently expects the host VM (it reads /status fields off
+        // it). Until the slash handler is also refactored to a
+        // smaller surface, the host routes the call through a
+        // single delegate. The reference lives on AgentHost so
+        // SendTaskAsync's call site stays readable.
+        _agentHost.RegisterSlashHandler(prompt =>
+            SlashCommandHandler.TryExecuteAsync(prompt, this));
 
         _provider.Saved += OnProviderSaved;
         _provider.TestStarted += OnProviderTestStarted;
@@ -511,16 +449,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private void OnSidebarProjectSelected(object? sender, ProjectSelectionChangedEventArgs args)
     {
+        // AgentHost also subscribes to ProjectSelected to drive
+        // the context-budget recompute + status message. The host
+        // keeps the conversation list refresh here because the
+        // sidebar / conversation VMs are its concern. The two
+        // handlers are independent — both fire on the same event.
         _conversationList.Refresh(_sidebar.CurrentProject);
-        _ = RecomputeContextInputTokensAsync(DraftPrompt);
-        StatusMessage = args.StatusMessage;
     }
 
     private void OnSidebarProjectAdded(object? sender, ProjectAddedEventArgs args)
     {
         _conversationList.Refresh(_sidebar.CurrentProject);
-        _ = RecomputeContextInputTokensAsync(DraftPrompt);
-        StatusMessage = args.StatusMessage;
     }
 
     private void OnConversationSelected(object? sender, ConversationSelectedEventArgs args)
@@ -744,7 +683,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             // than throwing.
             _conversationList.Refresh(_sidebar.CurrentProject, _settings.LastActiveConversationId);
             _provider.Refresh();
-            _ = RecomputeContextInputTokensAsync(DraftPrompt);
+            _settingsViewModel.Refresh();
+            // Recompute the context budget after the settings +
+            // project load lands — AgentHost owns the recompute
+            // and the meter, the host just kicks the initial
+            // pass.
+            _ = _agentHost.RecomputeContextInputTokensAsync(_agentHost.DraftPrompt);
 
             if (ActivityFeed.Activity.Count == 0)
             {
@@ -759,395 +703,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanSendTask))]
-    private async Task SendTaskAsync()
-    {
-        // The whole send path needs to surface failures to the user
-        // instead of letting them escape the RelayCommand. The ⌘↵
-        // keyboard path goes through MainWindow.SafeRun (try/catch
-        // wrapper), but the XAML send button calls Command.Execute
-        // directly — any uncaught exception in the async lambda
-        // becomes an unhandled-task exception on the dispatcher. The
-        // inner try/catch below only covers the agent run; promote
-        // the body into a try/finally that always restores IsRunning
-        // and reset the per-send CTS so a partial failure can't leave
-        // the host in a stuck-running state.
-        try
-        {
-            var prompt = DraftPrompt.Trim();
-            if (string.IsNullOrWhiteSpace(prompt))
-            {
-                ActivityFeed.Add("需要任务", "先描述你希望 AIChat 完成什么。", "等待");
-                StatusMessage = "请先输入任务。";
-                return;
-            }
-
-            // Slash commands (/clear, /help, /status, /new, /copy) short-circuit
-            // the agent loop. The handler renders its result as a system bubble
-            // in the activity feed and clears the draft. TryExecuteAsync
-            // returns Handled=false when the prompt is not a slash command —
-            // fall through to the normal agent flow.
-            var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync(prompt, this);
-            if (handled)
-            {
-                DraftPrompt = "";
-                if (slashResult is not null)
-                {
-                    ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
-                    StatusMessage = slashResult.Title + "。";
-                }
-                return;
-            }
-
-            // @file references: pull @path tokens out of the prompt, read
-            // the file contents, and drop a system bubble per attachment
-            // so the user can see what got inlined. Warnings (file not
-            // found, too large) render as their own system bubble so the
-            // user gets feedback rather than a silent skip. The cleaned
-            // prompt (with the @tokens stripped) plus a context block
-            // listing the attached file contents is what the agent sees.
-            var projectRoot = _sidebar.CurrentProject?.Path;
-            var parsed = PromptAttachmentParser.Parse(prompt, projectRoot);
-            foreach (var attachment in parsed.Attachments)
-            {
-                var preview = attachment.Content.Length > 200
-                    ? attachment.Content[..200] + "…"
-                    : attachment.Content;
-                ActivityFeed.Add(
-                    $"📎 {attachment.ResolvedPath}  ({attachment.ByteCount} 字节)",
-                    preview,
-                    "附件");
-            }
-            foreach (var warning in parsed.Warnings)
-            {
-                ActivityFeed.Add(
-                    $"⚠ {warning.OriginalToken}",
-                    warning.Message,
-                    "附件");
-            }
-
-            // Build the prompt the agent actually sees: cleaned user
-            // question + a labelled context block listing every attached
-            // file's content. Empty if the prompt was just @file
-            // references — in that case the user has seen the system
-            // bubbles; nothing more to do.
-            if (parsed.Attachments.Count > 0)
-            {
-                var contextBlock = new System.Text.StringBuilder();
-                contextBlock.AppendLine("Attached files (use these for context):");
-                foreach (var attachment in parsed.Attachments)
-                {
-                    contextBlock.AppendLine();
-                    contextBlock.AppendLine($"--- {attachment.ResolvedPath} ---");
-                    contextBlock.Append(attachment.Content);
-                }
-                prompt = string.IsNullOrWhiteSpace(parsed.CleanPrompt)
-                    ? contextBlock.ToString()
-                    : contextBlock + Environment.NewLine + Environment.NewLine + parsed.CleanPrompt;
-            }
-            else
-            {
-                prompt = parsed.CleanPrompt;
-            }
-
-            if (string.IsNullOrWhiteSpace(prompt))
-            {
-                // The prompt was just @file references; nothing to send
-                // to the agent. DraftPrompt is already cleared below.
-                StatusMessage = "已附加文件。";
-                DraftPrompt = "";
-                return;
-            }
-
-            _ = RecomputeContextInputTokensAsync(prompt);
-
-            var effectiveSettings = ProviderSettingsService.CreateEffectiveSettings(_settings, _settings.Temperature);
-            var validation = ProviderConfigurationValidator.ValidateEffectiveSettings(effectiveSettings);
-            if (!validation.IsValid || effectiveSettings is null)
-            {
-                var message = validation.Errors.FirstOrDefault()?.Message ?? "发送前需要配置模型密钥。";
-                ActivityFeed.Add("需要配置模型", message, "已阻止");
-                StatusMessage = message;
-                return;
-            }
-
-            if (_sidebar.CurrentProject is null || string.IsNullOrWhiteSpace(_sidebar.CurrentProject.Path))
-            {
-                ActivityFeed.Add("需要项目", "发送前请先选择或初始化项目。", "已阻止");
-                StatusMessage = "当前没有可运行的项目。";
-                return;
-            }
-
-            // Promote any pasted-image attachments to InputArtifacts on
-            // the current project so the agent loop can pick them up
-            // (AgentRequestFactory reads project.InputArtifacts and
-            // attaches image content parts to the latest user message
-            // for vision-capable models). The PNG files are already on
-            // disk in the pending-attachments folder — we just record
-            // them and clean up the UI strip. Project-level scope means
-            // the artifacts survive the conversation boundary (the user
-            // can prune via the project settings if they want).
-            if (PendingAttachments.Count > 0)
-            {
-                await PromotePendingAttachmentsAsync(_sidebar.CurrentProject);
-            }
-
-            // Replace any prior CTS. A new run cancels nothing — the user
-            // already chose to start a fresh one, so the old token has no
-            // listener any more.
-            _runCts?.Dispose();
-            _runCts = new CancellationTokenSource();
-
-            // Remember the prompt so a failed/cancelled run can be retried
-            // without retyping. RetryLastTask only fires when this is set AND
-            // the last run's status was 失败 or 已停止 (CanRetry).
-            _lastUserPrompt = prompt;
-
-            try
-            {
-                await _agentRunner.RunAsync(prompt, effectiveSettings, _runCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // StopTaskCommand cancelled the run. The agent runner has
-                // already flipped IsRunning to false and updated the activity
-                // item's status to "已停止"; just record the user-visible
-                // status, drop a toast so the user notices even if the
-                // window isn't focused, and move on.
-                StatusMessage = "已停止。";
-                _toast.Show("任务已停止。", ToastLevel.Warning);
-            }
-            catch (Exception ex)
-            {
-                StatusMessage = "请求失败。";
-                _toast.Show(ex.Message, ToastLevel.Error);
-            }
-        }
-        catch (Exception ex)
-        {
-            // Catch-all for any failure before the agent run kicks off
-            // (file copy for a pasted image, settings file write for
-            // the project, …). Without this the user would see a
-            // crashed app or a silently stuck IsRunning state. Show
-            // the same surface the inner catch uses so the failure
-            // path is consistent.
-            StatusMessage = "请求失败。";
-            _toast.Show(ex.Message, ToastLevel.Error);
-        }
-        finally
-        {
-            // Always release the per-send CTS so a failed run doesn't
-            // strand the host. The agent runner flips IsRunning back
-            // to false in its own finally; this finally is the
-            // outer guarantee that even a pre-run throw leaves the
-            // host in a clean state.
-            _runCts?.Dispose();
-            _runCts = null;
-        }
-    }
-
-    [RelayCommand(CanExecute = nameof(CanStopTask))]
-    private void StopTask()
-    {
-        _runCts?.Cancel();
-    }
-
-    // Convert every pending image attachment into a project-level
-    // InputArtifact so the agent loop can attach the image content
-    // to the next user message. Each artifact is materialised via
-    // InputArtifactService (which classifies kind + builds the
-    // summary) and persisted via InputArtifactFileStore (which
-    // copies the file to the project's managed artifacts folder and
-    // records storedPath in the metadata). The project list is
-    // re-saved so the change is durable across restarts.
-    //
-    // Pending attachment rows are cleared at the end of the method
-    // — the on-disk files have been copied to the project's
-    // managed location, and the temporary files are removed when
-    // the PendingAttachmentViewModel is disposed.
-    private async Task PromotePendingAttachmentsAsync(AIChat.Domain.Projects.ProjectWorkspace project)
-    {
-        if (PendingAttachments.Count == 0)
-        {
-            return;
-        }
-
-        var artifactService = new AIChat.Application.Artifacts.InputArtifactService();
-        var fileStore = new AIChat.Application.Artifacts.InputArtifactFileStore();
-        var snapshots = PendingAttachments.Attachments.ToList();
-
-        foreach (var attachment in snapshots)
-        {
-            try
-            {
-                var bytes = await File.ReadAllBytesAsync(attachment.FilePath);
-                var request = new AIChat.Application.Artifacts.InputArtifactCreateRequest
-                {
-                    ProjectId = project.Id,
-                    ConversationId = "",
-                    MessageId = "",
-                    FileName = attachment.FileName,
-                    MimeType = "image/png",
-                    ContentText = "",
-                    FileBytes = bytes,
-                    Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["source"] = "pasted-image",
-                    },
-                };
-                var artifact = artifactService.Create(request);
-                await fileStore.StoreBytesAsync(artifact, bytes, ".png");
-                project.InputArtifacts.Add(artifact);
-            }
-            catch (Exception ex)
-            {
-                // Single bad file shouldn't kill the whole send —
-                // surface it as a system bubble and continue with
-                // the rest.
-                ActivityFeed.Add(
-                    "附加失败",
-                    $"{attachment.FileName}: {ex.Message}",
-                    "附件");
-            }
-        }
-
-        // Persist the updated project (with the new artifacts) so
-        // the change survives an app restart. Mirror the pattern
-        // AgentRunnerViewModel uses after a run lands memory updates.
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(p => p.Id == project.Id);
-        if (index >= 0)
-        {
-            projects[index] = project;
-        }
-        else
-        {
-            projects.Add(project);
-        }
-        await _repository.SaveProjectsAsync(projects);
-
-        // Drop the UI rows (Dispose deletes the temp files; the
-        // managed copies in the artifact store are now the source
-        // of truth).
-        PendingAttachments.Clear();
-    }
-
-    // Rebuild PlanItems from the current AgentPlan. Called by the
-    // AgentRunner on every StepAdded / SubAgentStarted / SubAgentCompleted
-    // event (so the plan list stays in lockstep with what the agent
-    // just wrote). Items appear in the same order the agent wrote them.
-    public void UpdatePlan(AgentPlan? plan)
-    {
-        PlanItems.Clear();
-        if (plan is null)
-        {
-            // The XAML's plan panel binds IsVisible to HasPlan — raise
-            // it here too, otherwise the panel never collapses back
-            // hidden after the agent's last run finishes and clears
-            // the plan. (Same reason for the two other derived
-            // properties: their PropertyChanged only fires when the
-            // observable source flips, and PlanItems.Clear() / Add()
-            // are collection events, not per-property notifications.)
-            OnPropertyChanged(nameof(HasPlan));
-            OnPropertyChanged(nameof(PlanCompletedCount));
-            OnPropertyChanged(nameof(PlanProgressText));
-            return;
-        }
-        foreach (var item in plan.Items.OrderBy(item => item.Order))
-        {
-            PlanItems.Add(new PlanItemViewModel
-            {
-                Title = item.Title,
-                Status = item.Status
-            });
-        }
-        // HasPlan is the IsVisible for the whole plan panel — without
-        // raising it the panel stays hidden the whole session because
-        // PlanItems.Add() is a collection event, not a "HasPlan"
-        // PropertyChanged. The XAML only re-evaluates IsVisible on
-        // "HasPlan" notifications.
-        OnPropertyChanged(nameof(HasPlan));
-        OnPropertyChanged(nameof(PlanCompletedCount));
-        OnPropertyChanged(nameof(PlanProgressText));
-    }
-
-    private bool CanStopTask() => IsRunning;
-
-    [RelayCommand(CanExecute = nameof(CanRetry))]
-    private void RetryLastTask()
-    {
-        if (string.IsNullOrEmpty(_lastUserPrompt))
-        {
-            return;
-        }
-
-        DraftPrompt = _lastUserPrompt;
-        // Re-enter the send command. SendTaskCommand reads DraftPrompt,
-        // so we don't pass the prompt in directly.
-        if (SendTaskCommand.CanExecute(null))
-        {
-            SendTaskCommand.Execute(null);
-        }
-    }
-
-    private bool CanSendTask() => !IsRunning;
-
-    partial void OnDraftPromptChanged(string value)
-    {
-        _ = RecomputeContextInputTokensAsync(value);
-    }
-
-    partial void OnNoWriteModeChanged(bool value)
-    {
-        _approvalViewModel.IsReadOnly = value;
-        _ = RecomputeContextInputTokensAsync(DraftPrompt);
-        OnPropertyChanged(nameof(PromptPlaceholder));
-    }
-
-    // Re-runs the context router for the current project + goal and
-    // updates InputTokens. The only consumer is the status-bar
-    // context meter, so this method is called on every event that
-    // could shift the estimate: project selection, prompt keystrokes,
-    // and no-write toggle. Cheap because the router + file-index
-    // builder cache internally; running on every keystroke is fine.
-    //
-    // Every caller fires this without awaiting (it's a
-    // status-bar polish, not a hard dependency), so an unhandled
-    // exception here would crash the app the same way the
-    // d8dddbc / 847a598 async-void crash chain taught us to
-    // avoid. Swallow + surface via StatusMessage so the user
-    // sees what happened and the meter just stops updating for
-    // the rest of the session.
-    private async Task RecomputeContextInputTokensAsync(string goal)
-    {
-        var project = _sidebar.CurrentProject;
-        if (project is null || string.IsNullOrWhiteSpace(project.Path) || !Directory.Exists(project.Path))
-        {
-            InputTokens = 0;
-            return;
-        }
-
-        try
-        {
-            var resolvedGoal = string.IsNullOrWhiteSpace(goal) ? "项目概览" : goal.Trim();
-            var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500));
-            var contextPack = await Task.Run(() => new ContextRouter().Route(new ContextRouterRequest
-            {
-                Goal = resolvedGoal,
-                Phase = AgentRunPhase.GatheringContext,
-                FileIndex = fileIndex,
-                PinnedItems = project.PinnedContext,
-                InputArtifacts = project.InputArtifacts,
-                MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
-                MaxTokens = 900
-            }));
-            InputTokens = ContextInputEstimator.Estimate(contextPack.EstimatedTokens, resolvedGoal);
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Context 估算失败：{ex.Message}";
-        }
-    }
 
     // PR-3: project list, selection, and add logic live in ProjectSidebarViewModel.
     // These two passthroughs keep the XAML code-behind talking to a single

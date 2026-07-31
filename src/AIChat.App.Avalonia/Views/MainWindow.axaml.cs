@@ -73,7 +73,7 @@ public partial class MainWindow : Window
             // shortcut. Forwards to StopTaskCommand which is gated by
             // CanStopTask (= IsRunning) so it does nothing when idle.
             Gesture = new KeyGesture(Key.OemPeriod, KeyModifiers.Meta),
-            Command = viewModel.StopTaskCommand
+            Command = viewModel.AgentHost.StopTaskCommand
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -81,7 +81,7 @@ public partial class MainWindow : Window
             // RetryLastTaskCommand so it only fires when the previous
             // run failed or was stopped.
             Gesture = new KeyGesture(Key.R, KeyModifiers.Meta),
-            Command = viewModel.RetryLastTaskCommand
+            Command = viewModel.AgentHost.RetryLastTaskCommand
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -191,7 +191,7 @@ public partial class MainWindow : Window
             Gesture = new KeyGesture(Key.K, KeyModifiers.Meta | KeyModifiers.Shift),
             Command = new RelayCommand(() =>
             {
-                if (viewModel.IsRunning)
+                if (viewModel.AgentHost.IsRunning)
                 {
                     viewModel.StatusMessage = "运行中，无法清空。";
                     return;
@@ -390,7 +390,7 @@ public partial class MainWindow : Window
         {
             return;
         }
-        viewModel.DraftPrompt = text;
+        viewModel.AgentHost.DraftPrompt = text;
         PromptInput.Focus();
         // Put the caret at the end rather than selecting all — the
         // user clicked to edit, not to replace wholesale.
@@ -461,7 +461,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        viewModel.DraftPrompt = prompt;
+        viewModel.AgentHost.DraftPrompt = prompt;
         PromptInput.Focus();
     }
 
@@ -588,7 +588,7 @@ public partial class MainWindow : Window
                 if (bitmap is not null)
                 {
                     e.Handled = true;
-                    promptVm.PendingAttachments.AddPastedImage(bitmap);
+                    promptVm.AgentHost.PendingAttachments.AddPastedImage(bitmap);
                     bitmap.Dispose();
                     return;
                 }
@@ -612,9 +612,9 @@ public partial class MainWindow : Window
             }
 
             e.Handled = true;
-            if (viewModel.SendTaskCommand.CanExecute(null))
+            if (viewModel.AgentHost.SendTaskCommand.CanExecute(null))
             {
-                await viewModel.SendTaskCommand.ExecuteAsync(null);
+                await viewModel.AgentHost.SendTaskCommand.ExecuteAsync(null);
             }
         });
     }

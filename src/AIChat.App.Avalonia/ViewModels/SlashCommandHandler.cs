@@ -174,7 +174,7 @@ public static class SlashCommandHandler
         // approximate 64K context window the current run has used.
         // It's the only number the user really needs to decide
         // whether to start a new conversation or compact.
-        var contextLine = $"Context: {host.ContextBudgetPercent}%";
+        var contextLine = $"Context: {host.AgentHost.ContextBudgetPercent}%";
 
         // Safety policy: surface the two user-controlled toggles so
         // the user can verify state without opening settings. Empty
@@ -199,9 +199,9 @@ public static class SlashCommandHandler
         // StatusMessage — the user typically wants to know "what just
         // happened" not "what's the latest update". Only emit the line
         // when there has been at least one run.
-        var lastRunLine = string.IsNullOrEmpty(host.LastAssistantStatus)
+        var lastRunLine = string.IsNullOrEmpty(host.AgentHost.LastAssistantStatus)
             ? null
-            : $"上次运行: {host.LastAssistantStatus}";
+            : $"上次运行: {host.AgentHost.LastAssistantStatus}";
 
         var lines = new[] { projectLine, modelLine, conversationLine, contextLine, safetyLine, lastRunLine, status }
             .Where(line => line is not null);
