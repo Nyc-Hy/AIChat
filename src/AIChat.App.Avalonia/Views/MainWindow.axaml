@@ -144,6 +144,13 @@
                                                           VerticalAlignment="Center"/>
                                                     <TextBlock Text="{Binding Name}" FontFamily="{StaticResource FontSans}" FontSize="13" TextTrimming="CharacterEllipsis" MaxLines="1" VerticalAlignment="Center"/>
                                                 </StackPanel>
+                                                <Button.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="删除项目"
+                                                                  Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Sidebar.RemoveProjectCommand}"
+                                                                  CommandParameter="{Binding Id}"/>
+                                                    </MenuFlyout>
+                                                </Button.ContextFlyout>
                                             </Button>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>

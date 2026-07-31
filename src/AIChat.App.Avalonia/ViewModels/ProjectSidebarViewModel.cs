@@ -144,6 +144,54 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
         });
     }
 
+    // Removes the project with the given id from the saved list and
+    // refreshes the sidebar. The currently active project (if any) is
+    // swapped to the next project in the list so the rest of the UI
+    // (conversation list, agent runner) keeps working. The agent's
+    // local cached project reference will fall back to null on the
+    // next refresh — the next SendTaskCommand will block on the
+    // "需要项目" guard until the user picks a new one.
+    //
+    // The on-disk JSON under <AppData>/AIChat/projects.json is the
+    // source of truth; everything else (sidebar, conversation list)
+    // re-reads from the repo on Refresh.
+    [RelayCommand]
+    public async Task RemoveProjectAsync(string? projectId)
+    {
+        if (string.IsNullOrWhiteSpace(projectId))
+        {
+            return;
+        }
+
+        var projects = (await _repository.LoadProjectsAsync()).ToList();
+        var target = projects.FirstOrDefault(item =>
+            string.Equals(item.Id, projectId, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            return;
+        }
+
+        projects.Remove(target);
+        await _repository.SaveProjectsAsync(projects);
+
+        // If we just removed the active project, clear the last-active
+        // pointer so the next startup doesn't try to restore a project
+        // that's gone.
+        if (string.Equals(_settingsHolder.Current.LastActiveProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+        {
+            _settingsHolder.Current.LastActiveProjectId = "";
+            await _repository.SaveSettingsAsync(_settingsHolder.Current);
+        }
+
+        Refresh(projects);
+
+        ProjectAdded?.Invoke(this, new ProjectAddedEventArgs
+        {
+            Project = null,
+            StatusMessage = $"已删除项目：{target.Name}"
+        });
+    }
+
     private void ApplyProject(ProjectWorkspace? project)
     {
         CurrentProject = project;

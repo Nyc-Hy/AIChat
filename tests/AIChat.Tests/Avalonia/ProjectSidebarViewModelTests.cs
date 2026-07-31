@@ -125,6 +125,64 @@ public class ProjectSidebarViewModelTests : IDisposable
         Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(It.IsAny<List<ProjectWorkspace>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    [Fact]
+    public async Task RemoveProject_RemovesFromListAndSaves()
+    {
+        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = "/tmp/alpha" };
+        var beta = new ProjectWorkspace { Id = "b", Name = "Beta", Path = "/tmp/beta" };
+        var (vm, repository, holder) = CreateViewModel();
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { alpha, beta });
+        holder.Current.LastActiveProjectId = "a";
+        vm.Refresh([alpha, beta]);
+        Assert.Equal(2, vm.Projects.Count);
+
+        var captured = new List<ProjectAddedEventArgs>();
+        vm.ProjectAdded += (_, args) => captured.Add(args);
+
+        await vm.RemoveProjectCommand.ExecuteAsync("a");
+
+        Assert.Single(vm.Projects);
+        Assert.Equal("b", vm.Projects[0].Id);
+        Assert.Equal("", holder.Current.LastActiveProjectId);
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.Is<List<ProjectWorkspace>>(list => list.Count == 1 && list[0].Id == "b"),
+            It.IsAny<CancellationToken>()), Times.Once);
+        var args = Assert.Single(captured);
+        Assert.Contains("Alpha", args.StatusMessage);
+    }
+
+    [Fact]
+    public async Task RemoveProject_WithUnknownId_DoesNothing()
+    {
+        var (vm, repository, _) = CreateViewModel();
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new ProjectWorkspace { Id = "a", Name = "Alpha", Path = "/tmp/alpha" } });
+
+        await vm.RemoveProjectCommand.ExecuteAsync("nope");
+
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.IsAny<List<ProjectWorkspace>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RemoveProject_WithEmptyId_DoesNothing()
+    {
+        var (vm, repository, _) = CreateViewModel();
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ProjectWorkspace>());
+
+        await vm.RemoveProjectCommand.ExecuteAsync("");
+
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.IsAny<List<ProjectWorkspace>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private (ProjectSidebarViewModel vm, IAppRepository repository, SettingsHolder holder) CreateViewModel()
     {
         var repository = Mock.Of<IAppRepository>();
