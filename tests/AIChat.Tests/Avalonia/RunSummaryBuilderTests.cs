@@ -135,4 +135,57 @@ public class RunSummaryBuilderTests
 
         Assert.Equal("<1s", summary);
     }
+
+    [Fact]
+    public void BuildSummary_WithVerifications_ShowsPassedOverTotal()
+    {
+        // When auto-verify ran, the summary surfaces the pass / total
+        // count so the user can see whether the run's checks succeeded
+        // without opening the agent log. The X/Y format mirrors the
+        // status-bar context meter (the only other consumer of
+        // Verifications) so the two surfaces stay in sync.
+        var startedAt = DateTimeOffset.UtcNow.AddSeconds(-12);
+        var run = new AgentRun
+        {
+            Id = "r1",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddSeconds(12),
+            FileChanges = [],
+            ToolCallCount = 2,
+            SubAgentRuns = [],
+            Verifications = new()
+            {
+                new() { IsSuccess = true },
+                new() { IsSuccess = true },
+                new() { IsSuccess = false }
+            }
+        };
+
+        var summary = AgentRunnerViewModel.BuildRunSummary(run);
+
+        Assert.Equal("用 2 次工具 · 验证 2/3 通过 · 12s", summary);
+    }
+
+    [Fact]
+    public void BuildSummary_ZeroVerifications_OmitsVerificationLine()
+    {
+        // No verifications means the line shouldn't appear at all —
+        // same conditional rule as files / tools / sub-agents. The
+        // user didn't run auto-verify, so don't imply they did.
+        var startedAt = DateTimeOffset.UtcNow.AddSeconds(-2);
+        var run = new AgentRun
+        {
+            Id = "r1",
+            StartedAt = startedAt,
+            CompletedAt = startedAt.AddSeconds(2),
+            FileChanges = [],
+            ToolCallCount = 0,
+            SubAgentRuns = [],
+            Verifications = []
+        };
+
+        var summary = AgentRunnerViewModel.BuildRunSummary(run);
+
+        Assert.Equal("2s", summary);
+    }
 }

@@ -126,16 +126,15 @@ public class SubAgentRunViewModelTests
     }
 
     [Theory]
-    [InlineData("Running", "running", true, false, false, false, false, false)]
-    [InlineData("Completed", "completed", false, true, false, false, false, false)]
-    [InlineData("Failed", "failed", false, false, true, false, false, false)]
-    [InlineData("Cancelled", "cancelled", false, false, false, false, true, false)]
-    [InlineData("Skipped", "skipped", false, false, false, false, false, true)]
-    [InlineData("BudgetExceeded", "budget", false, false, false, true, false, false)]
-    [InlineData("SomethingUnknown", "other", false, false, false, false, false, false)]
-    public void StatusKind_MapsToCssClassAndFlag(
+    [InlineData("Running", true, false, false, false, false, false)]
+    [InlineData("Completed", false, true, false, false, false, false)]
+    [InlineData("Failed", false, false, true, false, false, false)]
+    [InlineData("Cancelled", false, false, false, false, true, false)]
+    [InlineData("Skipped", false, false, false, false, false, true)]
+    [InlineData("BudgetExceeded", false, false, false, true, false, false)]
+    [InlineData("SomethingUnknown", false, false, false, false, false, false)]
+    public void IsX_FlagsMatchStatus_ForXamlClassBinding(
         string status,
-        string expectedKind,
         bool isRunning,
         bool isCompleted,
         bool isFailed,
@@ -143,11 +142,17 @@ public class SubAgentRunViewModelTests
         bool isCancelled,
         bool isSkipped)
     {
+        // The XAML binds one Classes.X per IsX flag so the
+        // sub-agent-status style can colour the duration text by
+        // outcome. This test pins the mapping: exactly one IsX is
+        // true per row, and it matches the Status the row was
+        // constructed with. (The previous StatusKind string
+        // property was dropped in commit e2c1db2 because the
+        // IsX flags are what the XAML actually binds.)
         var run = NewRun(templateId: "explorer", task: "x");
         run.Status = status;
         var vm = new SubAgentRunViewModel(run);
 
-        Assert.Equal(expectedKind, vm.StatusKind);
         Assert.Equal(isRunning, vm.IsRunning);
         Assert.Equal(isCompleted, vm.IsCompleted);
         Assert.Equal(isFailed, vm.IsFailed);

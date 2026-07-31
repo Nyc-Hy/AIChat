@@ -387,9 +387,16 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     // Build the "本次运行" summary the host drops into the activity
     // feed right after a run lands. Keeps to one line of plain text
     // so the system bubble stays scannable: files / tools / duration.
-    // Explorer / worker sub-agent counts are surfaced when the run
-    // actually used them — silent otherwise so a simple chat
-    // exchange doesn't look heavier than it was.
+    // Explorer / worker sub-agent counts + verification results are
+    // surfaced when the run actually used them — silent otherwise so
+    // a simple chat exchange doesn't look heavier than it was.
+    //
+    // Verification line was previously rendered by the (now deleted)
+    // SessionInsightsViewModel as 'X/Y 通过'; bringing it back here
+    // so the user can see whether auto-verify actually passed
+    // without opening the agent log. The previous status bar
+    // context meter is the only other consumer of Verifications, and
+    // it shows the same X/Y format — keeping the two in sync.
     public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run)
     {
         var fileChangeCount = run.FileChanges?.Count ?? 0;
@@ -398,6 +405,8 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             ? FormatDuration(run.CompletedAt.Value - run.StartedAt)
             : "未知时长";
         var subAgentCount = run.SubAgentRuns?.Count ?? 0;
+        var verificationCount = run.Verifications?.Count ?? 0;
+        var verificationPassed = run.Verifications?.Count(verification => verification.IsSuccess) ?? 0;
 
         var parts = new List<string>();
         if (fileChangeCount > 0)
@@ -411,6 +420,10 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         if (subAgentCount > 0)
         {
             parts.Add($"派 {subAgentCount} 个子 Agent");
+        }
+        if (verificationCount > 0)
+        {
+            parts.Add($"验证 {verificationPassed}/{verificationCount} 通过");
         }
         parts.Add(duration);
 

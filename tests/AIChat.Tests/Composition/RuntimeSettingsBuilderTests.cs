@@ -5,31 +5,12 @@ using AIChat.Application.Tools;
 namespace AIChat.Tests.Composition;
 
 // PR-7 tests: RuntimeSettingsBuilder builds the AppSettings handed to the
-// agent harness for each execution mode. The three modes are verified
+// agent harness for each execution mode. ReadOnly + Gui are verified
 // independently to make sure the round budgets and permission policies
-// stay correct.
+// stay correct. (Plain was removed in e033937 — the agent runner only
+// ever picks between ReadOnly and Gui.)
 public class RuntimeSettingsBuilderTests
 {
-    [Fact]
-    public void Plain_DisablesAllTools()
-    {
-        var source = new AppSettings
-        {
-            ProviderId = "p1",
-            ProtocolId = "openai",
-            Model = "m1",
-            AgentMaxToolRounds = 20
-        };
-
-        var runtime = RuntimeSettingsBuilder.Plain(source);
-
-        Assert.Equal("p1", runtime.ProviderId);
-        Assert.Equal("m1", runtime.Model);
-        Assert.Equal(20, runtime.AgentMaxToolRounds);
-        Assert.Empty(runtime.EnabledToolIds);
-        Assert.Empty(runtime.ToolPermissionModes);
-    }
-
     [Fact]
     public void ReadOnly_EnablesOnlyReadOnlyAndUpdatePlanTools()
     {
