@@ -227,9 +227,9 @@ public sealed partial class GitStatusViewModel : ViewModelBase
 
 // Per-row VM. The display status collapses the raw "M " / "??"
 // porcelain codes into the human-readable string the user already
-// sees in the /git bubble. Background colour is chosen by the XAML
-// from StatusKind (no IBrush references here — the view layer owns
-// the colour map so theming stays centralised).
+// sees in the /git bubble. The colour of the per-status badge is
+// chosen by the XAML from StatusKind so theming stays in the view
+// layer.
 public sealed partial class GitFileChangeViewModel : ObservableObject
 {
     public string Path { get; }

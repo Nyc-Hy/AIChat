@@ -203,9 +203,6 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
             assistantItem.Status = "完成";
             _setLastAssistantStatus("完成");
-            // (no-op metrics update — see comment on the event-handler
-            // version above; the only surviving consumer was the
-            // status-bar input-tokens meter, which doesn't change here)
             // Drop a "本次运行" summary bubble into the activity feed
             // so the user can see at a glance what happened — file
             // count, tool call count, duration — without opening the
@@ -303,14 +300,6 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                             "正在读取",
                             FriendlyToolSummary(agentEvent.ToolCall.Name),
                             "工具");
-                        // The previous SessionInsightsViewModel.UpdateMetrics call
-            // here maintained a stack of output / tool-round / runtime
-            // metrics that the now-deleted right-rail insights surface
-            // used to display. None of those callers survived the 1.0
-            // redesign (the right rail was removed for the Linear /
-            // Notion feel), so the only thing this event actually
-            // needed to do for the surviving status-bar meter was… no
-            // input-tokens change here. Drop the call entirely.
                     });
                 }
 
@@ -367,14 +356,6 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                             assistantItem.Detail += agentEvent.Content;
                         }
                         _setStatusMessage("正在接收回复...");
-                        // The previous SessionInsightsViewModel.UpdateMetrics call
-            // here maintained a stack of output / tool-round / runtime
-            // metrics that the now-deleted right-rail insights surface
-            // used to display. None of those callers survived the 1.0
-            // redesign (the right rail was removed for the Linear /
-            // Notion feel), so the only thing this event actually
-            // needed to do for the surviving status-bar meter was… no
-            // input-tokens change here. Drop the call entirely.
                     });
                 }
 
@@ -383,14 +364,6 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     _setStatusMessage(agentEvent.Run?.CompletionReason is { Length: > 0 } reason ? reason : "运行完成。");
-                    // The previous SessionInsightsViewModel.UpdateMetrics call
-            // here maintained a stack of output / tool-round / runtime
-            // metrics that the now-deleted right-rail insights surface
-            // used to display. None of those callers survived the 1.0
-            // redesign (the right rail was removed for the Linear /
-            // Notion feel), so the only thing this event actually
-            // needed to do for the surviving status-bar meter was… no
-            // input-tokens change here. Drop the call entirely.
                 });
                 break;
         }
