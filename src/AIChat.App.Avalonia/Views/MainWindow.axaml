@@ -1077,7 +1077,7 @@
                         </StackPanel>
                         <Button Grid.Column="1" Classes="chrome-button"
                                 Command="{Binding GitStatus.RefreshCommand}"
-                                ToolTip.Tip="刷新 (R)"
+                                ToolTip.Tip="刷新"
                                 IsEnabled="{Binding !GitStatus.IsLoading}">
                             <Path Data="M3 12 a9 9 0 1 0 3 -6.7 M3 4 v5 h5"
                                   Stroke="{Binding $parent[Button].Foreground}"
