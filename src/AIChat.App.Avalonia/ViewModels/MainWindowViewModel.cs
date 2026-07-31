@@ -102,7 +102,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         : "说点什么…  (试试 /help 查看命令)";
 
     // (OnNoWriteModeChanged body is below; raises PromptPlaceholder in
-    // addition to the existing approval + insights side effects.)
+    // addition to the approval side effect.)
 
     // Clipboard helpers used by the /copy slash command. HasClipboardService
     // lets the slash handler fail gracefully when the platform clipboard
@@ -477,7 +477,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         };
         RegisterCommandPaletteCommands();
 
-        SeedEmptyState();
         _ = RefreshAsync();
     }
 
@@ -970,26 +969,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settings.AutoVerifyAgentRuns = value;
     }
 
-    private void SeedEmptyState()
-    {
-        // No-op placeholder kept for the constructor ordering. The
-        // previous insights view-model used SeedEmptyState to drop a
-        // couple of placeholder rows into its now-dead ContextPreview
-        // + SessionMetrics collections; the only thing still wired
-        // was the input-tokens side effect, which we now drive from
-        // RecomputeContextInputTokensAsync below. Calling it here
-        // keeps the "load → seed → refresh" constructor rhythm.
-        _ = RecomputeContextInputTokensAsync(DraftPrompt);
-    }
-
     // Re-runs the context router for the current project + goal and
     // updates InputTokens. The only consumer is the status-bar
-    // context meter (the "input" cell of the now-deleted metrics
-    // strip was the only thing it actually read), so this method is
-    // called on every event that could shift the estimate: project
-    // selection, prompt keystrokes, and no-write toggle. Cheap
-    // because the router + file-index builder cache internally;
-    // running on every keystroke is fine.
+    // context meter, so this method is called on every event that
+    // could shift the estimate: project selection, prompt keystrokes,
+    // and no-write toggle. Cheap because the router + file-index
+    // builder cache internally; running on every keystroke is fine.
     private async Task RecomputeContextInputTokensAsync(string goal)
     {
         var project = _sidebar.CurrentProject;
