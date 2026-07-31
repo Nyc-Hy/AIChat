@@ -28,7 +28,10 @@ public sealed class CommandItem
 
 // Command palette view-model: search-as-you-type, keyboard navigable list
 // of CommandItem. Owned by the MainWindowViewModel which feeds it the
-// palette surface (an ItemsControl overlay) and toggles IsOpen.
+// palette surface (an ItemsControl overlay); the host owns the
+// IsCommandPaletteOpen bool that drives XAML visibility, and resets
+// SearchText / SelectedIndex on open so the palette lands in a clean
+// state every time.
 public sealed partial class CommandPaletteViewModel : ViewModelBase
 {
     private readonly List<CommandItem> _allCommands = [];
@@ -39,9 +42,6 @@ public sealed partial class CommandPaletteViewModel : ViewModelBase
     [ObservableProperty]
     private int selectedIndex;
 
-    [ObservableProperty]
-    private bool isOpen;
-
     public ObservableCollection<CommandItem> FilteredCommands { get; } = [];
 
     // SearchText is the single source of truth; we rebuild the filtered
@@ -50,16 +50,6 @@ public sealed partial class CommandPaletteViewModel : ViewModelBase
     partial void OnSearchTextChanged(string value)
     {
         RebuildFiltered();
-    }
-
-    partial void OnIsOpenChanged(bool value)
-    {
-        if (value)
-        {
-            SearchText = "";
-            SelectedIndex = 0;
-            RebuildFiltered();
-        }
     }
 
     public void RegisterCommands(IEnumerable<CommandItem> commands)
@@ -96,12 +86,14 @@ public sealed partial class CommandPaletteViewModel : ViewModelBase
             return false;
         }
         var command = FilteredCommands[SelectedIndex];
-        var shouldClose = await command.Action();
-        if (shouldClose)
-        {
-            IsOpen = false;
-        }
-        return shouldClose;
+        // Command's Action returns true if the palette should close
+        // after running. The host flips its own IsCommandPaletteOpen
+        // in response (via the command's return value), so this VM
+        // doesn't need its own IsOpen mirror anymore — the previous
+        // IsOpen + OnIsOpenChanged handler were dead: nothing set
+        // IsOpen = true externally, and the false path in
+        // ExecuteSelectedAsync was a no-op.
+        return await command.Action();
     }
 
     private void RebuildFiltered()
