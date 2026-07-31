@@ -1136,6 +1136,3 @@ public sealed partial class ActivityItemViewModel(string title, string detail, s
     partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
     partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
 }
-
-public sealed record ProviderCardViewModel(string Name, string DefaultModel, string Status);
-public sealed record ProviderTemplateViewModel(string Id, string Name, string DefaultBaseUrl, string DefaultModel);
