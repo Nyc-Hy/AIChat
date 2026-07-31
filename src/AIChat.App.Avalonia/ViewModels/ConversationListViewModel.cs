@@ -17,8 +17,6 @@ namespace AIChat.App.Avalonia.ViewModels;
 public sealed partial class ConversationListViewModel : ViewModelBase
 {
     private const string NewConversationId = "new";
-    private const string SelectedColor = "#FFFFFF";
-    private const string UnselectedColor = "#FFFFFF00";
 
     private readonly IAppRepository _repository;
     private bool _isApplyingConversationSelection;
@@ -147,7 +145,6 @@ public sealed partial class ConversationListViewModel : ViewModelBase
         _isApplyingConversationSelection = true;
         foreach (var item in Conversations)
         {
-            item.Background = item.Id == conversation?.Id ? SelectedColor : UnselectedColor;
             item.IsSelected = item.Id == conversation?.Id;
         }
 

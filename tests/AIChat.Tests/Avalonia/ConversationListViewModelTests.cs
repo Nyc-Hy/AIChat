@@ -135,7 +135,7 @@ public class ConversationListViewModelTests
     }
 
     [Fact]
-    public void SelectConversation_AppliesSelectionColorToChosenCard()
+    public void SelectConversation_MarksIsSelectedOnChosenCard()
     {
         var project = new ProjectWorkspace
         {
@@ -155,8 +155,8 @@ public class ConversationListViewModelTests
 
         var cardA = vm.Conversations.First(c => c.Id == "a");
         var cardB = vm.Conversations.First(c => c.Id == "b");
-        Assert.Equal("#FFFFFF", cardA.Background);
-        Assert.Equal("#FFFFFF00", cardB.Background);
+        Assert.True(cardA.IsSelected);
+        Assert.False(cardB.IsSelected);
     }
 
     [Fact]
