@@ -27,6 +27,37 @@ public class GitStatusViewModelTests
         Assert.Null(vm.SelectedChange);
         Assert.False(vm.HasChanges);
         Assert.Null(vm.DiffText);
+        Assert.False(vm.HasLastUpdated);
+        Assert.Equal("", vm.LastUpdatedDisplay);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_SetsLastUpdatedToNow()
+    {
+        // The header renders LastUpdatedDisplay so the user can tell
+        // whether the change list is fresh. After a successful refresh
+        // the timestamp should be "now-ish" (a few seconds old at
+        // most) and HasLastUpdated should flip true. Empty result +
+        // non-empty result both set the timestamp — the user wants
+        // confirmation that the modal re-fetched even on a clean
+        // tree.
+        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var workspace = Mock.Of<IWorkspaceChangeService>();
+        Mock.Get(workspace)
+            .Setup(w => w.GetChangesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new WorkspaceChangeSet { Branch = "## main", Changes = [] });
+        var (vm, _, _) = CreateViewModel(currentProject: project, workspace: workspace);
+
+        var before = DateTimeOffset.Now;
+        await vm.RefreshAsync();
+        var after = DateTimeOffset.Now;
+
+        Assert.True(vm.HasLastUpdated);
+        Assert.NotNull(vm.LastUpdated);
+        Assert.InRange(vm.LastUpdated!.Value, before.AddSeconds(-1), after.AddSeconds(1));
+        // Display format is HH:mm:ss (6 chars + 2 colons = 8 chars).
+        Assert.Equal(8, vm.LastUpdatedDisplay.Length);
+        Assert.Contains(":", vm.LastUpdatedDisplay);
     }
 
     [Fact]

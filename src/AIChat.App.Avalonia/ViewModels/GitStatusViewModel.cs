@@ -36,6 +36,15 @@ public sealed partial class GitStatusViewModel : ViewModelBase
     [ObservableProperty]
     private DateTimeOffset? lastUpdated;
 
+    // Human-readable "12:34:56" timestamp for the header so the user
+    // can tell whether the change list + diff are fresh or stale
+    // without re-running git. Absolute time on purpose — a relative
+    // ("5 分钟前") form would need a timer to stay accurate while
+    // the modal is open, and the user typically re-runs refresh
+    // before checking anyway.
+    public string LastUpdatedDisplay => LastUpdated?.ToLocalTime().ToString("HH:mm:ss") ?? "";
+    public bool HasLastUpdated => LastUpdated.HasValue;
+
     [ObservableProperty]
     private string? diffText;
 
@@ -86,7 +95,10 @@ public sealed partial class GitStatusViewModel : ViewModelBase
             Changes.Clear();
             DiffText = null;
             SelectedPath = null;
-            LastUpdated = DateTimeOffset.Now;
+            // Don't touch LastUpdated here — the "no project" state
+            // is not a refresh outcome, the header should read as
+            // empty / pre-first-refresh rather than "更新于 刚刚"
+            // for a modal that has no data behind the timestamp.
             OnPropertyChanged(nameof(ChangeCount));
             OnPropertyChanged(nameof(HasChanges));
             OnPropertyChanged(nameof(HasDiff));
@@ -207,6 +219,12 @@ public sealed partial class GitStatusViewModel : ViewModelBase
 
     [ObservableProperty]
     private GitFileChangeViewModel? selectedChange;
+
+    partial void OnLastUpdatedChanged(DateTimeOffset? value)
+    {
+        OnPropertyChanged(nameof(LastUpdatedDisplay));
+        OnPropertyChanged(nameof(HasLastUpdated));
+    }
 
     // When the selection flips, update IsSelected on the affected
     // rows so the XAML can render the persistent selected state

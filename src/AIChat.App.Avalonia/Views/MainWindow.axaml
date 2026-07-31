@@ -1073,6 +1073,12 @@
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="分支:" Classes="muted" FontSize="12"/>
                                 <TextBlock Text="{Binding GitStatus.Branch}" Classes="body" FontSize="12" FontWeight="SemiBold"/>
+                                <TextBlock Classes="muted" FontSize="11"
+                                           IsVisible="{Binding GitStatus.HasLastUpdated}"
+                                           Text="更新于 "/>
+                                <TextBlock Classes="muted" FontSize="11"
+                                           IsVisible="{Binding GitStatus.HasLastUpdated}"
+                                           Text="{Binding GitStatus.LastUpdatedDisplay}"/>
                             </StackPanel>
                         </StackPanel>
                         <Button Grid.Column="1" Classes="chrome-button"
