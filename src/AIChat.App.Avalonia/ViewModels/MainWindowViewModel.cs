@@ -237,6 +237,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // the agent will send (not just the host's pre-build estimate).
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ContextBudgetPercent))]
+    [NotifyPropertyChangedFor(nameof(ContextBudgetWidthInMini))]
     private int inputTokens;
 
     public int ContextBudgetPercent =>
