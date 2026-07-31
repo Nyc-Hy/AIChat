@@ -1,8 +1,41 @@
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
+
 namespace AIChat.App.Avalonia.ViewModels;
 
-// Read-only row in the "可用的提供方" list in the settings modal.
-// The "Status" field is the only dynamic bit — "当前" for the active
-// provider, "可用" otherwise. Lives at the bottom of the settings
-// modal so the user can scan the full provider catalogue alongside
-// the active template.
-public sealed record ProviderCardViewModel(string Name, string DefaultModel, string Status);
+// Row in the "可用的提供方" list in the settings modal. Each card shows
+// the provider's display name + default model + a status badge ("当前"
+// for the active provider, "可用" otherwise). Clicking the card
+// SelectCommand switches the template dropdown at the top of the modal
+// to that provider, which through OnSelectedProviderTemplateChanged
+// re-seeds the model / base-url inputs from the catalog defaults (or
+// from the active provider's saved values when the user re-picks the
+// provider they're already on). The status badge stays AccentBrush
+// colored because the row really IS a target the user can act on —
+// the earlier "record with no Click handler" shape was misleading: the
+// accent foreground suggested interactivity the row didn't have.
+public sealed class ProviderCardViewModel
+{
+    public string Name { get; }
+    public string DefaultModel { get; }
+    public string Status { get; }
+    public string TemplateId { get; }
+    public bool IsActive { get; }
+    public ICommand SelectCommand { get; }
+
+    public ProviderCardViewModel(
+        string name,
+        string defaultModel,
+        string status,
+        string templateId,
+        bool isActive,
+        Action<string> selectTemplate)
+    {
+        Name = name;
+        DefaultModel = defaultModel;
+        Status = status;
+        TemplateId = templateId;
+        IsActive = isActive;
+        SelectCommand = new RelayCommand(() => selectTemplate(templateId));
+    }
+}

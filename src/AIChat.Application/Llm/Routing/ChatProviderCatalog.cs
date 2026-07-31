@@ -188,24 +188,44 @@ public static class ChatProviderCatalog
                ?? TokenPlanMiMo;
     }
 
+    // Resolves a model id against the catalog. Behavior:
+    // - exact id match in the provider's Models list → return that model
+    //   (preserves all capabilities / context limit from the catalog row)
+    // - non-empty user-typed id with no match → return a synthetic
+    //   LlmModelInfo carrying the user's id verbatim. The catalog is a
+    //   defaults source, not a gate; users running a model the catalog
+    //   doesn't know about (new release, private deployment, beta
+    //   channel) must be able to bind to it. The earlier shape silently
+    //   fell back to Models.First() for non-OpenAI-compatible providers,
+    //   which clobbered the user's input on save and made "I can't bind
+    //   a model" a daily-driver frustration.
+    // - empty / whitespace modelId → fall back to the first catalog
+    //   model. This is the only path that needs the fallback, and it
+    //   keeps "old settings files with an empty Model field" working.
     public static LlmModelInfo ResolveModel(string? providerIdOrName, string? modelId)
     {
         var provider = Resolve(providerIdOrName);
-        if (string.Equals(provider.Id, OpenAICompatible.Id, StringComparison.OrdinalIgnoreCase) &&
-            !string.IsNullOrWhiteSpace(modelId))
+        var trimmedId = modelId?.Trim();
+
+        var exactMatch = provider.Models.FirstOrDefault(model =>
+            string.Equals(model.Id, trimmedId, StringComparison.OrdinalIgnoreCase));
+        if (exactMatch is not null)
+        {
+            return exactMatch;
+        }
+
+        if (!string.IsNullOrWhiteSpace(trimmedId))
         {
             return new LlmModelInfo
             {
-                Id = modelId.Trim(),
-                DisplayName = modelId.Trim(),
+                Id = trimmedId,
+                DisplayName = trimmedId,
                 ContextLimit = provider.DefaultContextLimit,
                 CapabilityLabel = "tools",
                 Capabilities = ToolCapable
             };
         }
 
-        return provider.Models.FirstOrDefault(model =>
-                   string.Equals(model.Id, modelId, StringComparison.OrdinalIgnoreCase))
-               ?? provider.Models.First();
+        return provider.Models.First();
     }
 }

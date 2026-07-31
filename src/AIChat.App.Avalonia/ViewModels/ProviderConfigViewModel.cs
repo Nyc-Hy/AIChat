@@ -177,7 +177,25 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
             AdvancedProviders.Add(new ProviderCardViewModel(
                 provider.Name,
                 provider.DefaultModel,
-                isActive ? "当前" : "可用"));
+                isActive ? "当前" : "可用",
+                provider.Id,
+                isActive,
+                SelectTemplate));
+        }
+    }
+
+    // Wired to the "可用的提供方" card SelectCommand. Finds the matching
+    // template in the dropdown and assigns it; OnSelectedProviderTemplateChanged
+    // then re-seeds the model / base-url inputs from the catalog defaults
+    // (or the active provider's saved values if the user re-picks the
+    // same provider). The user types an API key + clicks Save to commit.
+    private void SelectTemplate(string templateId)
+    {
+        var template = ProviderTemplates.FirstOrDefault(t =>
+            string.Equals(t.Id, templateId, StringComparison.OrdinalIgnoreCase));
+        if (template is not null)
+        {
+            SelectedProviderTemplate = template;
         }
     }
 

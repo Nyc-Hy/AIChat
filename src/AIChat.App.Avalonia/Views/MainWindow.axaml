@@ -926,13 +926,19 @@
                                 <ItemsControl ItemsSource="{Binding Provider.AdvancedProviders}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ProviderCardViewModel">
-                                            <Grid ColumnDefinitions="*,Auto" Margin="0,4">
-                                                <StackPanel>
-                                                    <TextBlock Text="{Binding Name}" Classes="body" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
-                                                </StackPanel>
-                                                <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
-                                            </Grid>
+                                            <Button Classes="provider-card"
+                                                    Command="{Binding SelectCommand}"
+                                                    Classes.active="{Binding IsActive}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel>
+                                                        <TextBlock Text="{Binding Name}" Classes="body" FontWeight="SemiBold"/>
+                                                        <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </Button>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

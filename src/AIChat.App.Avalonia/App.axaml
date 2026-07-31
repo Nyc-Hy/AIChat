@@ -335,6 +335,29 @@
         </Style>
 
         <!--
+          Provider card in the settings modal "可用的提供方" list. Each card
+          is a Button so clicking actually does something (selects that
+          template in the dropdown above). The earlier record-with-no-
+          handler shape had an AccentBrush "当前" badge that looked
+          interactive but wasn't — a daily-driver trap. The .active class
+          tints the current provider's row so the user can see which one
+          is selected without having to re-read the dropdown.
+        -->
+        <Style Selector="Button.provider-card">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        </Style>
+        <Style Selector="Button.provider-card:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.provider-card.active">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
           Sidebar conversation row: quiet background, no border, generous
           padding. The .selected class tints the row with the soft accent
           so the user knows which conversation is open.
