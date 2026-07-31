@@ -225,8 +225,10 @@
                             <!-- Conversation: empty state OR scrollable bubbles -->
                             <Border Grid.Row="1" Classes="panel" Padding="0">
                                 <Panel>
-                                    <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline -->
-                                    <Grid IsVisible="{Binding ActivityFeed.HasConversation}">
+                                    <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline.
+                                         A floating "↓ N 条新消息" pill anchors to the bottom-right; it only shows
+                                         when new activity has arrived while the user is scrolled up. -->
+                                    <Panel IsVisible="{Binding ActivityFeed.HasConversation}">
                                         <ScrollViewer x:Name="ConversationScroll" Padding="20,12">
                                             <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
                                                 <ItemsControl.ItemTemplate>
@@ -303,7 +305,29 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </ScrollViewer>
-                                    </Grid>
+
+                                        <!--
+                                          "↓ N 条新消息" pill. Floats over the bottom-right of the
+                                          conversation panel; visible only when the user is scrolled
+                                          up and new activity has landed. Clicking it scrolls
+                                          to the bottom and resets the counter (the click handler
+                                          does both — the ScrollChanged listener would clear it too,
+                                          but doing it on click avoids one frame of "you have
+                                          unseen messages" after the user opted in).
+                                        -->
+                                        <Button Classes="new-message-pill"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Bottom"
+                                                Margin="0,0,0,14"
+                                                IsVisible="{Binding HasUnseenMessages}"
+                                                Click="NewMessagePill_OnClick"
+                                                ToolTip.Tip="跳到底部查看新消息">
+                                            <TextBlock Text="{Binding UnseenMessageLabel}"
+                                                       FontFamily="{StaticResource FontSans}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"/>
+                                        </Button>
+                                    </Panel>
 
                                     <!-- Empty state: hero (with sub-greeting) + 4 quick-action
                                          cards. The hero copy switches on HasProject so the

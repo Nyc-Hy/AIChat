@@ -558,6 +558,24 @@
             <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
             <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
         </Style>
+        <!--
+          Floating "↓ N 条新消息" pill. Anchored to the bottom-center
+          of the conversation panel; only visible when the user has
+          scrolled up and new activity has landed. Sits on a raised
+          surface with an accent border so it reads as an action,
+          not a status row. Hover deepens the border for affordance.
+        -->
+        <Style Selector="Button.new-message-pill">
+            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Accent300Brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+        </Style>
+        <Style Selector="Button.new-message-pill:pointerover">
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        </Style>
         <Style Selector="Border.badge.success">
             <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
         </Style>

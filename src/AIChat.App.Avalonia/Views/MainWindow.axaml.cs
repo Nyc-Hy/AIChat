@@ -14,6 +14,16 @@ public partial class MainWindow : Window
     private readonly AvaloniaClipboardService _clipboard;
     private readonly IThemeService _theme;
 
+    // Whether the user is currently parked at (or within ~32px of) the
+    // bottom of the conversation view. Updated by the ScrollChanged
+    // listener; the auto-scroll-on-add path consults it. Promoted to a
+    // field so the "↓ N 条新消息" pill click can also flip it true —
+    // after ScrollToEnd runs the ScrollChanged handler would update
+    // it too, but doing it eagerly keeps the very next streaming
+    // chunk from falling into the "user is scrolled up" branch while
+    // the scroll is still settling.
+    private bool _isUserAtBottom = true;
+
     public MainWindow(
         MainWindowViewModel viewModel,
         AvaloniaProjectPicker picker,
@@ -186,20 +196,59 @@ public partial class MainWindow : Window
         });
 
         // Auto-scroll the conversation view to the bottom whenever a new
-        // activity item arrives. The user is most often following along
-        // live, and the alternative (manually scrolling after every
-        // bubble lands) makes the conversation feel sluggish.
-        // Clear is the only mutation that should NOT scroll — it resets
-        // the view before the next conversation starts.
+        // activity item arrives — but only if the user is already at
+        // (or near) the bottom. If they've scrolled up to re-read an
+        // earlier bubble during a long run, the previous behaviour was
+        // to yank them back down on every streaming chunk, which makes
+        // it impossible to actually read history while the agent
+        // works. Once they scroll back to the bottom, auto-scroll
+        // resumes naturally.
+        //
+        // The "near bottom" threshold is in DIPs; 32px covers the
+        // rounded scrollbar's end-stop rounding plus a couple of
+        // subpixel slop rows so the user's wheel scroll doesn't have
+        // to land exactly on Extent - Viewport to count as "following
+        // along".
+        //
+        // When the user is scrolled UP, the new bubble goes into the
+        // activity feed but does NOT scroll the view; instead, a
+        // counter on the host VM ticks up and the floating
+        // "↓ N 条新消息" pill (in the conversation panel) becomes
+        // visible. Clicking the pill scrolls to the bottom and clears
+        // the counter. Scrolling back to the bottom on the wheel also
+        // clears the counter — the user has "seen" the new content
+        // by virtue of being at the bottom.
+        const double AtBottomThreshold = 32;
+
+        ConversationScroll.ScrollChanged += (_, _) =>
+        {
+            var offsetY = ConversationScroll.Offset.Y;
+            var extent = ConversationScroll.Extent.Height;
+            var viewport = ConversationScroll.Viewport.Height;
+            _isUserAtBottom = (offsetY + viewport) >= (extent - AtBottomThreshold);
+            if (_isUserAtBottom && viewModel.UnseenMessageCount > 0)
+            {
+                viewModel.ClearUnseenMessageCount();
+            }
+        };
+
         viewModel.ActivityFeed.Activity.CollectionChanged += (_, e) =>
         {
-            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add)
             {
-                // Use a small post to let the ItemsControl realise the new
-                // container before we ask for the scroll offset.
+                return;
+            }
+            if (_isUserAtBottom)
+            {
+                // Use a small post to let the ItemsControl realise the
+                // new container before we ask for the scroll offset.
                 Dispatcher.UIThread.Post(() =>
                     ConversationScroll.ScrollToEnd(),
                     DispatcherPriority.Background);
+            }
+            else
+            {
+                viewModel.IncrementUnseenMessageCount();
             }
         };
 
@@ -276,6 +325,21 @@ public partial class MainWindow : Window
         // Put the caret at the end rather than selecting all — the
         // user clicked to edit, not to replace wholesale.
         PromptInput.CaretIndex = text.Length;
+    }
+
+    // "↓ N 条新消息" pill click: jump to the bottom, clear the
+    // unseen counter, and flip the "at bottom" flag eagerly so the
+    // very next streaming bubble (which can arrive before
+    // ScrollChanged has a chance to fire) keeps auto-following.
+    private void NewMessagePill_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        viewModel.ClearUnseenMessageCount();
+        _isUserAtBottom = true;
+        ConversationScroll.ScrollToEnd();
     }
 
     private void ProjectButton_OnClick(object? sender, RoutedEventArgs e)

@@ -350,6 +350,24 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public int PlanCompletedCount => PlanItems.Count(item => item.IsCompleted);
     public string PlanProgressText => $"{PlanCompletedCount} / {PlanItems.Count}";
 
+    // Count of new activity bubbles that landed while the user was
+    // scrolled up reading history. The conversation view only
+    // auto-scrolls to the bottom when the user is at the bottom; this
+    // counter is what the floating "↓ N 条新消息" pill shows so the
+    // user knows there's new content waiting. Reset to 0 when they
+    // scroll back to the bottom or click the pill.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnseenMessages))]
+    private int unseenMessageCount;
+
+    public bool HasUnseenMessages => UnseenMessageCount > 0;
+    public string UnseenMessageLabel => UnseenMessageCount <= 1
+        ? "↓ 新消息"
+        : $"↓ {UnseenMessageCount} 条新消息";
+
+    public void IncrementUnseenMessageCount() => UnseenMessageCount++;
+    public void ClearUnseenMessageCount() => UnseenMessageCount = 0;
+
     // Sub-agent runs dispatched by the harness during a run (currently
     // just the read-only explorer template — the coordinator skips
     // every other template). Surfaced in the plan panel as a sub-
