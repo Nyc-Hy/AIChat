@@ -271,7 +271,6 @@ public partial class MainWindow : Window
         {
             return;
         }
-
         viewModel.DraftPrompt = text;
         PromptInput.Focus();
         // Put the caret at the end rather than selecting all — the
@@ -279,40 +278,43 @@ public partial class MainWindow : Window
         PromptInput.CaretIndex = text.Length;
     }
 
-    private async void ProjectButton_OnClick(object? sender, RoutedEventArgs e)
+    private void ProjectButton_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string projectId } ||
-            DataContext is not MainWindowViewModel viewModel)
+        if (sender is not Button { Tag: string projectId })
         {
             return;
         }
-
-        await viewModel.SelectProjectFromUiAsync(projectId);
+        SafeRun(() =>
+        {
+            if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
+            return viewModel.SelectProjectFromUiAsync(projectId);
+        });
     }
 
-    private async void ConversationButton_OnClick(object? sender, RoutedEventArgs e)
+    private void ConversationButton_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button { Tag: string conversationId } ||
-            DataContext is not MainWindowViewModel viewModel)
+        if (sender is not Button { Tag: string conversationId })
         {
             return;
         }
-
-        await viewModel.SelectConversationFromUiAsync(conversationId);
+        SafeRun(() =>
+        {
+            if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
+            return viewModel.SelectConversationFromUiAsync(conversationId);
+        });
     }
 
-    private async void AddProject_OnClick(object? sender, RoutedEventArgs e)
+    private void AddProject_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel viewModel)
+        SafeRun(async () =>
         {
-            return;
-        }
-
-        var path = await _picker.PickProjectFolderAsync();
-        if (path is { Length: > 0 })
-        {
-            await viewModel.AddProjectFromUiAsync(path);
-        }
+            if (DataContext is not MainWindowViewModel viewModel) return;
+            var path = await _picker.PickProjectFolderAsync();
+            if (path is { Length: > 0 })
+            {
+                await viewModel.AddProjectFromUiAsync(path);
+            }
+        });
     }
 
     // Empty-state welcome card click: fill the prompt with the suggested
@@ -407,87 +409,114 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // Wraps an async event-handler body so any uncaught exception
+    // becomes a user-visible status message + log instead of an
+    // unhandled-exception crash on the dispatcher. Avalonia's
+    // dispatcher treats async void exceptions as fatal; the only
+    // safe pattern for XAML event handlers is "async void with a
+    // try/catch at the root".
+    private async void SafeRun(Func<Task> body)
+    {
+        try
+        {
+            await body();
+        }
+        catch (Exception ex)
+        {
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.StatusMessage = $"操作失败：{ex.Message}";
+            }
+        }
+    }
+
     // Prompt input: Cmd+Enter (or Ctrl+Enter on non-mac) sends. The default
     // Enter key still inserts a newline because the box is multi-line.
     // Cmd+V / Ctrl+V intercepts the paste when the clipboard has an
     // image: text pastes fall through to the default TextBox handler
     // (we don't touch them), image pastes are saved as pending
     // attachments and shown above the input.
-    private async void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
+    private void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
     {
-        // Image paste: intercept ⌘V / Ctrl+V when the clipboard has
-        // an image. The default TextBox paste handler would do
-        // nothing for a non-text payload, but consuming the key event
-        // explicitly makes the contract obvious.
-        if (e.Key == Key.V &&
-            (e.KeyModifiers.HasFlag(KeyModifiers.Meta) ||
-             e.KeyModifiers.HasFlag(KeyModifiers.Control)) &&
-            DataContext is MainWindowViewModel promptVm &&
-            _clipboard.IsAvailable)
+        SafeRun(async () =>
         {
-            var bitmap = await _clipboard.TryGetBitmapAsync();
-            if (bitmap is not null)
+            // Image paste: intercept ⌘V / Ctrl+V when the clipboard has
+            // an image. The default TextBox paste handler would do
+            // nothing for a non-text payload, but consuming the key event
+            // explicitly makes the contract obvious.
+            if (e.Key == Key.V &&
+                (e.KeyModifiers.HasFlag(KeyModifiers.Meta) ||
+                 e.KeyModifiers.HasFlag(KeyModifiers.Control)) &&
+                DataContext is MainWindowViewModel promptVm &&
+                _clipboard.IsAvailable)
             {
-                e.Handled = true;
-                promptVm.PendingAttachments.AddPastedImage(bitmap);
-                bitmap.Dispose();
+                var bitmap = await _clipboard.TryGetBitmapAsync();
+                if (bitmap is not null)
+                {
+                    e.Handled = true;
+                    promptVm.PendingAttachments.AddPastedImage(bitmap);
+                    bitmap.Dispose();
+                    return;
+                }
+            }
+
+            if (e.Key != Key.Enter)
+            {
                 return;
             }
-        }
 
-        if (e.Key != Key.Enter)
-        {
-            return;
-        }
+            var isSend = e.KeyModifiers.HasFlag(KeyModifiers.Meta) ||
+                         e.KeyModifiers.HasFlag(KeyModifiers.Control);
+            if (!isSend)
+            {
+                return;
+            }
 
-        var isSend = e.KeyModifiers.HasFlag(KeyModifiers.Meta) ||
-                     e.KeyModifiers.HasFlag(KeyModifiers.Control);
-        if (!isSend)
-        {
-            return;
-        }
+            if (DataContext is not MainWindowViewModel viewModel)
+            {
+                return;
+            }
 
-        if (DataContext is not MainWindowViewModel viewModel)
-        {
-            return;
-        }
-
-        e.Handled = true;
-        if (viewModel.SendTaskCommand.CanExecute(null))
-        {
-            await viewModel.SendTaskCommand.ExecuteAsync(null);
-        }
+            e.Handled = true;
+            if (viewModel.SendTaskCommand.CanExecute(null))
+            {
+                await viewModel.SendTaskCommand.ExecuteAsync(null);
+            }
+        });
     }
 
     // Command palette: arrow keys move selection, Enter executes, Escape
     // closes. The list box already has focus navigation; we just need to
     // intercept these to keep the search box in focus while cycling.
-    private async void CommandPalette_OnKeyDown(object? sender, KeyEventArgs e)
+    private void CommandPalette_OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (DataContext is not MainWindowViewModel viewModel)
+        SafeRun(async () =>
         {
-            return;
-        }
+            if (DataContext is not MainWindowViewModel viewModel)
+            {
+                return;
+            }
 
-        switch (e.Key)
-        {
-            case Key.Down:
-                e.Handled = true;
-                viewModel.CommandPalette.MoveNextCommand.Execute(null);
-                break;
-            case Key.Up:
-                e.Handled = true;
-                viewModel.CommandPalette.MovePreviousCommand.Execute(null);
-                break;
-            case Key.Enter:
-                e.Handled = true;
-                await viewModel.CommandPalette.ExecuteSelectedAsync();
-                break;
-            case Key.Escape:
-                e.Handled = true;
-                viewModel.IsCommandPaletteOpen = false;
-                break;
-        }
+            switch (e.Key)
+            {
+                case Key.Down:
+                    e.Handled = true;
+                    viewModel.CommandPalette.MoveNextCommand.Execute(null);
+                    break;
+                case Key.Up:
+                    e.Handled = true;
+                    viewModel.CommandPalette.MovePreviousCommand.Execute(null);
+                    break;
+                case Key.Enter:
+                    e.Handled = true;
+                    await viewModel.CommandPalette.ExecuteSelectedAsync();
+                    break;
+                case Key.Escape:
+                    e.Handled = true;
+                    viewModel.IsCommandPaletteOpen = false;
+                    break;
+            }
+        });
     }
 
     private void ToggleMaximizeRestore()
