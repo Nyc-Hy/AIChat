@@ -296,20 +296,29 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             case AgentHarnessEventType.StepAdded:
                 // The harness updates Run.Plan whenever the agent adds
                 // a step. Forward the latest plan to the host so the
-                // plan panel stays in sync.
-                _updatePlan(agentEvent.Run?.Plan);
+                // plan panel stays in sync. The harness yields events
+                // on whatever thread the LLM stream resumes on, so
+                // every host-state mutation (including the plan list
+                // and the sub-agent rows) is marshalled to the UI
+                // thread first — mutating an ItemsControl-bound
+                // ObservableCollection from a thread-pool thread
+                // throws or corrupts the render.
+                await UpdatePlanOnUiThreadAsync(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.SubAgentStarted:
             case AgentHarnessEventType.SubAgentCompleted:
                 // Sub-agent runs are surfaced as a sub-section of the
                 // plan panel (template + task + status + duration).
                 // Upsert so the started event creates the row and the
-                // completed event updates the same row in place.
+                // completed event updates the same row in place. Both
+                // the upsert and the plan refresh run on the UI
+                // thread — the harness event may have arrived on a
+                // worker thread.
                 if (agentEvent.SubAgentRun is not null)
                 {
                     await Dispatcher.UIThread.InvokeAsync(() => _upsertSubAgent(agentEvent.SubAgentRun));
                 }
-                _updatePlan(agentEvent.Run?.Plan);
+                await UpdatePlanOnUiThreadAsync(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.PhaseChanged:
                 if (!string.IsNullOrWhiteSpace(agentEvent.PhaseTransition?.Summary))
@@ -359,8 +368,9 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 // ToolResult rather than a StepAdded, so the plan
                 // panel won't see the new items unless we forward
                 // here too. Cheap to do on every ToolResult — the
-                // host just clears + re-adds the same items.
-                _updatePlan(agentEvent.Run?.Plan);
+                // host just clears + re-adds the same items. Same
+                // UI-thread dispatch as StepAdded above.
+                await UpdatePlanOnUiThreadAsync(agentEvent.Run?.Plan);
                 break;
             case AgentHarnessEventType.ContentDelta:
                 if (!string.IsNullOrEmpty(agentEvent.Content))
@@ -397,6 +407,23 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 });
                 break;
         }
+    }
+
+    // Marshal a plan refresh to the UI thread. The harness event loop
+    // yields on whatever thread the underlying LLM stream resumes on
+    // (typically a thread-pool thread after an HTTP read), but the
+    // host's PlanItems is an ObservableCollection bound to a panel in
+    // the MainWindow XAML. Mutating it from a non-UI thread is unsafe
+    // — Avalonia either throws "Collection was modified during
+    // enumeration" on the render side, or silently drops the change
+    // and the user sees a stale plan. Every other host-state mutation
+    // in ApplyAgentEventAsync is already wrapped in an explicit
+    // Dispatcher.UIThread.InvokeAsync for the same reason; this
+    // helper keeps the plan dispatch next to the others instead of
+    // three identical lambda blocks scattered through the switch.
+    private async Task UpdatePlanOnUiThreadAsync(AIChat.Domain.Chat.AgentPlan? plan)
+    {
+        await Dispatcher.UIThread.InvokeAsync(() => _updatePlan(plan));
     }
 
     private static string FriendlyToolSummary(string toolName)
