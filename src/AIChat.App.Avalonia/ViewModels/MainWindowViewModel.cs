@@ -362,6 +362,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // scroll back to the bottom or click the pill.
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasUnseenMessages))]
+    [NotifyPropertyChangedFor(nameof(UnseenMessageLabel))]
     private int unseenMessageCount;
 
     public bool HasUnseenMessages => UnseenMessageCount > 0;
