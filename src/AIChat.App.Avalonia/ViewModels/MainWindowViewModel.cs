@@ -672,41 +672,55 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        // Same RelayCommand-exception-escape risk as SendTaskAsync
+        // (d7b179c): F5 (KeyBinding) and the palette both invoke
+        // RefreshCommand directly with no SafeRun wrapper. The body
+        // touches settings + projects + JSON normalization; any of
+        // them can throw (corrupt file, permission denied, removed
+        // drive). Catch and surface to the status bar so the user
+        // sees what happened instead of the app silently dying.
         StatusMessage = "正在读取本地状态...";
-        _settings = await _repository.LoadSettingsAsync();
-        _settingsHolder.Replace(_settings);
-        // Apply the persisted theme now that we have the loaded settings.
-        _theme.Apply(_settings.ThemePreference);
-        ProviderSettingsService.Normalize(_settings, _settings.Temperature);
-        AdvancedSettingsService.Normalize(_settings);
-        ToolSettingsService.Normalize(_settings, _toolRegistry);
-
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var active = ProviderSettingsService.GetSelectedProvider(_settings);
-
-        ActiveProvider = active is null ? "未配置模型" : active.Name;
-        ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
-        Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
-        AutoVerify = _settings.AutoVerifyAgentRuns;
-
-        _sidebar.Refresh(projects);
-        // Restore the last-active conversation if its id still
-        // matches a conversation on the current project.
-        // ConversationListViewModel.Refresh already handles the
-        // "preferred id not found" case by falling back to the most
-        // recent conversation / "new" placeholder, so a stale id
-        // from a deleted conversation degrades silently rather
-        // than throwing.
-        _conversationList.Refresh(_sidebar.CurrentProject, _settings.LastActiveConversationId);
-        _provider.Refresh();
-        _ = RecomputeContextInputTokensAsync(DraftPrompt);
-
-        if (ActivityFeed.Activity.Count == 0)
+        try
         {
-            ActivityFeed.Clear();
-        }
+            _settings = await _repository.LoadSettingsAsync();
+            _settingsHolder.Replace(_settings);
+            // Apply the persisted theme now that we have the loaded settings.
+            _theme.Apply(_settings.ThemePreference);
+            ProviderSettingsService.Normalize(_settings, _settings.Temperature);
+            AdvancedSettingsService.Normalize(_settings);
+            ToolSettingsService.Normalize(_settings, _toolRegistry);
 
-        StatusMessage = "已加载。";
+            var projects = (await _repository.LoadProjectsAsync()).ToList();
+            var active = ProviderSettingsService.GetSelectedProvider(_settings);
+
+            ActiveProvider = active is null ? "未配置模型" : active.Name;
+            ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
+            Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
+            AutoVerify = _settings.AutoVerifyAgentRuns;
+
+            _sidebar.Refresh(projects);
+            // Restore the last-active conversation if its id still
+            // matches a conversation on the current project.
+            // ConversationListViewModel.Refresh already handles the
+            // "preferred id not found" case by falling back to the most
+            // recent conversation / "new" placeholder, so a stale id
+            // from a deleted conversation degrades silently rather
+            // than throwing.
+            _conversationList.Refresh(_sidebar.CurrentProject, _settings.LastActiveConversationId);
+            _provider.Refresh();
+            _ = RecomputeContextInputTokensAsync(DraftPrompt);
+
+            if (ActivityFeed.Activity.Count == 0)
+            {
+                ActivityFeed.Clear();
+            }
+
+            StatusMessage = "已加载。";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"刷新失败：{ex.Message}";
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanSendTask))]
