@@ -376,6 +376,53 @@
                                                        TextWrapping="Wrap"/>
                                         </StackPanel>
 
+                                        <!--
+                                          First-run CTAs. Visible only when there's no
+                                          project loaded — the 4 quick-action cards below
+                                          reference project-specific work and would be
+                                          hollow without one. Two buttons: add a project
+                                          (same code path as ⌘O / palette entry) and
+                                          configure the model (opens the settings modal).
+                                          Both route through existing commands / handlers
+                                          so keyboard shortcuts, palette, and the empty
+                                          state stay in lockstep.
+                                        -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="12"
+                                                    HorizontalAlignment="Center"
+                                                    IsVisible="{Binding !HasProject}">
+                                            <Button Classes="quick-action"
+                                                    Width="200" Height="76"
+                                                    Click="AddProject_OnClick"
+                                                    ToolTip.Tip="从本地选一个代码仓库 (⌘O)">
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
+                                                        <Path Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z M3 9 H20"
+                                                              Stroke="{StaticResource AccentBrush}"
+                                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeLineJoin="Round"
+                                                              Width="16" Height="16" Stretch="Uniform"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock Text="添加项目" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Classes="quick-action"
+                                                    Width="200" Height="76"
+                                                    Command="{Binding OpenSettingsCommand}"
+                                                    ToolTip.Tip="配置模型提供方 (⌘,)">
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
+                                                        <Path Data="M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z"
+                                                              Stroke="{StaticResource AccentBrush}"
+                                                              StrokeThickness="1.8" StrokeLineCap="Round" StrokeLineJoin="Round"
+                                                              Width="16" Height="16" Stretch="Uniform"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <TextBlock Text="配置模型" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </StackPanel>
+
                                         <ItemsControl HorizontalAlignment="Center"
                                                       IsVisible="{Binding HasProject}">
                                             <ItemsControl.ItemsPanel>
