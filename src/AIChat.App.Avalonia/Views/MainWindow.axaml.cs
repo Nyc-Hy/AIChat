@@ -103,21 +103,6 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
-            // ⌘⇧M opens the memory editor. The palette item was
-            // already advertising the shortcut; the binding closes
-            // the gap so the user can rely on either surface.
-            Gesture = new KeyGesture(Key.M, KeyModifiers.Meta | KeyModifiers.Shift),
-            Command = viewModel.OpenMemoryEditorCommand
-        });
-        KeyBindings.Add(new KeyBinding
-        {
-            // ⌘⇧G opens the git status / diff viewer. Same as the
-            // palette item; previously the binding was missing.
-            Gesture = new KeyGesture(Key.G, KeyModifiers.Meta | KeyModifiers.Shift),
-            Command = new RelayCommand(async () => await viewModel.OpenGitStatusAsync())
-        });
-        KeyBindings.Add(new KeyBinding
-        {
             // ⌘⇧C copies the last AI reply. Mirrors /copy — same
             // handler, same status feedback (system bubble +
             // status-bar message). The palette was advertising this
