@@ -169,6 +169,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendTaskCommand))]
+    [NotifyPropertyChangedFor(nameof(CanRetry))]
     private bool isRunning;
 
     // 1.0 Beta: command palette + settings modal overlays. The toggles flip
