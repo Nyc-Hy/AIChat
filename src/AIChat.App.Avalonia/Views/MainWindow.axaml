@@ -1060,7 +1060,7 @@
                     VerticalAlignment="Center"
                     HorizontalAlignment="Center"
                     PointerPressed="GitStatusContent_OnPointerPressed">
-                <Grid RowDefinitions="Auto,*" RowSpacing="14">
+                <Grid RowDefinitions="Auto,Auto,*" RowSpacing="14">
 
                     <!-- Header: title + branch + refresh + close -->
                     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
@@ -1094,8 +1094,27 @@
                         </Button>
                     </Grid>
 
+                    <!-- Error banner. RefreshAsync sets ErrorMessage when
+                         the git call throws; without this row the user
+                         sees a silent no-op (the modal stays open with
+                         whatever it showed before, no visible failure
+                         indicator). Same pattern as the MemoryEditor
+                         error message a few sections up. -->
+                    <Border Grid.Row="1"
+                            Background="{StaticResource ErrorBgBrush}"
+                            BorderBrush="{StaticResource ErrorBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding2}"
+                            IsVisible="{Binding GitStatus.ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding GitStatus.ErrorMessage}"
+                                   Foreground="{StaticResource ErrorFgBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+
                     <!-- Body: file list + diff viewer -->
-                    <Grid Grid.Row="1" ColumnDefinitions="320,*" ColumnSpacing="0">
+                    <Grid Grid.Row="2" ColumnDefinitions="320,*" ColumnSpacing="0">
 
                         <!-- File list (left column) -->
                         <Border Grid.Column="0"
