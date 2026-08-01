@@ -94,129 +94,9 @@ public sealed class AgentHarness
         }
 
         _executionRequest = request.ChatRequest;
-        var subAgentSchedule = _coordinator.CreateSubAgentSchedule(
-            run.Id,
-            run.StructuredPlan,
-            request.ContextPack,
-            request.Goal,
-            run.MutationToolSucceeded);
-        if (!executionPolicy.AllowExplorer)
+        await foreach (var evt in RunSubAgentPhaseAsync(request, run, executionPolicy, cancellationToken))
         {
-            subAgentSchedule = [];
-        }
-        run.SubAgentScheduleDecisions.AddRange(subAgentSchedule);
-        var scheduledSubAgents = subAgentSchedule
-            .Where(decision => string.Equals(decision.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        run.ExplorerDecisionReason = CreateExplorerDecisionReason(executionPolicy, subAgentSchedule, scheduledSubAgents);
-        if (_subAgentScheduler is not null && scheduledSubAgents.Count > 0)
-        {
-            run.ExplorerUsed = true;
-            // Group into execution layers so independent sub-agents
-            // run in parallel (Task.WhenAll). Today every scheduled
-            // decision is a read-only explorer with no intra-batch
-            // dependencies, so the DAG collapses to a single layer —
-            // but the algorithm is here for when worker / verifier
-            // templates get wired through the same path.
-            var layers = ComputeSubAgentExecutionLayers(scheduledSubAgents);
-            foreach (var layer in layers)
-            {
-                // Emit phase changes up front so the UI shows every
-                // sub-agent as "starting" before the first tool
-                // event lands (matches the timing of the previous
-                // single-runner loop).
-                foreach (var plannedSubAgent in layer)
-                {
-                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, $"运行 {plannedSubAgent.TemplateId} 子 Agent"));
-                }
-
-                // Build the request set once so the parallel dispatch
-                // is a single Task.WhenAll. Each sub-agent is given
-                // the shared cancellation token — the scheduler
-                // returns SubAgentStatus.Cancelled rather than
-                // throwing when the user hits Stop.
-                var requests = layer
-                    .Select(plannedSubAgent => new SubAgentRunRequest
-                    {
-                        ParentRunId = run.Id,
-                        Task = BuildSubAgentTask(plannedSubAgent, run, request.Goal),
-                        ProjectPath = request.Context.ProjectPath,
-                        Settings = request.Settings,
-                        TemplateId = plannedSubAgent.TemplateId,
-                        ContextPack = request.ContextPack,
-                        MaxToolCalls = Math.Min(plannedSubAgent.MaxToolCalls, executionPolicy.SubAgentMaxToolCalls),
-                        WriteScope = plannedSubAgent.WriteScope,
-                        InputArtifacts = request.Context.InputArtifacts
-                    })
-                    .ToList();
-
-                SubAgentRun[] results;
-                try
-                {
-                    results = await Task.WhenAll(requests.Select(request => _subAgentScheduler!.RunAsync(request, cancellationToken)));
-                }
-                catch (OperationCanceledException)
-                {
-                    // The whole layer was cancelled mid-flight.
-                    // Synthesise a Cancelled result for every
-                    // request that didn't get a chance to return
-                    // one so the post-loop bookkeeping still runs.
-                    results = requests
-                        .Select(request => new SubAgentRun
-                        {
-                            ParentRunId = request.ParentRunId,
-                            TemplateId = request.TemplateId,
-                            Task = request.Task,
-                            Status = SubAgentStatus.Cancelled
-                        })
-                        .ToArray();
-                }
-
-                // Emit per-result events in the original layer order
-                // so the activity feed / plan panel sees the same
-                // sequence as before, just with the latency of the
-                // slowest sub-agent in the layer instead of the sum
-                // of all of them.
-                foreach (var (decision, subAgentRun) in layer.Zip(results))
-                {
-                    var runRecord = ToAgentSubAgentRun(subAgentRun);
-                    run.SubAgentRuns.Add(runRecord);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.SubAgentStarted,
-                        Run = run,
-                        SubAgentRun = runRecord
-                    };
-                    var subAgentStep = AddCompletedStep(
-                        run,
-                        ++_nextStepNumber,
-                        AgentStepType.Model,
-                        $"{FormatTemplateName(subAgentRun.TemplateId)} 子 Agent",
-                        subAgentRun.Task,
-                        FormatSubAgentResult(subAgentRun));
-                    RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
-                    _executionRequest = AppendSubAgentResultMessage(_executionRequest, subAgentRun);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.SubAgentCompleted,
-                        Run = run,
-                        Step = subAgentStep,
-                        SubAgentRun = runRecord
-                    };
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.StepAdded,
-                        Run = run,
-                        Step = subAgentStep
-                    };
-                    // 'decision' is the schedule entry that produced
-                    // this run — currently unused after dispatch
-                    // but kept in the loop so future per-decision
-                    // hooks (artifact routing, telemetry) have a
-                    // stable home.
-                    _ = decision;
-                }
-            }
+            yield return evt;
         }
 
         var assistantContent = "";
@@ -624,6 +504,151 @@ public sealed class AgentHarness
             Run = run,
             Step = planStep
         };
+    }
+
+    // Stage 3 of RunAsync: sub-agent (read-only explorer) phase.
+    // Builds a schedule from the coordinator, gates it on
+    // executionPolicy.AllowExplorer, and dispatches each
+    // execution layer in parallel (Task.WhenAll). Per-result
+    // events fire in the original layer order so the activity
+    // feed / plan panel sees the same sequence as the previous
+    // single-runner loop — just with the latency of the slowest
+    // sub-agent in the layer instead of the sum of all of them.
+    // Mutates the run record (SubAgentScheduleDecisions,
+    // ExplorerDecisionReason, ExplorerUsed, SubAgentRuns) and
+    // the per-instance _executionRequest (each completed
+    // sub-agent's result gets appended as a synthetic system
+    // message so the main model call sees the findings).
+    private async IAsyncEnumerable<AgentHarnessEvent> RunSubAgentPhaseAsync(
+        AgentHarnessRunRequest request,
+        AgentRun run,
+        AgentTaskExecutionPolicy executionPolicy,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var subAgentSchedule = _coordinator.CreateSubAgentSchedule(
+            run.Id,
+            run.StructuredPlan,
+            request.ContextPack,
+            request.Goal,
+            run.MutationToolSucceeded);
+        if (!executionPolicy.AllowExplorer)
+        {
+            subAgentSchedule = [];
+        }
+        run.SubAgentScheduleDecisions.AddRange(subAgentSchedule);
+        var scheduledSubAgents = subAgentSchedule
+            .Where(decision => string.Equals(decision.Status, "Scheduled", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        run.ExplorerDecisionReason = CreateExplorerDecisionReason(executionPolicy, subAgentSchedule, scheduledSubAgents);
+        if (_subAgentScheduler is not null && scheduledSubAgents.Count > 0)
+        {
+            run.ExplorerUsed = true;
+            // Group into execution layers so independent sub-agents
+            // run in parallel (Task.WhenAll). Today every scheduled
+            // decision is a read-only explorer with no intra-batch
+            // dependencies, so the DAG collapses to a single layer —
+            // but the algorithm is here for when worker / verifier
+            // templates get wired through the same path.
+            var layers = ComputeSubAgentExecutionLayers(scheduledSubAgents);
+            foreach (var layer in layers)
+            {
+                // Emit phase changes up front so the UI shows every
+                // sub-agent as "starting" before the first tool
+                // event lands (matches the timing of the previous
+                // single-runner loop).
+                foreach (var plannedSubAgent in layer)
+                {
+                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, $"运行 {plannedSubAgent.TemplateId} 子 Agent"));
+                }
+
+                // Build the request set once so the parallel dispatch
+                // is a single Task.WhenAll. Each sub-agent is given
+                // the shared cancellation token — the scheduler
+                // returns SubAgentStatus.Cancelled rather than
+                // throwing when the user hits Stop.
+                var requests = layer
+                    .Select(plannedSubAgent => new SubAgentRunRequest
+                    {
+                        ParentRunId = run.Id,
+                        Task = BuildSubAgentTask(plannedSubAgent, run, request.Goal),
+                        ProjectPath = request.Context.ProjectPath,
+                        Settings = request.Settings,
+                        TemplateId = plannedSubAgent.TemplateId,
+                        ContextPack = request.ContextPack,
+                        MaxToolCalls = Math.Min(plannedSubAgent.MaxToolCalls, executionPolicy.SubAgentMaxToolCalls),
+                        WriteScope = plannedSubAgent.WriteScope,
+                        InputArtifacts = request.Context.InputArtifacts
+                    })
+                    .ToList();
+
+                SubAgentRun[] results;
+                try
+                {
+                    results = await Task.WhenAll(requests.Select(request => _subAgentScheduler!.RunAsync(request, cancellationToken)));
+                }
+                catch (OperationCanceledException)
+                {
+                    // The whole layer was cancelled mid-flight.
+                    // Synthesise a Cancelled result for every
+                    // request that didn't get a chance to return
+                    // one so the post-loop bookkeeping still runs.
+                    results = requests
+                        .Select(request => new SubAgentRun
+                        {
+                            ParentRunId = request.ParentRunId,
+                            TemplateId = request.TemplateId,
+                            Task = request.Task,
+                            Status = SubAgentStatus.Cancelled
+                        })
+                        .ToArray();
+                }
+
+                // Emit per-result events in the original layer order
+                // so the activity feed / plan panel sees the same
+                // sequence as before, just with the latency of the
+                // slowest sub-agent in the layer instead of the sum
+                // of all of them.
+                foreach (var (decision, subAgentRun) in layer.Zip(results))
+                {
+                    var runRecord = ToAgentSubAgentRun(subAgentRun);
+                    run.SubAgentRuns.Add(runRecord);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.SubAgentStarted,
+                        Run = run,
+                        SubAgentRun = runRecord
+                    };
+                    var subAgentStep = AddCompletedStep(
+                        run,
+                        ++_nextStepNumber,
+                        AgentStepType.Model,
+                        $"{FormatTemplateName(subAgentRun.TemplateId)} 子 Agent",
+                        subAgentRun.Task,
+                        FormatSubAgentResult(subAgentRun));
+                    RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
+                    _executionRequest = AppendSubAgentResultMessage(_executionRequest, subAgentRun);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.SubAgentCompleted,
+                        Run = run,
+                        Step = subAgentStep,
+                        SubAgentRun = runRecord
+                    };
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.StepAdded,
+                        Run = run,
+                        Step = subAgentStep
+                    };
+                    // 'decision' is the schedule entry that produced
+                    // this run — currently unused after dispatch
+                    // but kept in the loop so future per-decision
+                    // hooks (artifact routing, telemetry) have a
+                    // stable home.
+                    _ = decision;
+                }
+            }
+        }
     }
 
     private static AgentRunStatus DetermineFinalStatus(AgentRun run)
