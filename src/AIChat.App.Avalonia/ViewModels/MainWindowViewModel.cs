@@ -56,6 +56,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     [ObservableProperty]
     private string readiness = "检查中";
 
+    // True while a connection test (⌘T / "测试当前模型") is in
+    // flight. Set by OnProviderTestStarted/Completed. Read by the
+    // agent host through a Func<bool> bridge so CanSendTask can
+    // disable the send button — otherwise a test in flight would
+    // race a freshly-sent agent run against the same provider.
+    // Lives on the host (not the agent host) because the test is
+    // triggered from ProviderConfigViewModel; the agent host never
+    // mutates it.
+    [ObservableProperty]
+    private bool isProviderTesting;
+
+    // OnIsProviderTestingChanged fires whenever the test-start /
+    // test-complete event pair flips the gate. Re-evaluate the
+    // agent host's send / stop commands so the send button
+    // disables mid-test and re-enables the moment the test
+    // completes. Can't use [NotifyCanExecuteChangedFor] here
+    // because the commands live on AgentHost, not on the host.
+    partial void OnIsProviderTestingChanged(bool value)
+    {
+        _agentHost.SendTaskCommand.NotifyCanExecuteChanged();
+        _agentHost.StopTaskCommand.NotifyCanExecuteChanged();
+    }
+
     // Computed view-state properties derive from the observables above. Avalonia
     // bindings do not pick up changes to plain CLR properties; we re-raise
     // PropertyChanged manually so the breadcrumb / greeting / status bar update
@@ -411,7 +434,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             toast,
             setStatusMessage: value => StatusMessage = value,
             getSettings: () => _settings,
-            getNoWriteMode: () => NoWriteMode);
+            getNoWriteMode: () => NoWriteMode,
+            getIsProviderTesting: () => IsProviderTesting);
 
         // The slash-command handler is a small static helper that
         // currently expects the host VM (it reads /status fields off
@@ -772,8 +796,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // the test completion would clobber IsRunning back to
         // false, the send button would re-enable, and the user
         // could kick off a second agent run against a
-        // still-in-flight first one. Activity feed + status
-        // bar are the right place for the test progress UI.
+        // still-in-flight first one.
+        //
+        // The send button does still need to disable during a
+        // test (otherwise the user can race a fresh agent run
+        // against the in-flight probe). The new IsProviderTesting
+        // flag is the dedicated gate for that; CanSendTask on
+        // AgentHost now checks both !IsRunning AND
+        // !IsProviderTesting.
+        IsProviderTesting = true;
         StatusMessage = $"正在测试 {args.ProviderName}...";
         _activeTestBubble = new ActivityItemViewModel(
             "模型测试",
@@ -789,6 +820,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // around the test is the surface bug: a connection test
         // is not an agent run and must not touch the agent
         // surface state.
+        //
+        // Drop the IsProviderTesting gate here, paired with the
+        // set in OnProviderTestStarted. NotifyCanExecuteChangedFor
+        // on the field re-evaluates CanSendTask so the send
+        // button re-enables immediately.
+        IsProviderTesting = false;
         var status = args.Exception is not null
             ? "失败"
             : args.IsSuccess ? "通过" : "失败";

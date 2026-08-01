@@ -49,6 +49,15 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     private readonly Action<string> _setStatusMessage;
     private readonly Func<AppSettings> _getSettings;
     private readonly Func<bool> _getNoWriteMode;
+    // True while a connection test (⌘T / "测试当前模型") is in
+    // flight. Surfaced here so CanSendTask can disable the send
+    // button — otherwise the user could start a second agent run
+    // while the test is still in flight, racing two requests
+    // against the same provider. The flag lives on the host
+    // because the test is fired from ProviderConfigViewModel via
+    // TestStarted/TestCompleted events; the agent loop never sets
+    // it directly.
+    private readonly Func<bool> _getIsProviderTesting;
 
     // ---- Host-side collaborators (still singletons, owned by the host) ----
 
@@ -170,7 +179,8 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         IToastService toast,
         Action<string> setStatusMessage,
         Func<AppSettings> getSettings,
-        Func<bool> getNoWriteMode)
+        Func<bool> getNoWriteMode,
+        Func<bool> getIsProviderTesting)
     {
         _chatService = chatService;
         _toolRegistry = toolRegistry;
@@ -183,6 +193,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         _setStatusMessage = setStatusMessage;
         _getSettings = getSettings;
         _getNoWriteMode = getNoWriteMode;
+        _getIsProviderTesting = getIsProviderTesting;
 
         // Construct the agent runner last so the runner's
         // "host" reference is the fully-initialised AgentHost.
@@ -457,7 +468,15 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         }
     }
 
-    private bool CanSendTask() => !IsRunning;
+    // Send is gated by both the agent-run state (IsRunning) and the
+    // provider-test state. The previous shape only checked IsRunning;
+    // a ⌘T test in flight wouldn't block a fresh send, so the user
+    // could kick off a second agent run against a provider whose
+    // first request hadn't returned yet. Now both gates must be
+    // clear. TestStarted/TestCompleted flip the host's
+    // IsProviderTesting through the Func<bool> bridge so the
+    // underlying state stays on the host (where the events arrive).
+    private bool CanSendTask() => !IsRunning && !_getIsProviderTesting();
     private bool CanStopTask() => IsRunning;
 
     // The slash-command handler currently needs the host VM
