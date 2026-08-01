@@ -20,7 +20,7 @@ public sealed class AgentHarnessTests
         var conversation = new Conversation { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -103,7 +103,7 @@ public sealed class AgentHarnessTests
             """
         }]);
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService));
 
         var events = new List<AgentHarnessEvent>();
@@ -148,7 +148,7 @@ public sealed class AgentHarnessTests
             Content = """{"summary":"should not be used","phases":[]}"""
         }]);
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService));
 
         var events = new List<AgentHarnessEvent>();
@@ -219,9 +219,9 @@ public sealed class AgentHarnessTests
             """
         }]);
         var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "should not run" }]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -284,7 +284,7 @@ public sealed class AgentHarnessTests
         });
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -323,7 +323,7 @@ public sealed class AgentHarnessTests
             Content = """{"summary":"should not plan continuation","phases":[]}"""
         }]);
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
@@ -363,7 +363,7 @@ public sealed class AgentHarnessTests
     {
         var conversation = new Conversation { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "retried" }]);
-        var harness = new AgentHarness(new AgentRunner(runnerService, new AgentToolCatalog([])));
+        var harness = new AgentHarness(new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -416,9 +416,9 @@ public sealed class AgentHarnessTests
             """
         }]);
         var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "Explorer found src/App.cs." }]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -503,9 +503,9 @@ public sealed class AgentHarnessTests
             """
         }]);
         var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "Explorer completed planned task." }]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -580,9 +580,9 @@ public sealed class AgentHarnessTests
         var subAgentService = new FakeChatCompletionService([
             [new ChatDelta { ToolCalls = [forbiddenToolCall] }]
         ]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -668,7 +668,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已修改 notes.txt 和 todo.txt。" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -726,7 +726,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
-            new AgentToolCatalog([new FakeVerificationTool()])));
+            AgentToolRegistry.CreateForTests([new FakeVerificationTool()])));
 
         var toolCallPhases = new List<string>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -780,7 +780,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已运行测试。" }]
             ]),
-            new AgentToolCatalog([new FakeSecretVerificationTool()])));
+            AgentToolRegistry.CreateForTests([new FakeSecretVerificationTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -827,7 +827,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new FakeLargeSecretReadTool()])));
+            AgentToolRegistry.CreateForTests([new FakeLargeSecretReadTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -886,7 +886,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -944,7 +944,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "updated" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -980,7 +980,7 @@ public sealed class AgentHarnessTests
         var conversation = new Conversation { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1015,7 +1015,7 @@ public sealed class AgentHarnessTests
         var goal = "请阅读当前项目的目录结构，简要说明 src 和 tests 目录分别负责什么。不需要修改文件。";
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "src 包含应用代码，tests 包含测试代码。" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1067,7 +1067,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new UpdatePlanTool()])));
+            AgentToolRegistry.CreateForTests([new UpdatePlanTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -1142,7 +1142,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [secondCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new UpdatePlanTool()])));
+            AgentToolRegistry.CreateForTests([new UpdatePlanTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -1199,7 +1199,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool(), new FakeVerificationTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool(), new FakeVerificationTool()])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1268,7 +1268,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1322,7 +1322,7 @@ public sealed class AgentHarnessTests
             new FakeChatCompletionService([
                 [new ChatDelta { ToolCalls = [first, second] }]
             ]),
-            new AgentToolCatalog([new FakeReadTool()])));
+            AgentToolRegistry.CreateForTests([new FakeReadTool()])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1369,7 +1369,7 @@ public sealed class AgentHarnessTests
         var conversation = new Conversation { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new ThrowingChatCompletionService(),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1408,7 +1408,7 @@ public sealed class AgentHarnessTests
         var conversation = new Conversation { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "never" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 

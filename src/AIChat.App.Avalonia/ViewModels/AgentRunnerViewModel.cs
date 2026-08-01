@@ -171,12 +171,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             // retries. The default value on a fresh AppSettings
             // is 3 so observable behaviour is unchanged unless the
             // user explicitly edits the value.
-            var toolCatalog = new AgentToolCatalog(_toolRegistry.All);
+            // AgentToolRegistry is now the single surface for
+            // tool resolution + execution (the plan-3.8 merge
+            // dropped AgentToolCatalog and ToolExecutionService);
+            // pass it directly to AgentRunner.
             var harness = new AgentHarness(
                 new AgentRunner(
                     _chatService,
-                    toolCatalog,
-                    new ToolExecutionService(toolCatalog),
+                    _toolRegistry,
                     retryPolicy: new RetryPolicy(maxRetries: settings.RetryMaxAttempts)));
             assistantItem.Detail = "";
             await foreach (var agentEvent in harness.RunAsync(new AgentHarnessRunRequest

@@ -11,7 +11,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_AutoExecutesReadOnlyTool()
     {
         var tool = new FakeTool("read_file", AgentToolRisk.ReadOnly);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -30,7 +30,7 @@ public sealed class ToolExecutionServiceTests
     {
         var content = string.Join('\n', Enumerable.Range(1, 600).Select(i => $"line {i:000}"));
         var tool = new FakeTool("read_file", AgentToolRisk.ReadOnly, content);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -48,7 +48,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_AsksApprovalForWriteTool()
     {
         var tool = new FakeTool("write_file", AgentToolRisk.Write);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -65,7 +65,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_ReturnsRejectedResultWhenApprovalRejected()
     {
         var tool = new FakeTool("write_file", AgentToolRisk.Write);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -85,7 +85,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_DoesNotExecuteDisabledTool()
     {
         var tool = new FakeTool("write_file", AgentToolRisk.Write);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -108,7 +108,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_EmitsSessionAllowedAndExecutesTool()
     {
         var tool = new FakeTool("write_file", AgentToolRisk.Write);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -132,7 +132,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_SessionAllowFromConfirmEachTimeSkipsApprovalOnNextCall()
     {
         var tool = new FakeTool("write_file", AgentToolRisk.Write);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         // 第一次调用：ConfirmEachTime（默认），用户点"本会话允许"
         var firstEvents = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
@@ -165,7 +165,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_SessionAllowedShellSkipsApprovalForAllowlistedCommand()
     {
         var tool = new FakeTool("run_shell", AgentToolRisk.Shell);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -184,7 +184,7 @@ public sealed class ToolExecutionServiceTests
     {
         var approvalRequested = false;
         var tool = new FakeTool("run_shell", AgentToolRisk.Shell);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -207,7 +207,7 @@ public sealed class ToolExecutionServiceTests
     public async Task ExecuteAsync_ReturnsStructuredFailureWhenToolThrows()
     {
         var tool = new ThrowingTool("read_file", AgentToolRisk.ReadOnly);
-        var service = new ToolExecutionService(new AgentToolCatalog([tool]));
+        var service = AgentToolRegistry.CreateForTests([tool]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {
@@ -225,7 +225,7 @@ public sealed class ToolExecutionServiceTests
     [Fact]
     public async Task ExecuteAsync_ReturnsUnknownToolStatus()
     {
-        var service = new ToolExecutionService(new AgentToolCatalog([]));
+        var service = AgentToolRegistry.CreateForTests([]);
 
         var events = await CollectAsync(service.ExecuteAsync(new ToolExecutionRequest
         {

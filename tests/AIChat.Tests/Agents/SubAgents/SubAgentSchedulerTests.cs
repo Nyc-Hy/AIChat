@@ -137,7 +137,7 @@ public sealed class SubAgentSchedulerTests
 
     private static SubAgentScheduler CreateScheduler(IChatCompletionService chat, IReadOnlyList<IAgentTool> tools)
     {
-        return new SubAgentScheduler(new AgentRunner(chat, new AgentToolCatalog(tools)));
+        return new SubAgentScheduler(new AgentRunner(chat, AgentToolRegistry.CreateForTests(tools)));
     }
 
     private static SubAgentRunRequest CreateRequest(

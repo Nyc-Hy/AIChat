@@ -20,8 +20,7 @@ namespace AIChat.Application.Agents;
 public sealed class AgentRunner
 {
     private readonly IChatCompletionService _chatService;
-    private readonly AgentToolCatalog _toolCatalog;
-    private readonly ToolExecutionService _toolExecutionService;
+    private readonly AgentToolRegistry _toolRegistry;
     private readonly RetryPolicy _retryPolicy;
 
     // Trailing state of the last round. Per-instance fields — safe
@@ -35,20 +34,13 @@ public sealed class AgentRunner
     private ToolRoundState _lastToolState = new(Stop: false, Cancelled: false);
     private AgentRunEvent? _terminalChatEvent;
 
-    public AgentRunner(IChatCompletionService chatService, AgentToolCatalog toolCatalog)
-        : this(chatService, toolCatalog, new ToolExecutionService(toolCatalog))
-    {
-    }
-
     public AgentRunner(
         IChatCompletionService chatService,
-        AgentToolCatalog toolCatalog,
-        ToolExecutionService toolExecutionService,
+        AgentToolRegistry toolRegistry,
         RetryPolicy? retryPolicy = null)
     {
         _chatService = chatService;
-        _toolCatalog = toolCatalog;
-        _toolExecutionService = toolExecutionService;
+        _toolRegistry = toolRegistry;
         _retryPolicy = retryPolicy ?? new RetryPolicy();
     }
 
@@ -58,7 +50,7 @@ public sealed class AgentRunner
         AgentRunContext context,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var enabledTools = _toolCatalog.ResolveEnabled(context.EnabledToolIds);
+        var enabledTools = _toolRegistry.ResolveEnabled(context.EnabledToolIds);
         var budgetManager = new AgentBudgetManager(new AgentBudget
         {
             MaxToolCalls = context.MaxToolRounds,
@@ -275,7 +267,7 @@ public sealed class AgentRunner
 
         foreach (var toolCall in toolCalls)
         {
-            var toolRisk = _toolCatalog.Find(toolCall.Name)?.Risk ?? AgentToolRisk.Shell;
+            var toolRisk = _toolRegistry.Find(toolCall.Name)?.Risk ?? AgentToolRisk.Shell;
             var budgetDecision = budgetManager.ConsumeToolCall(
                 toolCall.Name,
                 isHighRiskMutation: toolRisk != AgentToolRisk.ReadOnly,
@@ -298,7 +290,7 @@ public sealed class AgentRunner
             };
 
             AgentToolResult? result = null;
-            await foreach (var toolEvent in _toolExecutionService.ExecuteAsync(
+            await foreach (var toolEvent in _toolRegistry.ExecuteAsync(
                                new ToolExecutionRequest
                                {
                                    ToolCall = toolCall,
