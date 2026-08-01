@@ -2,7 +2,6 @@ using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
-using AIChat.Application.Configuration;
 using AIChat.Application.Llm.Routing;
 using Moq;
 

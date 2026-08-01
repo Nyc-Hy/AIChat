@@ -258,8 +258,9 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
     private static void ApplyProviderSpecificParameters(Dictionary<string, object?> payload, AppSettings settings)
     {
         // AppSettings.MaxOutputTokens is a real schema field, gets
-        // clamped by AdvancedSettingsService.Normalize on every load,
-        // and is honored by the Anthropic provider. The OpenAI-
+        // clamped on every load by the inline normalize in
+        // MainWindowViewModel ctor, and is honored by the Anthropic
+        // provider. The OpenAI-
         // compatible path also takes max_tokens — every model that
         // speaks the /chat/completions schema understands it — but
         // the request payload was built from ChatRequest which

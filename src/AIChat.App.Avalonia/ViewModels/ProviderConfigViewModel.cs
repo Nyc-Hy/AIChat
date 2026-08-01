@@ -3,7 +3,6 @@ using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
-using AIChat.Application.Configuration;
 using AIChat.Application.Llm.Routing;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;

@@ -5,7 +5,6 @@ using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
 using AIChat.Application.Agents;
 using AIChat.Application.Agents.Coordinator;
-using AIChat.Application.Configuration;
 using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Projects;
@@ -676,7 +675,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             // Apply the persisted theme now that we have the loaded settings.
             _theme.Apply(_settings.ThemePreference);
             ProviderSettingsService.Normalize(_settings, _settings.Temperature);
-            AdvancedSettingsService.Normalize(_settings);
+            // Clamp the persisted knobs to their valid ranges (was
+            // AdvancedSettingsService.Normalize). The service was
+            // deleted in the v1.0 refactor because it was the
+            // only caller of these clamps; inlining keeps the
+            // guard rails without a separate file.
+            _settings.AgentMaxToolRounds = Math.Clamp(_settings.AgentMaxToolRounds, 1, 100);
+            _settings.MaxAutoFixRounds = Math.Clamp(_settings.MaxAutoFixRounds, 0, 10);
+            _settings.RetryMaxAttempts = Math.Clamp(_settings.RetryMaxAttempts, 0, 10);
+            _settings.MaxOutputTokens = Math.Clamp(_settings.MaxOutputTokens, 256, 32768);
+            _settings.ConversationContextRatio = Math.Clamp(_settings.ConversationContextRatio, 0.3, 1.0);
             ToolSettingsService.Normalize(_settings, _toolRegistry);
 
             var projects = (await _repository.LoadProjectsAsync()).ToList();

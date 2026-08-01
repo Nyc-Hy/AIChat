@@ -102,8 +102,8 @@
                           through to AppSettings + fire a fire-and-forget
                           save. TextBoxes (no NumericUpDown) keep the
                           dependency surface narrow; the load-time
-                          normalization in AdvancedSettingsService.Normalize
-                          clamps out-of-range values on the next launch.
+                          inline Math.Clamp in MainWindowViewModel ctor
+                          normalizes out-of-range values on the next launch.
                         -->
                         <StackPanel Spacing="8">
                             <TextBlock Text="默认行为" Classes="section-title"/>

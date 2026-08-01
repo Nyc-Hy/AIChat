@@ -160,8 +160,8 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 prompt);
 
             // AppSettings.RetryMaxAttempts is a real schema field
-            // (clamped by AdvancedSettingsService.Normalize on
-            // every load, persisted through
+            // (clamped on every load by the inline normalize in
+            // MainWindowViewModel ctor, persisted through
             // ProtectedSettingsSerializer), but the construction
             // site at AgentRunnerViewModel always used the default
             // 'new RetryPolicy()' which has 3 hard-coded — the
