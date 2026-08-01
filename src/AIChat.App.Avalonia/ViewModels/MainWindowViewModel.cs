@@ -46,52 +46,24 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     private AppSettings _settings = new();
 
-    [ObservableProperty]
-    private string activeProvider = "正在加载...";
+    // App-wide status / readiness surface (provider, model,
+    // readiness pill, in-flight test flag, derived greeting /
+    // has-project / status-bar copy). Split out so the host
+    // doesn't carry the 4 backing fields + 6 computed
+    // properties + Sidebar subscription plumbing. See
+    // AppStatusViewModel for the full surface and the
+    // PropertyChanged forwarding for IsProviderTesting that
+    // re-evaluates AgentHost's send / stop CanExecute.
+    private readonly AppStatusViewModel _appStatus;
+    public AppStatusViewModel AppStatus => _appStatus;
 
-    [ObservableProperty]
-    private string activeModel = "";
-
-    [ObservableProperty]
-    private string readiness = "检查中";
-
-    // True while a connection test (⌘T / "测试当前模型") is in
-    // flight. Set by OnProviderTestStarted/Completed. Read by the
-    // agent host through a Func<bool> bridge so CanSendTask can
-    // disable the send button — otherwise a test in flight would
-    // race a freshly-sent agent run against the same provider.
-    // Lives on the host (not the agent host) because the test is
-    // triggered from ProviderConfigViewModel; the agent host never
-    // mutates it.
-    [ObservableProperty]
-    private bool isProviderTesting;
-
-    // OnIsProviderTestingChanged fires whenever the test-start /
-    // test-complete event pair flips the gate. Re-evaluate the
-    // agent host's send / stop commands so the send button
-    // disables mid-test and re-enables the moment the test
-    // completes. Can't use [NotifyCanExecuteChangedFor] here
-    // because the commands live on AgentHost, not on the host.
-    partial void OnIsProviderTestingChanged(bool value)
-    {
-        _agentHost.SendTaskCommand.NotifyCanExecuteChanged();
-        _agentHost.StopTaskCommand.NotifyCanExecuteChanged();
-    }
-
-    // Computed view-state properties derive from the observables above. Avalonia
-    // bindings do not pick up changes to plain CLR properties; we re-raise
-    // PropertyChanged manually so the breadcrumb / greeting / status bar update
-    // when the underlying fields flip.
-    partial void OnActiveProviderChanged(string value)
-    {
-        OnPropertyChanged(nameof(StatusBarModel));
-    }
-    partial void OnActiveModelChanged(string value) => OnPropertyChanged(nameof(StatusBarModel));
-    partial void OnReadinessChanged(string value)
-    {
-        OnPropertyChanged(nameof(IsReady));
-        OnPropertyChanged(nameof(NeedsConfiguration));
-    }
+    // ISlashCommandHost forwarders — the slash handler reads
+    // ActiveProvider / ActiveModel off the host interface, and
+    // the live values now live on AppStatusViewModel. Keep the
+    // ISlashCommandHost surface unchanged so the handler's
+    // contract doesn't need to know about the extraction.
+    public string ActiveProvider => _appStatus.ActiveProvider;
+    public string ActiveModel => _appStatus.ActiveModel;
 
     [ObservableProperty]
     private string draftPrompt = "";
@@ -218,29 +190,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     public GitStatusViewModel GitStatus => _gitStatus;
 
-    // 1.0 Beta: derive the top status, breadcrumb visibility and status-bar
-    // text from the same handful of fields so the XAML can stay declarative.
-    // HasProject hides the project crumb when no project is selected (so
-    // the breadcrumb doesn't read "AIChat / 未配置路径"). IsReady /
-    // NeedsConfiguration drive the compact status pills.
-    public bool HasProject => !string.IsNullOrWhiteSpace(Sidebar.SelectedProjectName)
-                              && Sidebar.SelectedProjectName != "未配置路径";
-
-    public bool IsReady => Readiness == "可运行";
-    public bool NeedsConfiguration => Readiness == "需要密钥" || Readiness == "需检查";
-
-    public string Greeting => HasProject ? "今天要完成什么？" : "选一个项目开始";
-    public string SubGreeting => HasProject
-        ? "输入目标后，AIChat 会读取项目上下文并在风险操作前询问你。"
-        : "添加本地代码仓库，让 AIChat 读取上下文后再开始任务。";
-
-    public string StatusBarModel => string.IsNullOrEmpty(ActiveModel)
-        ? ActiveProvider
-        : $"{ActiveProvider} · {ActiveModel}";
-
     // Approximate context window + estimated input tokens + the
     // status-bar context meter all moved to AgentHostViewModel
     // (it's the run state). The XAML binds through AgentHost.
+    //
+    // Status-bar text + Greeting/SubGreeting/HasProject/IsReady/
+    // NeedsConfiguration all moved to AppStatusViewModel
+    // (it's the "app is in what state" surface). The XAML binds
+    // through AppStatus.
 
     // PR-12: conversation activity feed is its own view-model. The XAML
     // binds to ActivityFeed.Activity / ActivityFeed.HasConversation.
@@ -420,6 +377,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _gitStatus = gitStatus;
         _workspace = workspace;
 
+        // App-status surface (active provider / model / readiness
+        // pill / in-flight test flag / derived Greeting + HasProject
+        // + StatusBarModel). Sidebar subscription lives inside
+        // AppStatusViewModel; the only PropertyChanged we listen
+        // for here is IsProviderTesting so we can re-evaluate the
+        // agent host's send / stop CanExecute. (Can't use
+        // [NotifyCanExecuteChangedFor] on AppStatus.IsProviderTesting
+        // because the commands live on AgentHost, not on the
+        // status VM.)
+        _appStatus = new AppStatusViewModel(sidebar);
+        _appStatus.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppStatusViewModel.IsProviderTesting))
+            {
+                _agentHost.SendTaskCommand.NotifyCanExecuteChanged();
+                _agentHost.StopTaskCommand.NotifyCanExecuteChanged();
+            }
+        };
+
         // Construct the agent host (which in turn owns the
         // AgentRunnerViewModel + the per-run CTS + the run state).
         // The bridge delegates (setStatusMessage, getSettings,
@@ -438,7 +414,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             setStatusMessage: value => StatusMessage = value,
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode,
-            getIsProviderTesting: () => IsProviderTesting);
+            getIsProviderTesting: () => _appStatus.IsProviderTesting);
 
         // The slash-command handler is a small static helper that
         // currently expects the host VM (it reads /status fields off
@@ -458,17 +434,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _approvalViewModel.RequestPresented += OnApprovalPresented;
         _approvalViewModel.RequestResolved += OnApprovalResolved;
 
-        _sidebar.PropertyChanged += (_, e) =>
-        {
-            // SelectedProjectName drives HasProject, Greeting and SubGreeting;
-            // re-raise them so the breadcrumb / page title update.
-            if (e.PropertyName == nameof(ProjectSidebarViewModel.SelectedProjectName))
-            {
-                OnPropertyChanged(nameof(HasProject));
-                OnPropertyChanged(nameof(Greeting));
-                OnPropertyChanged(nameof(SubGreeting));
-            }
-        };
+        // Sidebar.SelectedProjectName → HasProject / Greeting /
+        // SubGreeting forwarding now lives inside AppStatusViewModel
+        // (it's the one that owns those derived properties), so
+        // we don't need a local subscription here.
         RegisterCommandPaletteCommands();
 
         _ = RefreshAsync();
@@ -695,9 +664,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             var projects = (await _repository.LoadProjectsAsync()).ToList();
             var active = ProviderSettingsService.GetSelectedProvider(_settings);
 
-            ActiveProvider = active is null ? "未配置模型" : active.Name;
-            ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
-            Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
+            _appStatus.ActiveProvider = active is null ? "未配置模型" : active.Name;
+            _appStatus.ActiveModel = active is null ? "配置模型后即可运行任务" : active.SelectedModelId;
+            _appStatus.Readiness = active is not null && !string.IsNullOrWhiteSpace(active.ApiKey) ? "可运行" : "需要密钥";
 
             // The settings-modal mirror (Temperature / MaxOutputTokens /
             // AgentExecutionMode / AutoVerify / Tools permission matrix)
@@ -767,9 +736,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             return;
         }
 
-        ActiveProvider = args.ProviderName;
-        ActiveModel = args.ModelId;
-        Readiness = "可运行";
+        _appStatus.ActiveProvider = args.ProviderName;
+        _appStatus.ActiveModel = args.ModelId;
+        _appStatus.Readiness = "可运行";
         StatusMessage = args.AlreadyExisted ? "已更新模型配置。" : "已保存模型配置。";
     }
 
@@ -817,7 +786,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // flag is the dedicated gate for that; CanSendTask on
         // AgentHost now checks both !IsRunning AND
         // !IsProviderTesting.
-        IsProviderTesting = true;
+        _appStatus.IsProviderTesting = true;
         StatusMessage = $"正在测试 {args.ProviderName}...";
         _activeTestBubble = new ActivityItemViewModel(
             "模型测试",
@@ -838,7 +807,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // set in OnProviderTestStarted. NotifyCanExecuteChangedFor
         // on the field re-evaluates CanSendTask so the send
         // button re-enables immediately.
-        IsProviderTesting = false;
+        _appStatus.IsProviderTesting = false;
         var status = args.Exception is not null
             ? "失败"
             : args.IsSuccess ? "通过" : "失败";
@@ -863,7 +832,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         }
         _activeTestBubble = null;
 
-        Readiness = args.IsSuccess ? "可运行" : "需检查";
+        _appStatus.Readiness = args.IsSuccess ? "可运行" : "需检查";
         StatusMessage = args.IsSuccess ? "模型连接正常。" : "模型连接失败。";
     }
 

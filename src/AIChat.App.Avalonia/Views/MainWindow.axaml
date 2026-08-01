@@ -205,7 +205,7 @@
                                  dropping to a terminal. -->
                             <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                                            IsVisible="{Binding HasProject}"
+                                            IsVisible="{Binding AppStatus.HasProject}"
                                             ToolTip.Tip="{Binding Sidebar.ProjectHealth}">
                                     <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
                                           Stroke="{StaticResource MutedBrush}"
@@ -215,10 +215,10 @@
                                     <TextBlock Text="{Binding Sidebar.SelectedProjectName}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="400"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <Border Classes="badge success" IsVisible="{Binding IsReady}">
+                                    <Border Classes="badge success" IsVisible="{Binding AppStatus.IsReady}">
                                         <TextBlock Text="可运行" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource SuccessBadgeFgBrush}"/>
                                     </Border>
-                                    <Border Classes="badge warning" IsVisible="{Binding NeedsConfiguration}">
+                                    <Border Classes="badge warning" IsVisible="{Binding AppStatus.NeedsConfiguration}">
                                         <TextBlock Text="需要密钥" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource WarningBadgeFgBrush}"/>
                                     </Border>
                                     <!--
@@ -375,9 +375,9 @@
                                          have always used. -->
                                     <vcontrols:EmptyStateView
                                         IsVisible="{Binding !ActivityFeed.HasConversation}"
-                                        Greeting="{Binding Greeting}"
-                                        SubGreeting="{Binding SubGreeting}"
-                                        HasProject="{Binding HasProject}"
+                                        Greeting="{Binding AppStatus.Greeting}"
+                                        SubGreeting="{Binding AppStatus.SubGreeting}"
+                                        HasProject="{Binding AppStatus.HasProject}"
                                         OpenSettingsCommand="{Binding OpenSettingsCommand}"
                                         AddProjectRequested="AddProject_OnClick"
                                         QuickActionRequested="EmptyStateCard_OnClick"/>
@@ -563,9 +563,9 @@
                                                 <Border Classes="model-chip" MaxWidth="200">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}"/>
-                                                        <TextBlock Text="{Binding ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="80" FontFamily="{StaticResource FontSans}"/>
+                                                        <TextBlock Text="{Binding AppStatus.ActiveProvider}" FontSize="12" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="80" FontFamily="{StaticResource FontSans}"/>
                                                         <TextBlock Text="·" FontSize="12" Foreground="{StaticResource MutedBrush}" FontFamily="{StaticResource FontSans}"/>
-                                                        <TextBlock Text="{Binding ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="80" FontFamily="{StaticResource FontSans}"/>
+                                                        <TextBlock Text="{Binding AppStatus.ActiveModel}" FontSize="12" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="80" FontFamily="{StaticResource FontSans}"/>
                                                     </StackPanel>
                                                 </Border>
                                             </StackPanel>
@@ -643,7 +643,7 @@
                                        VerticalAlignment="Center"/>
                         </Grid>
                         <TextBlock Grid.Column="2"
-                                   Text="{Binding StatusBarModel}"
+                                   Text="{Binding AppStatus.StatusBarModel}"
                                    FontFamily="{StaticResource FontMono}"
                                    FontSize="11"
                                    Foreground="{StaticResource MutedBrush}"
