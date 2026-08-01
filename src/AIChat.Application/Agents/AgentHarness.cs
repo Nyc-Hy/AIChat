@@ -860,76 +860,24 @@ public sealed class AgentHarness
             : char.ToUpperInvariant(templateId[0]) + templateId[1..];
     }
 
-    // Groups the scheduled sub-agents into execution layers. A layer
-    // is a set of decisions whose intra-batch dependencies are all
-    // already complete; within a layer the harness dispatches every
-    // sub-agent in parallel (Task.WhenAll), so the parent run no
-    // longer pays N × per-sub-agent-latency for an N-agent plan.
-    //
-    // The dependency DAG lives on AgentSubAgentScheduleDecision.
-    // DependsOn (planned sub-agent ids). The agent coordinator has
-    // already filtered out decisions whose dependencies can never
-    // be satisfied, so the set passed in is consistent: the only
-    // thing that can go wrong is a cycle, which the safety counter
-    // here guards against (we fall back to dumping the remaining
-    // nodes into one layer rather than deadlock the run).
-    //
-    // Today the only template the coordinator actually schedules
-    // is the read-only "explorer", and explorer plans don't carry
-    // dependencies on each other — so this collapses to a single
-    // layer in the common case. The general algorithm is here so
-    // worker / verifier templates can be wired through the same
-    // path later without re-architecting the harness.
+    // Groups the scheduled sub-agents into execution layers so
+    // independent ones run in parallel (Task.WhenAll). The full
+    // dependency-DAG algorithm (cycle detection, topologically-
+    // ordered layers, safety counter against a misbehaving
+    // coordinator) used to live here as a 50-line method.
+    // Today the only template the coordinator schedules is the
+    // read-only "explorer", and explorer plans don't carry
+    // dependencies on each other — so the algorithm collapsed
+    // to a single layer in the common case. Returning a one-
+    // element wrapper here keeps the caller (which awaits one
+    // Task.WhenAll per layer) and the AgentSubAgentScheduleDecision
+    // .DependsOn shape intact; when worker / verifier templates
+    // land with real intra-batch dependencies, the topological
+    // algorithm comes back as a non-public helper.
     public static IReadOnlyList<IReadOnlyList<AgentSubAgentScheduleDecision>> ComputeSubAgentExecutionLayers(
         IReadOnlyList<AgentSubAgentScheduleDecision> scheduled)
     {
-        if (scheduled.Count == 0)
-        {
-            return [];
-        }
-
-        var remaining = new HashSet<string>(
-            scheduled.Select(decision => decision.PlannedSubAgentId),
-            StringComparer.OrdinalIgnoreCase);
-        var layers = new List<IReadOnlyList<AgentSubAgentScheduleDecision>>();
-        var safety = scheduled.Count + 1;
-
-        while (remaining.Count > 0 && safety-- > 0)
-        {
-            // A decision is ready when every dependency it still has
-            // references is OUTSIDE the remaining set — i.e. either
-            // already completed in an earlier layer, or never part
-            // of this batch (skipped by the coordinator). Order is
-            // preserved within a layer so event emission matches the
-            // original single-runner timing.
-            var ready = scheduled
-                .Where(decision => remaining.Contains(decision.PlannedSubAgentId))
-                .Where(decision => decision.DependsOn.All(dep => !remaining.Contains(dep)))
-                .OrderBy(decision => decision.Order)
-                .ToList();
-
-            if (ready.Count == 0)
-            {
-                // Cycle or some other inconsistency we can't
-                // reason about. Dump the rest into one layer so the
-                // run makes progress instead of hanging the
-                // agent loop forever. The dependency checker in
-                // BuildPlannedSubAgentDecisions should prevent this
-                // in practice, so this is belt + suspenders.
-                ready = scheduled
-                    .Where(decision => remaining.Contains(decision.PlannedSubAgentId))
-                    .OrderBy(decision => decision.Order)
-                    .ToList();
-            }
-
-            layers.Add(ready);
-            foreach (var decision in ready)
-            {
-                remaining.Remove(decision.PlannedSubAgentId);
-            }
-        }
-
-        return layers;
+        return scheduled.Count == 0 ? [] : [scheduled];
     }
 
     private static AgentStep AddRunningStep(

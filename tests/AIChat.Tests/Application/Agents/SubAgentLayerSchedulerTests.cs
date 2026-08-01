@@ -3,12 +3,15 @@ using AIChat.Domain.Chat;
 
 namespace AIChat.Tests.Application.Agents;
 
-// Unit tests for the AgentHarness DAG-to-waves scheduler. The
-// scheduler is a static method so the tests can poke the layer
-// boundaries directly without spinning up the full harness. The
-// scheduler's job is to return layers such that every decision's
-// dependencies are in an earlier layer (or in no layer at all, e.g.
-// skipped by the coordinator).
+// Unit tests for the AgentHarness scheduler. The scheduler used to
+// build a topological layer DAG (cycles, diamond dependencies,
+// chain dependencies) so independent sub-agents could run in
+// parallel. Today the only template the coordinator schedules is
+// the read-only "explorer" with no intra-batch dependencies, so
+// the algorithm collapses to a single layer and the DAG
+// machinery is dead — when worker / verifier templates land with
+// real dependencies, the topological algorithm comes back and
+// the layered tests come with it.
 public class SubAgentLayerSchedulerTests
 {
     [Fact]
@@ -54,45 +57,6 @@ public class SubAgentLayerSchedulerTests
     }
 
     [Fact]
-    public void ComputeLayers_ChainDependencies_ProducesLinearLayers()
-    {
-        // a → b → c
-        var decisions = new[]
-        {
-            NewDecision("a", order: 0, dependsOn: []),
-            NewDecision("b", order: 1, dependsOn: ["a"]),
-            NewDecision("c", order: 2, dependsOn: ["b"]),
-        };
-
-        var layers = AgentHarness.ComputeSubAgentExecutionLayers(decisions);
-
-        Assert.Equal(3, layers.Count);
-        Assert.Equal(new[] { "a" }, layers[0].Select(d => d.PlannedSubAgentId));
-        Assert.Equal(new[] { "b" }, layers[1].Select(d => d.PlannedSubAgentId));
-        Assert.Equal(new[] { "c" }, layers[2].Select(d => d.PlannedSubAgentId));
-    }
-
-    [Fact]
-    public void ComputeLayers_DiamondDependency_ProducesTwoLayers()
-    {
-        // a → {b, c} → d
-        var decisions = new[]
-        {
-            NewDecision("a", order: 0),
-            NewDecision("b", order: 1, dependsOn: ["a"]),
-            NewDecision("c", order: 2, dependsOn: ["a"]),
-            NewDecision("d", order: 3, dependsOn: ["b", "c"]),
-        };
-
-        var layers = AgentHarness.ComputeSubAgentExecutionLayers(decisions);
-
-        Assert.Equal(3, layers.Count);
-        Assert.Equal(new[] { "a" }, layers[0].Select(d => d.PlannedSubAgentId));
-        Assert.Equal(new[] { "b", "c" }, layers[1].Select(d => d.PlannedSubAgentId));
-        Assert.Equal(new[] { "d" }, layers[2].Select(d => d.PlannedSubAgentId));
-    }
-
-    [Fact]
     public void ComputeLayers_ExternalDependencies_AreIgnored()
     {
         // 'a' depends on 'missing', which isn't in the scheduled
@@ -128,32 +92,6 @@ public class SubAgentLayerSchedulerTests
 
         Assert.Single(layers);
         Assert.Equal(2, layers[0].Count);
-    }
-
-    [Fact]
-    public void ComputeLayers_MixedDagAndIndependent_HandlesLayersCorrectly()
-    {
-        // 'a' and 'b' are independent (run in layer 0).
-        // 'c' depends on 'a' (layer 1). 'd' is independent of
-        // everything but is in layer 1 because c is. Actually,
-        // since 'd' has no deps, it could run in layer 0 with a
-        // and b — verify the algorithm picks the earliest legal
-        // layer.
-        var decisions = new[]
-        {
-            NewDecision("a", order: 0),
-            NewDecision("b", order: 1),
-            NewDecision("c", order: 2, dependsOn: ["a"]),
-            NewDecision("d", order: 3),
-        };
-
-        var layers = AgentHarness.ComputeSubAgentExecutionLayers(decisions);
-
-        Assert.Equal(2, layers.Count);
-        // 'a', 'b', 'd' are all dependency-free → layer 0.
-        Assert.Equal(new[] { "a", "b", "d" }, layers[0].Select(d => d.PlannedSubAgentId));
-        // 'c' depends on 'a' → layer 1.
-        Assert.Equal(new[] { "c" }, layers[1].Select(d => d.PlannedSubAgentId));
     }
 
     private static AgentSubAgentScheduleDecision NewDecision(
