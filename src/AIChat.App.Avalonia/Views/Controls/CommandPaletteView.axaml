@@ -69,6 +69,22 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+
+                <!--
+                  Empty state — when the search produces no matches the
+                  ListBox is just an empty panel. Surface "(无匹配命令)"
+                  so the user knows the palette is alive and just not
+                  finding anything, vs. frozen / broken. Uses
+                  ObjectConverters.Equal = 0 on the filtered collection's
+                  count, same pattern as the sidebar empty hints.
+                -->
+                <TextBlock Grid.Row="1"
+                           Text="(无匹配命令)"
+                           Classes="muted"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Margin="0,24,0,0"
+                           IsVisible="{Binding CommandPalette.FilteredCommands.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
             </Grid>
         </Border>
     </Border>
