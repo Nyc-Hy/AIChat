@@ -1,8 +1,10 @@
 using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
+using AIChat.App.Avalonia.ViewModels;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Tools;
+using AIChat.Application.Workspace;
 using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
 using AIChat.Storage.Json;
@@ -98,5 +100,52 @@ public class AppHostTests
         using var host = AppHost.Build(services);
 
         Assert.Same(sentinel, host.GetService<object>());
+    }
+
+    // Locks the DI container graph so a future refactor that
+    // forgets to register a new service (or accidentally drops
+    // one) breaks the build / tests. The case this exists to
+    // catch: PR-1 to PR-9 each landed new services (IWorkspaceChangeService
+    // most recently) and the host's GetRequiredService<MainWindow>()
+    // would throw on startup if any of them were missing. The
+    // smoke test that caught that lived only in AppHostTests; this
+    // list is the explicit lock so the pattern can't drift.
+    [Theory]
+    [InlineData(typeof(IAppRepository))]
+    [InlineData(typeof(IWorkspaceChangeService))]
+    [InlineData(typeof(AgentToolRegistry))]
+    [InlineData(typeof(IChatProvider), true)]
+    [InlineData(typeof(IChatCompletionService))]
+    [InlineData(typeof(ProviderConnectionTester))]
+    [InlineData(typeof(ISettingsHolder))]
+    [InlineData(typeof(ProviderConfigViewModel))]
+    [InlineData(typeof(SettingsViewModel))]
+    [InlineData(typeof(ProjectSidebarViewModel))]
+    [InlineData(typeof(ConversationListViewModel))]
+    [InlineData(typeof(ToolApprovalViewModel))]
+    [InlineData(typeof(MemoryEditorViewModel))]
+    [InlineData(typeof(GitStatusViewModel))]
+    [InlineData(typeof(IApprovalService))]
+    [InlineData(typeof(IThemeService))]
+    [InlineData(typeof(IToastService))]
+    [InlineData(typeof(AvaloniaProjectPicker))]
+    [InlineData(typeof(IProjectPicker))]
+    [InlineData(typeof(AvaloniaClipboardService))]
+    [InlineData(typeof(IClipboardService))]
+    [InlineData(typeof(MainWindowViewModel))]
+    public void Build_ResolvesTopLevelService(Type serviceType, bool expectMultiple = false)
+    {
+        using var host = AppHost.Build();
+
+        if (expectMultiple)
+        {
+            var instances = host.GetServices(serviceType);
+            Assert.NotEmpty(instances);
+        }
+        else
+        {
+            var instance = host.GetService(serviceType);
+            Assert.NotNull(instance);
+        }
     }
 }
