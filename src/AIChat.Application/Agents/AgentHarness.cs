@@ -71,34 +71,10 @@ public sealed class AgentHarness
         var shouldPlan = planner is not null && executionPolicy.UsePlanner;
         if (shouldPlan)
         {
-            run.PlannerUsed = true;
-            run.ModelCallCount++;
-            yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
-            var structuredPlan = await planner!.PlanAsync(
-                new AgentPlanningRequest(
-                    request.Goal,
-                    request.Context.ProjectPath,
-                    request.Context.EnabledToolIds,
-                    request.ChatRequest.Messages),
-                request.Settings,
-                cancellationToken);
-            structuredPlan.RunId = run.Id;
-            run.StructuredPlan = structuredPlan;
-            run.Plan = structuredPlan.ToAgentPlan();
-
-            var planStep = AddCompletedStep(
-                run,
-                ++_nextStepNumber,
-                AgentStepType.Model,
-                structuredPlan.IsFallback ? "生成兜底计划" : "生成结构化计划",
-                request.Goal,
-                CreateStructuredPlanStepOutput(structuredPlan));
-            yield return new AgentHarnessEvent
+            await foreach (var evt in RunPlanPhaseAsync(request, run, cancellationToken))
             {
-                Type = AgentHarnessEventType.StepAdded,
-                Run = run,
-                Step = planStep
-            };
+                yield return evt;
+            }
         }
 
         await foreach (var evt in RunContextPhaseAsync(request, run, executionPolicy))
@@ -591,6 +567,52 @@ public sealed class AgentHarness
         };
         // IAsyncEnumerable must yield — keep the compiler quiet.
         await Task.CompletedTask;
+    }
+
+    // Stage 1 of RunAsync: structured-planning phase. Caller
+    // gates this behind (planner is wired in DI) AND
+    // (executionPolicy.UsePlanner == true), so by the time we get
+    // here `_planner` is non-null. Yields two events — a
+    // Planning phase change so the UI shows what's happening
+    // before the (potentially slow) planner call, then a Model
+    // step with the structured plan / fallback marker once the
+    // planner returns. The ModelCallCount bump lives here too
+    // because the planner counts as a model call (its output
+    // drives the rest of the run).
+    private async IAsyncEnumerable<AgentHarnessEvent> RunPlanPhaseAsync(
+        AgentHarnessRunRequest request,
+        AgentRun run,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        run.PlannerUsed = true;
+        run.ModelCallCount++;
+        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Planning, "生成结构化计划"));
+        var planner = _planner!;
+        var structuredPlan = await planner.PlanAsync(
+            new AgentPlanningRequest(
+                request.Goal,
+                request.Context.ProjectPath,
+                request.Context.EnabledToolIds,
+                request.ChatRequest.Messages),
+            request.Settings,
+            cancellationToken);
+        structuredPlan.RunId = run.Id;
+        run.StructuredPlan = structuredPlan;
+        run.Plan = structuredPlan.ToAgentPlan();
+
+        var planStep = AddCompletedStep(
+            run,
+            ++_nextStepNumber,
+            AgentStepType.Model,
+            structuredPlan.IsFallback ? "生成兜底计划" : "生成结构化计划",
+            request.Goal,
+            CreateStructuredPlanStepOutput(structuredPlan));
+        yield return new AgentHarnessEvent
+        {
+            Type = AgentHarnessEventType.StepAdded,
+            Run = run,
+            Step = planStep
+        };
     }
 
     private static AgentRunStatus DetermineFinalStatus(AgentRun run)
