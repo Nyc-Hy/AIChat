@@ -68,6 +68,19 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // so cancellation halts the inner loop at the next await point.
     private CancellationTokenSource? _runCts;
 
+    // CTS for the in-flight context-input recompute. Every caller
+    // fires RecomputeContextInputTokensAsync without awaiting (it's
+    // status-bar polish, not a hard dependency), and the recompute
+    // path is the kind that thrashes on rapid keystroke streams
+    // (each keystroke shifts the goal, which shifts the context
+    // router's pick-list). The CTS lets each new call cancel the
+    // in-flight one before it starts a new one. Read / write is
+    // guarded by _recomputeLock so a 200ms debounce Task.Delay
+    // running on a thread-pool thread doesn't race a fresh
+    // caller swapping the CTS.
+    private CancellationTokenSource? _recomputeCts;
+    private readonly object _recomputeLock = new();
+
     // The last user prompt that survived validation. Used by
     // RetryLastTask so a failed/cancelled run can be re-sent
     // without retyping.
@@ -638,25 +651,56 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // every keystroke is fine.
     //
     // Every caller fires this without awaiting (it's a
-    // status-bar polish, not a hard dependency), so an
-    // unhandled exception here would crash the app the same
-    // way the d8dddbc / 847a598 async-void crash chain taught
-    // us to avoid. Swallow + surface via StatusMessage so the
-    // user sees what happened and the meter just stops
-    // updating for the rest of the session.
+    // status-bar polish, not a hard dependency). Two hardening
+    // layers:
+    //   1. 200ms debounce. A rapid stream of keystrokes / project
+    //      selection changes collapses to one recompute; the
+    //      previous in-flight call gets cancelled at the next
+    //      await point instead of all 7 racers writing the meter
+    //      in arbitrary order.
+    //   2. Outer try/catch around the whole body. The inner
+    //      try/catch (built pre-PR) swallows exceptions from the
+    //      Task.Run paths; this outer one also catches anything
+    //      that escapes the project-read / debounce-delay paths
+    //      and was the second async-void crash chain that the
+    //      847a598 fix taught us to avoid. Swallow + surface via
+    //      StatusMessage so the user sees what happened and the
+    //      meter just stops updating for the rest of the session.
     public async Task RecomputeContextInputTokensAsync(string goal)
     {
-        var project = _sidebar.CurrentProject;
-        if (project is null || string.IsNullOrWhiteSpace(project.Path) || !Directory.Exists(project.Path))
+        CancellationToken token;
+        lock (_recomputeLock)
         {
-            InputTokens = 0;
+            _recomputeCts?.Cancel();
+            _recomputeCts = new CancellationTokenSource();
+            token = _recomputeCts.Token;
+        }
+
+        try
+        {
+            // Debounce: 200ms idle window so a rapid stream of
+            // keystrokes collapses to one recompute. The 7
+            // callers all fire-and-forget so the delay is
+            // invisible to the user; what they see is a stable
+            // meter that updates ~200ms after they stop typing.
+            await Task.Delay(TimeSpan.FromMilliseconds(200), token);
+        }
+        catch (OperationCanceledException)
+        {
             return;
         }
 
         try
         {
+            var project = _sidebar.CurrentProject;
+            if (project is null || string.IsNullOrWhiteSpace(project.Path) || !Directory.Exists(project.Path))
+            {
+                InputTokens = 0;
+                return;
+            }
+
             var resolvedGoal = string.IsNullOrWhiteSpace(goal) ? "项目概览" : goal.Trim();
-            var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500));
+            var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500), token);
             var contextPack = await Task.Run(() => new ContextRouter().Route(new ContextRouterRequest
             {
                 Goal = resolvedGoal,
@@ -666,8 +710,13 @@ public sealed partial class AgentHostViewModel : ViewModelBase
                 InputArtifacts = project.InputArtifacts,
                 MemorySnippets = project.Memories.Select(memory => memory.Content).ToList(),
                 MaxTokens = 900
-            }));
+            }), token);
             InputTokens = ContextInputEstimator.Estimate(contextPack.EstimatedTokens, resolvedGoal);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer recompute superseded us. Silent exit; the
+            // newer call will publish its own result.
         }
         catch (Exception ex)
         {
