@@ -60,10 +60,19 @@
                          FontSize="12"
                          VerticalAlignment="Center"
                          TextTrimming="CharacterEllipsis"/>
-              <TextBlock Text="{Binding FileCount, StringFormat='({0})'}"
+              <!--
+                FileCount badge: "src/ (12)" or "docs/ (3)". TextBlock
+                auto-converts the int, no StringFormat needed (the
+                same form triggered an AVLN2000 XAML parse error
+                in FilePreviewView on cold starts; keeping this
+                consistent with the safer form across the file
+                tree).
+              -->
+              <TextBlock Text="{Binding FileCount}"
                          Classes="muted"
                          FontSize="10"
-                         VerticalAlignment="Center"/>
+                         VerticalAlignment="Center"
+                         Margin="4,0,0,0"/>
             </StackPanel>
             <Button Classes="plain-row"
                     IsVisible="{Binding !IsFolder}"
