@@ -13,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace AIChat.App.Avalonia.Composition;
 
 // Centralised DI registration for the Avalonia desktop host.
-internal static class ServiceRegistration
+public static class ServiceRegistration
 {
     public static IServiceCollection AddAIChatDesktop(this IServiceCollection services)
     {
