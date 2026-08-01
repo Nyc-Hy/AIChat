@@ -65,6 +65,7 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 | ⌘G | `/git` — 当前分支 + 变更列表（bubble） |
 | ⌘⇧G | 打开 git status / diff viewer modal |
 | ⌘/ | 显示 /help |
+| ⌘? | 打开键盘快捷键 cheat sheet（也=titlebar ? 按钮） |
 | F5 | 刷新状态（重读本地项目 + 对话） |
 | ⌘V | 粘贴图片 → pending attachment（⌘↵ 一起送） |
 | Esc | 关闭命令面板 / 设置 / memory / git modal（按优先级） |
@@ -84,6 +85,7 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 - **设置 (⌘,)** — provider / model / API key / no-write / auto-verify
 - **Memory editor (⌘⇧M)** — 当前项目 memory 增删，按 category 分组
 - **Git status / diff (⌘⇧G)** — 左文件列表 / 右 diff viewer，可复制
+- **Keyboard shortcuts (⌘?)** — 18+ 个快捷键 cheat sheet，按类别分组（任务 / 项目 / 命令 / 模式 / 工具审批 / Slash）
 - **Tool approval** — 写入工具被 agent 触发时弹窗，三选一：拒绝 / 允许一次 / 本会话内允许
 
 ### Sub-agent
@@ -102,13 +104,66 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 
 - 跑完 activity feed 里追加 `本次运行` system bubble："改 N 个文件 · 用 N 次工具 · 派 N 个子 Agent · 12s"
 - 工具错误 → 工具问题 bubble
-- 失败 → toast + assistant bubble 状态=失败；可 ⌘R 重试
-- 已停止 → toast + assistant bubble 状态=已停止；可 ⌘R 重试
+- 失败 → AI bubble 底边变红 + soft red wash + status chip 变红（`bubble-ai.failed` class）；可 ⌘R 重试
+- 已停止 → AI bubble 底边变琥珀 + soft amber wash + status chip 变琥珀（`bubble-ai.stopped` class）；可 ⌘R 重试
+- **Conversation list rename** — 右键对话 → 重命名 → TextBox 内联编辑（Enter / focus-lost 提交，Esc 取消）。Rename 通过 `Func<id, newTitle, Task>` 回调到 `ConversationListViewModel` 持久化
+
+### Empty states
+
+- Sidebar: "(还没有项目,按 ⌘O 添加)" / "(还没有对话)"
+- CommandPalette: "(无匹配命令)"
+- 主面板：EmptyStateView — 首屏 hero + 2 个 first-run CTA（添加项目 / 配置模型），加载项目后切到 4 个 quick-action card
+
+### Loading / inline feedback
+
+- GitStatusView 刷新按钮：进行中切 0.8s 旋转 spinner（Grid swap Path 子元素）
+- SettingsView provider 测试：3 行互斥反馈（in-flight muted / SuccessBg / ErrorBg）+ 上次结果记忆
+- 失败/已停止 AI bubble：见上"运行反馈"
 
 ### 重要修复
 
 - `d3a0600` — tool approval modal 缺位，写入工具一上来就 hang
 - `847a598` — async void event handler 没 try/catch，任意 throw 整个窗口崩
+
+## Front-end MVP pass（codex/desktop-rebuild, 2026-08）
+
+`c0d0bf8` 起 9 个 commit，目标是消除 daily driver 残留的"卡 / 迷"瞬间。详细分类：
+
+### 1. Empty / 零状态文案
+
+让用户**没项目**时知道下一步：sidebar `(还没有项目,按 ⌘O 添加)` / `(还没有对话)`、CommandPalette `(无匹配命令)`。技术上用 `ObjectConverters.Equal=0` 模式（不需要新 IsEmpty 属性）。
+
+### 2. Loading / inline feedback
+
+用户按下"测试"按钮要立刻看到 spinner，否则会反复点：GitStatusView 刷新按钮切 0.8s 旋转 Path、SettingsView provider 测试 3 行互斥反馈（in-flight muted / SuccessBg / ErrorBg）。`ProviderConfigViewModel` 加 `IsTestInFlight` / `LastTestMessage` / `LastTestIsSuccess` / `LastTestHasResult` 4 个字段，try/finally 保证 IsTestInFlight 一定复位。
+
+### 3. Tool approval Esc/Enter
+
+之前点完 prompt 后 agent 弹 tool approval，用户**必须**鼠标点 3 个按钮之一。`ToolApprovalView.axaml` 加 `IsVisible="{Binding HasPendingApproval}"` + `KeyDown` handler + Tooltip 提示，Esc=拒绝、Enter=允许一次。"本会话内允许"故意没绑快捷键（会和"按 S 发送"肌肉记忆撞）。
+
+### 4. Settings tool permission presets
+
+15 个 tool 一个一个点 dropdown 是体力活。3 个 preset 按钮："只读自动" / "全部确认" / "恢复默认"，SettingsViewModel 加 3 个 `[RelayCommand]` 复用 `AgentToolRegistry.AllWithMetadata` 批量改 mode。
+
+### 5. Help button + KeyboardShortcutsView modal
+
+titlebar `?` 按钮 + ⌘? 全局快捷键，调出 18+ 快捷键 cheat sheet（任务 / 项目·导航 / 命令·信息 / 模式·设置 / 工具审批 / Slash 命令 6 个 section）。XAML hard-code（不是 VM-bound，因为是 documentation 不是 state），`Esc` 或点击 scrim 关闭。`App.axaml` 加 `TextBlock.kbd-display` 样式（FontMono + TextBrush），和 `kbd-pill` 视觉一致但走 TextBlock 路径。新加 `xmlns:behaviors` 别名（`AIChat.App.Avalonia.Behaviors`）。
+
+### 6. AI bubble 错误/停止视觉
+
+之前 failed AI bubble 跟 in-flight time-stamp 视觉一样（都 `muted` 灰字），扫 feed 容易漏。`ActivityItemViewModel` 加 `IsFailed` / `IsStopped`（`Status == "失败" / "已停止"` 派生），`OnStatusChanged` 同步 re-raise。`App.axaml` 加 `Border.bubble-ai.failed` / `.stopped` 样式（ErrorBorderBrush/Background 改色）+ `TextBlock.muted.failed/stopped` 状态 chip 改色。XAML 用 `Classes.failed="{Binding IsFailed}"` 切换。
+
+### 7. Conversation list inline rename
+
+右键只有"删除"——攒 3 个对话就分不清。`ConversationCardViewModel` Title 从 get-only 改 `[ObservableProperty]`，加 `IsRenaming` / `EditingTitle` + `StartRename/CancelRename/CommitRenameAsync` 4 个命令。Callback 模式（`Func<string, string, Task>?`）让 card 不直接知道 repository。新加 `Behaviors/FocusOnLoadBehavior.cs`（AttachedProperty `IsEnabled`），双 trigger：AttachedToVisualTree（首次 attach）+ IsVisible changed（重命名 → 提交 → 再重命名 时 TextBox 已在 visual tree 里，只 IsVisible flip）。`ConversationListViewModel.RenameConversationAsync` 走 `_repository.SaveProjectsAsync` 持久化，含"new 占位卡 / 空字符串 / 未变化"3 个 no-op 短路。
+
+### 8. Avalonia 12 命名空间坑
+
+`Behaviors/FocusOnLoadBehavior.cs` 因为文件在 `AIChat.App.Avalonia.Behaviors` 命名空间下，`Avalonia.VisualTreeAttachmentEventArgs` 的 `Avalonia.` 前缀会被编译器解析为同 namespace 子命名空间——加 `using Avalonia;` + bare name 解决。
+
+### 9. /help body 外部化
+
+`/help` 走的是 `Resources/HelpText.md`（`EmbeddedResource`），不是 AvaloniaResource——`AssetLoader` 在 headless test host 不 init。
 
 ## 产品定位（2026-07-30 用户原话）
 
