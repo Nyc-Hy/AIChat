@@ -183,6 +183,70 @@ public class ProjectSidebarViewModelTests : IDisposable
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public void Refresh_WithProjects_RaisesProjectSelected_ForStartupRestore()
+    {
+        // The startup path (MainWindowVM.RefreshAsync -> Sidebar.Refresh)
+        // silently updated CurrentProject and didn't fire ProjectSelected
+        // pre-fix, so the FileTreeViewModel's "rebuild on project change"
+        // subscription never fired and the file tree stayed empty until
+        // the user clicked the project card again. ApplyProject now
+        // raises ProjectSelected on every CurrentProject transition
+        // (including the null → real-project one on cold start), so
+        // this test pins the post-fix behavior.
+        var (vm, _, _) = CreateViewModel();
+        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
+        var beta = new ProjectWorkspace { Id = "b", Name = "Beta", Path = Path.Combine(_tempRoot, "beta") };
+        var captured = new List<ProjectSelectionChangedEventArgs>();
+        vm.ProjectSelected += (_, args) => captured.Add(args);
+
+        vm.Refresh([alpha, beta]);
+
+        var args = Assert.Single(captured);
+        Assert.Same(alpha, args.Project);
+        Assert.Equal("已切换到项目：Alpha", args.StatusMessage);
+    }
+
+    [Fact]
+    public void Refresh_WithSameProject_DoesNotRaiseProjectSelected()
+    {
+        // Re-raise would double-rebuild the file tree + recompute the
+        // context budget on every "save settings" round-trip that
+        // happens to land on the same CurrentProject. ReferenceEquals
+        // guard inside ApplyProject prevents this.
+        var (vm, _, _) = CreateViewModel();
+        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
+        var captured = new List<ProjectSelectionChangedEventArgs>();
+        vm.Refresh([alpha]);
+        vm.ProjectSelected += (_, args) => captured.Add(args);
+
+        // Second refresh with the same project list — CurrentProject
+        // is the same reference, no transition, no event.
+        vm.Refresh([alpha]);
+
+        Assert.Empty(captured);
+    }
+
+    [Fact]
+    public void Refresh_WithEmptyList_AfterProjects_RaisesProjectSelected_WithNull()
+    {
+        // The "user removes the last project" path needs to fire
+        // ProjectSelected with Project=null so FileTreeViewModel can
+        // clear its Root and the sidebar can show the "no project"
+        // hint instead of stale data. Pre-fix this transition was
+        // silent because ApplyProject never fired on the null path.
+        var (vm, _, _) = CreateViewModel();
+        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
+        var captured = new List<ProjectSelectionChangedEventArgs>();
+        vm.Refresh([alpha]);
+        vm.ProjectSelected += (_, args) => captured.Add(args);
+
+        vm.Refresh(Array.Empty<ProjectWorkspace>());
+
+        var args = Assert.Single(captured);
+        Assert.Null(args.Project);
+    }
+
     private (ProjectSidebarViewModel vm, IAppRepository repository, SettingsHolder holder) CreateViewModel()
     {
         var repository = Mock.Of<IAppRepository>();
