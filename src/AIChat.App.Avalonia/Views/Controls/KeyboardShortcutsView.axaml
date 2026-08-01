@@ -1,0 +1,165 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.KeyboardShortcutsView"
+             mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="560">
+
+  <!--
+    Read-only keyboard-shortcut cheat sheet, opened from the
+    titlebar "?" button. Hard-coded list of every binding wired
+    up in MainWindow.axaml.cs / ToolApprovalView — kept inline
+    (not in a VM) because the list is documentation, not state.
+    Split into sections so a user can find the relevant binding
+    by category (editor, navigation, modals, …) instead of
+    scanning one long alphabetised list.
+
+    Two closing affordances: Esc anywhere on the scrim, click
+    anywhere outside the content. The scrim-on-click is the
+    standard modal pattern; Esc matches the user's existing
+    "Esc closes overlays" muscle memory.
+  -->
+  <Border Background="{StaticResource ScrimBrush}"
+          KeyDown="KeyboardShortcutsScrim_OnKeyDown"
+          PointerPressed="KeyboardShortcutsScrim_OnClick">
+    <Border Background="{StaticResource SurfaceBrush}"
+            Width="720"
+            MaxHeight="600"
+            Padding="{StaticResource Padding6}"
+            CornerRadius="{StaticResource RadiusLg}"
+            BoxShadow="{StaticResource Elevation5Shadow}"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            PointerPressed="KeyboardShortcutsContent_OnPointerPressed">
+      <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14">
+
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="4">
+            <TextBlock Text="键盘快捷键" Classes="page-title"/>
+            <TextBlock Text="按 ? 随时调出。Esc 或点击外部关闭。"
+                       Classes="muted"/>
+          </StackPanel>
+          <Button Grid.Column="1" Classes="chrome-button"
+                  Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).CloseShortcutsCommand}"
+                  ToolTip.Tip="关闭 (Esc)">
+            <Path Data="M6 6 L18 18 M18 6 L6 18"
+                  Stroke="{Binding $parent[Button].Foreground}"
+                  StrokeThickness="1.6" StrokeLineCap="Round"
+                  Width="14" Height="14" Stretch="Uniform"/>
+          </Button>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1">
+          <StackPanel Spacing="18">
+
+            <!-- 编辑器 / 任务 -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="任务" Classes="section-title"/>
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="发送任务" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ ↵" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="聚焦输入框" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ L" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="重试上一次任务" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ R" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="停止当前任务" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ ." Classes="kbd-display" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+
+            <!-- 项目 / 导航 -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="项目 / 导航" Classes="section-title"/>
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="添加项目" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ O" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="新建对话" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ N" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="清空当前对话" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ ⇧ K" Classes="kbd-display" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+
+            <!-- 命令 / 信息 -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="命令 / 信息" Classes="section-title"/>
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="命令面板" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ K" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="帮助 (slash /help)" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ ?" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="当前项目 git 状态" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ G" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="Git 状态 viewer" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ ⇧ G" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="Memory 编辑器" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="⌘ ⇧ M" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="复制最后 AI 回复" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="⌘ ⇧ C" Classes="kbd-display" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+
+            <!-- 模式 / 设置 -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="模式 / 设置" Classes="section-title"/>
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="设置" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ ," Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="切换只读模式" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ ⇧ R" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="切换自动验证" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ ⇧ V" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="测试当前模型" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ T" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="切换主题" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="⌘ ⇧ T" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="刷新状态" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="F5" Classes="kbd-display" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+
+            <!-- 工具审批 modal -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="工具审批 (弹窗时)" Classes="section-title"/>
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="拒绝" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="Esc" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="允许一次" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="Enter" Classes="kbd-display" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+
+            <!-- Slash 命令 -->
+            <StackPanel Spacing="6">
+              <TextBlock Text="Slash 命令 (在输入框里输 /)" Classes="section-title"/>
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="/clear · /new" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="清空当前对话" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="/status" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="项目 / 模型 / Context 状态" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="/memory" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="当前项目的 memory 列表" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="/git" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="git 状态简版" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="/copy" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="复制最后 AI 回复" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="/help" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="命令帮助" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="@&lt;path&gt;" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="附加文件到下条消息" Classes="muted" VerticalAlignment="Center"/>
+              </Grid>
+            </StackPanel>
+
+          </StackPanel>
+        </ScrollViewer>
+
+        <TextBlock Grid.Row="2"
+                   Text="按 Esc 关闭"
+                   Classes="muted"
+                   FontSize="11"
+                   HorizontalAlignment="Right"/>
+      </Grid>
+    </Border>
+  </Border>
+</UserControl>

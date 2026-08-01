@@ -104,6 +104,12 @@
             <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
             <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         </Style>
+        <Style Selector="TextBlock.kbd-display">
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+            <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
         <Style Selector="TextBlock.page-title">
             <Setter Property="FontSize" Value="{StaticResource FontH1}" />
             <Setter Property="FontWeight" Value="SemiBold" />

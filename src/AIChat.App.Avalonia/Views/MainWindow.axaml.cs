@@ -189,11 +189,13 @@ public partial class MainWindow : Window
         KeyBindings.Add(new KeyBinding
         {
             // ⌘/ is VS Code's "show help" convention. Drops a /help
-            // result bubble in the activity feed so the user can see
-            // the available commands without leaving the composer.
+            // The natural "show me help" gesture. Opens the
+            // shortcuts cheat-sheet modal (the more discoverable,
+            // visually richer alternative to the /help slash
+            // command — the slash command still works for users
+            // who prefer typing /help in the prompt).
             Gesture = new KeyGesture(Key.OemQuestion, KeyModifiers.Meta),
-            Command = new RelayCommand(async () =>
-                await KeyCommandBridge.RunSlashCommandAsync(viewModel, "/help", "系统"))
+            Command = new RelayCommand(() => viewModel.OpenShortcutsCommand.Execute(null))
         });
         KeyBindings.Add(new KeyBinding
         {

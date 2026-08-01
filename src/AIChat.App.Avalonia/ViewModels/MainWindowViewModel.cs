@@ -190,6 +190,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     public GitStatusViewModel GitStatus => _gitStatus;
 
+    // Keyboard-shortcuts cheat sheet modal. The "?" titlebar button
+    // and the ⌘? global shortcut both surface this — both paths
+    // route through OpenShortcutsCommand / CloseShortcutsCommand
+    // so the modals always open to a fresh state.
+    [ObservableProperty]
+    private bool isShortcutsOpen;
+
     // Approximate context window + estimated input tokens + the
     // status-bar context meter all moved to AgentHostViewModel
     // (it's the run state). The XAML binds through AgentHost.
@@ -261,6 +268,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     [RelayCommand]
     private void CloseGitStatus() => IsGitStatusOpen = false;
+
+    // Keyboard-shortcuts cheat sheet modal. The "?" titlebar button
+    // and the ⌘? global shortcut both go through OpenShortcuts so
+    // the user can always reach the list (the global shortcut is
+    // the user-discoverable path; the titlebar button is the
+    // always-visible entry point for first-time users).
+    [RelayCommand]
+    private void OpenShortcuts() => IsShortcutsOpen = true;
+
+    [RelayCommand]
+    private void CloseShortcuts() => IsShortcutsOpen = false;
 
     [RelayCommand]
     private void NewConversation()
