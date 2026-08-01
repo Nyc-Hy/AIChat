@@ -542,10 +542,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
                 "M4 4 H20 V20 H4 Z M4 9 H20",
                 async () =>
                 {
-                    var path = await _projectPicker.PickProjectFolderAsync();
-                    if (!string.IsNullOrWhiteSpace(path))
+                    var result = await _projectPicker.PickProjectFolderAsync();
+                    switch (result)
                     {
-                        await AddProjectFromUiAsync(path);
+                        case PickerResult.Picked picked:
+                            await AddProjectFromUiAsync(picked.Path);
+                            break;
+                        case PickerResult.Failed failed:
+                            StatusMessage = failed.Reason;
+                            break;
+                        // Cancelled — stay silent.
                     }
                     return true;
                 }),

@@ -457,10 +457,17 @@ public partial class MainWindow : Window
         SafeRun(async () =>
         {
             if (DataContext is not MainWindowViewModel viewModel) return;
-            var path = await _picker.PickProjectFolderAsync();
-            if (path is { Length: > 0 })
+            var result = await _picker.PickProjectFolderAsync();
+            switch (result)
             {
-                await viewModel.AddProjectFromUiAsync(path);
+                case PickerResult.Picked picked:
+                    await viewModel.AddProjectFromUiAsync(picked.Path);
+                    break;
+                case PickerResult.Failed failed:
+                    viewModel.StatusMessage = failed.Reason;
+                    break;
+                // Cancelled — stay silent; the user explicitly dismissed
+                // the dialog and doesn't need a status message.
             }
         });
     }
