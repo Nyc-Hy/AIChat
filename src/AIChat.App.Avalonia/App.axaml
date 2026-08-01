@@ -1,17 +1,18 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="AIChat.App.Avalonia.App"
-             xmlns:local="using:AIChat.App.Avalonia"
              RequestedThemeVariant="Default">
-
-    <Application.DataTemplates>
-        <local:ViewLocator/>
-    </Application.DataTemplates>
 
     <!--
       Token dictionaries. Tokens.axaml carries the light-mode base; the
       dark theme dictionary gets merged in automatically when the app's
       RequestedThemeVariant resolves to Dark.
+
+      Note: no global Application.DataTemplates block. Every view-model
+      in the app binds through an inline <DataTemplate x:DataType="vm:...">
+      inside the consuming ItemsControl / ContentControl, so the
+      old reflection-based ViewLocator was never actually invoked
+      at runtime — dropped in the v1.0 refactor.
     -->
     <Application.Resources>
         <ResourceDictionary>
