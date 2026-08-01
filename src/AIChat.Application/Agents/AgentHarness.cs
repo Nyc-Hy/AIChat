@@ -23,9 +23,6 @@ public sealed class AgentHarness
     private readonly SubAgentScheduler? _subAgentScheduler;
     private readonly AgentTaskClassifier _taskClassifier;
     private readonly AgentTaskExecutionPolicyBuilder _executionPolicyBuilder;
-    private readonly AgentCompletionEvidenceChecker _completionEvidenceChecker;
-    private readonly AgentRunQualityEvaluator _qualityEvaluator;
-    private readonly AgentStrategyAdvisor _strategyAdvisor;
 
     public AgentHarness(
         AgentRunner agentRunner,
@@ -34,10 +31,7 @@ public sealed class AgentHarness
         AgentPromptComposer? promptComposer = null,
         SubAgentScheduler? subAgentScheduler = null,
         AgentTaskClassifier? taskClassifier = null,
-        AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null,
-        AgentCompletionEvidenceChecker? completionEvidenceChecker = null,
-        AgentRunQualityEvaluator? qualityEvaluator = null,
-        AgentStrategyAdvisor? strategyAdvisor = null)
+        AgentTaskExecutionPolicyBuilder? executionPolicyBuilder = null)
     {
         _agentRunner = agentRunner;
         _planner = planner;
@@ -46,9 +40,6 @@ public sealed class AgentHarness
         _subAgentScheduler = subAgentScheduler;
         _taskClassifier = taskClassifier ?? new AgentTaskClassifier();
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
-        _completionEvidenceChecker = completionEvidenceChecker ?? new AgentCompletionEvidenceChecker();
-        _qualityEvaluator = qualityEvaluator ?? new AgentRunQualityEvaluator();
-        _strategyAdvisor = strategyAdvisor ?? new AgentStrategyAdvisor();
     }
 
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
@@ -90,7 +81,7 @@ public sealed class AgentHarness
             request.Context,
             request.ContextPack,
             !string.IsNullOrWhiteSpace(request.ContinuedFromRunId));
-        executionPolicy = _strategyAdvisor.Adjust(
+        executionPolicy = ApplyHistoricalAdjustments(
             executionPolicy,
             request.Context,
             request.Conversation.AgentRuns.Where(item => item.Id != run.Id).ToList());
@@ -424,11 +415,6 @@ public sealed class AgentHarness
                         ? "Agent 运行已取消。"
                         : agentEvent.Content;
                     run.CompletionReason = SensitiveDataRedactor.RedactText(reason);
-                    CompleteFinalValidation(run, assistantContent);
-                    run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.Cancelled);
-                    CompleteQualityAssessment(run, AgentRunStatus.Cancelled);
-                    CompleteRecoverySuggestion(run, executionPolicy, AgentRunStatus.Cancelled);
-                    CompleteTelemetry(run);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.ContentDelta,
@@ -455,12 +441,7 @@ public sealed class AgentHarness
                 {
                     run.ToolBudgetExceeded = true;
                     run.CompletionReason = "已达到工具调用轮数上限。";
-                    CompleteFinalValidation(run, assistantContent);
-                    run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
-                    CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
-                    CompleteRecoverySuggestion(run, executionPolicy);
-                    CompleteTelemetry(run);
-                    var budgetMessage = CreateBudgetPausedUserMessage(run);
+                    var budgetMessage = "工具预算已用完，任务已暂停。";
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.ContentDelta,
@@ -500,12 +481,8 @@ public sealed class AgentHarness
 
                         if (run.ToolBudgetExceeded)
                         {
-                            CompleteFinalValidation(run, assistantContent);
-                            run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.BudgetExceeded);
-                            CompleteQualityAssessment(run, AgentRunStatus.BudgetExceeded);
-                            CompleteRecoverySuggestion(run, executionPolicy);
-                            CompleteTelemetry(run);
-                            var budgetMessage = CreateBudgetPausedUserMessage(run);
+                            run.CompletionReason = "已达到工具调用轮数上限。";
+                            var budgetMessage = "工具预算已用完，任务已暂停。";
                             yield return new AgentHarnessEvent
                             {
                                 Type = AgentHarnessEventType.ContentDelta,
@@ -530,27 +507,7 @@ public sealed class AgentHarness
                         }
                     }
 
-                    CompleteFinalValidation(run, assistantContent);
                     var finalStatus = runnerReportedError ? AgentRunStatus.Failed : DetermineFinalStatus(run);
-                    run.FinalStatusReason = CreateFinalStatusReason(run, finalStatus);
-                    CompleteQualityAssessment(run, finalStatus);
-                    CompleteRecoverySuggestion(run, executionPolicy);
-                    CompleteTelemetry(run);
-                    var finalContent = BuildFinalContent(assistantContent, run, finalStatus);
-                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
-                    var finalAppendix = CreateFinalContentAppendix(run, finalStatus);
-                    if (!string.IsNullOrWhiteSpace(finalAppendix))
-                    {
-                        yield return new AgentHarnessEvent
-                        {
-                            Type = AgentHarnessEventType.ContentDelta,
-                            Run = run,
-                            Content = string.IsNullOrWhiteSpace(assistantContent)
-                                ? finalAppendix
-                                : Environment.NewLine + Environment.NewLine + finalAppendix
-                        };
-                    }
-
                     yield return CreatePhaseChanged(run, CompleteRun(run, finalStatus));
                     // Use steps count to derive the final step number; the auto-verify
                     // loop may have added intermediate steps that overflow stepNumber.
@@ -560,7 +517,7 @@ public sealed class AgentHarness
                         AgentStepType.Final,
                         "生成最终回复",
                         "",
-                        finalContent);
+                        assistantContent);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.RunCompleted,
@@ -571,9 +528,6 @@ public sealed class AgentHarness
             }
         }
 
-        run.FinalStatusReason = CreateFinalStatusReason(run, AgentRunStatus.Completed);
-        CompleteQualityAssessment(run, AgentRunStatus.Completed);
-        CompleteTelemetry(run);
         yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
     }
 
@@ -618,20 +572,49 @@ public sealed class AgentHarness
         return "Explorer allowed but no schedule was produced.";
     }
 
-    private static string CreateFinalStatusReason(AgentRun run, AgentRunStatus status)
+    // Inline of the previous AgentStrategyAdvisor.Adjust: the
+    // "should I bump MaxToolRounds because the user keeps hitting
+    // the tool budget" decision lives here so the only collaborator
+    // of AgentHarness stays AgentTaskExecutionPolicyBuilder. The
+    // logic is the same as the deleted AgentStrategyAdvisor —
+    // when adaptive flags are off, the policy is returned as-is.
+    private static AgentTaskExecutionPolicy ApplyHistoricalAdjustments(
+        AgentTaskExecutionPolicy policy,
+        AgentRunContext context,
+        IReadOnlyList<AgentRun> history)
     {
-        return status switch
+        if (history.Count == 0)
         {
-            AgentRunStatus.Completed => "Completion evidence satisfied.",
-            AgentRunStatus.BudgetExceeded => "Tool budget exhausted; checkpoint created.",
-            AgentRunStatus.Failed when run.Verifications.Any(verification => !verification.IsSuccess) =>
-                "At least one verification failed.",
-            AgentRunStatus.Failed => string.IsNullOrWhiteSpace(run.CompletionReason)
-                ? "Run failed final evidence checks."
-                : run.CompletionReason,
-            AgentRunStatus.Cancelled => "Run was cancelled.",
-            _ => status.ToString()
-        };
+            return policy;
+        }
+
+        var notes = new List<string>();
+        var adjusted = policy;
+
+        if (context.AdaptiveStrategiesEnabled && context.AdaptiveBudgetAndExplorerEnabled)
+        {
+            var baseLimit = Math.Max(1, context.MaxToolRounds);
+            var recentSameComplexity = history
+                .Where(run => string.Equals(run.TaskComplexity, policy.Complexity.ToString(), StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(run => run.StartedAt)
+                .Take(12)
+                .ToList();
+            var budgetExceededCount = recentSameComplexity
+                .Count(run => run.ToolBudgetExceeded || run.Status == AgentRunStatus.BudgetExceeded);
+
+            if (budgetExceededCount >= 2 && policy.MaxToolRounds < baseLimit)
+            {
+                var extraBudget = policy.Complexity == AgentTaskComplexity.Simple ? 2 : 6;
+                var newBudget = Math.Min(baseLimit, policy.MaxToolRounds + extraBudget);
+                if (newBudget > policy.MaxToolRounds)
+                {
+                    adjusted = adjusted with { MaxToolRounds = newBudget };
+                    notes.Add($"recent budget pressure: {policy.MaxToolRounds}->{newBudget}");
+                }
+            }
+        }
+
+        return notes.Count == 0 ? policy : adjusted with { StrategyAdjustment = string.Join("; ", notes) };
     }
 
     private static AgentRunContext ApplyExecutionPolicy(
@@ -667,55 +650,6 @@ public sealed class AgentHarness
         };
     }
 
-    private static string BuildFinalContent(string assistantContent, AgentRun run, AgentRunStatus status)
-    {
-        var appendix = CreateFinalContentAppendix(run, status);
-        return string.IsNullOrWhiteSpace(appendix)
-            ? assistantContent
-            : string.IsNullOrWhiteSpace(assistantContent)
-                ? appendix
-                : assistantContent.TrimEnd() + Environment.NewLine + Environment.NewLine + appendix;
-    }
-
-    private static string CreateFinalContentAppendix(AgentRun run, AgentRunStatus status)
-    {
-        if (status != AgentRunStatus.Completed)
-        {
-            return CreateIncompleteRunUserMessage(run);
-        }
-
-        var notes = new List<string>();
-        if (string.Equals(run.CompletionEvidenceStatus, "risk", StringComparison.OrdinalIgnoreCase))
-        {
-            notes.Add("完成声明已降级：最终回复中的完成/验证声明缺少对应工具证据，请以本条证据说明为准。");
-        }
-
-        if (run.MutationToolSucceeded && run.Verifications.Count == 0)
-        {
-            notes.Add("完成证据：已记录文件修改；未运行验证。");
-        }
-        else if (run.Verifications.Any(verification => !verification.IsSuccess))
-        {
-            var passed = run.Verifications.Count(verification => verification.IsSuccess);
-            notes.Add($"完成证据：验证未全部通过（{passed}/{run.Verifications.Count} 通过）。");
-        }
-
-        return string.Join(Environment.NewLine, notes);
-    }
-
-    private static string CreateIncompleteRunUserMessage(AgentRun run)
-    {
-        if (run.Verifications.Any(verification => !verification.IsSuccess))
-        {
-            var failed = run.Verifications.First(verification => !verification.IsSuccess);
-            return $"任务未完成：验证未通过（{failed.Command}，退出码 {failed.ExitCode}）。";
-        }
-
-        return string.IsNullOrWhiteSpace(run.CompletionReason)
-            ? "任务未完成，需要继续处理。"
-            : $"任务未完成：{run.CompletionReason}";
-    }
-
     private static void RecordMutationGuardrail(
         AgentRun run,
         ChatToolCall? toolCall,
@@ -733,202 +667,6 @@ public sealed class AgentHarness
         run.MutationToolSucceeded = true;
     }
 
-    private void CompleteFinalValidation(AgentRun run, string assistantContent)
-    {
-        var evidence = _completionEvidenceChecker.Check(assistantContent, run);
-        run.CompletionEvidenceStatus = evidence.Status;
-        run.CompletionEvidenceSummary = evidence.Summary;
-        run.CanClaimModified = evidence.CanClaimModified;
-        run.CanClaimVerified = evidence.CanClaimVerified;
-        var checks = new List<string>
-        {
-            run.ToolBudgetExceeded ? "工具预算：已耗尽" : "工具预算：未耗尽",
-            run.ToolApprovalRejectedCount > 0
-                ? $"工具审批：{run.ToolApprovalRejectedCount} 次拒绝"
-                : "工具审批：无拒绝",
-            run.MutationToolSucceeded
-                ? "项目修改：已记录修改工具"
-                : "项目修改：未记录修改工具"
-        };
-
-        if (run.Verifications.Count > 0)
-        {
-            var successCount = run.Verifications.Count(verification => verification.IsSuccess);
-            checks.Add($"验证：{successCount}/{run.Verifications.Count} 通过");
-        }
-        else
-        {
-            checks.Add("验证：未运行");
-        }
-
-        checks.Add(evidence.Summary);
-        foreach (var risk in evidence.Risks)
-        {
-            checks.Add($"一致性风险：{risk}");
-        }
-
-        run.FinalValidationSummary = string.Join(Environment.NewLine, checks);
-    }
-
-    private void CompleteQualityAssessment(AgentRun run, AgentRunStatus status)
-    {
-        var originalStatus = run.Status;
-        run.Status = status;
-        var evaluation = _qualityEvaluator.Evaluate(run);
-        run.QualityScore = evaluation.Score;
-        run.QualitySummary = evaluation.Summary;
-        run.StrategySuggestion = evaluation.StrategySuggestion;
-        run.Status = originalStatus;
-    }
-
-    private static void CompleteTelemetry(AgentRun run)
-    {
-        run.Telemetry = AgentRunTelemetryBuilder.Build(run);
-        run.OutcomeKind = AgentRunTelemetryBuilder.ClassifyOutcome(run);
-    }
-
-    private static void CompleteRecoverySuggestion(
-        AgentRun run,
-        AgentTaskExecutionPolicy policy,
-        AgentRunStatus? targetStatus = null)
-    {
-        run.VerificationRecoveryPacket = AgentRunCheckpointSummaryBuilder.BuildVerificationRecoveryPacket(run);
-        run.CheckpointSummary = AgentRunCheckpointSummaryBuilder.Build(run);
-        run.CheckpointArtifactRefs = run.Artifacts
-            .OrderByDescending(artifact => artifact.CreatedAt)
-            .Take(8)
-            .Select(artifact => string.IsNullOrWhiteSpace(artifact.ToolName)
-                ? $"{artifact.Kind}:{artifact.Id}"
-                : $"{artifact.ToolName}:{artifact.Kind}:{artifact.Id}")
-            .ToList();
-
-        if (run.ToolBudgetExceeded)
-        {
-            var recoveryStyle = policy.PreferCleanRetryRecovery
-                ? "如果恢复包显示当前状态不可信，优先用重试入口从原始目标重新开始。"
-                : "优先沿用 checkpoint 继续，避免重复已经完成的探索或计划项。";
-            run.RecoverySuggestion =
-                $"""
-                继续完成这个已暂停的 Agent 任务。
-
-                原始目标：
-                {run.Goal}
-
-                暂停原因：
-                工具调用预算已耗尽。
-
-                恢复包：
-                {run.CheckpointSummary}
-
-                继续要求：
-                1. 先用 git_status 和必要的只读工具快速确认当前状态。
-                2. 不要重复恢复包里已经完成的探索或计划项。
-                3. 优先继续“未完成计划/下一步建议”里的事项。
-                4. 如果需要修改，实际调用写入/编辑工具后再声称完成。
-                5. 如果发生修改，优先运行项目验证命令或合适的测试。
-                6. {recoveryStyle}
-                """;
-            return;
-        }
-
-        if (targetStatus == AgentRunStatus.Cancelled || run.Status == AgentRunStatus.Cancelled || run.Phase == "cancelled")
-        {
-            run.RecoverySuggestion =
-                $"""
-                继续这个已停止的 Agent 任务。
-
-                原始目标：
-                {run.Goal}
-
-                停止原因：
-                {(string.IsNullOrWhiteSpace(run.CompletionReason) ? "用户取消或请求中断。" : run.CompletionReason)}
-
-                恢复包：
-                {run.CheckpointSummary}
-
-                继续要求：
-                1. 先检查当前工作区状态，确认上一轮已经完成到哪里。
-                2. 沿用恢复包中的上下文，不要重复已经完成的步骤。
-                3. 从未完成的计划项或最后一个失败/运行中步骤继续。
-                """;
-            return;
-        }
-
-        if (run.ToolApprovalRejectedCount > 0)
-        {
-            run.RecoverySuggestion =
-                $"""
-                继续完成这个被工具审批中断的 Agent 任务。
-
-                原始目标：
-                {run.Goal}
-
-                暂停原因：
-                上一轮有工具被拒绝。
-
-                恢复包：
-                {run.CheckpointSummary}
-
-                继续要求：
-                1. 先说明接下来需要哪些工具、为什么需要。
-                2. 如果用户没有重新授权，不要重复调用刚被拒绝的高风险工具。
-                3. 优先用只读工具确认当前状态，再选择最小必要动作。
-                4. {FormatApprovalRecoveryPreference(policy)}
-                """;
-            return;
-        }
-
-        if (run.Verifications.Any(verification => !verification.IsSuccess))
-        {
-            run.RecoverySuggestion =
-                $"""
-                继续修复这个验证失败的 Agent 任务。
-
-                原始目标：
-                {run.Goal}
-
-                暂停原因：
-                上一轮验证未全部通过。
-
-                恢复包：
-                {run.CheckpointSummary}
-
-                失败验证恢复包：
-                {run.VerificationRecoveryPacket}
-
-                继续要求：
-                1. 优先查看失败验证恢复包中的命令、错误摘要和相关文件。
-                2. 只修复导致验证失败的最小问题，不扩大范围。
-                3. 修复后重新运行失败验证命令。
-                """;
-            return;
-        }
-
-        run.RecoverySuggestion =
-            $"""
-            复查并继续这个 Agent 任务。
-
-            原始目标：
-            {run.Goal}
-
-            恢复包：
-            {run.CheckpointSummary}
-
-            继续要求：
-            1. 先查看当前工作区状态和恢复包。
-            2. 不要重复已完成步骤。
-            3. 从下一步建议继续，或明确说明无需继续。
-            """;
-    }
-
-    private static string CreateBudgetPausedUserMessage(AgentRun run)
-    {
-        var next = AgentRunCheckpointSummaryBuilder.GetNextStepSuggestion(run);
-        return string.IsNullOrWhiteSpace(next)
-            ? "工具预算已用完，任务已暂停。当前状态已经保存，可以继续追加预算完成剩余工作。"
-            : $"工具预算已用完，任务已暂停。当前状态已经保存。\n\n下一步建议：{next}";
-    }
-
     private static string Truncate(string value, int maxChars)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -943,13 +681,6 @@ public sealed class AgentHarness
     private static bool IsMutationTool(string toolName)
     {
         return toolName is "write_file" or "edit_file" or "apply_patch" or "git_restore_file" or "git_commit";
-    }
-
-    private static string FormatApprovalRecoveryPreference(AgentTaskExecutionPolicy policy)
-    {
-        return policy.CautiousToolApproval
-            ? "保持高风险工具说明优先，等用户确认后再执行写入或提交。"
-            : "保持工具调用最小化。";
     }
 
     private static string CreateContextStepOutput(AgentRun run, AgentTaskExecutionPolicy policy)

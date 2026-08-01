@@ -88,38 +88,12 @@ public sealed class AgentRunSerializationTests
                     ToolApprovalRequiredCount = 2,
                     ToolApprovalRejectedCount = 1,
                     ToolSessionAllowedCount = 1,
-                    FinalValidationSummary = "工具预算：未耗尽",
-                    CompletionEvidenceStatus = "satisfied",
-                    CompletionEvidenceSummary = "结果一致性：声明与工具记录一致",
-                    CanClaimModified = true,
-                    CanClaimVerified = true,
                     ExecutionPolicySummary = "complexity=Complex; maxToolRounds=4",
-                    FinalStatusReason = "Completion evidence satisfied.",
-                    OutcomeKind = AgentRunOutcomeKind.Success,
-                    Telemetry = new AgentRunTelemetry
-                    {
-                        EstimatedPromptTokens = 420,
-                        ContextRefCount = 6,
-                        ModelCallCount = 3,
-                        ToolCallCount = 2,
-                        VerificationCount = 1,
-                        VerificationSuccessCount = 1,
-                        VerificationPassRate = 1,
-                        OutcomeReason = "ok"
-                    },
-                    QualityScore = 91,
-                    QualitySummary = "任务完成；验证通过 1 个",
-                    StrategySuggestion = "策略表现良好，保持当前执行模式。",
                     TaskComplexity = "Complex",
                     PlannerUsed = true,
                     ExplorerUsed = true,
                     ExplorerDecisionReason = "Explorer scheduled: 1.",
-                    RecoverySuggestion = "继续处理：test",
-                    CheckpointSummary = "目标：test",
-                    VerificationRecoveryPacket = "失败验证：1/2",
-                    CheckpointArtifactRefs = ["read_file:tool_result:artifact-1"],
                     AcceptanceStatus = AgentRunAcceptanceStatus.Accepted,
-                    AcceptanceNote = "用户确认通过",
                     AcceptanceReviewedAt = new DateTimeOffset(2026, 5, 1, 9, 2, 0, TimeSpan.Zero),
                     CurrentPhaseSummary = "running tests",
                     Status = AgentRunStatus.Completed,
@@ -313,30 +287,12 @@ public sealed class AgentRunSerializationTests
         Assert.Equal(2, roundTripped.AgentRuns[0].ToolApprovalRequiredCount);
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolApprovalRejectedCount);
         Assert.Equal(1, roundTripped.AgentRuns[0].ToolSessionAllowedCount);
-        Assert.Equal("工具预算：未耗尽", roundTripped.AgentRuns[0].FinalValidationSummary);
-        Assert.Equal("satisfied", roundTripped.AgentRuns[0].CompletionEvidenceStatus);
-        Assert.Equal("结果一致性：声明与工具记录一致", roundTripped.AgentRuns[0].CompletionEvidenceSummary);
-        Assert.True(roundTripped.AgentRuns[0].CanClaimModified);
-        Assert.True(roundTripped.AgentRuns[0].CanClaimVerified);
         Assert.Equal("complexity=Complex; maxToolRounds=4", roundTripped.AgentRuns[0].ExecutionPolicySummary);
-        Assert.Equal("Completion evidence satisfied.", roundTripped.AgentRuns[0].FinalStatusReason);
-        Assert.Equal(AgentRunOutcomeKind.Success, roundTripped.AgentRuns[0].OutcomeKind);
-        Assert.Equal(420, roundTripped.AgentRuns[0].Telemetry.EstimatedPromptTokens);
-        Assert.Equal(1, roundTripped.AgentRuns[0].Telemetry.VerificationPassRate);
-        Assert.Equal("ok", roundTripped.AgentRuns[0].Telemetry.OutcomeReason);
-        Assert.Equal(91, roundTripped.AgentRuns[0].QualityScore);
-        Assert.Equal("任务完成；验证通过 1 个", roundTripped.AgentRuns[0].QualitySummary);
-        Assert.Equal("策略表现良好，保持当前执行模式。", roundTripped.AgentRuns[0].StrategySuggestion);
         Assert.Equal("Complex", roundTripped.AgentRuns[0].TaskComplexity);
         Assert.True(roundTripped.AgentRuns[0].PlannerUsed);
         Assert.True(roundTripped.AgentRuns[0].ExplorerUsed);
         Assert.Equal("Explorer scheduled: 1.", roundTripped.AgentRuns[0].ExplorerDecisionReason);
-        Assert.Equal("继续处理：test", roundTripped.AgentRuns[0].RecoverySuggestion);
-        Assert.Equal("目标：test", roundTripped.AgentRuns[0].CheckpointSummary);
-        Assert.Equal("失败验证：1/2", roundTripped.AgentRuns[0].VerificationRecoveryPacket);
-        Assert.Equal(["read_file:tool_result:artifact-1"], roundTripped.AgentRuns[0].CheckpointArtifactRefs);
         Assert.Equal(AgentRunAcceptanceStatus.Accepted, roundTripped.AgentRuns[0].AcceptanceStatus);
-        Assert.Equal("用户确认通过", roundTripped.AgentRuns[0].AcceptanceNote);
         Assert.Equal(new DateTimeOffset(2026, 5, 1, 9, 2, 0, TimeSpan.Zero), roundTripped.AgentRuns[0].AcceptanceReviewedAt);
         Assert.Equal("running tests", roundTripped.AgentRuns[0].CurrentPhaseSummary);
         Assert.Single(roundTripped.AgentRuns[0].PhaseHistory);
