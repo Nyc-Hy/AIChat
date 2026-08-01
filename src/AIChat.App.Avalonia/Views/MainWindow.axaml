@@ -128,6 +128,11 @@
 
                                 <!-- 2. 项目 section -->
                                 <TextBlock Text="项目" Classes="section-title" Margin="4,16,0,6"/>
+                                <TextBlock Text="(还没有项目，按 ⌘O 添加)"
+                                           Classes="muted"
+                                           FontSize="12"
+                                           Margin="4,0,0,4"
+                                           IsVisible="{Binding Sidebar.Projects.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
                                 <ItemsControl ItemsSource="{Binding Sidebar.Projects}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ProjectCardViewModel">
@@ -160,6 +165,11 @@
 
                                 <!-- 3. 最近 section -->
                                 <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
+                                <TextBlock Text="(还没有对话)"
+                                           Classes="muted"
+                                           FontSize="12"
+                                           Margin="4,0,0,4"
+                                           IsVisible="{Binding ConversationList.Conversations.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
                                 <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="vm:ConversationCardViewModel">
