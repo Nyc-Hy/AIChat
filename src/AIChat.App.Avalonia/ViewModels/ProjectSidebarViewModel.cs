@@ -88,12 +88,13 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
         _settingsHolder.Current.LastActiveProjectId = project.Id;
         await _repository.SaveSettingsAsync(_settingsHolder.Current);
 
+        // ApplyProject now fires ProjectSelected on the transition,
+        // so the previous explicit Invoke here was a duplicate that
+        // double-rebuilt the file tree / recomputed the context
+        // budget on every user click. The early-return on
+        // ReferenceEquals(project, CurrentProject) still prevents
+        // a no-op click from firing it again.
         ApplyProject(project);
-        ProjectSelected?.Invoke(this, new ProjectSelectionChangedEventArgs
-        {
-            Project = project,
-            StatusMessage = $"已切换到项目：{project.Name}"
-        });
     }
 
     // Registers a new project rooted at the supplied directory. No-op
@@ -194,6 +195,7 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
 
     private void ApplyProject(ProjectWorkspace? project)
     {
+        var previous = CurrentProject;
         CurrentProject = project;
         foreach (var card in Projects)
         {
@@ -205,13 +207,36 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
             SelectedProjectName = "未选择项目";
             SelectedProjectPath = "";
             ProjectHealth = "添加或初始化项目后开始。";
-            return;
+        }
+        else
+        {
+            SelectedProjectName = project.Name;
+            SelectedProjectPath = string.IsNullOrWhiteSpace(project.Path) ? "未配置路径" : project.Path;
+            ProjectHealth = ProjectLoadSnapshotBuilder.Build(project).HealthText;
+            SelectedProjectCard = Projects.FirstOrDefault(card => card.Id == project.Id);
         }
 
-        SelectedProjectName = project.Name;
-        SelectedProjectPath = string.IsNullOrWhiteSpace(project.Path) ? "未配置路径" : project.Path;
-        ProjectHealth = ProjectLoadSnapshotBuilder.Build(project).HealthText;
-        SelectedProjectCard = Projects.FirstOrDefault(card => card.Id == project.Id);
+        // Fire ProjectSelected on every transition (including the
+        // initial Refresh on app startup and the null transition when
+        // the last project is removed). Subscribers — FileTreeVM
+        // rebuilds the file index off the new path, AgentHost
+        // recomputes the context budget, etc. — need the same
+        // notification for "user clicked a different project" and
+        // "app launched and restored the last-active project". Pre-
+        // fix, ApplyProject silently updated internal state and
+        // only SelectProjectAsync (a user click handler) raised the
+        // event — so a fresh app launch with a saved project in
+        // projects.json never rebuilt the file tree.
+        if (!ReferenceEquals(previous, project))
+        {
+            ProjectSelected?.Invoke(this, new ProjectSelectionChangedEventArgs
+            {
+                Project = project,
+                StatusMessage = project is null
+                    ? "未选择项目。"
+                    : $"已切换到项目：{project.Name}"
+            });
+        }
     }
 
     partial void OnSelectedProjectCardChanged(ProjectCardViewModel? value)
