@@ -14,6 +14,7 @@ public class FileTreeViewModelTests : IDisposable
     private readonly string _tempRoot;
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly FileTreeViewModel _vm;
+    private readonly RecordingFileOpener _opener = new();
 
     public FileTreeViewModelTests()
     {
@@ -26,7 +27,7 @@ public class FileTreeViewModelTests : IDisposable
         _sidebar = new ProjectSidebarViewModel(
             new StubRepository(),
             new StubSettingsHolder());
-        _vm = new FileTreeViewModel(_sidebar, new StubFactory(_tempRoot));
+        _vm = new FileTreeViewModel(_sidebar, new StubFactory(_tempRoot), _opener);
     }
 
     public void Dispose()
@@ -58,7 +59,7 @@ public class FileTreeViewModelTests : IDisposable
     [Fact]
     public async Task RebuildAsync_AfterIndexFailure_SurfacesError()
     {
-        var failing = new FileTreeViewModel(_sidebar, new FailingFactory());
+        var failing = new FileTreeViewModel(_sidebar, new FailingFactory(), _opener);
         try
         {
             await failing.RebuildAsync(_tempRoot);
@@ -137,6 +138,92 @@ public class FileTreeViewModelTests : IDisposable
         _vm.ToggleFolderCommand.Execute(file);
 
         Assert.Equal(before, file.IsExpanded);
+    }
+
+    [Fact]
+    public void OpenWithSystemApp_OnFile_CallsOpenerWithAbsolutePath()
+    {
+        // Set the sidebar's current project so the relative
+        // path resolves to the temp root.
+        var project = new ProjectWorkspace { Id = "p1", Name = "TreeTest", Path = _tempRoot };
+        _sidebar.Refresh(new[] { project });
+        _sidebar.SelectProjectCommand.Execute(project.Id);
+
+        var file = new FileTreeNodeViewModel("Foo.cs", "src/Foo.cs", isFolder: false, sizeBytes: 100, typeTag: "source");
+
+        _vm.OpenWithSystemAppCommand.Execute(file);
+
+        var opened = Assert.Single(_opener.OpenedPaths);
+        var expected = Path.Combine(_tempRoot, "src", "Foo.cs");
+        Assert.Equal(expected, opened);
+    }
+
+    [Fact]
+    public void OpenWithSystemApp_OnFolder_IsNoOp()
+    {
+        var project = new ProjectWorkspace { Id = "p1", Name = "TreeTest", Path = _tempRoot };
+        _sidebar.Refresh(new[] { project });
+        _sidebar.SelectProjectCommand.Execute(project.Id);
+
+        var folder = new FileTreeNodeViewModel("src", "src", isFolder: true, sizeBytes: 0, typeTag: "");
+
+        _vm.OpenWithSystemAppCommand.Execute(folder);
+
+        Assert.Empty(_opener.OpenedPaths);
+    }
+
+    [Fact]
+    public void OpenWithSystemApp_WhenOpenerThrows_SurfacesStatusMessage()
+    {
+        var project = new ProjectWorkspace { Id = "p1", Name = "TreeTest", Path = _tempRoot };
+        _sidebar.Refresh(new[] { project });
+        _sidebar.SelectProjectCommand.Execute(project.Id);
+        _opener.NextError = new InvalidOperationException("simulated OS denial");
+
+        var captured = new List<string>();
+        _vm.StatusMessageRequested += (_, message) => captured.Add(message);
+        var file = new FileTreeNodeViewModel("Foo.cs", "src/Foo.cs", isFolder: false, sizeBytes: 100, typeTag: "source");
+
+        _vm.OpenWithSystemAppCommand.Execute(file);
+
+        var raised = Assert.Single(captured);
+        Assert.Contains("simulated OS denial", raised);
+    }
+
+    [Fact]
+    public void OpenWithSystemApp_WithNoProject_SurfacesStatusMessage()
+    {
+        // No project selected — no path to resolve against.
+        var captured = new List<string>();
+        _vm.StatusMessageRequested += (_, message) => captured.Add(message);
+        var file = new FileTreeNodeViewModel("Foo.cs", "src/Foo.cs", isFolder: false, sizeBytes: 100, typeTag: "source");
+
+        _vm.OpenWithSystemAppCommand.Execute(file);
+
+        Assert.NotEmpty(captured);
+        Assert.Empty(_opener.OpenedPaths);
+    }
+
+    // Stub IFileOpener that records every path it was asked to
+    // open and can be configured to throw on the next call. The
+    // test host runs on macOS / Linux / Windows equally so we
+    // can't use the real Mac opener without spawning processes
+    // (and possibly opening files in user-visible apps).
+    private sealed class RecordingFileOpener : AIChat.App.Avalonia.Composition.IFileOpener
+    {
+        public List<string> OpenedPaths { get; } = new();
+        public Exception? NextError { get; set; }
+
+        public void OpenWithSystemApp(string absolutePath)
+        {
+            if (NextError is not null)
+            {
+                var err = NextError;
+                NextError = null;
+                throw err;
+            }
+            OpenedPaths.Add(absolutePath);
+        }
     }
 
     // In-memory IProjectFileIndexFactory that returns a fixed

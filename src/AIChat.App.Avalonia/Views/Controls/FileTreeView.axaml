@@ -71,7 +71,8 @@
                     HorizontalContentAlignment="Stretch"
                     Padding="0"
                     Command="{Binding ((vm:FileTreeViewModel)DataContext).SelectFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                    CommandParameter="{Binding}">
+                    CommandParameter="{Binding}"
+                    DoubleTapped="FileRow_OnDoubleTapped">
               <TextBlock Text="{Binding Name}"
                          Classes="body"
                          FontSize="12"

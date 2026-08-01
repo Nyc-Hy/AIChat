@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AIChat.App.Avalonia.Composition;
 using AIChat.Application.Workspace;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -21,6 +22,7 @@ public sealed partial class FileTreeViewModel : ViewModelBase, IDisposable
 {
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly IProjectFileIndexFactory _indexFactory;
+    private readonly IFileOpener _fileOpener;
     private CancellationTokenSource? _currentBuildCts;
     private bool _disposed;
 
@@ -28,6 +30,12 @@ public sealed partial class FileTreeViewModel : ViewModelBase, IDisposable
     // the host can pop the preview pane or wire a tool. The host
     // decides what to do; the tree just signals the intent.
     public event EventHandler<FileTreeFileSelectedEventArgs>? FileSelected;
+
+    // Raised when the opener (or anything else in the tree VM)
+    // wants the host to surface a status message — the host
+    // already has a status bar / toast surface and the tree
+    // doesn't need its own.
+    public event EventHandler<string>? StatusMessageRequested;
 
     [ObservableProperty]
     private FileTreeNodeViewModel? root;
@@ -41,10 +49,14 @@ public sealed partial class FileTreeViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     private string? buildError;
 
-    public FileTreeViewModel(ProjectSidebarViewModel sidebar, IProjectFileIndexFactory indexFactory)
+    public FileTreeViewModel(
+        ProjectSidebarViewModel sidebar,
+        IProjectFileIndexFactory indexFactory,
+        IFileOpener fileOpener)
     {
         _sidebar = sidebar;
         _indexFactory = indexFactory;
+        _fileOpener = fileOpener;
         _sidebar.ProjectSelected += OnProjectSelected;
     }
 
@@ -126,6 +138,37 @@ public sealed partial class FileTreeViewModel : ViewModelBase, IDisposable
             return;
         }
         node.IsExpanded = !node.IsExpanded;
+    }
+
+    // Open the file in the system default app (the user's IDE,
+    // their editor, Preview for images, etc.). Triggered by
+    // double-click in the XAML. Resolves the relative path
+    // against the current project root, calls IFileOpener,
+    // and surfaces any failure via StatusMessageRequested so
+    // the user knows why nothing happened (the host can route
+    // this into the existing status bar or toast surface).
+    [RelayCommand]
+    private void OpenWithSystemApp(FileTreeNodeViewModel? node)
+    {
+        if (node is null || node.IsFolder)
+        {
+            return;
+        }
+        var projectRoot = _sidebar.CurrentProject?.Path;
+        if (string.IsNullOrWhiteSpace(projectRoot))
+        {
+            StatusMessageRequested?.Invoke(this, "没有当前项目，无法打开文件。");
+            return;
+        }
+        var fullPath = Path.Combine(projectRoot, node.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        try
+        {
+            _fileOpener.OpenWithSystemApp(fullPath);
+        }
+        catch (Exception ex)
+        {
+            StatusMessageRequested?.Invoke(this, ex.Message);
+        }
     }
 
     public void Dispose()

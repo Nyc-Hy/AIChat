@@ -58,7 +58,9 @@ public static class ServiceRegistration
         services.AddSingleton<MemoryEditorViewModel>();
         services.AddSingleton<GitStatusViewModel>();
         services.AddSingleton<IProjectFileIndexFactory, ProjectFileIndexFactory>();
+        services.AddSingleton<IFileOpener, MacFileOpener>();
         services.AddSingleton<FileTreeViewModel>();
+        services.AddSingleton<FilePreviewViewModel>();
         services.AddSingleton<IApprovalService, UIBoundApprovalService>();
         services.AddSingleton<IThemeService, FluentThemeService>();
         services.AddSingleton<IToastService, ToastService>();

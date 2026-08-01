@@ -38,6 +38,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     private readonly GitStatusViewModel _gitStatus;
     private readonly AIChat.Application.Workspace.IWorkspaceChangeService _workspace;
     private readonly FileTreeViewModel _fileTree;
+    private readonly FilePreviewViewModel _filePreview;
     private readonly AgentHostViewModel _agentHost;
 
     // lastAssistantStatus + CanRetry + _lastUserPrompt all moved
@@ -329,6 +330,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     // picks a different project.
     public FileTreeViewModel FileTree => _fileTree;
 
+    // Phase 1: read-only file preview. Populated when the user
+    // picks a file leaf in the tree; the file→preview wiring
+    // lives in the constructor (FileTreeViewModel.FileSelected
+    // event → PreviewAsync), so the XAML just binds
+    // FilePreview.HasFile to a Border IsVisible.
+    public FilePreviewViewModel FilePreview => _filePreview;
+
     // PR-6: tool approval dialog and Approve / Reject commands live in a
     // dedicated view-model. The IApprovalService is what the agent
     // harness depends on; the service is a thin facade over the VM.
@@ -384,7 +392,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         MemoryEditorViewModel memoryEditor,
         GitStatusViewModel gitStatus,
         AIChat.Application.Workspace.IWorkspaceChangeService workspace,
-        FileTreeViewModel fileTree)
+        FileTreeViewModel fileTree,
+        FilePreviewViewModel filePreview)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -403,6 +412,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _gitStatus = gitStatus;
         _workspace = workspace;
         _fileTree = fileTree;
+        _filePreview = filePreview;
+
+        // Phase 1 wiring: file leaf picked in the tree → load
+        // the file into the preview pane. The tree emits the
+        // project's relative path; the preview resolves it
+        // against the sidebar's current project root.
+        _fileTree.FileSelected += async (_, args) =>
+        {
+            await _filePreview.PreviewAsync(_sidebar.CurrentProject?.Path, args.RelativePath);
+        };
+        // File-tree errors (opener failed, build failed, etc.)
+        // bubble up to the host's existing status surface rather
+        // than the tree VM owning its own toast.
+        _fileTree.StatusMessageRequested += (_, message) => StatusMessage = message;
+        // Project switch while a file is open: clear the preview
+        // so the user doesn't see "stale" content from the
+        // previous project.
+        _sidebar.ProjectSelected += (_, args) =>
+        {
+            if (args.Project?.Path != _filePreview.ProjectRoot)
+            {
+                _filePreview.ClearCommand.Execute(null);
+            }
+        };
 
         // App-status surface (active provider / model / readiness
         // pill / in-flight test flag / derived Greeting + HasProject

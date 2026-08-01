@@ -429,6 +429,21 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
         </Style>
 
+        <!--
+          file-preview: the read-only file panel that drops in at
+          the top of the conversation. Sits inside the .panel
+          conversation border so the activity feed remains below
+          it. Light sunken background, hairline border, rounded
+          corners to match the existing "code block" visual.
+        -->
+        <Style Selector="Border.file-preview">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
         <!-- Model chip: small flat rectangle with a status dot + name. -->
         <Style Selector="Border.model-chip">
             <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />

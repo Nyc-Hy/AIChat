@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.FilePreviewView"
+             x:DataType="vm:FilePreviewViewModel"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="200">
+
+  <!--
+    Phase 1 file preview. Lives at the top of the conversation
+    panel (above the activity feed). Collapses to zero height
+    when no file is selected (HasFile=false). The header shows
+    the path with the project-relative prefix dimmed; the body
+    is a monospace line-numbered scroll. "外部打开" calls the
+    OpenWithSystemApp command on the host VM (added in
+    Phase 1.4) — for now the button is visible but does nothing.
+  -->
+  <Border Classes="file-preview"
+          IsVisible="{Binding HasFile}"
+          MaxHeight="320"
+          Margin="0,0,0,12">
+    <Grid RowDefinitions="Auto,Auto,*">
+      <!-- Header: file name + path + close -->
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="10,8,8,4">
+        <StackPanel Spacing="2">
+          <TextBlock Text="{Binding DisplayName}"
+                     Classes="body"
+                     FontWeight="SemiBold"
+                     FontSize="13"
+                     TextTrimming="CharacterEllipsis"/>
+          <TextBlock Text="{Binding ContentPath}"
+                     Classes="muted"
+                     FontSize="11"
+                     TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+        <Button Grid.Column="1"
+                Classes="chrome-button"
+                Command="{Binding ClearCommand}"
+                ToolTip.Tip="关闭预览 (Esc)">
+          <Path Data="M6 6 L18 18 M18 6 L6 18"
+                Stroke="{Binding $parent[Button].Foreground}"
+                StrokeThickness="1.6" StrokeLineCap="Round"
+                Width="12" Height="12" Stretch="Uniform"/>
+        </Button>
+      </Grid>
+
+      <Border Grid.Row="1" Classes="section-divider"/>
+
+      <!-- Body: line-numbered monospace scroll, or loading / error placeholder -->
+      <Panel Grid.Row="2">
+        <TextBlock Text="正在读取文件…"
+                   Classes="muted"
+                   FontSize="12"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Margin="20"
+                   IsVisible="{Binding IsLoading}"/>
+        <TextBlock Text="{Binding LoadError}"
+                   Classes="muted"
+                   FontSize="12"
+                   Foreground="{StaticResource ErrorFgBrush}"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   Margin="20"
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding LoadError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      IsVisible="{Binding !IsLoading}"
+                      Padding="6,4">
+          <ItemsControl ItemsSource="{Binding Lines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:FilePreviewLine">
+                <Grid ColumnDefinitions="48,*" ColumnSpacing="8">
+                  <TextBlock Grid.Column="0"
+                             Text="{Binding Number, StringFormat='{0}'}"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="12"
+                             Classes="muted"
+                             HorizontalAlignment="Right"
+                             TextAlignment="Right"/>
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding Text}"
+                             FontFamily="{StaticResource FontMono}"
+                             FontSize="12"
+                             TextWrapping="NoWrap"/>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Panel>
+    </Grid>
+  </Border>
+</UserControl>

@@ -281,11 +281,16 @@
 
                             <!-- Conversation: empty state OR scrollable bubbles -->
                             <Border Grid.Row="1" Classes="panel" Padding="0">
-                                <Panel>
-                                    <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline.
-                                         A floating "↓ N 条新消息" pill anchors to the bottom-right; it only shows
-                                         when new activity has arrived while the user is scrolled up. -->
-                                    <Panel IsVisible="{Binding ActivityFeed.HasConversation}">
+                                <Grid RowDefinitions="Auto,*">
+                                    <!-- Phase 1: read-only file preview. Sits at the top of
+                                         the conversation panel; collapses to zero height
+                                         when no file is selected. -->
+                                    <vcontrols:FilePreviewView Grid.Row="0"/>
+                                    <Panel Grid.Row="1">
+                                        <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline.
+                                             A floating "↓ N 条新消息" pill anchors to the bottom-right; it only shows
+                                             when new activity has arrived while the user is scrolled up. -->
+                                        <Panel IsVisible="{Binding ActivityFeed.HasConversation}">
                                         <ScrollViewer x:Name="ConversationScroll" Padding="20,12">
                                             <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
                                                 <!--
@@ -421,6 +426,7 @@
                                         AddProjectRequested="AddProject_OnClick"
                                         QuickActionRequested="EmptyStateCard_OnClick"/>
                                 </Panel>
+                                </Grid>
                             </Border>
 
                             <!--
