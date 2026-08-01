@@ -5,6 +5,7 @@
         xmlns:composition="using:AIChat.App.Avalonia.Composition"
         xmlns:controls="using:AIChat.App.Avalonia.Controls"
         xmlns:vcontrols="using:AIChat.App.Avalonia.Views.Controls"
+        xmlns:behaviors="using:AIChat.App.Avalonia.Behaviors"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1240" d:DesignHeight="800"
@@ -186,14 +187,32 @@
                                                     ToolTip.Tip="{Binding Title}"
                                                     HorizontalAlignment="Stretch"
                                                     HorizontalContentAlignment="Stretch">
-                                                <TextBlock Text="{Binding Title}"
-                                                           FontFamily="{StaticResource FontSans}"
-                                                           FontSize="13"
-                                                           Foreground="{StaticResource Text2Brush}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           MaxLines="1"/>
+                                                <!--
+                                                  Inline rename: TextBlock shows by default, TextBox takes
+                                                  over when IsRenaming flips. The TextBox is the same
+                                                  parent slot, so the row's height stays stable.
+                                                -->
+                                                <Panel HorizontalAlignment="Stretch">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               FontFamily="{StaticResource FontSans}"
+                                                               FontSize="13"
+                                                               Foreground="{StaticResource Text2Brush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxLines="1"
+                                                               IsVisible="{Binding !IsRenaming}"/>
+                                                    <TextBox Text="{Binding EditingTitle, Mode=TwoWay}"
+                                                             FontFamily="{StaticResource FontSans}"
+                                                             FontSize="13"
+                                                             IsVisible="{Binding IsRenaming}"
+                                                             behaviors:FocusOnLoadBehavior.IsEnabled="True"
+                                                             KeyDown="ConversationRename_OnKeyDown"
+                                                             LostFocus="ConversationRename_OnLostFocus"
+                                                             Padding="4,2"/>
+                                                </Panel>
                                                 <Button.ContextFlyout>
                                                     <MenuFlyout>
+                                                        <MenuItem Header="重命名"
+                                                                  Command="{Binding StartRenameCommand}"/>
                                                         <MenuItem Header="删除对话"
                                                                   Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ConversationList.RemoveConversationCommand}"
                                                                   CommandParameter="{Binding Id}"/>

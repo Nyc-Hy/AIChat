@@ -419,6 +419,39 @@ public partial class MainWindow : Window
         });
     }
 
+    // Inline-rename keyboard handler. Enter commits, Esc cancels.
+    // LostFocus also commits, so Tab / click-out behaves the same
+    // as Enter (matches how every chat app handles inline edit).
+    private void ConversationRename_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox textBox ||
+            textBox.DataContext is not ConversationCardViewModel card)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            SafeRun(() => card.CommitRenameCommand.ExecuteAsync(null));
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            card.CancelRenameCommand.Execute(null);
+        }
+    }
+
+    private void ConversationRename_OnLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox textBox &&
+            textBox.DataContext is ConversationCardViewModel card &&
+            card.IsRenaming)
+        {
+            SafeRun(() => card.CommitRenameCommand.ExecuteAsync(null));
+        }
+    }
+
     private void AddProject_OnClick(object? sender, RoutedEventArgs e)
     {
         SafeRun(async () =>

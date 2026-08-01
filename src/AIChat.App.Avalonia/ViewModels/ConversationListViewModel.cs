@@ -34,6 +34,58 @@ public sealed partial class ConversationListViewModel : ViewModelBase
         _repository = repository;
     }
 
+    // The card's onTitleChange callback. Splits out so the
+    // constructor below can pass it without inlining a multi-line
+    // lambda twice (once for real conversations, once for the
+    // "new" placeholder — even though the placeholder doesn't
+    // get renamed, the signature stays uniform).
+    private Task PersistTitleChangeAsync(string conversationId, string newTitle)
+        => RenameConversationAsync(conversationId, newTitle);
+
+    // Updates the underlying Conversation.Title in the current
+    // project, then re-saves the project list. No-op for the
+    // "new" placeholder id or unknown ids, and no-op when the
+    // trimmed value matches the existing title (the card already
+    // skipped the save in that case, but we double-check here to
+    // avoid a wasted repo write on whitespace-only renames).
+    public async Task RenameConversationAsync(string conversationId, string newTitle)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId) ||
+            conversationId == NewConversationId ||
+            _currentProject is null)
+        {
+            return;
+        }
+
+        var trimmed = newTitle?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+        {
+            return;
+        }
+
+        var target = _currentProject.Conversations.FirstOrDefault(conversation =>
+            string.Equals(conversation.Id, conversationId, StringComparison.OrdinalIgnoreCase));
+        if (target is null || target.Title == trimmed)
+        {
+            return;
+        }
+
+        target.Title = trimmed;
+        target.UpdatedAt = DateTimeOffset.Now;
+
+        var projects = (await _repository.LoadProjectsAsync()).ToList();
+        var index = projects.FindIndex(project => project.Id == _currentProject.Id);
+        if (index >= 0)
+        {
+            projects[index] = _currentProject;
+        }
+        else
+        {
+            projects.Add(_currentProject);
+        }
+        await _repository.SaveProjectsAsync(projects);
+    }
+
     // Replaces the conversation list with the project's recent
     // conversations. If the project is null or has no conversations,
     // a single "new" placeholder card is shown. Raises
@@ -45,7 +97,11 @@ public sealed partial class ConversationListViewModel : ViewModelBase
 
         if (project is null || project.Conversations.Count == 0)
         {
-            Conversations.Add(new ConversationCardViewModel(NewConversationId, "新任务", "暂无历史对话"));
+            Conversations.Add(new ConversationCardViewModel(
+                NewConversationId,
+                "新任务",
+                "暂无历史对话",
+                PersistTitleChangeAsync));
             SetSelectedConversation(Conversations[0]);
             ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
             {
@@ -64,7 +120,8 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             Conversations.Add(new ConversationCardViewModel(
                 conversation.Id,
                 string.IsNullOrWhiteSpace(conversation.Title) ? "未命名任务" : conversation.Title,
-                conversation.UpdatedAt.ToLocalTime().ToString("M月d日 HH:mm")));
+                conversation.UpdatedAt.ToLocalTime().ToString("M月d日 HH:mm"),
+                PersistTitleChangeAsync));
         }
 
         var selectedCard = Conversations.FirstOrDefault(item => item.Id == preferredConversationId)

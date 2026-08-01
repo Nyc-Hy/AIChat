@@ -238,6 +238,89 @@ public class ConversationListViewModelTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task RenameConversation_UpdatesTitleAndSaves()
+    {
+        var project = new ProjectWorkspace
+        {
+            Id = "p1",
+            Name = "Alpha",
+            Path = "/tmp/alpha",
+            Conversations = { NewConversation("a", "Old title", DateTimeOffset.UtcNow) }
+        };
+        var repository = Mock.Of<IAppRepository>();
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { project });
+        var vm = new ConversationListViewModel(repository);
+        vm.Refresh(project);
+
+        await vm.RenameConversationAsync("a", "  New title  ");
+
+        Assert.Equal("New title", project.Conversations[0].Title);
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.IsAny<List<ProjectWorkspace>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RenameConversation_WithNewPlaceholder_DoesNothing()
+    {
+        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var repository = Mock.Of<IAppRepository>();
+        var vm = new ConversationListViewModel(repository);
+        vm.Refresh(project);
+
+        await vm.RenameConversationAsync("new", "Whatever");
+
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.IsAny<List<ProjectWorkspace>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RenameConversation_WithWhitespaceOnly_DoesNothing()
+    {
+        var project = new ProjectWorkspace
+        {
+            Id = "p1",
+            Name = "Alpha",
+            Path = "/tmp/alpha",
+            Conversations = { NewConversation("a", "Original", DateTimeOffset.UtcNow) }
+        };
+        var repository = Mock.Of<IAppRepository>();
+        var vm = new ConversationListViewModel(repository);
+        vm.Refresh(project);
+
+        await vm.RenameConversationAsync("a", "   ");
+
+        Assert.Equal("Original", project.Conversations[0].Title);
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.IsAny<List<ProjectWorkspace>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RenameConversation_WithUnchangedTitle_DoesNothing()
+    {
+        var project = new ProjectWorkspace
+        {
+            Id = "p1",
+            Name = "Alpha",
+            Path = "/tmp/alpha",
+            Conversations = { NewConversation("a", "Same", DateTimeOffset.UtcNow) }
+        };
+        var repository = Mock.Of<IAppRepository>();
+        var vm = new ConversationListViewModel(repository);
+        vm.Refresh(project);
+
+        await vm.RenameConversationAsync("a", "  Same  ");
+
+        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
+            It.IsAny<List<ProjectWorkspace>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     private static Conversation NewConversation(string id, string title, DateTimeOffset updatedAt)
         => new()
         {
