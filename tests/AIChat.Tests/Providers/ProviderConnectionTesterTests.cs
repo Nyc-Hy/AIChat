@@ -56,7 +56,7 @@ public sealed class ProviderConnectionTesterTests
             Name = "Anthropic",
             BaseUrl = "https://api.anthropic.com",
             ApiKey = "anthropic-key",
-            SelectedModelId = "claude-3-5-sonnet-latest"
+            SelectedModelId = "claude-opus-4-6"
         });
 
         Assert.True(result.IsSuccess);

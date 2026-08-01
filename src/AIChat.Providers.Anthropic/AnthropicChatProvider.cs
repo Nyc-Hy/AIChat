@@ -25,7 +25,7 @@ public sealed class AnthropicChatProvider : IChatProvider
         ProtocolId = "anthropic",
         Name = "Anthropic",
         DefaultBaseUrl = "https://api.anthropic.com",
-        DefaultModel = "claude-3-5-sonnet-latest",
+        DefaultModel = "claude-opus-4-6",
         DefaultContextLimit = 200_000
     };
 

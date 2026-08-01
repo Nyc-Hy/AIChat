@@ -139,10 +139,25 @@ public static class ChatProviderCatalog
         ProtocolId = "openai",
         Name = "OpenAI-compatible",
         DefaultBaseUrl = "https://api.openai.com/v1",
-        DefaultModel = "custom-model",
-        DefaultContextLimit = 128_000,
+        DefaultModel = "gpt-5",
+        DefaultContextLimit = 400_000,
         Models =
         [
+            // OpenAI's current flagship tier (2026-08). 400K context,
+            // tools + vision. The "gpt-5-mini" entry is the price/quality
+            // sweet spot for day-to-day work; the older 4.1 line stays
+            // because some users still have it provisioned and we don't
+            // want to break their existing settings.
+            new LlmModelInfo { Id = "gpt-5", DisplayName = "gpt-5", ContextLimit = 400_000, CapabilityLabel = "tools · vision", Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true } },
+            new LlmModelInfo { Id = "gpt-5-mini", DisplayName = "gpt-5-mini", ContextLimit = 400_000, CapabilityLabel = "tools · vision", Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true } },
+            new LlmModelInfo { Id = "gpt-4.1", DisplayName = "gpt-4.1", ContextLimit = 1_000_000, CapabilityLabel = "tools · vision · 1M ctx", Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true } },
+            new LlmModelInfo { Id = "gpt-4.1-mini", DisplayName = "gpt-4.1-mini", ContextLimit = 1_000_000, CapabilityLabel = "tools · vision · 1M ctx", Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true } },
+            // For users running against a non-OpenAI endpoint (a self-hosted
+            // vLLM, llama.cpp, or a private proxy), the literal model id
+            // is typed in the Settings textbox and resolved via
+            // ResolveModel's "non-empty user-typed id" path. Kept here so
+            // the dropdown isn't empty on a fresh install before the user
+            // types their real id.
             new LlmModelInfo { Id = "custom-model", DisplayName = "custom-model", ContextLimit = 128_000, CapabilityLabel = "tools", Capabilities = ToolCapable }
         ]
     };
@@ -153,24 +168,39 @@ public static class ChatProviderCatalog
         ProtocolId = "anthropic",
         Name = "Anthropic",
         DefaultBaseUrl = "https://api.anthropic.com",
-        DefaultModel = "claude-3-5-sonnet-latest",
+        // Opus 4.6 is the current Anthropic flagship as of 2026-08.
+        // Sonnet 4.5 and Haiku 3.5 (the small/fast tier) round out the
+        // default lineup. We deliberately drop claude-3-5-* from the
+        // default Models list — users with old settings still resolve
+        // through ResolveModel's "non-empty user-typed id" path, so
+        // existing setups keep working — but the dropdown now reflects
+        // the 4.x generation by default.
+        DefaultModel = "claude-opus-4-6",
         DefaultContextLimit = 200_000,
         Models =
         [
             new LlmModelInfo
             {
-                Id = "claude-3-5-sonnet-latest",
-                DisplayName = "claude-3-5-sonnet-latest",
+                Id = "claude-opus-4-6",
+                DisplayName = "claude-opus-4-6",
                 ContextLimit = 200_000,
-                CapabilityLabel = "tools · vision",
-                Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true }
+                CapabilityLabel = "tools · vision · thinking",
+                Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true, SupportsThinking = true }
+            },
+            new LlmModelInfo
+            {
+                Id = "claude-sonnet-4-5",
+                DisplayName = "claude-sonnet-4-5",
+                ContextLimit = 200_000,
+                CapabilityLabel = "tools · vision · thinking",
+                Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true, SupportsThinking = true }
             },
             new LlmModelInfo
             {
                 Id = "claude-3-5-haiku-latest",
                 DisplayName = "claude-3-5-haiku-latest",
                 ContextLimit = 200_000,
-                CapabilityLabel = "tools · vision",
+                CapabilityLabel = "tools · vision (fast)",
                 Capabilities = new LlmModelCapabilities { SupportsTools = true, SupportsVision = true }
             }
         ]

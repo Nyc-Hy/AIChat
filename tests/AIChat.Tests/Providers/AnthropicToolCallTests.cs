@@ -138,7 +138,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
             Tools =
             [
@@ -173,7 +173,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
             Tools =
             [
@@ -205,7 +205,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
             Tools = []
         };
@@ -226,7 +226,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages = [new ChatMessage { Role = ChatRole.User, Content = "test" }],
             Tools =
             [
@@ -280,7 +280,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage { Role = ChatRole.User, Content = "read the file" },
@@ -326,7 +326,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage { Role = ChatRole.User, Content = "read the file" },
@@ -369,7 +369,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage { Role = ChatRole.User, Content = "read two files" },
@@ -425,7 +425,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage { Role = ChatRole.User, Content = "hello" },
@@ -451,7 +451,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage
@@ -488,7 +488,7 @@ public sealed class AnthropicToolCallTests
 
         var request = new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage { Role = ChatRole.User, Content = "do something" },
@@ -545,7 +545,7 @@ public sealed class AnthropicToolCallTests
     {
         return new ChatRequest
         {
-            Model = "claude-3-5-sonnet-latest",
+            Model = "claude-opus-4-6",
             Messages =
             [
                 new ChatMessage { Role = ChatRole.User, Content = "test" }

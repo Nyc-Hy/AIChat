@@ -92,7 +92,7 @@ public sealed class ProviderSettingsServiceTests
         Assert.False(result.AlreadyExisted);
         Assert.Equal("openai-compatible", result.Provider.TemplateId);
         Assert.Equal("openai", result.Provider.ProtocolId);
-        Assert.Equal("custom-model", result.Provider.SelectedModelId);
+        Assert.Equal("gpt-5", result.Provider.SelectedModelId);
         Assert.Equal(result.Provider.Id, settings.ActiveConfiguredProviderId);
     }
 
