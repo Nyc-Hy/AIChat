@@ -259,7 +259,7 @@ public partial class MainWindow : Window
             var extent = ConversationScroll.Extent.Height;
             var viewport = ConversationScroll.Viewport.Height;
             _isUserAtBottom = (offsetY + viewport) >= (extent - AtBottomThreshold);
-            if (_isUserAtBottom && viewModel.UnseenMessageCount > 0)
+            if (_isUserAtBottom && viewModel.MessageScroll.UnseenMessageCount > 0)
             {
                 viewModel.ClearUnseenMessageCount();
             }
@@ -386,7 +386,7 @@ public partial class MainWindow : Window
         {
             return;
         }
-        viewModel.ClearUnseenMessageCount();
+        viewModel.MessageScroll.ClearUnseenMessageCount();
         _isUserAtBottom = true;
         ConversationScroll.ScrollToEnd();
     }

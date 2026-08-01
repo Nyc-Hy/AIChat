@@ -367,18 +367,22 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     // counter is what the floating "↓ N 条新消息" pill shows so the
     // user knows there's new content waiting. Reset to 0 when they
     // scroll back to the bottom or click the pill.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUnseenMessages))]
-    [NotifyPropertyChangedFor(nameof(UnseenMessageLabel))]
-    private int unseenMessageCount;
+    // Scroll-state for the conversation panel. Extracted into a
+    // sub-VM in the v1.0 refactor so the host doesn't carry the
+    // counter, derived labels, and the bump / clear methods the
+    // auto-scroll handler pushes into. XAML still binds through
+    // MainWindowViewModel.MessageScroll.{HasUnseenMessages,
+    // UnseenMessageLabel} for now — the two paths go through the
+    // sub-VM's PropertyChanged which bubbles through the host's
+    // own PropertyChanged. (Re-binding directly to MessageScroll
+    // would be the next step but requires touching XAML; out of
+    // scope for this commit.)
+    public MessageScrollState MessageScroll { get; } = new();
 
-    public bool HasUnseenMessages => UnseenMessageCount > 0;
-    public string UnseenMessageLabel => UnseenMessageCount <= 1
-        ? "↓ 新消息"
-        : $"↓ {UnseenMessageCount} 条新消息";
-
-    public void IncrementUnseenMessageCount() => UnseenMessageCount++;
-    public void ClearUnseenMessageCount() => UnseenMessageCount = 0;
+    public bool HasUnseenMessages => MessageScroll.HasUnseenMessages;
+    public string UnseenMessageLabel => MessageScroll.UnseenMessageLabel;
+    public void IncrementUnseenMessageCount() => MessageScroll.IncrementUnseenMessageCount();
+    public void ClearUnseenMessageCount() => MessageScroll.ClearUnseenMessageCount();
 
     public MainWindowViewModel(
         IAppRepository repository,
