@@ -9,7 +9,7 @@ namespace AIChat.App.Avalonia.ViewModels;
 // (so the response is part of the conversation flow, not just a
 // status-bar blip).
 //
-// The handler takes the host as a dependency so it can read live state
+// The handler takes an ISlashCommandHost so it can read live state
 // (active provider / model / current project / conversation count) and
 // call the same clear / add / status APIs the rest of the app uses.
 // Keeping this in one place means the MainWindowViewModel stays focused
@@ -41,7 +41,7 @@ public static class SlashCommandHandler
     // Async because /copy needs to await the platform clipboard call
     // before it can report success. The other commands still run
     // synchronously — they simply return Task.CompletedTask.
-    public static async Task<(bool Handled, Result? Result)> TryExecuteAsync(string prompt, MainWindowViewModel host)
+    public static async Task<(bool Handled, Result? Result)> TryExecuteAsync(string prompt, ISlashCommandHost host)
     {
         if (string.IsNullOrEmpty(prompt) || prompt[0] != '/')
         {
@@ -85,7 +85,7 @@ public static class SlashCommandHandler
     // so the user sees a system bubble confirming what just happened
     // (avoids the silent-success trap where a copy silently failed and
     // the user later wonders why their paste is empty).
-    private static async Task<Result> TryCopyLastAssistantAsync(MainWindowViewModel host)
+    private static async Task<Result> TryCopyLastAssistantAsync(ISlashCommandHost host)
     {
         var last = host.ActivityFeed.Activity.LastOrDefault(item => item.IsAssistantBubble);
         if (last is null)
@@ -109,7 +109,7 @@ public static class SlashCommandHandler
         return new Result("已复制", $"{text.Length} 字符: {preview}");
     }
 
-    private static string BuildMemory(MainWindowViewModel host)
+    private static string BuildMemory(ISlashCommandHost host)
     {
         var project = host.Sidebar.CurrentProject;
         if (project is null || project.Memories.Count == 0)
@@ -149,7 +149,7 @@ public static class SlashCommandHandler
         return string.Join("\n", lines);
     }
 
-    private static string BuildStatus(MainWindowViewModel host)
+    private static string BuildStatus(ISlashCommandHost host)
     {
         // SelectedProjectName is "未选择项目" when no project is loaded
         // and "未配置路径" when the project has no on-disk path. Map

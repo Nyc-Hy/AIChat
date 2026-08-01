@@ -86,4 +86,19 @@ public class SlashCommandHandlerTests
 
         Assert.False(handled);
     }
+
+    [Fact]
+    public void MainWindowViewModel_ImplementsISlashCommandHost()
+    {
+        // The handler used to take MainWindowViewModel directly, which
+        // meant the dependency grew one field at a time. The interface
+        // is now the contract; this is a type-level test that locks
+        // the implementation in place so a future refactor that drops
+        // the interface (and re-couples the handler to the concrete
+        // VM) breaks the build.
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+
+        Assert.IsAssignableFrom<ISlashCommandHost>(viewModel);
+    }
 }

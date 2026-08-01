@@ -20,7 +20,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
-public sealed partial class MainWindowViewModel : ViewModelBase
+public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHost
 {
     private readonly IAppRepository _repository;
     private readonly AgentToolRegistry _toolRegistry;
