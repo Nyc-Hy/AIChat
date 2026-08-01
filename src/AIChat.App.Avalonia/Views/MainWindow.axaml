@@ -249,6 +249,23 @@
                                     <Panel IsVisible="{Binding ActivityFeed.HasConversation}">
                                         <ScrollViewer x:Name="ConversationScroll" Padding="20,12">
                                             <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
+                                                <!--
+                                                  Virtualize the conversation feed so long
+                                                  runs (1000+ bubbles) only realise the
+                                                  visible windows. Plain StackPanel
+                                                  instantiates every bubble and tanks
+                                                  scroll perf + memory once the user has
+                                                  been chatting for a while. The
+                                                  ScrollViewer's ScrollChanged /
+                                                  ScrollToEnd APIs used by
+                                                  MainWindow.xaml.cs work the same way
+                                                  under the virtualizing panel.
+                                                -->
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <VirtualizingStackPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ActivityItemViewModel">
                                                         <Grid Classes="bubble-enter" Margin="0,0,0,12">
