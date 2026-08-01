@@ -74,7 +74,7 @@
               <DataTemplate x:DataType="vm:FilePreviewLine">
                 <Grid ColumnDefinitions="48,*" ColumnSpacing="8">
                   <TextBlock Grid.Column="0"
-                             Text="{Binding Number, StringFormat='{0}'}"
+                             Text="{Binding Number}"
                              FontFamily="{StaticResource FontMono}"
                              FontSize="12"
                              Classes="muted"

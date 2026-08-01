@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -23,6 +24,24 @@ public partial class MainWindow : Window
     // chunk from falling into the "user is scrolled up" branch while
     // the scroll is still settling.
     private bool _isUserAtBottom = true;
+
+    // Phase 1.5: the 最近 (conversations) section in the sidebar
+    // is collapsed by default. The file tree is the new primary
+    // navigation surface; the conversation list is secondary
+    // history. The user can still expand it on demand. State
+    // lives on the view (not the VM) because it's pure UI chrome
+    // with no semantic meaning for the rest of the app. A
+    // StyledProperty (not a plain CLR field) so the XAML
+    // bindings on the chevron + body actually re-evaluate when
+    // the title is clicked.
+    public static readonly StyledProperty<bool> IsConversationsSectionExpandedProperty =
+        AvaloniaProperty.Register<MainWindow, bool>(nameof(IsConversationsSectionExpanded), false);
+
+    public bool IsConversationsSectionExpanded
+    {
+        get => GetValue(IsConversationsSectionExpandedProperty);
+        set => SetValue(IsConversationsSectionExpandedProperty, value);
+    }
 
     public MainWindow(
         MainWindowViewModel viewModel,
@@ -417,6 +436,15 @@ public partial class MainWindow : Window
             if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
             return viewModel.SelectConversationFromUiAsync(conversationId);
         });
+    }
+
+    // Phase 1.5: clicking the "最近" section title toggles the
+    // expanded state. Lives on the view because it's pure UI
+    // chrome — the conversation list's content / state is
+    // unaffected, just whether it's visible in the sidebar.
+    private void ConversationsSection_OnClick(object? sender, RoutedEventArgs e)
+    {
+        IsConversationsSectionExpanded = !IsConversationsSectionExpanded;
     }
 
     // Inline-rename keyboard handler. Enter commits, Esc cancels.

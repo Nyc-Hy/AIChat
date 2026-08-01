@@ -430,6 +430,24 @@
         </Style>
 
         <!--
+          sidebar-section-header: a section title that's also
+          clickable (used by the collapsible "最近" section in
+          Phase 1.5). Inherits the muted text style of the
+          other section titles; the pointerover wash tells the
+          user it's a button, not a static label.
+        -->
+        <Style Selector="Button.sidebar-section-header">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.sidebar-section-header:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        </Style>
+
+        <!--
           file-preview: the read-only file panel that drops in at
           the top of the conversation. Sits inside the .panel
           conversation border so the activity feed remains below

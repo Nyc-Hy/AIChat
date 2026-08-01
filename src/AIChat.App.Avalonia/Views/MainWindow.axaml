@@ -10,6 +10,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1240" d:DesignHeight="800"
         x:Class="AIChat.App.Avalonia.Views.MainWindow"
+        x:Name="RootWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
         Title="AIChat"
@@ -174,8 +175,31 @@
                                 <TextBlock Text="文件" Classes="section-title" Margin="4,16,0,6"/>
                                 <vcontrols:FileTreeView/>
 
-                                <!-- 4. 最近 section -->
-                                <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
+                                <!-- 4. 最近 section (Phase 1.5: collapsed by default;
+                                     click the title to expand. The file tree is the
+                                     primary navigation surface, the conversation
+                                     list is secondary history.) -->
+                                <Button Classes="sidebar-section-header"
+                                        Margin="4,16,0,6"
+                                        Click="ConversationsSection_OnClick"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="▸"
+                                                   Classes="muted"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"
+                                                   IsVisible="{Binding #RootWindow.IsConversationsSectionExpanded, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=False}"/>
+                                        <TextBlock Text="▾"
+                                                   Classes="muted"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"
+                                                   IsVisible="{Binding #RootWindow.IsConversationsSectionExpanded}"/>
+                                        <TextBlock Text="最近" Classes="section-title" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel Spacing="2"
+                                            IsVisible="{Binding #RootWindow.IsConversationsSectionExpanded}">
                                 <TextBlock Text="(还没有对话)"
                                            Classes="muted"
                                            FontSize="12"
@@ -226,6 +250,7 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
