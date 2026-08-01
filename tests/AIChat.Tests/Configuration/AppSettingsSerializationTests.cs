@@ -13,9 +13,7 @@ public sealed class AppSettingsSerializationTests
             AgentMaxToolRounds = 7,
             AgentExecutionMode = AgentExecutionMode.Deep,
             AgentAdaptiveStrategiesEnabled = false,
-            AgentAdaptiveBudgetAndExplorerEnabled = false,
-            AgentAdaptiveRecoveryEnabled = false,
-            AgentAdaptiveAutoVerifyEnabled = false
+            AgentAdaptiveBudgetAndExplorerEnabled = false
         };
 
         var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -26,7 +24,5 @@ public sealed class AppSettingsSerializationTests
         Assert.Equal(AgentExecutionMode.Deep, roundTripped.AgentExecutionMode);
         Assert.False(roundTripped.AgentAdaptiveStrategiesEnabled);
         Assert.False(roundTripped.AgentAdaptiveBudgetAndExplorerEnabled);
-        Assert.False(roundTripped.AgentAdaptiveRecoveryEnabled);
-        Assert.False(roundTripped.AgentAdaptiveAutoVerifyEnabled);
     }
 }

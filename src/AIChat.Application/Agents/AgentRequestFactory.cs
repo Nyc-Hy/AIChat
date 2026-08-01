@@ -210,8 +210,6 @@ public sealed class AgentRequestFactory
                 MaxAutoFixRounds = request.RuntimeSettings.MaxAutoFixRounds,
                 AdaptiveStrategiesEnabled = request.RuntimeSettings.AgentAdaptiveStrategiesEnabled,
                 AdaptiveBudgetAndExplorerEnabled = request.RuntimeSettings.AgentAdaptiveBudgetAndExplorerEnabled,
-                AdaptiveRecoveryEnabled = request.RuntimeSettings.AgentAdaptiveRecoveryEnabled,
-                AdaptiveAutoVerifyEnabled = request.RuntimeSettings.AgentAdaptiveAutoVerifyEnabled,
                 VerificationCommands = request.VerificationCommands,
                 InputArtifacts = selectedInputArtifacts
             },

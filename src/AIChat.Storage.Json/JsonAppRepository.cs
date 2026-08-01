@@ -116,9 +116,7 @@ public sealed class JsonAppRepository : IAppRepository
             MaxAutoFixRounds = 0,
             AutoVerifyAgentRuns = false,
             AgentAdaptiveStrategiesEnabled = false,
-            AgentAdaptiveBudgetAndExplorerEnabled = false,
-            AgentAdaptiveRecoveryEnabled = false,
-            AgentAdaptiveAutoVerifyEnabled = false
+            AgentAdaptiveBudgetAndExplorerEnabled = false
         };
     }
 

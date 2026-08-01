@@ -20,8 +20,6 @@ public sealed class AgentRunContext
     public int MaxAutoFixRounds { get; init; }
     public bool AdaptiveStrategiesEnabled { get; init; } = true;
     public bool AdaptiveBudgetAndExplorerEnabled { get; init; } = true;
-    public bool AdaptiveRecoveryEnabled { get; init; } = true;
-    public bool AdaptiveAutoVerifyEnabled { get; init; } = true;
     public IReadOnlyList<ProjectVerificationCommand> VerificationCommands { get; init; } = [];
     public IReadOnlyList<InputArtifact> InputArtifacts { get; init; } = [];
 }

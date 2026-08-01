@@ -126,8 +126,6 @@ internal static class ProtectedSettingsSerializer
             MaxAutoFixRounds = settings.MaxAutoFixRounds,
             AgentAdaptiveStrategiesEnabled = settings.AgentAdaptiveStrategiesEnabled,
             AgentAdaptiveBudgetAndExplorerEnabled = settings.AgentAdaptiveBudgetAndExplorerEnabled,
-            AgentAdaptiveRecoveryEnabled = settings.AgentAdaptiveRecoveryEnabled,
-            AgentAdaptiveAutoVerifyEnabled = settings.AgentAdaptiveAutoVerifyEnabled,
             ConfiguredProviders = settings.ConfiguredProviders.Select(CloneProvider).ToList(),
             RetryMaxAttempts = settings.RetryMaxAttempts,
             ConversationContextRatio = settings.ConversationContextRatio,

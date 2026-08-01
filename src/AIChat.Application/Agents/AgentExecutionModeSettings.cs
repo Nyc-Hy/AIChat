@@ -68,7 +68,5 @@ public static class AgentExecutionModePolicy
         settings.MaxAutoFixRounds = resolved.MaxAutoFixRounds;
         settings.AgentAdaptiveStrategiesEnabled = resolved.AdaptiveStrategies;
         settings.AgentAdaptiveBudgetAndExplorerEnabled = resolved.AdaptiveStrategies;
-        settings.AgentAdaptiveRecoveryEnabled = resolved.AdaptiveStrategies;
-        settings.AgentAdaptiveAutoVerifyEnabled = resolved.AdaptiveStrategies;
     }
 }

@@ -642,8 +642,6 @@ public sealed class AgentHarness
             MaxAutoFixRounds = context.MaxAutoFixRounds,
             AdaptiveStrategiesEnabled = context.AdaptiveStrategiesEnabled,
             AdaptiveBudgetAndExplorerEnabled = context.AdaptiveBudgetAndExplorerEnabled,
-            AdaptiveRecoveryEnabled = context.AdaptiveRecoveryEnabled,
-            AdaptiveAutoVerifyEnabled = context.AdaptiveAutoVerifyEnabled,
             VerificationCommands = context.VerificationCommands,
             InputArtifacts = context.InputArtifacts
         };
