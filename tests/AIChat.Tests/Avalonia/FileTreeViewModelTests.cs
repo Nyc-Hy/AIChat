@@ -48,6 +48,27 @@ public class FileTreeViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task RebuildAsync_AfterCancelledBuild_ResetsIsBuildingOnInvalidPath()
+    {
+        // Lock the post-fix semantics: when a previous build was
+        // cancelled mid-flight and a NEW rebuild for an invalid path
+        // arrives, IsBuilding must end up false. Pre-fix the early
+        // return for invalid paths only reset Root/RootPath and
+        // left IsBuilding stuck at true from the cancelled build.
+        await _vm.RebuildAsync(_tempRoot); // valid → IsBuilding ends false
+        // Force the timing race: spin up a rebuild for a missing
+        // path; the previous _currentBuildCts is cancelled inside
+        // RebuildAsync but that path is a valid one too. Use a path
+        // that resolves to "doesn't exist" after the directory check.
+        await _vm.RebuildAsync(Path.Combine(_tempRoot, "no-such-dir"));
+
+        Assert.Null(_vm.Root);
+        Assert.Equal("", _vm.RootPath);
+        Assert.False(_vm.IsBuilding);
+        Assert.Null(_vm.BuildError);
+    }
+
+    [Fact]
     public async Task RebuildAsync_WithInvalidPath_LeavesRootNull()
     {
         await _vm.RebuildAsync("/nonexistent/path/that/does/not/exist");

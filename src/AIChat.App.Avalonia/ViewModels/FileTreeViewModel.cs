@@ -73,8 +73,17 @@ public sealed partial class FileTreeViewModel : ViewModelBase, IDisposable
     {
         if (string.IsNullOrWhiteSpace(projectPath) || !Directory.Exists(projectPath))
         {
+            // No project (or the project directory was deleted between
+            // sessions). Reset every piece of state the XAML binds to
+            // so the sidebar shows the "select a project" hint and
+            // nothing else — pre-fix, IsBuilding could stay true from
+            // a cancelled build of a *previous* project, so the user
+            // would see "正在建立文件索引…" and the (empty) tree at
+            // the same time.
             Root = null;
             RootPath = "";
+            IsBuilding = false;
+            BuildError = null;
             return;
         }
 

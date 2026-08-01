@@ -108,13 +108,27 @@ public sealed partial class FilePreviewViewModel : ViewModelBase, IDisposable
         catch (OperationCanceledException)
         {
             // A newer preview superseded this one — silently drop.
+            // Do NOT touch ContentPath: leaving the previous successful
+            // value in place keeps HasFile true so the panel stays
+            // visible. The next load will overwrite both fields when
+            // it completes (success or error).
         }
         catch (Exception ex)
         {
+            // Error path: surface the message but DO NOT set
+            // ContentPath. Pre-fix, the catch block set ContentPath =
+            // fullPath so HasFile=true and the panel stayed visible —
+            // but the only visible body was "正在读取文件…" (because
+            // IsLoading had been reset to false) or the close-X in a
+            // panel that pointed at a non-existent file. Clearing the
+            // path makes the panel collapse (HasFile=false) so the
+            // activity feed takes over the full conversation area.
+            // The user can pick the file again to retry.
             LoadError = ex.Message;
             Lines.Clear();
-            ContentPath = fullPath;
-            DisplayName = Path.GetFileName(fullPath);
+            ContentPath = "";
+            DisplayName = "";
+            FileSize = 0;
         }
         finally
         {
