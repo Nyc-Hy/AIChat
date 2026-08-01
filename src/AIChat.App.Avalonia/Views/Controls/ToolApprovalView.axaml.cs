@@ -2,6 +2,7 @@ using AIChat.App.Avalonia.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.Views.Controls;
 
@@ -18,11 +19,41 @@ namespace AIChat.App.Avalonia.Views.Controls;
 // don't do that" gesture, and the agent loop's
 // PresentRequestAsync is still awaiting on the TCS so this
 // resolves it with a Reject and the run ends.
+//
+// Keyboard shortcuts: Esc = Reject, Enter = Approve one-shot.
+// Approve-for-session deliberately has no shortcut (it's the
+// less-common choice, and binding a third key would conflict
+// with the "S to send" muscle memory users build up after a
+// few prompts).
 public partial class ToolApprovalView : UserControl
 {
     public ToolApprovalView()
     {
         InitializeComponent();
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.Escape),
+            Command = new RelayCommand(() =>
+            {
+                if (DataContext is MainWindowViewModel vm &&
+                    vm.Approval.RejectCommand.CanExecute(null))
+                {
+                    vm.Approval.RejectCommand.Execute(null);
+                }
+            })
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.Enter),
+            Command = new RelayCommand(() =>
+            {
+                if (DataContext is MainWindowViewModel vm &&
+                    vm.Approval.ApproveCommand.CanExecute(null))
+                {
+                    vm.Approval.ApproveCommand.Execute(null);
+                }
+            })
+        });
     }
 
     private void InitializeComponent()
