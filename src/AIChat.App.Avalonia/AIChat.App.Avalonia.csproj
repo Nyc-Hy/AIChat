@@ -18,6 +18,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Plain embedded resource (not AvaloniaResource) so the
+      /help body can be loaded via Assembly.GetManifestResourceStream
+      without an Avalonia asset pipeline — important for the
+      headless test host (AppHost.Build) which doesn't initialise
+      AssetLoader.
+    -->
+    <EmbeddedResource Include="Resources\HelpText.md" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AIChat.Abstractions\AIChat.Abstractions.csproj" />
     <ProjectReference Include="..\AIChat.Application\AIChat.Application.csproj" />
     <ProjectReference Include="..\AIChat.Domain\AIChat.Domain.csproj" />

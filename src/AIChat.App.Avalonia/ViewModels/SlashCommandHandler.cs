@@ -1,3 +1,5 @@
+using System.IO;
+using System.Reflection;
 using AIChat.Domain.Projects;
 
 namespace AIChat.App.Avalonia.ViewModels;
@@ -18,15 +20,42 @@ public static class SlashCommandHandler
 {
     public sealed record Result(string Title, string Body);
 
-    private const string HelpBody =
-        "可用命令:\n" +
-        "/clear — 清空当前对话\n" +
-        "/new — 同 /clear\n" +
-        "/status — 显示当前项目、模型、对话数、Context、上次运行、安全策略\n" +
-        "/memory — 显示当前项目的 memory 列表\n" +
-        "/git — 显示当前项目的 git 状态\n" +
-        "/copy — 复制最后一条 AI 回复到剪贴板\n" +
-        "/help — 显示本帮助";
+    // /help body lives in Resources/HelpText.md (compiled as an
+    // EmbeddedResource, not AvaloniaResource) so the doc can be
+    // edited without rebuilding the C# project, and so the
+    // markdown rendering path is exercised exactly the way a
+    // user-edited doc would be. EmbeddedResource (vs the
+    // AvaloniaResource route) is used so the headless test host
+    // (AppHost.Build) can still load the body without an
+    // Avalonia asset pipeline. The Lazy<string> caches the
+    // loaded body across calls.
+    private static readonly Lazy<string> HelpBody = new(LoadHelpBody);
+
+    private static string LoadHelpBody()
+    {
+        // The resource is rooted at the assembly's default
+        // namespace, so the full name is
+        // AIChat.App.Avalonia.Resources.HelpText.md.
+        const string resourceName = "AIChat.App.Avalonia.Resources.HelpText.md";
+        try
+        {
+            using var stream = Assembly.GetExecutingAssembly()
+                .GetManifestResourceStream(resourceName)
+                ?? throw new InvalidOperationException(
+                    $"Embedded resource '{resourceName}' not found. " +
+                    "Check the .csproj <EmbeddedResource> entry for Resources\\HelpText.md.");
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd().TrimEnd();
+        }
+        catch (Exception)
+        {
+            // If the resource is missing (e.g. tests running
+            // without the embedded resource) fall back to a
+            // minimal hardcoded string so /help never crashes
+            // the handler.
+            return "可用命令: /clear · /status · /memory · /git · /copy · /help";
+        }
+    }
 
     // Returns true if the prompt was a slash command and the host
     // should skip the normal agent flow. The returned Result is the text
@@ -63,7 +92,7 @@ public static class SlashCommandHandler
                 host.StatusMessage = "已清空对话。";
                 return (true, null);
             case "/help":
-                return (true, new Result("帮助", HelpBody));
+                return (true, new Result("帮助", HelpBody.Value));
             case "/status":
                 return (true, new Result("当前状态", BuildStatus(host)));
             case "/memory":
