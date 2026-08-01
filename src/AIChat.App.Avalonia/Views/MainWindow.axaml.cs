@@ -109,14 +109,7 @@ public partial class MainWindow : Window
             // shortcut without a binding.
             Gesture = new KeyGesture(Key.C, KeyModifiers.Meta | KeyModifiers.Shift),
             Command = new RelayCommand(async () =>
-            {
-                var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync("/copy", viewModel);
-                if (handled && slashResult is not null)
-                {
-                    viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "命令");
-                    viewModel.StatusMessage = slashResult.Title + "。";
-                }
-            })
+                await KeyCommandBridge.RunSlashCommandAsync(viewModel, "/copy"))
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -165,14 +158,7 @@ public partial class MainWindow : Window
             // git state on every call, so there's no staleness.
             Gesture = new KeyGesture(Key.G, KeyModifiers.Meta),
             Command = new RelayCommand(async () =>
-            {
-                var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync("/git", viewModel);
-                if (handled && slashResult is not null)
-                {
-                    viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
-                    viewModel.StatusMessage = slashResult.Title + "。";
-                }
-            })
+                await KeyCommandBridge.RunSlashCommandAsync(viewModel, "/git", "系统"))
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -207,14 +193,7 @@ public partial class MainWindow : Window
             // the available commands without leaving the composer.
             Gesture = new KeyGesture(Key.OemQuestion, KeyModifiers.Meta),
             Command = new RelayCommand(async () =>
-            {
-                var (handled, slashResult) = await SlashCommandHandler.TryExecuteAsync("/help", viewModel);
-                if (handled && slashResult is not null)
-                {
-                    viewModel.ActivityFeed.Add(slashResult.Title, slashResult.Body, "系统");
-                    viewModel.StatusMessage = slashResult.Title + "。";
-                }
-            })
+                await KeyCommandBridge.RunSlashCommandAsync(viewModel, "/help", "系统"))
         });
         KeyBindings.Add(new KeyBinding
         {
