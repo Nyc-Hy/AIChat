@@ -7,6 +7,7 @@ using AIChat.App.Avalonia.Composition;
 using AIChat.Application.Agents;
 using AIChat.Application.Tools;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
@@ -193,6 +194,53 @@ public sealed partial class SettingsViewModel : ViewModelBase
             row.PropertyChanged += OnToolRowPropertyChanged;
             Tools.Add(row);
         }
+    }
+
+    // ---- Tool permission presets ----
+    // 15 tools in the default registry; clicking each dropdown
+    // individually is friction. These three commands set every
+    // tool's SelectedMode in one shot — each assignment flows
+    // through OnToolRowPropertyChanged which writes
+    // _settings.ToolPermissionModes + EnabledToolIds + saves.
+    //
+    // - "只读自动" → ReadOnly tools: AutoReadOnly; write tools:
+    //   ConfirmEachTime. The default for most users.
+    // - "全部确认" → every tool: ConfirmEachTime. Maximum safety.
+    // - "恢复默认" → drop every ToolPermissionModes override
+    //   (the row UI then re-renders DefaultPermissionMode via
+    //   Refresh's TryGetValue fall-through).
+    [RelayCommand]
+    private void ApplyReadOnlyAutoPreset()
+    {
+        foreach (var row in Tools)
+        {
+            row.SelectedMode = row.DefaultMode == ToolPermissionMode.AutoReadOnly
+                ? ToolPermissionMode.AutoReadOnly
+                : ToolPermissionMode.ConfirmEachTime;
+        }
+    }
+
+    [RelayCommand]
+    private void ApplyConfirmAllPreset()
+    {
+        foreach (var row in Tools)
+        {
+            row.SelectedMode = ToolPermissionMode.ConfirmEachTime;
+        }
+    }
+
+    [RelayCommand]
+    private void ApplyDefaultPreset()
+    {
+        // Removing the ToolPermissionModes entry is the
+        // "absence" signal that the per-row getter falls back to
+        // DefaultPermissionMode. Re-rendering the rows after
+        // the clear requires no extra work — the next
+        // PropertyChanged refresh will re-read the cleared map
+        // and show the default.
+        _settings.ToolPermissionModes.Clear();
+        SaveFireAndForget();
+        Refresh();
     }
 
     // Per-row PropertyChanged → host settings. Only SelectedMode

@@ -159,7 +159,26 @@
                           the raw enum.
                         -->
                         <StackPanel Spacing="8">
-                            <TextBlock Text="工具权限" Classes="section-title"/>
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                                <TextBlock Grid.Column="0" Text="工具权限" Classes="section-title" VerticalAlignment="Center"/>
+                                <!--
+                                  Quick presets: instead of clicking 15
+                                  dropdowns to set every tool, one click
+                                  sets the whole matrix. "只读自动" is
+                                  what most users want; "全部确认" is
+                                  the paranoid default; "恢复默认"
+                                  clears every override.
+                                -->
+                                <Button Grid.Column="1" Classes="secondary" Content="只读自动"
+                                        Command="{Binding Settings.ApplyReadOnlyAutoPresetCommand}"
+                                        ToolTip.Tip="只读类自动放行,写入类每次确认"/>
+                                <Button Grid.Column="2" Classes="secondary" Content="全部确认"
+                                        Command="{Binding Settings.ApplyConfirmAllPresetCommand}"
+                                        ToolTip.Tip="所有工具每次都弹确认"/>
+                                <Button Grid.Column="3" Classes="secondary" Content="恢复默认"
+                                        Command="{Binding Settings.ApplyDefaultPresetCommand}"
+                                        ToolTip.Tip="清除所有 override,用每个工具的默认设置"/>
+                            </Grid>
                             <ItemsControl ItemsSource="{Binding Settings.Tools}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:ToolSettingViewModel">
