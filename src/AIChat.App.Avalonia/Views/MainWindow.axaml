@@ -4,6 +4,7 @@
         xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
         xmlns:composition="using:AIChat.App.Avalonia.Composition"
         xmlns:controls="using:AIChat.App.Avalonia.Controls"
+        xmlns:vcontrols="using:AIChat.App.Avalonia.Views.Controls"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1240" d:DesignHeight="800"
@@ -346,141 +347,23 @@
                                         </Button>
                                     </Panel>
 
-                                    <!-- Empty state: hero (with sub-greeting) + 4 quick-action
-                                         cards. The hero copy switches on HasProject so the
-                                         user gets actionable guidance whether they've added
-                                         a project or not; the quick-action cards only show
-                                         when a project is loaded because their prompts
-                                         reference project-specific work (release checks,
-                                         "explain this codebase", etc.) and would be hollow
-                                         without one. ToolTip.Tip on each card shows the
-                                         full prompt. -->
-                                    <StackPanel IsVisible="{Binding !ActivityFeed.HasConversation}"
-                                                Spacing="32"
-                                                VerticalAlignment="Center"
-                                                HorizontalAlignment="Center"
-                                                MaxWidth="620">
-                                        <StackPanel Spacing="8" HorizontalAlignment="Center">
-                                            <!-- Hero + sub-greeting bound to Greeting /
-                                                 SubGreeting so the copy changes when the
-                                                 project selection flips (less AI-startup,
-                                                 more "real person tool"). -->
-                                            <TextBlock Text="{Binding Greeting}"
-                                                       Classes="hero-title"
-                                                       HorizontalAlignment="Center"/>
-                                            <TextBlock Text="{Binding SubGreeting}"
-                                                       Classes="muted"
-                                                       FontSize="13"
-                                                       HorizontalAlignment="Center"
-                                                       TextAlignment="Center"
-                                                       MaxWidth="460"
-                                                       TextWrapping="Wrap"/>
-                                        </StackPanel>
-
-                                        <!--
-                                          First-run CTAs. Visible only when there's no
-                                          project loaded — the 4 quick-action cards below
-                                          reference project-specific work and would be
-                                          hollow without one. Two buttons: add a project
-                                          (same code path as ⌘O / palette entry) and
-                                          configure the model (opens the settings modal).
-                                          Both route through existing commands / handlers
-                                          so keyboard shortcuts, palette, and the empty
-                                          state stay in lockstep.
-                                        -->
-                                        <StackPanel Orientation="Horizontal"
-                                                    Spacing="12"
-                                                    HorizontalAlignment="Center"
-                                                    IsVisible="{Binding !HasProject}">
-                                            <Button Classes="quick-action"
-                                                    Width="200" Height="76"
-                                                    Click="AddProject_OnClick"
-                                                    ToolTip.Tip="从本地选一个代码仓库 (⌘O)">
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
-                                                        <Path Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z M3 9 H20"
-                                                              Stroke="{StaticResource AccentBrush}"
-                                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                                                              Width="16" Height="16" Stretch="Uniform"
-                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <TextBlock Text="添加项目" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Classes="quick-action"
-                                                    Width="200" Height="76"
-                                                    Command="{Binding OpenSettingsCommand}"
-                                                    ToolTip.Tip="配置模型提供方 (⌘,)">
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
-                                                        <Path Data="M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z"
-                                                              Stroke="{StaticResource AccentBrush}"
-                                                              StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
-                                                              Width="16" Height="16" Stretch="Uniform"
-                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <TextBlock Text="配置模型" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </StackPanel>
-
-                                        <ItemsControl HorizontalAlignment="Center"
-                                                      IsVisible="{Binding HasProject}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <UniformGrid Rows="2" Columns="2"/>
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <Button Classes="quick-action" Width="280" Height="76" Tag="检查发布前风险并修复失败的测试" ToolTip.Tip="检查发布前风险并修复失败的测试" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
-                                                        <Path Data="M5 12 l4 4 L19 6"
-                                                              Stroke="{StaticResource AccentBrush}"
-                                                              StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
-                                                              Width="16" Height="16" Stretch="Uniform"
-                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <TextBlock Text="发布前检查" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Classes="quick-action" Width="280" Height="76" Tag="挑一段最复杂的函数，重构得更易读、更易测" ToolTip.Tip="挑一段最复杂的函数，重构得更易读、更易测" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
-                                                        <Path Data="M12 20 H21 M16.5 3.5 a2.121 2.121 0 0 1 3 3 L7 19 L4 20 L5 17 L16.5 3.5 z"
-                                                              Stroke="{StaticResource AccentBrush}"
-                                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                                                              Width="16" Height="16" Stretch="Uniform"
-                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <TextBlock Text="重构" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Classes="quick-action" Width="280" Height="76" Tag="整理 README，把功能、快捷键、构建步骤写清楚" ToolTip.Tip="整理 README，把功能、快捷键、构建步骤写清楚" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
-                                                        <Path Data="M14 2 H6 a2 2 0 0 0 -2 2 v16 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V8 z M14 2 v6 h6"
-                                                              Stroke="{StaticResource AccentBrush}"
-                                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                                                              Width="16" Height="16" Stretch="Uniform"
-                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <TextBlock Text="写文档" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
-                                                </StackPanel>
-                                            </Button>
-                                            <Button Classes="quick-action" Width="280" Height="76" Tag="解释一下当前项目结构和核心数据流" ToolTip.Tip="解释一下当前项目结构和核心数据流" Click="EmptyStateCard_OnClick">
-                                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                                    <Border Width="28" Height="28" CornerRadius="8" Background="{StaticResource AccentSoftBrush}">
-                                                        <Path Data="M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0 M12 6 V12 L16 14"
-                                                              Stroke="{StaticResource AccentBrush}"
-                                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                                                              Width="16" Height="16" Stretch="Uniform"
-                                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                    <TextBlock Text="理解项目" FontWeight="SemiBold" Classes="body" VerticalAlignment="Center" FontSize="14"/>
-                                                </StackPanel>
-                                            </Button>
-                                        </ItemsControl>
-                                    </StackPanel>
+                                    <!-- Empty state (hero + first-run CTAs + 4 quick-action
+                                         cards) extracted to EmptyStateView so this file
+                                         stays focused on the conversation feed. The user
+                                         control exposes Greeting / SubGreeting /
+                                         HasProject / OpenSettingsCommand as styled
+                                         properties and raises AddProjectRequested /
+                                         QuickActionRequested events that bubble back to
+                                         the same handlers ⌘O / palette / direct click
+                                         have always used. -->
+                                    <vcontrols:EmptyStateView
+                                        IsVisible="{Binding !ActivityFeed.HasConversation}"
+                                        Greeting="{Binding Greeting}"
+                                        SubGreeting="{Binding SubGreeting}"
+                                        HasProject="{Binding HasProject}"
+                                        OpenSettingsCommand="{Binding OpenSettingsCommand}"
+                                        AddProjectRequested="AddProject_OnClick"
+                                        QuickActionRequested="EmptyStateCard_OnClick"/>
                                 </Panel>
                             </Border>
 
