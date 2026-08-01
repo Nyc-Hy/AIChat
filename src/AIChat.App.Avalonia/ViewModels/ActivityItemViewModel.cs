@@ -36,6 +36,14 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
     // in flight.
     public bool IsThinking => Title == "AIChat" && string.IsNullOrEmpty(Detail) && Status == "运行中";
 
+    // Terminal states. The strings are produced by AgentRunner / harness
+    // and consumed by the XAML via Classes.failed / Classes.stopped to
+    // switch the bubble border + status-chip color. The two are split so
+    // a user-initiated stop can read as amber (calm, intentional) while
+    // a real error reads as red (something went wrong).
+    public bool IsFailed => Status == "失败";
+    public bool IsStopped => Status == "已停止";
+
     // Bubble classification: the 1.0 Beta redesign needs three distinct
     // bubble styles (user right-aligned, AI with avatar, system centered),
     // and the XAML can't switch on Title in a binding. These flags make
@@ -54,7 +62,16 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
     private bool hasReceivedFirstContent;
 
     partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
-    partial void OnStatusChanged(string value) => OnPropertyChanged(nameof(IsThinking));
+    partial void OnStatusChanged(string value)
+    {
+        // Status drives the in-flight spinner AND the terminal
+        // styling (IsFailed / IsStopped) so a Status flip must
+        // re-raise all three or the XAML re-render uses stale
+        // classification.
+        OnPropertyChanged(nameof(IsThinking));
+        OnPropertyChanged(nameof(IsFailed));
+        OnPropertyChanged(nameof(IsStopped));
+    }
     partial void OnTitleChanged(string value)
     {
         // Title drives the bubble classification (IsUserBubble /

@@ -300,9 +300,9 @@
                                                                 <StackPanel Grid.Column="1" Spacing="4">
                                                                     <Grid ColumnDefinitions="*,Auto">
                                                                         <TextBlock Text="{Binding Title}" Foreground="{StaticResource Text2Brush}" FontWeight="SemiBold" FontSize="12"/>
-                                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" FontSize="11" Margin="10,0,0,0"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11" Margin="10,0,0,0"/>
                                                                     </Grid>
-                                                                    <Border Classes="bubble-ai">
+                                                                    <Border Classes="bubble-ai" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}">
                                                                         <Panel>
                                                                             <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
                                                                                                         Markdown="{Binding Detail}"

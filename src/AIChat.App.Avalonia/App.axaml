@@ -218,6 +218,34 @@
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="0,0,0,12" />
         </Style>
+        <!--
+          Terminal-state variants of the AI bubble. Failed = red
+          bottom border + soft red wash so a user who's
+          skimming the feed can't miss the error. Stopped =
+          amber, calm, intentional. Both are toggled on the
+          Border via Classes.failed / Classes.stopped from
+          ActivityItemViewModel.IsFailed / IsStopped.
+        -->
+        <Style Selector="Border.bubble-ai.failed">
+            <Setter Property="BorderBrush" Value="{StaticResource ErrorBorderBrush}" />
+            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
+        </Style>
+        <Style Selector="Border.bubble-ai.stopped">
+            <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />
+            <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
+        </Style>
+        <!--
+          Status-chip color when an AI bubble is in a terminal
+          state. Default (muted) is used for in-flight / time
+          stamps; .failed / .stopped swap the foreground so the
+          user can read the chip at a glance.
+        -->
+        <Style Selector="TextBlock.muted.failed">
+            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.muted.stopped">
+            <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
+        </Style>
 
         <!--
           Send button: 36x36 with the accent as background. The hover state
