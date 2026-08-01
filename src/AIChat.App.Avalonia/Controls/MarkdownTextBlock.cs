@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
+using AvaloniaApplication = Avalonia.Application;
 
 namespace AIChat.App.Avalonia.Controls;
 
@@ -10,6 +11,23 @@ public sealed class MarkdownTextBlock : TextBlock
 {
     public static readonly StyledProperty<string?> MarkdownProperty =
         AvaloniaProperty.Register<MarkdownTextBlock, string?>(nameof(Markdown));
+
+    // Inline-code background — read from the design-token
+    // dictionary (CodeBgBrush) so the same hex never escapes
+    // the Tokens files. Lazily resolved on first use so
+    // MarkdownTextBlock can be instantiated before the
+    // application resource dictionary is fully merged (e.g. in
+    // design-time / unit-test hosts); falls back to a
+    // transparent brush if the token isn't present.
+    private static readonly Lazy<IBrush> InlineCodeBackground = new(() =>
+    {
+        if (AvaloniaApplication.Current?.Resources.TryGetResource("CodeBgBrush", null, out var resource) == true
+            && resource is IBrush brush)
+        {
+            return brush;
+        }
+        return Brushes.Transparent;
+    });
 
     public string? Markdown
     {
@@ -82,7 +100,7 @@ public sealed class MarkdownTextBlock : TextBlock
                 Inlines?.Add(new Run(text[(next + 1)..end])
                 {
                     FontFamily = FontFamily.Parse("Consolas, Cascadia Mono, monospace"),
-                    Background = Brush.Parse("#E8EDF5")
+                    Background = InlineCodeBackground.Value
                 });
                 index = end + 1;
             }
