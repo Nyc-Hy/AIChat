@@ -186,10 +186,60 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
-                    <Button Classes="secondary" Command="{Binding Provider.TestProviderCommand}" Content="测试连接"/>
-                    <Button Classes="primary" Command="{Binding Provider.SaveProviderCommand}" Content="保存配置"/>
-                </StackPanel>
+                <!--
+                  Test result row: inline feedback for the "测试连接"
+                  button so the user sees success / failure right next
+                  to the button they clicked, instead of having to
+                  chase the test bubble in the conversation feed (which
+                  is hidden behind the modal) or wait for the status
+                  bar toast (which clears on the next event). Three
+                  states stack on the same cell: in-flight muted text,
+                  success Border, error Border — only one visible at
+                  a time.
+                -->
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="8">
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="(正在测试连接...)"
+                               Classes="muted"
+                               FontSize="12"
+                               IsVisible="{Binding Provider.IsTestInFlight}"/>
+                    <Border Grid.Row="0" Grid.Column="0"
+                            Background="{StaticResource SuccessBgBrush}"
+                            BorderBrush="{StaticResource SuccessBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            IsVisible="{Binding Provider.LastTestHasResult}">
+                        <TextBlock Text="{Binding Provider.LastTestMessage}"
+                                   Foreground="{StaticResource SuccessFgBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding Provider.LastTestIsSuccess}"/>
+                    </Border>
+                    <Border Grid.Row="0" Grid.Column="0"
+                            Background="{StaticResource ErrorBgBrush}"
+                            BorderBrush="{StaticResource ErrorBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            IsVisible="{Binding Provider.LastTestHasResult}">
+                        <TextBlock Text="{Binding Provider.LastTestMessage}"
+                                   Foreground="{StaticResource ErrorFgBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding !Provider.LastTestIsSuccess}"/>
+                    </Border>
+                    <StackPanel Grid.Row="0" Grid.Column="1" Grid.RowSpan="2"
+                                Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Button Classes="secondary"
+                                Command="{Binding Provider.TestProviderCommand}"
+                                Content="测试连接"
+                                IsEnabled="{Binding !Provider.IsTestInFlight}"/>
+                        <Button Classes="primary"
+                                Command="{Binding Provider.SaveProviderCommand}"
+                                Content="保存配置"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Border>

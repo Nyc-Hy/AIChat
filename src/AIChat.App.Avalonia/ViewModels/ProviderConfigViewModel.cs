@@ -38,6 +38,23 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
     [ObservableProperty]
     private ProviderTemplateViewModel? selectedProviderTemplate;
 
+    // Last "测试连接" result, surfaced inline in SettingsView so the
+    // user doesn't have to look at the conversation-feed bubble
+    // (which is hidden behind the modal) or the bottom status bar
+    // (which auto-clears on the next event). Cleared when a new
+    // test starts so the row doesn't show stale text.
+    [ObservableProperty]
+    private string lastTestMessage = "";
+
+    [ObservableProperty]
+    private bool lastTestIsSuccess;
+
+    [ObservableProperty]
+    private bool lastTestHasResult;
+
+    [ObservableProperty]
+    private bool isTestInFlight;
+
     public ObservableCollection<ProviderTemplateViewModel> ProviderTemplates { get; } = [];
     public ObservableCollection<ProviderCardViewModel> AdvancedProviders { get; } = [];
 
@@ -132,6 +149,9 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
         var configured = ProviderSettingsService.GetSelectedProvider(settings);
         if (configured is null || string.IsNullOrWhiteSpace(configured.ApiKey))
         {
+            LastTestMessage = "没有可测试的 API Key — 先保存配置。";
+            LastTestIsSuccess = false;
+            LastTestHasResult = true;
             TestCompleted?.Invoke(this, new ProviderTestCompletedEventArgs
             {
                 IsSuccess = false,
@@ -140,6 +160,8 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
             return;
         }
 
+        IsTestInFlight = true;
+        LastTestHasResult = false;
         TestStarted?.Invoke(this, new ProviderTestStartedEventArgs
         {
             ProviderName = configured.Name,
@@ -149,6 +171,9 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
         try
         {
             var result = await _tester.TestAsync(configured);
+            LastTestMessage = result.Message;
+            LastTestIsSuccess = result.IsSuccess;
+            LastTestHasResult = true;
             TestCompleted?.Invoke(this, new ProviderTestCompletedEventArgs
             {
                 IsSuccess = result.IsSuccess,
@@ -157,12 +182,19 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            LastTestMessage = ex.Message;
+            LastTestIsSuccess = false;
+            LastTestHasResult = true;
             TestCompleted?.Invoke(this, new ProviderTestCompletedEventArgs
             {
                 IsSuccess = false,
                 Message = ex.Message,
                 Exception = ex
             });
+        }
+        finally
+        {
+            IsTestInFlight = false;
         }
     }
 
