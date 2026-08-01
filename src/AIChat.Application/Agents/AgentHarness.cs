@@ -101,20 +101,10 @@ public sealed class AgentHarness
             };
         }
 
-        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, "准备系统提示和会话上下文"));
-        var contextStep = AddCompletedStep(
-            run,
-            ++_nextStepNumber,
-            AgentStepType.Model,
-            "准备上下文",
-            request.Goal,
-            CreateContextStepOutput(run, executionPolicy));
-        yield return new AgentHarnessEvent
+        await foreach (var evt in RunContextPhaseAsync(request, run, executionPolicy))
         {
-            Type = AgentHarnessEventType.StepAdded,
-            Run = run,
-            Step = contextStep
-        };
+            yield return evt;
+        }
 
         var executionRequest = request.ChatRequest;
         var subAgentSchedule = _coordinator.CreateSubAgentSchedule(
@@ -569,6 +559,38 @@ public sealed class AgentHarness
         run.TaskComplexity = policy.Complexity.ToString();
         run.ExecutionPolicySummary = AgentExecutionPolicySummaryBuilder.Build(policy);
         return policy;
+    }
+
+    // Stage 2 of RunAsync: emit a single "GatheringContext" phase
+    // change plus a Model step summarising the prompt / model /
+    // tools / budget / workspace snapshot for this run. Pure
+    // transformation — no I/O, no awaits beyond the IAsyncEnumerable
+    // marker — so the helper exists to keep RunAsync's body
+    // readable, not to share work. The output string is the same
+    // shape the inline version produced (CreateContextStepOutput is
+    // unchanged), and the step counter bump happens here so the
+    // numbering stays contiguous with the planner step above.
+    private async IAsyncEnumerable<AgentHarnessEvent> RunContextPhaseAsync(
+        AgentHarnessRunRequest request,
+        AgentRun run,
+        AgentTaskExecutionPolicy executionPolicy)
+    {
+        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, "准备系统提示和会话上下文"));
+        var contextStep = AddCompletedStep(
+            run,
+            ++_nextStepNumber,
+            AgentStepType.Model,
+            "准备上下文",
+            request.Goal,
+            CreateContextStepOutput(run, executionPolicy));
+        yield return new AgentHarnessEvent
+        {
+            Type = AgentHarnessEventType.StepAdded,
+            Run = run,
+            Step = contextStep
+        };
+        // IAsyncEnumerable must yield — keep the compiler quiet.
+        await Task.CompletedTask;
     }
 
     private static AgentRunStatus DetermineFinalStatus(AgentRun run)
