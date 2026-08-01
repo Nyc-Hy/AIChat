@@ -99,211 +99,10 @@ public sealed class AgentHarness
             yield return evt;
         }
 
-        var assistantContent = "";
-        var runnerReportedError = false;
-        var stepByToolCallId = new Dictionary<string, AgentStep>(StringComparer.Ordinal);
-        await foreach (var agentEvent in _agentRunner.RunAsync(
-                           _executionRequest,
-                           request.Settings,
-                           ApplyExecutionPolicy(request.Context, executionPolicy),
-                           cancellationToken))
+        await foreach (var evt in RunToolLoopPhaseAsync(request, run, executionPolicy, cancellationToken))
         {
-            switch (agentEvent.Type)
-            {
-                case AgentRunEventType.ModelRequestStarted:
-                    run.ModelCallCount++;
-                    break;
-                case AgentRunEventType.RawProviderEvent:
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.RawProviderEvent,
-                        Run = run,
-                        RawJson = agentEvent.RawJson
-                    };
-                    break;
-                case AgentRunEventType.ContentDelta:
-                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
-                    assistantContent += agentEvent.Content;
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.ContentDelta,
-                        Run = run,
-                        Content = agentEvent.Content
-                    };
-                    break;
-                case AgentRunEventType.ToolCall:
-                    if (agentEvent.ToolCall is null)
-                    {
-                        break;
-                    }
-
-                    yield return CreatePhaseChanged(
-                        run,
-                        _coordinator.StartPhase(
-                            run,
-                            AgentCoordinator.ClassifyToolPhase(agentEvent.ToolCall.Name),
-                            $"调用工具：{agentEvent.ToolCall.Name}"));
-                    run.ToolCallCount++;
-                    var step = AddRunningStep(
-                        run,
-                        ++_nextStepNumber,
-                        AgentStepType.ToolCall,
-                        $"调用工具：{agentEvent.ToolCall.Name}",
-                        agentEvent.ToolCall.ArgumentsJson,
-                        agentEvent.ToolCall.Id,
-                        agentEvent.ToolCall.Name);
-                    stepByToolCallId[agentEvent.ToolCall.Id] = step;
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.ToolCall,
-                        Run = run,
-                        Step = step,
-                        ToolCall = agentEvent.ToolCall
-                    };
-                    break;
-                case AgentRunEventType.ToolApprovalRequired:
-                    run.ToolApprovalRequiredCount++;
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.ToolApprovalRequired,
-                        Run = run,
-                        ToolCall = agentEvent.ToolCall,
-                        ToolPreview = agentEvent.ToolPreview
-                    };
-                    break;
-                case AgentRunEventType.ToolApprovalRejected:
-                    run.ToolApprovalRejectedCount++;
-                    CompleteToolStep(stepByToolCallId, agentEvent.ToolCall, "用户拒绝执行该工具。", isError: true);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.ToolApprovalRejected,
-                        Run = run,
-                        ToolCall = agentEvent.ToolCall,
-                        ToolPreview = agentEvent.ToolPreview
-                    };
-                    break;
-                case AgentRunEventType.ToolSessionAllowed:
-                    run.ToolSessionAllowedCount++;
-                    break;
-                case AgentRunEventType.ToolResult:
-                    if (agentEvent.ToolResult is not null)
-                    {
-                        CompleteToolStep(
-                            stepByToolCallId,
-                            agentEvent.ToolCall,
-                            agentEvent.ToolResult.Content,
-                            agentEvent.ToolResult.IsError);
-                        RecordFileChanges(
-                            run,
-                            stepByToolCallId,
-                            agentEvent.ToolCall,
-                            agentEvent.ToolPreview,
-                            agentEvent.ToolResult);
-                        RecordVerification(
-                            run,
-                            stepByToolCallId,
-                            agentEvent.ToolCall,
-                            agentEvent.ToolResult);
-                        RecordMutationGuardrail(
-                            run,
-                            agentEvent.ToolCall,
-                            agentEvent.ToolPreview,
-                            agentEvent.ToolResult);
-                        RecordPlan(run, agentEvent.ToolCall, agentEvent.ToolResult);
-                        RecordArtifact(
-                            run,
-                            stepByToolCallId,
-                            agentEvent.ToolCall,
-                            agentEvent.ToolResult);
-                    }
-
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.ToolResult,
-                        Run = run,
-                        Step = agentEvent.ToolCall is not null && stepByToolCallId.TryGetValue(agentEvent.ToolCall.Id, out var toolStep)
-                            ? toolStep
-                            : null,
-                        ToolCall = agentEvent.ToolCall,
-                        ToolResult = agentEvent.ToolResult
-                    };
-                    break;
-                case AgentRunEventType.Error:
-                    runnerReportedError = true;
-                    run.CompletionReason = SensitiveDataRedactor.RedactText(agentEvent.Content);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.ContentDelta,
-                        Run = run,
-                        Content = agentEvent.Content
-                    };
-                    break;
-                case AgentRunEventType.Cancelled:
-                {
-                    var reason = string.IsNullOrWhiteSpace(agentEvent.Content)
-                        ? "Agent 运行已取消。"
-                        : agentEvent.Content;
-                    await foreach (var evt in EmitTerminalAsync(run, reason, "运行已取消", AgentRunStatus.Cancelled, isBudgetExceeded: false))
-                    {
-                        yield return evt;
-                    }
-                    yield break;
-                }
-                case AgentRunEventType.BudgetExceeded:
-                {
-                    await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
-                    {
-                        yield return evt;
-                    }
-                    yield break;
-                }
-                case AgentRunEventType.Completed:
-                    // Auto-verify loop: after mutations, run verification commands
-                    // and feed failures back to the model for another fix round.
-                    if (request.Context.AutoVerifyAgentRuns &&
-                        request.Context.VerificationCommands.Count > 0 &&
-                        run.MutationToolSucceeded)
-                    {
-                        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Verifying, "运行自动验证"));
-                        await foreach (var verifyEvent in RunAutoVerifyLoopAsync(
-                                           run, request, stepByToolCallId,
-                                           request.Settings, ApplyExecutionPolicy(request.Context, executionPolicy), cancellationToken))
-                        {
-                            yield return verifyEvent;
-                        }
-
-                        if (run.ToolBudgetExceeded)
-                        {
-                            await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
-                            {
-                                yield return evt;
-                            }
-                            yield break;
-                        }
-                    }
-
-                    var finalStatus = runnerReportedError ? AgentRunStatus.Failed : DetermineFinalStatus(run);
-                    yield return CreatePhaseChanged(run, CompleteRun(run, finalStatus));
-                    // Use steps count to derive the final step number; the auto-verify
-                    // loop may have added intermediate steps that overflow _nextStepNumber.
-                    var finalStep = AddCompletedStep(
-                        run,
-                        run.Steps.Count + 1,
-                        AgentStepType.Final,
-                        "生成最终回复",
-                        "",
-                        assistantContent);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.RunCompleted,
-                        Run = run,
-                        Step = finalStep
-                    };
-                    yield break;
-            }
+            yield return evt;
         }
-
-        yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
     }
 
     // Shared terminal-event sequence used by both the Cancelled
@@ -649,6 +448,240 @@ public sealed class AgentHarness
                 }
             }
         }
+    }
+
+    // Stage 4 of RunAsync: the main tool loop. Forwards the
+    // (potentially sub-agent-augmented) execution request into
+    // AgentRunner.RunAsync, then translates every AgentRunEvent
+    // into the corresponding AgentHarnessEvent(s) while keeping
+    // per-run bookkeeping in sync. The 10-arm switch handles
+    // streaming deltas, tool calls (with their approval /
+    // session-allow / result fan-out), terminal states
+    // (Cancelled / BudgetExceeded / Completed), and the
+    // post-mutation auto-verify loop. Three of the arms
+    // (Cancelled, BudgetExceeded, and the inner BudgetExceeded
+    // branch of Completed) use `yield break` to stop the run
+    // early — the caller's `await foreach` ends naturally when
+    // the helper returns. The trailing yield (after the foreach
+    // exits without a `yield break`) covers the rare case where
+    // the inner runner returns without firing any of the
+    // terminal events, in which case the run is marked
+    // Completed with no final-step summary.
+    private async IAsyncEnumerable<AgentHarnessEvent> RunToolLoopPhaseAsync(
+        AgentHarnessRunRequest request,
+        AgentRun run,
+        AgentTaskExecutionPolicy executionPolicy,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var assistantContent = "";
+        var runnerReportedError = false;
+        var stepByToolCallId = new Dictionary<string, AgentStep>(StringComparer.Ordinal);
+        await foreach (var agentEvent in _agentRunner.RunAsync(
+                           _executionRequest,
+                           request.Settings,
+                           ApplyExecutionPolicy(request.Context, executionPolicy),
+                           cancellationToken))
+        {
+            switch (agentEvent.Type)
+            {
+                case AgentRunEventType.ModelRequestStarted:
+                    run.ModelCallCount++;
+                    break;
+                case AgentRunEventType.RawProviderEvent:
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.RawProviderEvent,
+                        Run = run,
+                        RawJson = agentEvent.RawJson
+                    };
+                    break;
+                case AgentRunEventType.ContentDelta:
+                    yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
+                    assistantContent += agentEvent.Content;
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ContentDelta,
+                        Run = run,
+                        Content = agentEvent.Content
+                    };
+                    break;
+                case AgentRunEventType.ToolCall:
+                    if (agentEvent.ToolCall is null)
+                    {
+                        break;
+                    }
+
+                    yield return CreatePhaseChanged(
+                        run,
+                        _coordinator.StartPhase(
+                            run,
+                            AgentCoordinator.ClassifyToolPhase(agentEvent.ToolCall.Name),
+                            $"调用工具：{agentEvent.ToolCall.Name}"));
+                    run.ToolCallCount++;
+                    var step = AddRunningStep(
+                        run,
+                        ++_nextStepNumber,
+                        AgentStepType.ToolCall,
+                        $"调用工具：{agentEvent.ToolCall.Name}",
+                        agentEvent.ToolCall.ArgumentsJson,
+                        agentEvent.ToolCall.Id,
+                        agentEvent.ToolCall.Name);
+                    stepByToolCallId[agentEvent.ToolCall.Id] = step;
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ToolCall,
+                        Run = run,
+                        Step = step,
+                        ToolCall = agentEvent.ToolCall
+                    };
+                    break;
+                case AgentRunEventType.ToolApprovalRequired:
+                    run.ToolApprovalRequiredCount++;
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ToolApprovalRequired,
+                        Run = run,
+                        ToolCall = agentEvent.ToolCall,
+                        ToolPreview = agentEvent.ToolPreview
+                    };
+                    break;
+                case AgentRunEventType.ToolApprovalRejected:
+                    run.ToolApprovalRejectedCount++;
+                    CompleteToolStep(stepByToolCallId, agentEvent.ToolCall, "用户拒绝执行该工具。", isError: true);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ToolApprovalRejected,
+                        Run = run,
+                        ToolCall = agentEvent.ToolCall,
+                        ToolPreview = agentEvent.ToolPreview
+                    };
+                    break;
+                case AgentRunEventType.ToolSessionAllowed:
+                    run.ToolSessionAllowedCount++;
+                    break;
+                case AgentRunEventType.ToolResult:
+                    if (agentEvent.ToolResult is not null)
+                    {
+                        CompleteToolStep(
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolResult.Content,
+                            agentEvent.ToolResult.IsError);
+                        RecordFileChanges(
+                            run,
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolPreview,
+                            agentEvent.ToolResult);
+                        RecordVerification(
+                            run,
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolResult);
+                        RecordMutationGuardrail(
+                            run,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolPreview,
+                            agentEvent.ToolResult);
+                        RecordPlan(run, agentEvent.ToolCall, agentEvent.ToolResult);
+                        RecordArtifact(
+                            run,
+                            stepByToolCallId,
+                            agentEvent.ToolCall,
+                            agentEvent.ToolResult);
+                    }
+
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ToolResult,
+                        Run = run,
+                        Step = agentEvent.ToolCall is not null && stepByToolCallId.TryGetValue(agentEvent.ToolCall.Id, out var toolStep)
+                            ? toolStep
+                            : null,
+                        ToolCall = agentEvent.ToolCall,
+                        ToolResult = agentEvent.ToolResult
+                    };
+                    break;
+                case AgentRunEventType.Error:
+                    runnerReportedError = true;
+                    run.CompletionReason = SensitiveDataRedactor.RedactText(agentEvent.Content);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ContentDelta,
+                        Run = run,
+                        Content = agentEvent.Content
+                    };
+                    break;
+                case AgentRunEventType.Cancelled:
+                {
+                    var reason = string.IsNullOrWhiteSpace(agentEvent.Content)
+                        ? "Agent 运行已取消。"
+                        : agentEvent.Content;
+                    await foreach (var evt in EmitTerminalAsync(run, reason, "运行已取消", AgentRunStatus.Cancelled, isBudgetExceeded: false))
+                    {
+                        yield return evt;
+                    }
+                    yield break;
+                }
+                case AgentRunEventType.BudgetExceeded:
+                {
+                    await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
+                    {
+                        yield return evt;
+                    }
+                    yield break;
+                }
+                case AgentRunEventType.Completed:
+                    // Auto-verify loop: after mutations, run verification commands
+                    // and feed failures back to the model for another fix round.
+                    if (request.Context.AutoVerifyAgentRuns &&
+                        request.Context.VerificationCommands.Count > 0 &&
+                        run.MutationToolSucceeded)
+                    {
+                        yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Verifying, "运行自动验证"));
+                        await foreach (var verifyEvent in RunAutoVerifyLoopAsync(
+                                           run, request, stepByToolCallId,
+                                           request.Settings, ApplyExecutionPolicy(request.Context, executionPolicy), cancellationToken))
+                        {
+                            yield return verifyEvent;
+                        }
+
+                        if (run.ToolBudgetExceeded)
+                        {
+                            await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
+                            {
+                                yield return evt;
+                            }
+                            yield break;
+                        }
+                    }
+
+                    var finalStatus = runnerReportedError ? AgentRunStatus.Failed : DetermineFinalStatus(run);
+                    yield return CreatePhaseChanged(run, CompleteRun(run, finalStatus));
+                    // Use steps count to derive the final step number; the auto-verify
+                    // loop may have added intermediate steps that overflow _nextStepNumber.
+                    var finalStep = AddCompletedStep(
+                        run,
+                        run.Steps.Count + 1,
+                        AgentStepType.Final,
+                        "生成最终回复",
+                        "",
+                        assistantContent);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.RunCompleted,
+                        Run = run,
+                        Step = finalStep
+                    };
+                    yield break;
+            }
+        }
+
+        // Runner returned without firing Completed / Cancelled /
+        // BudgetExceeded — treat the run as Completed with no
+        // final-step summary. Same semantics as the trailing
+        // yield in the pre-extraction RunAsync.
+        yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
     }
 
     private static AgentRunStatus DetermineFinalStatus(AgentRun run)
