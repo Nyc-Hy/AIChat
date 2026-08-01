@@ -42,6 +42,19 @@ public sealed class AgentHarness
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
     }
 
+    // Per-run step counter. Starts at 1 (the first emitted step
+    // is number 1) and is bumped after each step is added. The
+    // counter is a private instance field rather than a local in
+    // RunAsync because the eventual plan is to extract each
+    // phase (planner / context / sub-agent / tool-loop) into its
+    // own IAsyncEnumerable helper — IAsyncEnumerable helpers
+    // can't share `ref` locals with their caller, so a per-
+    // instance slot is the cleanest shared state. AgentHarness
+    // is constructed per-run (AgentRunnerViewModel.cs new's one
+    // harness per user message), so this field is never
+    // concurrent across runs.
+    private int _nextStepNumber = 1;
+
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
         AgentHarnessRunRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -54,7 +67,6 @@ public sealed class AgentHarness
             Run = run
         };
 
-        var stepNumber = 0;
         var planner = _planner;
         var shouldPlan = planner is not null && executionPolicy.UsePlanner;
         if (shouldPlan)
@@ -76,7 +88,7 @@ public sealed class AgentHarness
 
             var planStep = AddCompletedStep(
                 run,
-                ++stepNumber,
+                ++_nextStepNumber,
                 AgentStepType.Model,
                 structuredPlan.IsFallback ? "生成兜底计划" : "生成结构化计划",
                 request.Goal,
@@ -92,7 +104,7 @@ public sealed class AgentHarness
         yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.GatheringContext, "准备系统提示和会话上下文"));
         var contextStep = AddCompletedStep(
             run,
-            ++stepNumber,
+            ++_nextStepNumber,
             AgentStepType.Model,
             "准备上下文",
             request.Goal,
@@ -200,7 +212,7 @@ public sealed class AgentHarness
                     };
                     var subAgentStep = AddCompletedStep(
                         run,
-                        ++stepNumber,
+                        ++_nextStepNumber,
                         AgentStepType.Model,
                         $"{FormatTemplateName(subAgentRun.TemplateId)} 子 Agent",
                         subAgentRun.Task,
@@ -277,7 +289,7 @@ public sealed class AgentHarness
                     run.ToolCallCount++;
                     var step = AddRunningStep(
                         run,
-                        ++stepNumber,
+                        ++_nextStepNumber,
                         AgentStepType.ToolCall,
                         $"调用工具：{agentEvent.ToolCall.Name}",
                         agentEvent.ToolCall.ArgumentsJson,
@@ -416,7 +428,7 @@ public sealed class AgentHarness
                     var finalStatus = runnerReportedError ? AgentRunStatus.Failed : DetermineFinalStatus(run);
                     yield return CreatePhaseChanged(run, CompleteRun(run, finalStatus));
                     // Use steps count to derive the final step number; the auto-verify
-                    // loop may have added intermediate steps that overflow stepNumber.
+                    // loop may have added intermediate steps that overflow _nextStepNumber.
                     var finalStep = AddCompletedStep(
                         run,
                         run.Steps.Count + 1,
