@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
-using Avalonia.Threading;
 using System.Windows.Input;
 
 namespace AIChat.App.Avalonia.Views.Controls;
@@ -11,12 +9,24 @@ namespace AIChat.App.Avalonia.Views.Controls;
 // so the welcome chrome (hero + first-run CTAs + 4 quick-action
 // cards) lives in its own UserControl. The host (MainWindow)
 // binds Greeting / SubGreeting / HasProject / OpenSettingsCommand
-// as styled properties (this control's own DataContext is
-// `this`, so the XAML's {Binding ...} resolves to them) and
-// subscribes to the two RoutedEventArgs-flavoured events below
-// to forward to its existing AddProject / EmptyStateCard
-// handlers — the same code paths ⌘O / ⌘, / palette / direct
-// click all converge on.
+// as styled properties and subscribes to the two RoutedEventArgs-
+// flavoured events below to forward to its existing AddProject /
+// EmptyStateCard handlers — the same code paths ⌘O / ⌘, / palette /
+// direct click all converge on.
+//
+// DataContext: the host (MainWindow) sets DataContext to itself
+// (its own MainWindowViewModel flows in as inherited DataContext
+// when the EmptyStateView doesn't override it) so that the
+// styled-property bindings Greeting="{Binding AppStatus.Greeting}"
+// resolve against the host's VM. Inner XAML uses x:Name="Self" +
+// "#Self.Greeting" to read back the styled property the host
+// just set — Avalonia's binding system supports a self-reference
+// path because the styled property's setter is a real CLR property
+// on the control. (The previous "DataContext = this" hack made
+// the styled property bindings resolve against the control itself,
+// which broke the host's binding chain — the host's AppStatus path
+// doesn't exist on the control, so the Greeting setter was never
+// called and the hero TextBlock was permanently empty.)
 public sealed partial class EmptyStateView : UserControl
 {
     public static readonly StyledProperty<string> GreetingProperty =
@@ -58,11 +68,6 @@ public sealed partial class EmptyStateView : UserControl
     public EmptyStateView()
     {
         InitializeComponent();
-        // The internal XAML's {Binding Greeting} etc. resolves to
-        // this control's own styled properties (rather than
-        // MainWindowViewModel) so the user control is self-
-        // contained and the host can wire it up in one block.
-        DataContext = this;
     }
 
     // Bubble up the "user clicked the Add Project card" event

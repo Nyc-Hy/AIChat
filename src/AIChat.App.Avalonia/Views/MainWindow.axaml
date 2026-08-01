@@ -173,7 +173,7 @@
 
                                 <!-- 3. 文件 section (Phase 1: file tree for the current project) -->
                                 <TextBlock Text="文件" Classes="section-title" Margin="4,16,0,6"/>
-                                <vcontrols:FileTreeView/>
+                                <vcontrols:FileTreeView DataContext="{Binding FileTree}"/>
 
                                 <!-- 4. 最近 section (Phase 1.5: collapsed by default;
                                      click the title to expand. The file tree is the
@@ -310,7 +310,8 @@
                                     <!-- Phase 1: read-only file preview. Sits at the top of
                                          the conversation panel; collapses to zero height
                                          when no file is selected. -->
-                                    <vcontrols:FilePreviewView Grid.Row="0"/>
+                                    <vcontrols:FilePreviewView Grid.Row="0"
+                                                            DataContext="{Binding FilePreview}"/>
                                     <Panel Grid.Row="1">
                                         <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline.
                                              A floating "↓ N 条新消息" pill anchors to the bottom-right; it only shows
