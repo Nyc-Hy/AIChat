@@ -21,7 +21,12 @@ namespace AIChat.App.Avalonia.ViewModels;
 // VM, single purpose, no orchestration. MainWindowViewModel
 // assigns to these fields via `_appStatus.ActiveProvider = ...`
 // and the XAML binds via `AppStatus.ActiveProvider` etc.
-public sealed partial class AppStatusViewModel : ObservableObject, IDisposable
+//
+// Lifetime: singleton in DI alongside the host. The Sidebar
+// subscription lives for the process lifetime — same shape as
+// the host's own event subscriptions, no explicit Unwire
+// needed because nothing in this app ever disposes the host.
+public sealed partial class AppStatusViewModel : ObservableObject
 {
     private readonly ProjectSidebarViewModel _sidebar;
 
@@ -89,10 +94,5 @@ public sealed partial class AppStatusViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(IsReady));
         OnPropertyChanged(nameof(NeedsConfiguration));
-    }
-
-    public void Dispose()
-    {
-        _sidebar.PropertyChanged -= OnSidebarPropertyChanged;
     }
 }
