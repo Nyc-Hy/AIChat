@@ -679,11 +679,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             // Apply the persisted theme now that we have the loaded settings.
             _theme.Apply(_settings.ThemePreference);
             ProviderSettingsService.Normalize(_settings, _settings.Temperature);
-            // Clamp the persisted knobs to their valid ranges (was
-            // AdvancedSettingsService.Normalize). The service was
-            // deleted in the v1.0 refactor because it was the
-            // only caller of these clamps; inlining keeps the
-            // guard rails without a separate file.
+            // Clamp the persisted knobs to their valid ranges. Inlined
+            // here (vs. a separate settings service) so the only
+            // caller — the constructor — and the rules live in the
+            // same place. ToolSettingsService still owns tool-list
+            // normalization because that one varies per registered
+            // tool catalog.
             _settings.AgentMaxToolRounds = Math.Clamp(_settings.AgentMaxToolRounds, 1, 100);
             _settings.MaxAutoFixRounds = Math.Clamp(_settings.MaxAutoFixRounds, 0, 10);
             _settings.RetryMaxAttempts = Math.Clamp(_settings.RetryMaxAttempts, 0, 10);
