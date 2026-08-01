@@ -37,12 +37,54 @@
                     </StackPanel>
                     <Button Grid.Column="1" Classes="chrome-button"
                             Command="{Binding GitStatus.RefreshCommand}"
-                            ToolTip.Tip="刷新"
+                            ToolTip.Tip="刷新 (⌘⇧G)"
                             IsEnabled="{Binding !GitStatus.IsLoading}">
-                        <Path Data="M3 12 a9 9 0 1 0 3 -6.7 M3 4 v5 h5"
-                              Stroke="{Binding $parent[Button].Foreground}"
-                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                              Width="14" Height="14" Stretch="Uniform"/>
+                        <!--
+                          Refresh button content swaps between the
+                          refresh-arrow glyph and a small spinner arc
+                          based on IsLoading. Button can only hold one
+                          Content child, so wrap both in a Grid — the
+                          two Paths share the same cell, IsVisible
+                          flips between them. The arc has a rotation
+                          animation so the user sees the action is
+                          running, not just that the button got
+                          disabled.
+                        -->
+                        <Grid Width="14" Height="14">
+                            <Path Data="M3 12 a9 9 0 1 0 3 -6.7 M3 4 v5 h5"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="14" Height="14" Stretch="Uniform"
+                                  IsVisible="{Binding !GitStatus.IsLoading}"/>
+                            <Panel Width="14" Height="14"
+                                   IsVisible="{Binding GitStatus.IsLoading}">
+                                <Path Data="M12 3 a9 9 0 0 1 9 9"
+                                      Stroke="{Binding $parent[Button].Foreground}"
+                                      StrokeThickness="1.6" StrokeLineCap="Round"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      RenderTransformOrigin="50%,50%">
+                                    <Path.RenderTransform>
+                                        <RotateTransform/>
+                                    </Path.RenderTransform>
+                                </Path>
+                                <Panel.Styles>
+                                    <Style Selector="Panel Path">
+                                        <Style.Animations>
+                                            <Animation Duration="0:0:0.8"
+                                                       IterationCount="Infinite"
+                                                       PlaybackDirection="Normal">
+                                                <KeyFrame Cue="0%">
+                                                    <Setter Property="RotateTransform.Angle" Value="0"/>
+                                                </KeyFrame>
+                                                <KeyFrame Cue="100%">
+                                                    <Setter Property="RotateTransform.Angle" Value="360"/>
+                                                </KeyFrame>
+                                            </Animation>
+                                        </Style.Animations>
+                                    </Style>
+                                </Panel.Styles>
+                            </Panel>
+                        </Grid>
                     </Button>
                     <Button Grid.Column="2" Classes="chrome-button"
                             Command="{Binding CloseGitStatusCommand}"
