@@ -234,6 +234,80 @@ Avalonia binding 只在源属性 `PropertyChanged` 时重求值。**派生属性
 - `AgentRunnerViewModel.ApplyAgentEventAsync` 的三个 `_updatePlan` 调用（StepAdded / SubAgentCompleted / ToolResult）以前直接 fire 在 harness 的 worker 线程上 → 状态栏的计划面板偶尔显示陈旧。修法：抽 `UpdatePlanOnUiThreadAsync(plan)` helper 把 `Dispatcher.UIThread.InvokeAsync` 收成一处
 - `RecomputeContextInputTokensAsync` 是 fire-and-forget（`OnDraftPromptChanged` / `OnNoWriteModeChanged` / `OnSidebarProjectSelected` / `OnSidebarProjectAdded` / `SendTaskAsync` / `RefreshAsync` 都 `_ =` 它），body 里有两个 `Task.Run`（file index + context router），任何一个抛（perms / 卸载的盘）就会让 app 直接 crash。**async void / fire-and-forget 路径的每个 body 都得 try/catch 一次**，跟 847a598 的 XAML handler 同级
 
+## "真的很劣质" cleanup wave（commits `320cedc` / `e356ee5` / `8d98050`，2026-08-01）
+
+用户看了 file tree + preview 的 5 commit 之后反馈"真的很劣质"——截图显示 3 个明显 bug 叠在一起。根因都是"binding chain 静默失败"，但失败点各不相同。下次新加 UserControl / ViewModel 之前先看一遍。
+
+### A. UserControl 必须显式设 `DataContext`，否则 binding 跑回主 VM
+
+`<vcontrols:FilePreviewView/>` 和 `<vcontrols:FileTreeView/>` 在 MainWindow.axaml 里没设 `DataContext`，继承 MainWindowViewModel。XAML 内的 `{Binding HasFile}` / `{Binding Root}` / `{Binding IsBuilding}` 在 MainWindowVM 上找不到对应属性——binding silently 失败，IsVisible fallback 到 `true`（default），于是：
+
+- FilePreviewView 永远 visible 显示 "正在读取文件..." 幽灵（即使没选文件）
+- FileTreeView 同时显示 "(选择一个项目查看文件)" + "正在建立文件索引..." 两个相互矛盾的提示
+
+**规则**：所有放在 MainWindow 里的 `vcontrols:XxxView` 必须在 use-site 显式 `DataContext="{Binding XxxViewModelProp}"`——不能依赖"DataContext 自然继承"。
+
+### B. UserControl 内 `DataContext = this` 是反模式
+
+`EmptyStateView` 的 ctor 写了 `DataContext = this`，意图是让内部 XAML `{Binding Greeting}` 解析到自己的 styled property。**但这样 host（MainWindow）的 `Greeting="{Binding AppStatus.Greeting}"` 也在 EmptyStateView 自己的 DataContext 上求值**——EmptyStateView 没有 `AppStatus` 属性，binding 再次 silently 失败，**Greeting setter 从来没被调用过**，hero TextBlock 永远空着。
+
+**修法**（最干净）：
+
+1. 删 `DataContext = this`
+2. root UserControl 加 `x:Name="Self"`
+3. 内部 XAML 用 `{Binding #Self.Greeting}` / `{Binding #Self.HasProject}` / `{Binding #Self.OpenSettingsCommand}` 引用 styled property
+4. host 那边的 `Greeting="{Binding AppStatus.Greeting}"` 走继承的 MainWindowViewModel，正常 work
+
+`x:CompileBindings="False"` 不能绕过这个问题（试过没用）——binding 链的 source 解析跟 compile / reflection 模式无关，是 DataContext 决定了 source。
+
+### C. Collection 改动要 fire PropertyChanged，不是 CollectionChanged
+
+`Sidebar.Projects` 是 `ObservableCollection<ProjectCardViewModel>`。`AppStatusViewModel` 之前只订阅了 `PropertyChanged`（只盯 `SelectedProjectName` 变化）。`ObservableCollection.Clear()` / `Add()` 触发 `CollectionChanged`，**不会** 触发 `PropertyChanged("Projects")`。后果：
+
+- 启动时 sidebar 加载项目 → `Projects.Add` → 集合有 1 项 → `AppStatus.HasProject` 仍然是 `false`（初始值，没人 re-raise）→ 4 quick-action cards 不显示 / hero 文案错
+
+**修法**：AppStatusViewModel 还要 `_sidebar.Projects.CollectionChanged += OnSidebarProjectsChanged;` 主动 fire `OnPropertyChanged(nameof(HasProject))` 等。
+
+### D. Event 不在所有 transition 都 fire = 启动时功能残废
+
+`ProjectSidebarViewModel.ProjectSelected` 事件**只**在 `SelectProjectAsync`（user click handler）里 fire，`ApplyProject` 私有方法不 fire。结果：
+
+- 启动 `Refresh(projects) → ApplyProject(target)` 静默更新 `CurrentProject` / `SelectedProjectName` → FileTreeViewModel 收不到通知 → 不 rebuild → 文件树空着显示 "(选择一个项目查看文件)"（即使项目已选）
+- 用户必须**手动再点一次项目卡**才看到文件树
+
+**规则**：状态转换的 event firing 必须在**所有**改状态的入口里覆盖（启动恢复、user click、user add、user remove、null transition），不能只在 user-driven 的那个里 fire。`ReferenceEquals(previous, current)` guard 避免重复 fire。
+
+### E. HasProject 单一字符串判定 vs 真实状态
+
+`HasProject` 之前只检查 `Sidebar.SelectedProjectName` 不是空、不是 "未配置路径"。但 sidebar 的 `SelectedProjectName` 默认值就是 `"未选择项目"`（display hint）——这个字符串既非空也不是"未配置路径"，**所以默认 HasProject = true**。
+
+结果：fresh install 没项目时，empty state 直接显示 "今天要完成什么？" + 4 quick-action cards（HasProject=true 分支），CTAs（添加项目 / 配置模型）反而被隐藏。
+
+**修法**：HasProject 加 `Projects.Count > 0` gate + 排除 display-hint 字符串：
+
+```csharp
+public bool HasProject => _sidebar.Projects.Count > 0
+                          && !string.IsNullOrWhiteSpace(_sidebar.SelectedProjectName)
+                          && _sidebar.SelectedProjectName != "未配置路径"
+                          && _sidebar.SelectedProjectName != "未选择项目";
+```
+
+**教训**：display-only 字符串 ("未选择项目" / "无" / "—") 跟 semantic state 不要共用同一个字段。要么拆 `DisplayName` + `IsEmpty`，要么让 IsEmpty 走独立判据。
+
+### F. macOS .NET 10 `SpecialFolder.ApplicationData` = `~/Library/Application Support`
+
+**不是** Linux 习惯的 `~/.config`。调试时在这个 path 写测试数据没用，必须写到 macOS 那个。
+
+下次开发测试需要写 settings / projects.json，先 `Environment.SpecialFolder.ApplicationData` 确认路径，不要凭 Linux 习惯直接 `~/.config`。
+
+### G. Avalonia 12 styled property 不会被父 binding 透过 DataContext 抓到
+
+`AvaloniaProperty.Register<TControl, TValue>(...)` 注册的 styled property 在 XAML 里写 `Greeting="{Binding AppStatus.Greeting}"` 是 **单向的 source → target** 流程（source = host's AppStatus.Greeting, target = control's Greeting styled property）。Avalonia 不为 parent DataContext 跟 child DataContext 不一致的情况做特殊透传——
+
+`#Self.Greeting` 模式（root UserControl `x:Name="Self"` + `{Binding #Self.Greeting}`）是 Avalonia 12 官方推荐的自引用方式，比 `RelativeSource AncestorType=UserControl` 干净。
+
+
+
 ## 测试基线
 
 `621 → 693`，覆盖：
