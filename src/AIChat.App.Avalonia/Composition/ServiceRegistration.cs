@@ -57,6 +57,8 @@ public static class ServiceRegistration
         services.AddSingleton<ToolApprovalViewModel>();
         services.AddSingleton<MemoryEditorViewModel>();
         services.AddSingleton<GitStatusViewModel>();
+        services.AddSingleton<IProjectFileIndexFactory, ProjectFileIndexFactory>();
+        services.AddSingleton<FileTreeViewModel>();
         services.AddSingleton<IApprovalService, UIBoundApprovalService>();
         services.AddSingleton<IThemeService, FluentThemeService>();
         services.AddSingleton<IToastService, ToastService>();

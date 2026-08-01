@@ -412,6 +412,23 @@
             <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
         </Style>
 
+        <!--
+          plain-row: a button with no chrome at all. Used for
+          file-tree leaves where the chevron is the only visual
+          cue that the row is a clickable affordance — adding
+          the sidebar-row hover wash makes file rows look like
+          navigation items, which they aren't.
+        -->
+        <Style Selector="Button.plain-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.plain-row:pointerover">
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        </Style>
+
         <!-- Model chip: small flat rectangle with a status dot + name. -->
         <Style Selector="Border.model-chip">
             <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />

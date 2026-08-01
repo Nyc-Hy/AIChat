@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.FileTreeView"
+             x:DataType="vm:FileTreeViewModel"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="240" d:DesignHeight="320">
+
+  <!--
+    Phase 1 file tree. Lives in the left rail of MainWindow
+    (below the 项目 list). Shows the current project's source
+    tree; clicking a leaf forwards through FileTreeViewModel to
+    the host. Folders use the TreeView's built-in expand/collapse
+    chevron; files are buttons that fire SelectFile. Empty /
+    not-built / error states surface explicit copy so a user who
+    lands here with no project (or before the first build) doesn't
+    see a blank rectangle.
+  -->
+  <StackPanel Spacing="2">
+
+    <TextBlock Text="(选择一个项目查看文件)"
+               Classes="muted"
+               FontSize="12"
+               Margin="4,0,0,4"
+               IsVisible="{Binding Root, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Null}}"/>
+
+    <TextBlock Text="正在建立文件索引…"
+               Classes="muted"
+               FontSize="12"
+               Margin="4,0,0,4"
+               IsVisible="{Binding IsBuilding}"/>
+
+    <TextBlock Text="{Binding BuildError}"
+               Classes="muted"
+               FontSize="12"
+               Foreground="{StaticResource ErrorFgBrush}"
+               Margin="4,0,0,4"
+               TextWrapping="Wrap"
+               IsVisible="{Binding BuildError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+    <TreeView ItemsSource="{Binding Root.Children}"
+              IsVisible="{Binding Root, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter={x:Null}}"
+              Background="Transparent"
+              Padding="0">
+      <TreeView.ItemTemplate>
+        <TreeDataTemplate x:DataType="vm:FileTreeNodeViewModel" ItemsSource="{Binding Children}">
+          <!--
+            Folders: just a name + (count) badge. The TreeView
+            draws the expand chevron itself.
+            Files: a button so single-click selects and the
+            affordance matches the existing "clickable row"
+            pattern in the sidebar.
+          -->
+          <Panel>
+            <StackPanel Orientation="Horizontal" Spacing="6"
+                        IsVisible="{Binding IsFolder}">
+              <TextBlock Text="{Binding Name}"
+                         Classes="body"
+                         FontSize="12"
+                         VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding FileCount, StringFormat='({0})'}"
+                         Classes="muted"
+                         FontSize="10"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+            <Button Classes="plain-row"
+                    IsVisible="{Binding !IsFolder}"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    Padding="0"
+                    Command="{Binding ((vm:FileTreeViewModel)DataContext).SelectFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                    CommandParameter="{Binding}">
+              <TextBlock Text="{Binding Name}"
+                         Classes="body"
+                         FontSize="12"
+                         VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"/>
+            </Button>
+          </Panel>
+        </TreeDataTemplate>
+      </TreeView.ItemTemplate>
+    </TreeView>
+  </StackPanel>
+</UserControl>

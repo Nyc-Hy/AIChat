@@ -37,6 +37,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     private readonly MemoryEditorViewModel _memoryEditor;
     private readonly GitStatusViewModel _gitStatus;
     private readonly AIChat.Application.Workspace.IWorkspaceChangeService _workspace;
+    private readonly FileTreeViewModel _fileTree;
     private readonly AgentHostViewModel _agentHost;
 
     // lastAssistantStatus + CanRetry + _lastUserPrompt all moved
@@ -322,6 +323,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     // to ConversationSelected events to load messages.
     public ConversationListViewModel ConversationList => _conversationList;
 
+    // Phase 1: file tree for the current project. Listens to
+    // ProjectSelected internally so the XAML just binds
+    // FileTree.Root and the tree rebuilds whenever the user
+    // picks a different project.
+    public FileTreeViewModel FileTree => _fileTree;
+
     // PR-6: tool approval dialog and Approve / Reject commands live in a
     // dedicated view-model. The IApprovalService is what the agent
     // harness depends on; the service is a thin facade over the VM.
@@ -376,7 +383,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         IClipboardService clipboard,
         MemoryEditorViewModel memoryEditor,
         GitStatusViewModel gitStatus,
-        AIChat.Application.Workspace.IWorkspaceChangeService workspace)
+        AIChat.Application.Workspace.IWorkspaceChangeService workspace,
+        FileTreeViewModel fileTree)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -394,6 +402,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _memoryEditor = memoryEditor;
         _gitStatus = gitStatus;
         _workspace = workspace;
+        _fileTree = fileTree;
 
         // App-status surface (active provider / model / readiness
         // pill / in-flight test flag / derived Greeting + HasProject

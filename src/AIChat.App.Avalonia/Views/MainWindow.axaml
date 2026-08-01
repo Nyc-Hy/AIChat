@@ -170,7 +170,11 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <!-- 3. 最近 section -->
+                                <!-- 3. 文件 section (Phase 1: file tree for the current project) -->
+                                <TextBlock Text="文件" Classes="section-title" Margin="4,16,0,6"/>
+                                <vcontrols:FileTreeView/>
+
+                                <!-- 4. 最近 section -->
                                 <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
                                 <TextBlock Text="(还没有对话)"
                                            Classes="muted"
