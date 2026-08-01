@@ -55,6 +55,17 @@ public sealed class AgentHarness
     // concurrent across runs.
     private int _nextStepNumber = 1;
 
+    // Per-run execution request. Starts as the user-supplied
+    // ChatRequest, then gets re-Appended to with a synthetic
+    // "sub-agent result" message after each completed sub-agent
+    // (so the main model call sees the sub-agent findings as
+    // part of its conversation). Same justification as
+    // _nextStepNumber: IAsyncEnumerable phase helpers can't
+    // share `ref` locals across yield boundaries, and this
+    // request is the canonical "input" the tool loop reads at
+    // the end of the sub-agent phase.
+    private ChatRequest _executionRequest = null!;
+
     public async IAsyncEnumerable<AgentHarnessEvent> RunAsync(
         AgentHarnessRunRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -82,7 +93,7 @@ public sealed class AgentHarness
             yield return evt;
         }
 
-        var executionRequest = request.ChatRequest;
+        _executionRequest = request.ChatRequest;
         var subAgentSchedule = _coordinator.CreateSubAgentSchedule(
             run.Id,
             run.StructuredPlan,
@@ -184,7 +195,7 @@ public sealed class AgentHarness
                         subAgentRun.Task,
                         FormatSubAgentResult(subAgentRun));
                     RecordSubAgentArtifact(run, subAgentStep, subAgentRun);
-                    executionRequest = AppendSubAgentResultMessage(executionRequest, subAgentRun);
+                    _executionRequest = AppendSubAgentResultMessage(_executionRequest, subAgentRun);
                     yield return new AgentHarnessEvent
                     {
                         Type = AgentHarnessEventType.SubAgentCompleted,
@@ -212,7 +223,7 @@ public sealed class AgentHarness
         var runnerReportedError = false;
         var stepByToolCallId = new Dictionary<string, AgentStep>(StringComparer.Ordinal);
         await foreach (var agentEvent in _agentRunner.RunAsync(
-                           executionRequest,
+                           _executionRequest,
                            request.Settings,
                            ApplyExecutionPolicy(request.Context, executionPolicy),
                            cancellationToken))
