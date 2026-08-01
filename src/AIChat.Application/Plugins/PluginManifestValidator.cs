@@ -12,9 +12,9 @@ public static class PluginManifestValidator
             diagnostics.Add(Error("插件 id 不能为空。", manifestPath: manifestPath));
         }
 
-        if (manifest.Tools.Count == 0 && manifest.Skills.Count == 0 && manifest.McpServers.Count == 0)
+        if (manifest.Tools.Count == 0)
         {
-            diagnostics.Add(Warning("插件未声明 tools、skills 或 mcpServers。", manifest.Id, manifestPath: manifestPath));
+            diagnostics.Add(Warning("插件未声明 tools。", manifest.Id, manifestPath: manifestPath));
         }
 
         var seenToolIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -23,82 +23,7 @@ public static class PluginManifestValidator
             ValidateTool(manifest, tool, seenToolIds, diagnostics, manifestPath);
         }
 
-        var seenSkillIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var skill in manifest.Skills)
-        {
-            ValidateSkill(manifest, skill, seenSkillIds, diagnostics, manifestPath);
-        }
-
-        var seenMcpServerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var server in manifest.McpServers)
-        {
-            ValidateMcpServer(manifest, server, seenMcpServerIds, diagnostics, manifestPath);
-        }
-
         return diagnostics;
-    }
-
-    private static void ValidateSkill(
-        PluginManifest manifest,
-        PluginSkillManifest skill,
-        HashSet<string> seenSkillIds,
-        List<PluginDiagnostic> diagnostics,
-        string? manifestPath)
-    {
-        if (string.IsNullOrWhiteSpace(skill.Id))
-        {
-            diagnostics.Add(Error("Skill id 不能为空。", manifest.Id, manifestPath: manifestPath));
-            return;
-        }
-
-        if (!seenSkillIds.Add(skill.Id))
-        {
-            diagnostics.Add(Error($"Skill id 重复：{skill.Id}", manifest.Id, skill.Id, manifestPath));
-        }
-
-        if (string.IsNullOrWhiteSpace(skill.Path))
-        {
-            diagnostics.Add(Error("Skill 缺少 path。", manifest.Id, skill.Id, manifestPath));
-            return;
-        }
-
-        try
-        {
-            PluginSkillLoader.ResolveSkillPath(manifest.DirectoryPath, skill.Path);
-        }
-        catch (Exception ex)
-        {
-            diagnostics.Add(Error(ex.Message, manifest.Id, skill.Id, manifestPath));
-        }
-    }
-
-    private static void ValidateMcpServer(
-        PluginManifest manifest,
-        PluginMcpServerManifest server,
-        HashSet<string> seenServerIds,
-        List<PluginDiagnostic> diagnostics,
-        string? manifestPath)
-    {
-        if (string.IsNullOrWhiteSpace(server.Id))
-        {
-            diagnostics.Add(Error("MCP server id 不能为空。", manifest.Id, manifestPath: manifestPath));
-            return;
-        }
-
-        if (!seenServerIds.Add(server.Id))
-        {
-            diagnostics.Add(Error($"MCP server id 重复：{server.Id}", manifest.Id, server.Id, manifestPath));
-        }
-
-        if (!string.Equals(server.Transport, "stdio", StringComparison.OrdinalIgnoreCase))
-        {
-            diagnostics.Add(Error("当前只支持声明 stdio MCP server。", manifest.Id, server.Id, manifestPath));
-        }
-
-        if (string.IsNullOrWhiteSpace(server.Command))
-        {
-            diagnostics.Add(Error("MCP server 缺少 command。", manifest.Id, server.Id, manifestPath));
-        }
     }
 
     private static void ValidateTool(

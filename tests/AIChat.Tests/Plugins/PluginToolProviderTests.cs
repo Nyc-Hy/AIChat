@@ -194,121 +194,17 @@ public sealed class PluginToolProviderTests
         }
     }
 
-    [Fact]
-    public async Task LoadFromDirectoryAsync_LoadsSkillsAndMcpServerDeclarations()
-    {
-        var root = CreateTempDirectory();
-        try
-        {
-            var pluginDirectory = Path.Combine(root, "local");
-            Directory.CreateDirectory(pluginDirectory);
-            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "SKILL.md"), "# Local Skill\nUse local workflow.");
-            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), """
-            {
-              "id": "local",
-              "name": "Local",
-              "skills": [
-                {
-                  "id": "workflow",
-                  "name": "Workflow",
-                  "path": "SKILL.md"
-                }
-              ],
-              "mcpServers": [
-                {
-                  "id": "stdio_server",
-                  "transport": "stdio",
-                  "command": "dotnet",
-                  "arguments": ["--info"]
-                }
-              ]
-            }
-            """);
-
-            var provider = await PluginToolProvider.LoadFromDirectoryAsync(root);
-
-            var skill = Assert.Single(provider.Skills);
-            Assert.Equal("local_workflow", skill.Id);
-            Assert.Contains("Use local workflow.", skill.Content);
-            Assert.Equal("local_stdio_server", Assert.Single(provider.McpServers).Id);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task LoadFromDirectoryAsync_DiscoversEnabledMcpTools()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        var root = CreateTempDirectory();
-        try
-        {
-            var pluginDirectory = Path.Combine(root, "mcp");
-            Directory.CreateDirectory(pluginDirectory);
-            var serverScript = Path.Combine(pluginDirectory, "server.ps1");
-            await File.WriteAllTextAsync(serverScript, """
-            while ($line = [Console]::In.ReadLine()) {
-              $msg = $line | ConvertFrom-Json
-              if ($msg.method -eq 'initialize') {
-                @{ jsonrpc='2.0'; id=$msg.id; result=@{ protocolVersion='2025-11-25'; capabilities=@{ tools=@{} }; serverInfo=@{ name='fake'; version='1.0' } } } | ConvertTo-Json -Depth 20 -Compress
-              } elseif ($msg.method -eq 'tools/list') {
-                @{ jsonrpc='2.0'; id=$msg.id; result=@{ tools=@(@{ name='echo'; description='Echo text'; inputSchema=@{ type='object'; properties=@{ text=@{ type='string' } } } }) } } | ConvertTo-Json -Depth 20 -Compress
-              } elseif ($msg.method -eq 'tools/call') {
-                @{ jsonrpc='2.0'; id=$msg.id; result=@{ content=@(@{ type='text'; text=('echo:' + $msg.params.arguments.text) }); isError=$false } } | ConvertTo-Json -Depth 20 -Compress
-              }
-            }
-            """);
-            await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), $$"""
-            {
-              "id": "mcp",
-              "name": "MCP",
-              "mcpServers": [
-                {
-                  "id": "fake",
-                  "transport": "stdio",
-                  "command": "powershell.exe",
-                  "arguments": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "{{serverScript.Replace("\\", "\\\\")}}"],
-                  "risk": "read_only",
-                  "timeoutSeconds": 10
-                }
-              ]
-            }
-            """);
-
-            var provider = await PluginToolProvider.LoadFromDirectoryAsync(root);
-
-            var tool = Assert.Single(provider.Tools);
-            Assert.Equal("mcp_fake_echo", tool.Id);
-            Assert.Equal(AgentToolRisk.ReadOnly, tool.Risk);
-            Assert.Equal("MCP", Assert.Single(provider.GetToolMetadata()).Category);
-
-            var result = await tool.ExecuteAsync("""{"text":"hello"}""", new AgentToolContext { ProjectPath = root });
-            Assert.False(result.IsError);
-            Assert.Contains("echo:hello", result.Content);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    private static async Task WritePluginAsync(string root, string content)
-    {
-        var pluginDirectory = Path.Combine(root, "local");
-        Directory.CreateDirectory(pluginDirectory);
-        await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), content);
-    }
-
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "AIChat-plugin-tests-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    private static async Task WritePluginAsync(string root, string manifestJson)
+    {
+        var pluginDirectory = Path.Combine(root, "local");
+        Directory.CreateDirectory(pluginDirectory);
+        await File.WriteAllTextAsync(Path.Combine(pluginDirectory, "plugin.json"), manifestJson);
     }
 }
