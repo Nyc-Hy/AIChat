@@ -414,54 +414,18 @@ public sealed class AgentHarness
                     var reason = string.IsNullOrWhiteSpace(agentEvent.Content)
                         ? "Agent 运行已取消。"
                         : agentEvent.Content;
-                    run.CompletionReason = SensitiveDataRedactor.RedactText(reason);
-                    yield return new AgentHarnessEvent
+                    await foreach (var evt in EmitTerminalAsync(run, reason, "运行已取消", AgentRunStatus.Cancelled, isBudgetExceeded: false))
                     {
-                        Type = AgentHarnessEventType.ContentDelta,
-                        Run = run,
-                        Content = reason
-                    };
-                    yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Cancelled));
-                    var cancelledStep = AddCompletedStep(
-                        run,
-                        run.Steps.Count + 1,
-                        AgentStepType.Final,
-                        "运行已取消",
-                        "",
-                        reason);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.RunCompleted,
-                        Run = run,
-                        Step = cancelledStep
-                    };
+                        yield return evt;
+                    }
                     yield break;
                 }
                 case AgentRunEventType.BudgetExceeded:
                 {
-                    run.ToolBudgetExceeded = true;
-                    run.CompletionReason = "已达到工具调用轮数上限。";
-                    var budgetMessage = "工具预算已用完，任务已暂停。";
-                    yield return new AgentHarnessEvent
+                    await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
                     {
-                        Type = AgentHarnessEventType.ContentDelta,
-                        Run = run,
-                        Content = budgetMessage
-                    };
-                    yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.BudgetExceeded));
-                    var budgetStep = AddCompletedStep(
-                        run,
-                        run.Steps.Count + 1,
-                        AgentStepType.Final,
-                        "预算暂停",
-                        "",
-                        budgetMessage);
-                    yield return new AgentHarnessEvent
-                    {
-                        Type = AgentHarnessEventType.RunCompleted,
-                        Run = run,
-                        Step = budgetStep
-                    };
+                        yield return evt;
+                    }
                     yield break;
                 }
                 case AgentRunEventType.Completed:
@@ -481,28 +445,10 @@ public sealed class AgentHarness
 
                         if (run.ToolBudgetExceeded)
                         {
-                            run.CompletionReason = "已达到工具调用轮数上限。";
-                            var budgetMessage = "工具预算已用完，任务已暂停。";
-                            yield return new AgentHarnessEvent
+                            await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
                             {
-                                Type = AgentHarnessEventType.ContentDelta,
-                                Run = run,
-                                Content = budgetMessage
-                            };
-                            yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.BudgetExceeded));
-                            var budgetStep = AddCompletedStep(
-                                run,
-                                run.Steps.Count + 1,
-                                AgentStepType.Final,
-                                "预算暂停",
-                                "",
-                                budgetMessage);
-                            yield return new AgentHarnessEvent
-                            {
-                                Type = AgentHarnessEventType.RunCompleted,
-                                Run = run,
-                                Step = budgetStep
-                            };
+                                yield return evt;
+                            }
                             yield break;
                         }
                     }
@@ -529,6 +475,59 @@ public sealed class AgentHarness
         }
 
         yield return CreatePhaseChanged(run, CompleteRun(run, AgentRunStatus.Completed));
+    }
+
+    // Shared terminal-event sequence used by both the Cancelled
+    // and BudgetExceeded switch arms, and by the BudgetExceeded
+    // branch inside the Completed arm. Emits the three events every
+    // terminal state needs: ContentDelta (with the user-visible
+    // message), PhaseChanged (the final phase), RunCompleted (the
+    // final step). The two paths differed only in (message, step
+    // title, status, and whether run.ToolBudgetExceeded /
+    // run.CompletionReason were pre-set), so the helper takes
+    // those four values and does the bookkeeping once. Cancelled
+    // runs redact the user-supplied reason; budget-exceeded runs
+    // set the canonical "tool budget" message themselves.
+    private async IAsyncEnumerable<AgentHarnessEvent> EmitTerminalAsync(
+        AgentRun run,
+        string message,
+        string stepTitle,
+        AgentRunStatus status,
+        bool isBudgetExceeded)
+    {
+        if (isBudgetExceeded)
+        {
+            run.ToolBudgetExceeded = true;
+            run.CompletionReason = "已达到工具调用轮数上限。";
+        }
+        else
+        {
+            run.CompletionReason = SensitiveDataRedactor.RedactText(message);
+        }
+
+        yield return new AgentHarnessEvent
+        {
+            Type = AgentHarnessEventType.ContentDelta,
+            Run = run,
+            Content = message
+        };
+        yield return CreatePhaseChanged(run, CompleteRun(run, status));
+        var step = AddCompletedStep(
+            run,
+            run.Steps.Count + 1,
+            AgentStepType.Final,
+            stepTitle,
+            "",
+            message);
+        yield return new AgentHarnessEvent
+        {
+            Type = AgentHarnessEventType.RunCompleted,
+            Run = run,
+            Step = step
+        };
+        // IAsyncEnumerable must yield — keep the compiler quiet
+        // even when this phase is the terminal one.
+        await Task.CompletedTask;
     }
 
     private static AgentRunStatus DetermineFinalStatus(AgentRun run)
