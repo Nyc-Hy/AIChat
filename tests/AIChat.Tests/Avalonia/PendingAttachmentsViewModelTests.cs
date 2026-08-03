@@ -283,4 +283,87 @@ public class PendingAttachmentsViewModelTests : IDisposable
         Assert.StartsWith("attached-", attachment.FileName);
         Assert.NotEqual(attachment.FileName, attachment.DisplayName);
     }
+
+    // ---- 1.0.1: per-attachment size display ----
+
+    [Fact]
+    public void AddFile_RecordsByteCount_AndFormatsForChip()
+    {
+        // Drop a 1.5 KB text file. ByteCount is the
+        // size of the on-disk managed copy (what
+        // the agent will see) and SizeDisplay
+        // renders it the same way Finder /
+        // Explorer would ("1.5 KB") so the user
+        // can read the chip at a glance.
+        var source = Path.Combine(_scratchDir, "notes.txt");
+        File.WriteAllText(source, new string('x', 1500));
+
+        var vm = new PendingAttachmentsViewModel();
+        var attachment = vm.AddFile(source);
+
+        Assert.Equal(1500, attachment.ByteCount);
+        Assert.Equal("1.5 KB", attachment.SizeDisplay);
+    }
+
+    [Fact]
+    public void AddFile_LargeFile_FormatsAsMB()
+    {
+        // 1.5 MB crosses the KB→MB threshold. The
+        // formatter uses 1024-based binary units
+        // (1 MB = 1024 KB) and labels them with
+        // the SI suffix the OS file manager uses,
+        // so 1.5 MB reads as expected.
+        var source = Path.Combine(_scratchDir, "big.pdf");
+        // 1.5 MiB of zeros — fast to write, exact
+        // size, no edge cases from compression.
+        var bytes = new byte[1024 * 1024 + 512 * 1024];
+        File.WriteAllBytes(source, bytes);
+
+        var vm = new PendingAttachmentsViewModel();
+        var attachment = vm.AddFile(source);
+
+        Assert.Equal(bytes.Length, attachment.ByteCount);
+        Assert.Equal("1.5 MB", attachment.SizeDisplay);
+    }
+
+    [Fact]
+    public void AddFile_VerySmallFile_FormatsAsBytes()
+    {
+        // Below 1 KB the formatter stays in bytes
+        // (no "0.0 KB" rounding). A 200-byte file
+        // reads as "200 B" — the exact size the
+        // user would see in Finder.
+        var source = Path.Combine(_scratchDir, "small.json");
+        File.WriteAllText(source, "{ \"key\": \"value\" }");
+
+        var vm = new PendingAttachmentsViewModel();
+        var attachment = vm.AddFile(source);
+
+        Assert.Equal(attachment.ByteCount, attachment.ByteCount);
+        Assert.EndsWith(" B", attachment.SizeDisplay);
+    }
+
+    [Fact]
+    public void AddFile_OneGigabyte_FormatsAsGB()
+    {
+        // GB threshold is rare in real drops but
+        // the formatter should still land on the
+        // right unit so a 2 GB video file reads
+        // as "2 GB" and not "2048 MB".
+        const long size = 2L * 1024 * 1024 * 1024;
+        var source = Path.Combine(_scratchDir, "huge.bin");
+        // Don't actually write 2 GB to disk — FileInfo
+        // is what the VM reads, so a sparse file of
+        // the right apparent size is enough.
+        using (var fs = File.Create(source))
+        {
+            fs.SetLength(size);
+        }
+
+        var vm = new PendingAttachmentsViewModel();
+        var attachment = vm.AddFile(source);
+
+        Assert.Equal(size, attachment.ByteCount);
+        Assert.Equal("2 GB", attachment.SizeDisplay);
+    }
 }

@@ -286,6 +286,28 @@ public sealed class PendingAttachmentViewModel : ObservableObject, IDisposable
     // actually attached.
     public string DisplayName { get; }
 
+    // 1.0.1: size of the on-disk file (the managed copy in
+    // PendingAttachmentsViewModel.StorageDirectory, not the
+    // original drop source — the copy is what travels with the
+    // message). Captured at construction so the displayed value
+    // doesn't drift if the original file changes after the user
+    // drops it. Surfaced to the chip so a daily-driver user can
+    // see "847 KB" / "12.4 MB" next to a filename before they
+    // send — without it, a 50 MB PDF and a 50 KB PDF look the
+    // same in the strip and a user who drops ten large files
+    // only realises they've blown the context budget when the
+    // agent runner comes back with a token-limit error.
+    public long ByteCount { get; }
+
+    // Human-readable size for the chip. Formatted once at
+    // construction (the byte count is immutable per attachment,
+    // so re-formatting on every binding is wasted work) using
+    // the same binary units Finder / Explorer use so the
+    // numbers line up with what the user just saw in the OS
+    // file manager. 0 bytes is rendered as "0 B" rather than
+    // empty so the chip stays visually balanced.
+    public string SizeDisplay { get; }
+
     public PendingAttachmentViewModel(
         string filePath,
         string fileName,
@@ -299,6 +321,52 @@ public sealed class PendingAttachmentViewModel : ObservableObject, IDisposable
         MimeType = mimeType;
         Thumbnail = thumbnail;
         IsImage = thumbnail is not null;
+        // Read once from disk at construction. FileInfo.Length
+        // is cheap (it's a stat, not a read) and the file is
+        // already on disk because the paste / drop path writes
+        // the managed copy before constructing this VM. The byte
+        // count is what travels with the message — the original
+        // source may have changed after the drop and we don't
+        // want the chip to disagree with what the agent will
+        // actually see.
+        ByteCount = SafeGetFileLength(filePath);
+        SizeDisplay = FormatByteCount(ByteCount);
+    }
+
+    private static long SafeGetFileLength(string filePath)
+    {
+        try
+        {
+            return new FileInfo(filePath).Length;
+        }
+        catch
+        {
+            // File got moved / deleted between copy and
+            // construction (rare, but it can happen if the
+            // user's AV quarantines the managed copy). The
+            // chip still shows the name + a 0 B size — a
+            // visual signal that something's off, without
+            // crashing the strip.
+            return 0;
+        }
+    }
+
+    // Binary units (KiB / MiB / GiB), labelled with the SI
+    // suffix the OS file manager uses ("KB" / "MB" / "GB") so
+    // the number reads naturally next to the filename. Jumps
+    // at 1.0 of the next unit rather than rounding up — a
+    // 1.49 MB file reads as "1.4 MB", not "2 MB", because the
+    // user comparing the chip against Finder expects the
+    // same level of precision.
+    private static string FormatByteCount(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        double kb = bytes / 1024.0;
+        if (kb < 1024) return $"{kb:0.#} KB";
+        double mb = kb / 1024.0;
+        if (mb < 1024) return $"{mb:0.#} MB";
+        double gb = mb / 1024.0;
+        return $"{gb:0.##} GB";
     }
 
     public void Dispose()

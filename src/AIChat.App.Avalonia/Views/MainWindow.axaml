@@ -1095,7 +1095,40 @@
                                                                                Foreground="{DynamicResource TextBrush}"
                                                                                TextTrimming="CharacterEllipsis"
                                                                                MaxLines="1"/>
+                                                                    <TextBlock Text="{Binding SizeDisplay}"
+                                                                               Classes="muted"
+                                                                               FontSize="10"
+                                                                               FontFamily="{StaticResource FontMono}"/>
                                                                 </StackPanel>
+                                                            </Border>
+                                                            <!--
+                                                              1.0.1: size badge in the lower-right
+                                                              of the image chip. Thumbnails are
+                                                              56×56 and don't leave room for
+                                                              a second line of text, so we
+                                                              overlay a small pill with the
+                                                              file size (matches the non-image
+                                                              chip's SizeDisplay so the user
+                                                              sees the same number regardless
+                                                              of which row type they dropped).
+                                                              The wash surface + bordered
+                                                              pill reads cleanly on any
+                                                              thumbnail colour without
+                                                              fighting the underlying image.
+                                                            -->
+                                                            <Border IsVisible="{Binding IsImage}"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Bottom"
+                                                                    Margin="0,0,4,4"
+                                                                    Background="{DynamicResource OverlayWashBrush}"
+                                                                    BorderBrush="{DynamicResource LineSoftBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="{StaticResource RadiusSm}"
+                                                                    Padding="4,1">
+                                                                <TextBlock Text="{Binding SizeDisplay}"
+                                                                           FontSize="9"
+                                                                           FontFamily="{StaticResource FontMono}"
+                                                                           Foreground="{DynamicResource TextBrush}"/>
                                                             </Border>
                                                             <Button Classes="pending-attachment-remove"
                                                                     Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AgentHost.PendingAttachments.RemoveCommand}"
