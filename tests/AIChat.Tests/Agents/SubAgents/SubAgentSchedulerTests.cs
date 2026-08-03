@@ -12,6 +12,73 @@ namespace AIChat.Tests.Agents.SubAgents;
 public sealed class SubAgentSchedulerTests
 {
     [Fact]
+    public async Task CancelAsync_RoundTrip_ConvertsToCancelledStatus()
+    {
+        // The full round-trip: schedule a run, wait until it
+        // is registered as in-flight (the agent's stream is
+        // blocked), cancel it, and verify the run completes
+        // with SubAgentStatus.Cancelled.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var chat = new BlockingChatCompletionService(gate.Task);
+        var scheduler = CreateScheduler(chat, []);
+        using var cts = new CancellationTokenSource();
+
+        // The scheduler's active map is keyed by the run id
+        // from the request; the default is a random GUID, so
+        // pin it here so the cancel call below can target the
+        // specific run.
+        const string runId = "cancellable-run-1";
+        var request = new SubAgentRunRequest
+        {
+            RunId = runId,
+            ParentRunId = "parent-1",
+            Task = "inspect auth",
+            ProjectPath = Environment.CurrentDirectory,
+            Settings = new AppSettings { Model = "test" },
+            ContextPack = new TaskContextPack
+            {
+                Summary = "Context pack",
+                ArtifactRefs = ["run_test:tool_result:failed"],
+            },
+            MaxToolCalls = 4,
+        };
+        var runTask = scheduler.RunAsync(request, cts.Token);
+        await chat.Started.Task;
+
+        var cancelled = scheduler.CancelAsync(runId);
+        Assert.True(cancelled);
+
+        // Release the gate so the blocked stream unwinds
+        // (the per-run CTS is already cancelled; the await
+        // foreach exits via OperationCanceledException).
+        gate.SetResult();
+        var run = await runTask;
+
+        Assert.Equal(SubAgentStatus.Cancelled, run.Status);
+        Assert.Contains("cancelled", run.Result!.Summary, StringComparison.OrdinalIgnoreCase);
+
+        // A second cancel on the same id is a no-op: the
+        // _activeRuns entry was already removed in the
+        // finally block.
+        Assert.False(scheduler.CancelAsync(runId));
+    }
+
+    [Fact]
+    public void CancelAsync_UnknownRunId_ReturnsFalse()
+    {
+        var scheduler = CreateScheduler(new QueueChatCompletionService([]), []);
+        Assert.False(scheduler.CancelAsync("never-issued"));
+    }
+
+    [Fact]
+    public void CancelAsync_EmptyOrNullRunId_ReturnsFalse()
+    {
+        var scheduler = CreateScheduler(new QueueChatCompletionService([]), []);
+        Assert.False(scheduler.CancelAsync(""));
+        Assert.False(scheduler.CancelAsync("   "));
+    }
+
+    [Fact]
     public async Task RunAsync_CompletesReadOnlyExplorerAndAttributesToolCalls()
     {
         var toolCall = new ChatToolCall
