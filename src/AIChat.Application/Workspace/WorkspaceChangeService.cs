@@ -4,37 +4,44 @@ namespace AIChat.Application.Workspace;
 
 public interface IWorkspaceChangeService
 {
+    // projectPath is nullable: callers in the ViewModel layer pass
+    // through the project sidebar's "no project selected" state
+    // (which is represented as a null path), and the implementation
+    // surfaces a no-op / friendly error rather than throwing on a
+    // null. The interface has to opt in here because the C#
+    // nullable-analysis rules don't allow "string" parameters to
+    // accept a "string?" caller without an explicit `!`.
     Task<WorkspaceChangeSet> GetChangesAsync(
-        string projectPath,
+        string? projectPath,
         int maxFiles = 200,
         CancellationToken cancellationToken = default);
 
     Task<WorkspaceDiff> GetDiffAsync(
-        string projectPath,
+        string? projectPath,
         string path,
         bool staged = false,
         int maxChars = 40_000,
         CancellationToken cancellationToken = default);
 
     Task<WorkspaceRestoreResult> RestoreFileAsync(
-        string projectPath,
+        string? projectPath,
         string path,
         bool deleteUntracked = false,
         CancellationToken cancellationToken = default);
 
     Task<WorkspaceCommitResult> CommitAsync(
-        string projectPath,
+        string? projectPath,
         string message,
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default);
 
     Task StageAsync(
-        string projectPath,
+        string? projectPath,
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default);
 
     Task UnstageAsync(
-        string projectPath,
+        string? projectPath,
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default);
 }
@@ -42,7 +49,7 @@ public interface IWorkspaceChangeService
 public sealed class WorkspaceChangeService : IWorkspaceChangeService
 {
     public async Task<WorkspaceChangeSet> GetChangesAsync(
-        string projectPath,
+        string? projectPath,
         int maxFiles = 200,
         CancellationToken cancellationToken = default)
     {
@@ -78,7 +85,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
     }
 
     public async Task<WorkspaceDiff> GetDiffAsync(
-        string projectPath,
+        string? projectPath,
         string path,
         bool staged = false,
         int maxChars = 40_000,
@@ -144,7 +151,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
     }
 
     public async Task<WorkspaceRestoreResult> RestoreFileAsync(
-        string projectPath,
+        string? projectPath,
         string path,
         bool deleteUntracked = false,
         CancellationToken cancellationToken = default)
@@ -196,7 +203,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
     }
 
     public async Task<WorkspaceCommitResult> CommitAsync(
-        string projectPath,
+        string? projectPath,
         string message,
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default)
@@ -247,7 +254,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
     }
 
     public async Task StageAsync(
-        string projectPath,
+        string? projectPath,
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default)
     {
@@ -269,7 +276,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
     }
 
     public async Task UnstageAsync(
-        string projectPath,
+        string? projectPath,
         IReadOnlyList<string> paths,
         CancellationToken cancellationToken = default)
     {
@@ -301,7 +308,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
         };
     }
 
-    private static IReadOnlyList<string> NormalizePaths(string projectPath, IReadOnlyList<string> paths)
+    private static IReadOnlyList<string> NormalizePaths(string? projectPath, IReadOnlyList<string> paths)
     {
         return paths
             .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -316,7 +323,7 @@ public sealed class WorkspaceChangeService : IWorkspaceChangeService
     }
 
     private static async Task<PathGitStatus> GetPathStatusAsync(
-        string projectPath,
+        string? projectPath,
         string relativePath,
         CancellationToken cancellationToken)
     {

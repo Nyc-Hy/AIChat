@@ -164,7 +164,7 @@ public static class CrashReporter
         LogException(e.Exception, "Dispatcher.UnhandledException");
     }
 
-    private static void OnUnobservedTask(object sender, UnobservedTaskExceptionEventArgs e)
+    private static void OnUnobservedTask(object? sender, UnobservedTaskExceptionEventArgs e)
     {
         LogException(e.Exception, "TaskScheduler.UnobservedTaskException");
         e.SetObserved();

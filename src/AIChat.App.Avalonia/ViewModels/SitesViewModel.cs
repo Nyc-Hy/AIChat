@@ -196,7 +196,12 @@ public sealed partial class SitesViewModel : ViewModelBase
             return;
         }
 
-        server.Stop();
+        // Dictionary.Remove(key, out value) annotates `value` as
+        // nullable, but when it returns true the value is the
+        // stored instance — guaranteed non-null here. The bang
+        // tells the nullable-flow analyser to trust the
+        // wasRunning guard.
+        server!.Stop();
         var url = $"http://localhost:{server.Port}/  (已停止)";
 
         await _registry.RecordDeploymentAsync(new SiteDeployment

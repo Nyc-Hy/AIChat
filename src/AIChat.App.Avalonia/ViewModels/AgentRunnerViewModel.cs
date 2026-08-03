@@ -70,7 +70,12 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     // await point. OperationCanceledException is caught here and
     // surfaces as a "已停止" status on the assistant bubble rather
     // than a "失败" one.
-    public async Task RunAsync(string prompt, AppSettings effectiveSettings, CancellationToken cancellationToken = default)
+    public async Task RunAsync(
+        string prompt,
+        AppSettings effectiveSettings,
+        string continuedFromRunId = "",
+        string retriedFromRunId = "",
+        CancellationToken cancellationToken = default)
     {
         _host.IsRunning = true;
         _host.DraftPrompt = "";
@@ -86,9 +91,19 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         _host.SetStatusMessage("AIChat 正在读取上下文...");
 
         var project = _sidebar.CurrentProject!;
-        var conversation = new Conversation
+        var parentRunId = string.IsNullOrWhiteSpace(continuedFromRunId)
+            ? retriedFromRunId
+            : continuedFromRunId;
+        // Wave 2: conversations 改成 sessions,sidebar 在 ApplyProject 时已
+        // 加载 _sidebar.CurrentProjectSessions(绑到当前 project 的 Project 类 sessions)。
+        var conversation = string.IsNullOrWhiteSpace(parentRunId)
+            ? null
+            : _sidebar.CurrentProjectSessions.FirstOrDefault(item =>
+                item.AgentRuns.Any(run => run.Id == parentRunId));
+        var isExistingConversation = conversation is not null;
+        conversation ??= new Project
         {
-            ProjectId = project.Id,
+            WorkspaceId = project.Id,
             Title = prompt.Length > 80 ? prompt[..80] : prompt,
             UpdatedAt = DateTimeOffset.Now
         };
@@ -140,8 +155,8 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 EffectiveSettings = effectiveSettings,
                 RuntimeSettings = runtimeSettings,
                 ProjectName = project.Name,
-                ProjectPath = project.Path,
-                ProjectLoadSnapshot = BuildProjectSnapshot(project),
+                ProjectPath = project.TryGetPrimaryPath() ?? "",
+                ProjectLoadSnapshot = BuildProjectSnapshot(project, _sidebar.CurrentProjectSessions),
                 PinnedContextItems = project.PinnedContext,
                 InputArtifacts = project.InputArtifacts,
                 MemoryEntries = project.Memories,
@@ -190,27 +205,31 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 ChatRequest = requestBuild.ChatRequest,
                 Settings = effectiveSettings,
                 ContextPack = requestBuild.ContextPack,
-                Context = requestBuild.AgentContext
+                Context = requestBuild.AgentContext,
+                ContinuedFromRunId = continuedFromRunId,
+                RetriedFromRunId = retriedFromRunId
             }, cancellationToken))
             {
                 await ApplyAgentEventAsync(agentEvent, assistantItem, assistantMessage);
             }
 
+            var run = conversation.AgentRuns.LastOrDefault();
+            var terminal = GetRunTerminalPresentation(run);
             if (string.IsNullOrWhiteSpace(assistantItem.Detail))
             {
-                assistantItem.Detail = "本次运行已结束，但没有可显示的文本。";
+                assistantItem.Detail = terminal.FallbackDetail;
             }
 
-            assistantItem.Status = "完成";
-            _host.LastAssistantStatus = "完成";
+            assistantItem.Status = terminal.ActivityStatus;
+            _host.LastAssistantStatus = terminal.ActivityStatus;
             // Drop a "本次运行" summary bubble into the activity
             // feed so the user can see at a glance what happened
             // — file count, tool call count, duration — without
             // opening the git modal or scrolling through tool
             // cards.
-            var run = conversation.AgentRuns.LastOrDefault();
             if (run is not null)
             {
+                _host.RecordLastRun(run);
                 // Pass isReadOnly so a no-write run with 0
                 // changes can be tagged in the summary — the
                 // user sent a refactor / fix / add request, the
@@ -221,23 +240,29 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 // every write. Tagging the line in the summary
                 // keeps the cause visible without an extra system
                 // bubble.
-                _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite), "完成");
+                _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite), terminal.ActivityStatus);
             }
-            conversation.UpdatedAt = DateTimeOffset.Now;
-            project.Conversations.Add(conversation);
-            project.UpdatedAt = DateTimeOffset.Now;
-            await SaveProjectsAsync();
-            _conversationList.Refresh(project, conversation.Id);
-            _host.SetStatusMessage("完成。");
+            await PersistConversationAsync(project, conversation, isExistingConversation);
+            _host.SetStatusMessage(terminal.StatusMessage);
         }
         catch (OperationCanceledException)
         {
+            var run = conversation.AgentRuns.LastOrDefault();
+            if (run is { Status: AgentRunStatus.Running })
+            {
+                run.Complete(AgentRunStatus.Cancelled, completionReason: "运行已由用户停止。");
+            }
+            if (run is not null)
+            {
+                _host.RecordLastRun(run);
+            }
             assistantItem.Status = "已停止";
             _host.LastAssistantStatus = "已停止";
             if (string.IsNullOrEmpty(assistantItem.Detail))
             {
                 assistantItem.Detail = "本次运行已停止。";
             }
+            await PersistConversationSafelyAsync(project, conversation, isExistingConversation);
             // Re-throw so the host's SendTaskCommand can set
             // its own status message; the host owns the
             // user-facing status bar.
@@ -245,10 +270,20 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            var run = conversation.AgentRuns.LastOrDefault();
+            if (run is { Status: AgentRunStatus.Running })
+            {
+                run.Complete(AgentRunStatus.Failed, completionReason: ex.Message);
+            }
+            if (run is not null)
+            {
+                _host.RecordLastRun(run);
+            }
             assistantItem.Status = "失败";
             _host.LastAssistantStatus = "失败";
             assistantItem.Detail = $"请求失败：{ex.Message}";
             _host.SetStatusMessage("请求失败。");
+            await PersistConversationSafelyAsync(project, conversation, isExistingConversation);
             // Re-throw so the host's SendTaskCommand catch can
             // drop a toast — the runner never knows about the
             // toast service.
@@ -258,6 +293,23 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         {
             _host.IsRunning = false;
         }
+    }
+
+    public static RunTerminalPresentation GetRunTerminalPresentation(AgentRun? run)
+    {
+        var reason = run?.CompletionReason?.Trim() ?? "";
+        return run?.Status switch
+        {
+            AgentRunStatus.Completed => new("完成", string.IsNullOrEmpty(reason) ? "完成。" : reason,
+                "本次运行已结束，但没有可显示的文本。"),
+            AgentRunStatus.BudgetExceeded => new("预算暂停", string.IsNullOrEmpty(reason) ? "工具预算已用完，任务已暂停。" : reason,
+                "工具预算已用完，任务已暂停。你可以继续上一次任务。"),
+            AgentRunStatus.Cancelled => new("已停止", string.IsNullOrEmpty(reason) ? "已停止。" : reason,
+                "本次运行已停止。"),
+            AgentRunStatus.Failed => new("失败", string.IsNullOrEmpty(reason) ? "请求失败。" : reason,
+                "本次运行失败。你可以继续上一次任务。"),
+            _ => new("失败", "运行记录缺少有效终态。", "本次运行没有产生有效的结束状态。")
+        };
     }
 
     private async Task ApplyAgentEventAsync(
@@ -445,6 +497,10 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         var verificationPassed = run.Verifications?.Count(verification => verification.IsSuccess) ?? 0;
 
         var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(run.Model))
+        {
+            parts.Add(run.Model);
+        }
         if (fileChangeCount > 0)
         {
             parts.Add($"改 {fileChangeCount} 个文件");
@@ -452,6 +508,14 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         if (toolCount > 0)
         {
             parts.Add($"用 {toolCount} 次工具");
+        }
+        if (run.ModelCallCount > 0)
+        {
+            parts.Add($"模型 {run.ModelCallCount} 轮");
+        }
+        if (run.ContextEstimatedTokens > 0)
+        {
+            parts.Add($"输入约 {run.ContextEstimatedTokens:N0} tokens");
         }
         if (subAgentCount > 0)
         {
@@ -483,25 +547,55 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         return $"{(int)span.TotalMinutes}m {span.Seconds}s";
     }
 
-    private async Task SaveProjectsAsync()
+    // Wave 2: v1 模型下,写新 session 到 repo + 把当前 workspace 持久化。
+    // CurrentProjectSessions 是 sidebar 已加载的当前项目的 sessions。
+    private async Task SaveSessionAndProjectAsync(ChatSession conversation, bool isExistingConversation)
     {
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(project => project.Id == _sidebar.CurrentProject?.Id);
-        if (index >= 0)
+        var sidebar = _sidebar;
+        if (sidebar.CurrentProject is null)
         {
-            projects[index] = _sidebar.CurrentProject!;
-        }
-        else if (_sidebar.CurrentProject is not null)
-        {
-            projects.Add(_sidebar.CurrentProject);
+            return;
         }
 
-        await _repository.SaveProjectsAsync(projects);
+        conversation.UpdatedAt = DateTimeOffset.Now;
+        var sessions = sidebar.CurrentProjectSessions.ToList();
+        if (!isExistingConversation && sessions.All(item => item.Id != conversation.Id))
+        {
+            sessions.Add(conversation);
+        }
+        else
+        {
+            // 替换 in-memory 列表里的同 id session
+            var idx = sessions.FindIndex(s => s.Id == conversation.Id);
+            if (idx >= 0)
+            {
+                sessions[idx] = conversation;
+            }
+        }
+
+        sidebar.CurrentProject.UpdatedAt = DateTimeOffset.Now;
+
+        // 写 workspaces + sessions
+        var workspaces = (await _repository.LoadWorkspacesAsync()).ToList();
+        var wsIndex = workspaces.FindIndex(w => w.Id == sidebar.CurrentProject.Id);
+        if (wsIndex >= 0)
+        {
+            workspaces[wsIndex] = sidebar.CurrentProject;
+        }
+        else
+        {
+            workspaces.Add(sidebar.CurrentProject);
+        }
+        await _repository.SaveWorkspacesAsync(workspaces);
+        await _repository.SaveSessionsAsync(sessions);
+        sidebar.UpdateCurrentProjectSessions(sessions);
+
+        _conversationList.Refresh(sidebar.CurrentProject, sessions, conversation.Id);
     }
 
-    private static string BuildProjectSnapshot(ProjectWorkspace project)
+    private static string BuildProjectSnapshot(WorkspaceProject project, IReadOnlyList<ChatSession> sessions)
     {
-        var snapshot = ProjectLoadSnapshotBuilder.Build(project);
+        var snapshot = ProjectLoadSnapshotBuilder.Build(project, sessions);
         return string.Join(Environment.NewLine, [
             snapshot.HealthText,
             snapshot.ProfileText,
@@ -509,4 +603,34 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             snapshot.RecommendationText
         ]);
     }
+
+    private async Task PersistConversationAsync(
+        WorkspaceProject project,
+        ChatSession conversation,
+        bool isExistingConversation)
+    {
+        await SaveSessionAndProjectAsync(conversation, isExistingConversation);
+    }
+
+    private async Task PersistConversationSafelyAsync(
+        WorkspaceProject project,
+        ChatSession conversation,
+        bool isExistingConversation)
+    {
+        try
+        {
+            await PersistConversationAsync(project, conversation, isExistingConversation);
+        }
+        catch
+        {
+            // Preserve the original run error/cancellation while making the
+            // separate history-save failure visible to the user.
+            await _host.ReportConversationPersistenceFailureAsync();
+        }
+    }
 }
+
+public sealed record RunTerminalPresentation(
+    string ActivityStatus,
+    string StatusMessage,
+    string FallbackDetail);
