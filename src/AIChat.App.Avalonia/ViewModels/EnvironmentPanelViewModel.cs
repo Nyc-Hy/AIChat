@@ -661,7 +661,39 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
 
     private void RecountSources()
     {
-        // Two source kinds land here:
+        // The Changed event handler + the ctor's
+        // fire-and-forget ReloadAsync().ContinueWith
+        // both call in from different threads:
+        // the Changed handler fires on whatever
+        // thread the registry mutation happened
+        // (the click handler thread for the
+        // Sources panel's add/remove buttons),
+        // while the ctor's ContinueWith runs on
+        // TaskScheduler.Default's thread pool.
+        // ObservableCollection is not thread-safe,
+        // so the mutation has to land on the UI
+        // thread or Avalonia throws on the next
+        // ItemsControl re-bind ("Collection was
+        // modified during enumeration"). Headless
+        // test hosts don't own a live
+        // Application.Current — same fall-through
+        // ToolApprovalViewModel.RunOnUiThread uses,
+        // so the test suite can drive the panel
+        // from a non-UI thread without the
+        // Post landing on a never-pumped
+        // dispatcher.
+        if (global::Avalonia.Application.Current is null || Dispatcher.UIThread.CheckAccess())
+        {
+            DoRecountSources();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(DoRecountSources);
+        }
+    }
+
+    private void DoRecountSources()
+    {
         //   1. Pending image attachments (the
         //      composer's ⌘V + drag-drop strip) — these
         //      travel with the NEXT message, not
@@ -896,5 +928,21 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(processId)) return;
         await _processSupervisor.StopAsync(processId);
+    }
+
+    // 1.0.1: drop a persisted Source from the
+    // registry. The Sources panel's per-row
+    // "×" button routes through this — the
+    // registry fires Changed, the panel's
+    // subscription re-mirrors, and the row
+    // disappears. No-op when the id doesn't
+    // match a persisted source (e.g. the row
+    // is a pending attachment that shares the
+    // Sources list visually but is owned by
+    // PendingAttachments, not the registry).
+    public async Task RemoveSourceAsync(string? sourceId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceId)) return;
+        await _sourceRegistry.RemoveAsync(sourceId);
     }
 }

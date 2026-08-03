@@ -3,6 +3,7 @@ using AIChat.Abstractions.Llm;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
 using AIChat.Application.BackgroundProcesses;
+using AIChat.Application.Sources;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Domain.Chat;
@@ -686,5 +687,164 @@ public sealed class EnvironmentPanelViewModelTests
             StartedAt = startedAt,
         };
         return new SubAgentRunViewModel(run);
+    }
+
+    // ---- 1.0.1: per-row "×" delete button on a Source row ----
+
+    [Fact]
+    public async Task RemoveSourceAsync_DropsSourceFromRegistryAndPanel()
+    {
+        // Set up a panel with two persisted
+        // Sources, then drop one via the new
+        // "×" handler. The panel's Changed
+        // subscription should re-mirror and
+        // the row count + summary should both
+        // reflect the new state.
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        var firstId = await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "clipboard",
+            DisplayName = "First",
+            Content = "first body",
+        });
+        var secondId = await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "web",
+            DisplayName = "Second",
+            Content = "second body",
+        });
+        // AttachTo() mirrors the upstream state
+        // (Sources, Deliverables, SubAgentRuns,
+        // PendingAttachments). The earlier
+        // CreateViewModel() test path doesn't
+        // call it; we need to here so the
+        // per-row "×" button is wired against
+        // the live Sources collection.
+        vm.AttachTo();
+        Assert.Equal(2, vm.SourceCount);
+
+        await vm.RemoveSourceAsync(firstId);
+
+        Assert.Single(vm.Sources);
+        Assert.Equal("Second", vm.Sources[0].DisplayName);
+        Assert.Single(registry.Sources);
+        Assert.Equal(secondId, registry.Sources[0].Id);
+    }
+
+    [Fact]
+    public async Task RemoveSourceAsync_EmptyId_IsNoOp()
+    {
+        // Defensive: the click handler validates
+        // the Tag's value before it calls us,
+        // but a future caller might forget.
+        // No-op is the right behaviour — a
+        // stray empty id shouldn't crash the
+        // panel.
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "web",
+            DisplayName = "A",
+            Content = "body",
+        });
+        vm.AttachTo();
+
+        await vm.RemoveSourceAsync("");
+        await vm.RemoveSourceAsync(null);
+
+        Assert.Single(vm.Sources);
+    }
+
+    [Fact]
+    public async Task RemoveSourceAsync_UnknownId_IsNoOp()
+    {
+        // The id doesn't match a persisted
+        // Source (e.g. the user removed it
+        // from another path between render
+        // and click). RemoveAsync returns
+        // false; the panel stays consistent.
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "web",
+            DisplayName = "A",
+            Content = "body",
+        });
+        vm.AttachTo();
+
+        await vm.RemoveSourceAsync("nonexistent");
+
+        Assert.Single(vm.Sources);
+    }
+
+    private static (EnvironmentPanelViewModel Vm, AgentHostViewModel Host, ProjectSidebarViewModel Sidebar,
+        Mock<IWorkspaceChangeService> Workspace, SourceRegistry Registry)
+        CreateViewModelWithSourceRegistry()
+    {
+        // Same shape as CreateViewModel but
+        // uses a *real* SourceRegistry (backed
+        // by a per-test JSON file) rather than
+        // InMemorySourceRegistry. The reason:
+        // InMemorySourceRegistry.ReloadAsync
+        // fires Changed synchronously, so the
+        // EnvironmentPanelViewModel ctor ends
+        // up calling RefreshSources twice for
+        // the same load (once from the Changed
+        // event handler, once from the ctor's
+        // fire-and-forget ContinueWith). When
+        // the test suite runs in parallel and
+        // the second refresh lands on a
+        // different thread than the first
+        // (TaskScheduler.Default's thread pool),
+        // the two Clear + Add pairs on
+        // Sources race and the row count
+        // doubles — a flaky test that
+        // disappears when run in isolation.
+        // The real SourceRegistry.ReloadAsync
+        // only loads from JSON (no synthetic
+        // Changed), so the panel's mirror
+        // happens exactly once per load and
+        // there's no race to chase.
+        var repository = new InMemoryAppRepository();
+        var settingsHolder = new SettingsHolder();
+        settingsHolder.Replace(new AppSettings());
+        var sidebar = new ProjectSidebarViewModel(repository, settingsHolder);
+        var activity = new ActivityFeedViewModel();
+        var toast = new ToastService(action => action());
+        var sourcesRoot = Path.Combine(
+            Path.GetTempPath(),
+            "aichat-env-sources-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(sourcesRoot);
+        var sourcesFile = Path.Combine(sourcesRoot, "sources.json");
+        var registry = new SourceRegistry(sourcesFile);
+        var host = new AgentHostViewModel(
+            Mock.Of<IChatCompletionService>(),
+            AgentToolRegistry.CreateForTests([]),
+            Mock.Of<IApprovalService>(),
+            repository,
+            sidebar,
+            new ConversationListViewModel(repository),
+            activity,
+            toast,
+            registry,
+            _ => { },
+            () => settingsHolder.Current,
+            () => false,
+            () => false,
+            action =>
+            {
+                action();
+                return Task.CompletedTask;
+            });
+        var workspace = new Mock<IWorkspaceChangeService>();
+        var supervisorRoot = Path.Combine(
+            Path.GetTempPath(),
+            "aichat-env-tests-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(supervisorRoot);
+        var supervisor = new BackgroundProcessSupervisor(
+            Path.Combine(supervisorRoot, "processes.json"));
+        var vm = new EnvironmentPanelViewModel(
+            workspace.Object, supervisor, host, sidebar, new MockClipboardService(), registry);
+        return (vm, host, sidebar, workspace, registry);
     }
 }

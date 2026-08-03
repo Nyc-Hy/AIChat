@@ -335,7 +335,7 @@
                           IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:SourceRowViewModel">
-                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="0,1">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,1">
                     <Path Grid.Column="0"
                           Data="M3 5 h12 v10 h-12 z M3 9 h12 M7 5 v10 M3 15 l-2 2 h16 l-2 -2"
                           Stroke="{DynamicResource MutedBrush}"
@@ -354,9 +354,8 @@
                       for pending attachment rows (no Source.Id
                       to reference — the paste path sends the
                       image as a normal artifact, not an
-                      @-reference; InsertReferenceCommand is
-                      null in that case so CanExecute returns
-                      false).
+                      @-reference; the button's IsVisible binding
+                      checks Source != null).
                     -->
                     <Button Grid.Column="2"
                             Classes="chrome-button"
@@ -366,6 +365,33 @@
                             Tag="{Binding}"
                             ToolTip.Tip="在光标位置插入 @-引用到 composer">
                       <TextBlock Text="引用" FontSize="10"/>
+                    </Button>
+                    <!--
+                      Per-row "×" delete button. Same
+                      visibility rule as 引用 (hidden
+                      for pending attachment rows —
+                      the Sources list reuses the
+                      visual surface but pending
+                      attachments are owned by
+                      PendingAttachments, not the
+                      registry). The Tag carries the
+                      Source.Id so the click handler
+                      can target the right registry
+                      entry without taking a
+                      dependency on the row's full
+                      Source object.
+                    -->
+                    <Button Grid.Column="3"
+                            Classes="chrome-button"
+                            Padding="4,1"
+                            IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                            Click="SourceRemove_OnClick"
+                            Tag="{Binding Id}"
+                            ToolTip.Tip="从数据源删除">
+                      <Path Data="M6 6 L18 18 M18 6 L6 18"
+                            Stroke="{Binding $parent[Button].Foreground}"
+                            StrokeThickness="1.6" StrokeLineCap="Round"
+                            Width="10" Height="10" Stretch="Uniform"/>
                     </Button>
                   </Grid>
                 </DataTemplate>

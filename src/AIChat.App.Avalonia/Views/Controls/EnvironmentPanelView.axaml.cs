@@ -142,4 +142,48 @@ public partial class EnvironmentPanelView : UserControl
             vm.RaiseInsertReferenceRequested(row.Source);
         }
     }
+
+    // 1.0.1: per-row "×" click handler. Drops
+    // the Source from the registry via the
+    // panel VM. The button's Tag carries the
+    // row's Id (just the id, not the full
+    // Source) so the handler can target the
+    // registry entry without taking a
+    // dependency on the row's full Source
+    // object. async void is intentional here
+    // because the click handler can't be
+    // awaited by Avalonia's input pipeline —
+    // the try/catch belt-and-braces mirrors
+    // the StopBackgroundProcess_OnClick
+    // pattern, in case a future change lets
+    // an exception escape the registry's
+    // persistence path.
+    private async void SourceRemove_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string sourceId }
+            || string.IsNullOrWhiteSpace(sourceId))
+        {
+            return;
+        }
+        if (DataContext is EnvironmentPanelViewModel vm)
+        {
+            try
+            {
+                await vm.RemoveSourceAsync(sourceId);
+            }
+            catch
+            {
+                // Registry's persistence path is
+                // expected to swallow its own
+                // errors. This catch is a
+                // belt-and-braces fallback in
+                // case a future change lets an
+                // exception escape (e.g. JSON
+                // write failure). Crashing the
+                // panel over a delete-click
+                // would be worse than silently
+                // leaving the row in place.
+            }
+        }
+    }
 }
