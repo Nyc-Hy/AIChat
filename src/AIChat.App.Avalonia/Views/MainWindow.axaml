@@ -38,7 +38,11 @@
     -->
     <Grid>
         <Border Background="{DynamicResource BgBrush}" CornerRadius="18" ClipToBounds="True">
-            <Grid RowDefinitions="48,*,32">
+            <Grid RowDefinitions="48,*,32"
+                  DragDrop.AllowDrop="True"
+                  DragDrop.DragOver="OnDragOver"
+                  DragDrop.DragLeave="OnDragLeave"
+                  DragDrop.Drop="OnDrop">
 
                 <!-- ============== Titlebar (slim, with brand mark) ============== -->
                 <Grid Grid.Row="0"
@@ -1000,11 +1004,47 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:PendingAttachmentViewModel">
                                                     <Border Classes="pending-attachment"
-                                                            ToolTip.Tip="{Binding FileName}">
+                                                            ToolTip.Tip="{Binding DisplayName}">
                                                         <Panel>
-                                                            <Image Source="{Binding Thumbnail}"
+                                                            <!--
+                                                              Image rows show the decoded thumbnail.
+                                                              Non-image rows swap to a flat
+                                                              "file icon + display name" chip —
+                                                              keeps the strip a fixed height so
+                                                              the composer doesn't jump when the
+                                                              user drops a 2 MB PDF next to a
+                                                              200 KB screenshot.
+                                                            -->
+                                                            <Image IsVisible="{Binding IsImage}"
+                                                                   Source="{Binding Thumbnail}"
                                                                    Width="56" Height="56"
                                                                    Stretch="UniformToFill"/>
+                                                            <Border IsVisible="{Binding !$parent[Border].((vm:PendingAttachmentViewModel)DataContext).IsImage}"
+                                                                    Width="120" Height="56"
+                                                                    Background="{DynamicResource SurfaceSunkenBrush}"
+                                                                    BorderBrush="{DynamicResource LineSoftBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="{StaticResource RadiusSm}"
+                                                                    Padding="8,6">
+                                                                <StackPanel Orientation="Vertical"
+                                                                            Spacing="2"
+                                                                            VerticalAlignment="Center">
+                                                                    <Path Data="M6 3 H14 L18 7 V19 a1 1 0 0 1 -1 1 H6 a1 1 0 0 1 -1 -1 V4 a1 1 0 0 1 1 -1 Z M14 3 V7 H18"
+                                                                          Stroke="{DynamicResource MutedBrush}"
+                                                                          StrokeThickness="1.4"
+                                                                          StrokeLineCap="Round"
+                                                                          StrokeJoin="Round"
+                                                                          Width="16" Height="16"
+                                                                          Stretch="Uniform"
+                                                                          HorizontalAlignment="Left"/>
+                                                                    <TextBlock Text="{Binding DisplayName}"
+                                                                               FontFamily="{StaticResource FontSans}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextBrush}"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               MaxLines="1"/>
+                                                                </StackPanel>
+                                                            </Border>
                                                             <Button Classes="pending-attachment-remove"
                                                                     Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AgentHost.PendingAttachments.RemoveCommand}"
                                                                     CommandParameter="{Binding}"
@@ -1323,6 +1363,54 @@
                     </Grid>
                 </Border>
             </Grid>
+        </Border>
+
+        <!-- ============== Drop-zone overlay ============== -->
+        <!--
+          Shown when the user is hovering the window with a file
+          drag (OnDragOver → IsDragOver=true). Fades a translucent
+          accent wash over the entire content area with a centred
+          "释放鼠标添加文件" prompt, so the user gets immediate
+          feedback that the drop will be accepted. Sits below
+          the toasts layer (next sibling) so a running toast
+          stays visible during the drag.
+
+          IsVisible is bound to MainWindow.IsDragOver (a
+          DirectProperty on the code-behind) via the #RootWindow
+          self-reference, since the DataContext at this level is
+          MainWindowViewModel — not the window itself.
+        -->
+        <Border IsVisible="{Binding #RootWindow.IsDragOver}"
+                Background="{DynamicResource AccentBrush}"
+                Opacity="0.12"
+                BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="2"
+                CornerRadius="18"
+                Margin="2"
+                IsHitTestVisible="False">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="10">
+                <Path Data="M12 4 V20 M5 11 L12 4 L19 11 M5 16 V19 a1 1 0 0 0 1 1 H18 a1 1 0 0 0 1 -1 V16"
+                      Stroke="{DynamicResource AccentBrush}"
+                      StrokeThickness="2.2"
+                      StrokeLineCap="Round"
+                      StrokeJoin="Round"
+                      Width="40" Height="40"
+                      Stretch="Uniform"
+                      HorizontalAlignment="Center"/>
+                <TextBlock Text="释放鼠标添加文件"
+                           FontFamily="{StaticResource FontSans}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="支持图片、PDF、文档、代码等任意文件"
+                           FontFamily="{StaticResource FontSans}"
+                           FontSize="12"
+                           Foreground="{DynamicResource MutedBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
         </Border>
 
         <!-- ============== Toasts (bottom-right) ============== -->

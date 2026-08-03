@@ -696,13 +696,72 @@ internal partial class MainWindow : Window
         });
     }
 
-    private void AddImageAttachment_OnClick(object? sender, RoutedEventArgs e)
+    // "+" → "图片 / 文件" submenu. Opens a StorageProvider file
+    // picker that accepts arbitrary file types (not just images,
+    // despite the menu label) and forwards the selected paths
+    // through the same PendingAttachments.AddFile path that
+    // drag-and-drop uses. The 1.0 shape was a placeholder toast
+    // pointing the user at ⌘V — 1.0.1 wires the real picker so
+    // the composer "+" surface actually does what it advertises.
+    //
+    // Cancellation (user closes the dialog with no selection) is
+    // silent — same convention as ExportConversationMenuItem and
+    // the project picker.
+    private async void AddImageAttachment_OnClick(object? sender, RoutedEventArgs e)
     {
-        // The image paste flow lives on AgentHost.PendingAttachments
-        // and is wired to ⌘V in the prompt input. The menu item
-        // delegates to the same surface so the affordance is
-        // discoverable without remembering the keyboard shortcut.
-        _toast?.Show("请用 ⌘V 粘贴图片(也可拖拽到输入框)", ToastLevel.Info);
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "添加附件",
+                AllowMultiple = true,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("所有文件") { Patterns = new[] { "*.*" } },
+                    new FilePickerFileType("图片") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.svg" } },
+                    new FilePickerFileType("文档") { Patterns = new[] { "*.pdf", "*.doc", "*.docx", "*.txt", "*.md", "*.rtf" } },
+                    new FilePickerFileType("代码 / 数据") { Patterns = new[] { "*.json", "*.xml", "*.yaml", "*.yml", "*.csv", "*.tsv" } },
+                },
+            });
+            if (files is null || files.Count == 0)
+            {
+                return;
+            }
+            var added = 0;
+            foreach (var file in files)
+            {
+                var path = file.TryGetLocalPath();
+                if (string.IsNullOrEmpty(path))
+                {
+                    continue;
+                }
+                try
+                {
+                    viewModel.AgentHost.PendingAttachments.AddFile(path);
+                    added++;
+                }
+                catch (Exception ex)
+                {
+                    viewModel.StatusMessage = $"无法添加 {Path.GetFileName(path)}：{ex.Message}";
+                }
+            }
+            if (added > 0)
+            {
+                viewModel.StatusMessage = $"已添加 {added} 个附件。";
+                PromptInput.Focus();
+            }
+        }
+        catch (Exception ex)
+        {
+            // The CrashReporter hook will already have caught
+            // any unexpected exception; we just want a user-
+            // visible message instead of a silent failure.
+            viewModel.StatusMessage = $"添加附件失败：{ex.Message}";
+        }
     }
 
     private void AddAtFile_OnClick(object? sender, RoutedEventArgs e)
@@ -992,6 +1051,136 @@ internal partial class MainWindow : Window
                 await viewModel.AgentHost.SendTaskCommand.ExecuteAsync(null);
             }
         });
+    }
+
+    // Drag-and-drop file attachments into the composer.
+    //
+    // The handlers live on the root Grid (set via
+    // DragDrop.AllowDrop="True" + DragDrop.Drop / DragOver / DragLeave
+    // in MainWindow.axaml). The whole window is the drop target so the
+    // user doesn't have to aim at the composer — they can drop anywhere
+    // on the main content and the file lands in the pending-attachments
+    // strip above the prompt.
+    //
+    // Avalonia 12's drag-drop API is the new IDataTransfer-based shape
+    // (e.DataTransfer + DataTransferExtensions.TryGetFiles). The old
+    // e.Data + DataFormats.Files path is marked obsolete; the new API
+    // also handles OS file promises (the "real" file URI on macOS
+    // instead of the "filename only" fallback) correctly.
+    //
+    // Directory drops are filtered out — the artifact pipeline is
+    // per-file and a 1.0.1 follow-up will add a "include children"
+    // path.
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        var hasFiles = e.DataTransfer is not null &&
+            DataTransferExtensions.TryGetFiles(e.DataTransfer) is { Length: > 0 };
+        e.DragEffects = hasFiles ? DragDropEffects.Copy : DragDropEffects.None;
+        IsDragOver = hasFiles;
+        e.Handled = true;
+    }
+
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        IsDragOver = false;
+        e.Handled = true;
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        IsDragOver = false;
+        if (e.DataTransfer is null)
+        {
+            return;
+        }
+        var items = DataTransferExtensions.TryGetFiles(e.DataTransfer);
+        if (items is null || items.Length == 0)
+        {
+            return;
+        }
+        e.Handled = true;
+        SafeRun(async () => await AcceptDroppedFilesAsync(items));
+    }
+
+    // Resolves each IStorageItem to a local path, then forwards to
+    // PendingAttachments.AddFile. Directories are skipped with a
+    // user-visible status message (the per-file pipeline can't
+    // recurse in the 1.0.1 first slice; a follow-up will add a
+    // "include children" mode). Failures from AddFile (file gone,
+    // perms, etc.) bubble up through the per-item try / catch so
+    // a single bad file doesn't kill the whole drop.
+    private async Task AcceptDroppedFilesAsync(IEnumerable<IStorageItem> items)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        var accepted = 0;
+        var skipped = 0;
+        foreach (var item in items)
+        {
+            if (item is IStorageFolder)
+            {
+                skipped++;
+                continue;
+            }
+            var path = item.TryGetLocalPath();
+            if (string.IsNullOrEmpty(path))
+            {
+                skipped++;
+                continue;
+            }
+            try
+            {
+                viewModel.AgentHost.PendingAttachments.AddFile(path);
+                accepted++;
+            }
+            catch (Exception ex)
+            {
+                skipped++;
+                viewModel.StatusMessage = $"无法添加 {Path.GetFileName(path)}：{ex.Message}";
+            }
+        }
+        if (accepted > 0)
+        {
+            viewModel.StatusMessage = skipped > 0
+                ? $"已添加 {accepted} 个附件（{skipped} 个跳过）。"
+                : $"已添加 {accepted} 个附件。";
+            PromptInput.Focus();
+        }
+        else if (skipped > 0)
+        {
+            viewModel.StatusMessage = "未添加任何附件（仅支持文件，不支持目录）。";
+        }
+        await Task.CompletedTask;
+    }
+
+    // Toggles the "drop here" overlay in the XAML. The overlay sits
+    // above the conversation area and only fades in while a file
+    // drag is hovering the window — the XAML binds IsVisible to
+    // this property. Setter fires the OnPropertyChanged event
+    // through the field, which is what the {Binding IsDragOver}
+    // markup extension subscribes to.
+    private bool _isDragOver;
+    public static readonly DirectProperty<MainWindow, bool> IsDragOverProperty =
+        AvaloniaProperty.RegisterDirect<MainWindow, bool>(
+            nameof(IsDragOver), o => o.IsDragOver, (o, v) => o.IsDragOver = v);
+    public bool IsDragOver
+    {
+        get => _isDragOver;
+        set
+        {
+            if (_isDragOver == value)
+            {
+                return;
+            }
+            _isDragOver = value;
+            // DirectProperty<T> needs the registered callback,
+            // not the standard PropertyChanged event, to push the
+            // value into Avalonia's binding system. RaiseAndSetIfChanged
+            // handles both sides in one call.
+            RaisePropertyChanged(IsDragOverProperty, oldValue: !value, newValue: value);
+        }
     }
 
     // Command palette: arrow keys move selection, Enter executes, Escape

@@ -631,19 +631,26 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         return _slashHandler(DraftPrompt);
     }
 
-    // Convert every pending image attachment into a project-level
-    // InputArtifact so the agent loop can attach the image content
-    // to the next user message. Each artifact is materialised via
-    // InputArtifactService (which classifies kind + builds the
-    // summary) and persisted via InputArtifactFileStore (which
-    // copies the file to the project's managed artifacts folder
-    // and records storedPath in the metadata). The project list
-    // is re-saved so the change is durable across restarts.
+    // Convert every pending attachment (image or non-image) into a
+    // project-level InputArtifact so the agent loop can attach the
+    // file content to the next user message. Each artifact is
+    // materialised via InputArtifactService (which classifies kind +
+    // builds the summary) and persisted via InputArtifactFileStore
+    // (which copies the file to the project's managed artifacts
+    // folder and records storedPath in the metadata). The project
+    // list is re-saved so the change is durable across restarts.
     //
     // Pending attachment rows are cleared at the end of the method
     // — the on-disk files have been copied to the project's
     // managed location, and the temporary files are removed when
     // the PendingAttachmentViewModel is disposed.
+    //
+    // MimeType + extension come from the PendingAttachmentViewModel
+    // (filled in by AddPastedImage / AddFile) rather than being
+    // hardcoded to image/png — the old shape was a paste-image-only
+    // path; drag-and-drop introduced arbitrary file types and the
+    // classifier downstream needs the real mime to dispatch to the
+    // right text extractor (pdf / docx / xlsx / raw text).
     private async Task PromotePendingAttachmentsAsync(WorkspaceProject project)
     {
         if (PendingAttachments.Count == 0)
@@ -659,22 +666,42 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             try
             {
                 var bytes = await File.ReadAllBytesAsync(attachment.FilePath);
+                // Source label survives into the artifact metadata so
+                // the agent can distinguish "user pasted a screenshot"
+                // from "user dropped a 2MB PDF" when reasoning about
+                // what to do with the file. The classifier still owns
+                // the canonical Kind, so this is just provenance.
+                var source = attachment.IsImage ? "pasted-image" : "dropped-file";
                 var request = new AIChat.Application.Artifacts.InputArtifactCreateRequest
                 {
                     ProjectId = project.Id,
                     ConversationId = "",
                     MessageId = "",
-                    FileName = attachment.FileName,
-                    MimeType = "image/png",
+                    FileName = attachment.DisplayName,
+                    MimeType = attachment.MimeType,
                     ContentText = "",
                     FileBytes = bytes,
                     Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                     {
-                        ["source"] = "pasted-image",
+                        ["source"] = source,
                     },
                 };
                 var artifact = artifactService.Create(request);
-                await _artifactFileStore.StoreBytesAsync(artifact, bytes, ".png");
+                // Preserve the on-disk extension so the artifact
+                // store's downstream consumers (file copy,
+                // inspection tools, the user-facing file list) see
+                // the original type. A pasted .png still becomes
+                // .png; a dropped report.pdf stays .pdf.
+                var extension = Path.GetExtension(attachment.DisplayName);
+                if (string.IsNullOrEmpty(extension))
+                {
+                    extension = Path.GetExtension(attachment.FileName);
+                }
+                if (string.IsNullOrEmpty(extension))
+                {
+                    extension = ".bin";
+                }
+                await _artifactFileStore.StoreBytesAsync(artifact, bytes, extension);
                 project.InputArtifacts.Add(artifact);
             }
             catch (Exception ex)
@@ -684,7 +711,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
                 // the rest.
                 _activityFeed.Add(
                     "附加失败",
-                    $"{attachment.FileName}: {ex.Message}",
+                    $"{attachment.DisplayName}: {ex.Message}",
                     "附件");
             }
         }
