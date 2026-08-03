@@ -1021,9 +1021,22 @@ internal partial class MainWindow : Window
         _toast?.Show($"已抓取 {result.Content.Length} 字符到数据源。", ToastLevel.Success);
     }
 
-    private void AddPluginAttachment_OnClick(object? sender, RoutedEventArgs e)
+    private void OpenPlugins_OnClick(object? sender, RoutedEventArgs e)
     {
-        _toast?.Show("插件 — Wave 8 接入", ToastLevel.Info);
+        // "+" / "插件" menu. Past shape was a
+        // placeholder toast ("插件 — Wave 8 接入")
+        // — the Plugin modal had already shipped
+        // (IPluginRegistry + PluginsViewModel + the
+        // sidebar's 5th nav item) but the
+        // composer's "+" entry never pointed at it,
+        // so a user reaching for it from the
+        // composer hit a stub. This slice routes
+        // the click through the same modal-open
+        // path the sidebar nav item uses.
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.IsPluginsOpen = true;
+        }
     }
 
     // Wave 4 (plan §4): "追加要求" button. The button is currently
