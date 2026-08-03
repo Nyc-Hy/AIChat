@@ -11,6 +11,7 @@ using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
+using AIChat.Application.Artifacts;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using Avalonia.Threading;
@@ -19,8 +20,19 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
+// One row in the sidebar "最近" section. Just a title — clicking
+// routes to the conversation / search the user was last on.
+// Wave 6 replaces this with a real conversation id / search query
+// pointer; for now it's display-only so the parity surface is
+// visible in the layout.
+public sealed class RecentItemViewModel(string title)
+{
+    public string Title { get; } = title;
+}
+
 public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHost
 {
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly IAppRepository _repository;
     private readonly AgentToolRegistry _toolRegistry;
     private readonly IChatCompletionService _chatService;
@@ -36,9 +48,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     private readonly IClipboardService _clipboard;
     private readonly MemoryEditorViewModel _memoryEditor;
     private readonly GitStatusViewModel _gitStatus;
+    private readonly PluginsViewModel _pluginsViewModel;
+    private readonly ScheduledViewModel _scheduledViewModel;
+    private readonly SitesViewModel _sitesViewModel;
     private readonly AIChat.Application.Workspace.IWorkspaceChangeService _workspace;
-    private readonly FileTreeViewModel _fileTree;
-    private readonly FilePreviewViewModel _filePreview;
     private readonly AgentHostViewModel _agentHost;
 
     // lastAssistantStatus + CanRetry + _lastUserPrompt all moved
@@ -93,6 +106,37 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // owns NoWriteMode; AgentHost owns the recompute.
         _ = _agentHost.RecomputeContextInputTokensAsync(_agentHost.DraftPrompt);
         OnPropertyChanged(nameof(PromptPlaceholder));
+        // Sprint 0.5: mirror NoWriteMode onto DefaultAccess so the
+        // existing ⌘⇧R shortcut still controls the Codex-aligned
+        // 2-toggle model. ⌘⇧R becomes "toggle DefaultAccess".
+        if (DefaultAccess == value)
+        {
+            DefaultAccess = !value;
+        }
+    }
+
+    partial void OnDefaultAccessChanged(bool value)
+    {
+        if (NoWriteMode == value)
+        {
+            NoWriteMode = !value;
+        }
+        OnPropertyChanged(nameof(PermissionBadgeText));
+        OnPropertyChanged(nameof(PermissionBadgeTooltip));
+        PersistPermissionSettings();
+    }
+
+    partial void OnFullAccessEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(PermissionBadgeText));
+        OnPropertyChanged(nameof(PermissionBadgeTooltip));
+        PersistPermissionSettings();
+    }
+
+    partial void OnEnvironmentPanelOpenChanged(bool value)
+    {
+        _settings.EnvironmentPanelOpen = value;
+        _ = PersistSettingsFireAndForget();
     }
 
     // Clipboard helpers used by the /copy slash command. HasClipboardService
@@ -110,7 +154,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     public async Task<string> GetGitStatusSummaryAsync()
     {
         var project = _sidebar.CurrentProject;
-        if (project is null || string.IsNullOrWhiteSpace(project.Path))
+        if (project is null || string.IsNullOrWhiteSpace(project.TryGetPrimaryPath()))
         {
             return "(请先选择项目)";
         }
@@ -118,7 +162,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         AIChat.Application.Workspace.WorkspaceChangeSet changeSet;
         try
         {
-            changeSet = await _workspace.GetChangesAsync(project.Path);
+            changeSet = await _workspace.GetChangesAsync(project.TryGetPrimaryPath());
         }
         catch (Exception ex)
         {
@@ -175,6 +219,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     [ObservableProperty]
     private bool isSettingsOpen;
 
+    // Wave 8 (parity plan §7 Wave 8): Plugins modal. Same
+    // pattern as Settings / MemoryEditor / GitStatus / RunHistory
+    // — a single bool the XAML binds to. Opens via
+    // OpenPluginsCommand (the sidebar's 5th nav item).
+    [ObservableProperty]
+    private bool isPluginsOpen;
+
+    // Wave 9 (parity plan §7 Wave 9): Scheduled + Sites modals.
+    // Same pattern as Plugins. OpenScheduledCommand /
+    // OpenSitesCommand are wired to the 3rd / 4th sidebar nav
+    // items; the underlying VMs are constructed eagerly in DI
+    // so the registry's first ReloadAsync fires before the
+    // user opens the modal.
+    [ObservableProperty]
+    private bool isScheduledOpen;
+
+    [ObservableProperty]
+    private bool isSitesOpen;
+
     // Memory editor modal: full add / delete UI for the current
     // project's memory. ⌘⇧M opens it. /memory (slash) stays as a
     // quick read-only summary in the activity feed — this is the
@@ -184,6 +247,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     public MemoryEditorViewModel MemoryEditor => _memoryEditor;
 
+    public PluginsViewModel Plugins => _pluginsViewModel;
+    public ScheduledViewModel Scheduled => _scheduledViewModel;
+    public SitesViewModel Sites => _sitesViewModel;
+
     // Git status / diff viewer modal. ⌘⇧G opens it; ⌘G stays as the
     // quick /git bubble for the lightweight "what just changed"
     // glance.
@@ -192,8 +259,176 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     public GitStatusViewModel GitStatus => _gitStatus;
 
+    [ObservableProperty]
+    private bool isRunHistoryOpen;
+
+    public RunHistoryViewModel RunHistory { get; }
+
+    // ---- Sprint 0.5: right-side Environment panel + 2-toggle permissions ----
+    // The Environment panel hosts the live git / sub-agent / source sections
+    // that used to live in the GitStatusView modal + the plan panel. The
+    // 2-toggle permissions replace the single NoWriteMode bool with the
+    // Codex Desktop shape: `DefaultAccess` (workspace writes + ask for
+    // network) and `FullAccessEnabled` (no approvals). Both off = read-only.
+    // See docs/CODEX_DESKTOP_PARITY_PLAN.md §13.5 deviation #1.
+    public EnvironmentPanelViewModel EnvironmentPanel => _environmentPanel;
+
+    // Codex parity: "最近" section in the sidebar. The list mixes
+    // recent agent runs / searches / planned tasks — Codex surfaces
+    // these as a flat list independent of "对话" so the user can
+    // jump back into something they did last week. Wave 6 wires
+    // this to a real Activity / Search history store; for now we
+    // expose a fixed demo list so the visual surface is in place.
+    public ObservableCollection<RecentItemViewModel> RecentItems { get; } = new()
+    {
+        new("规划定制键盘模具轴驱动"),
+        new("设计 LLM 驱动 A 股交易工具"),
+        new("开放 Agent 工程师路径访问"),
+        new("我想做一个 app 读取摄像头,在通过 ai 分析"),
+        new("定制 WMS MVP 计划"),
+        new("分析项目现状"),
+        new("分析项目现状"),
+        new("分析项目现状"),
+        new("提取现实作品名单"),
+    };
+    private EnvironmentPanelViewModel _environmentPanel = null!;
+
+    [ObservableProperty]
+    private bool environmentPanelOpen = true;
+
+    [ObservableProperty]
+    private bool defaultAccess = true;
+
+    [ObservableProperty]
+    private bool fullAccessEnabled;
+
+    // Computed display state for the composer permission badge. 3 states,
+    // mapped to 3 display strings the composer XAML can show verbatim.
+    // Order matters: FullAccess wins over DefaultAccess because it's the
+    // strictly broader grant.
+    public string PermissionBadgeText =>
+        FullAccessEnabled ? "完全访问"
+        : DefaultAccess ? "默认访问"
+        : "只读";
+
+    public string PermissionBadgeTooltip =>
+        FullAccessEnabled ? "完全访问 — 无需批准即可写入和执行网络命令 (点击切换)"
+        : DefaultAccess ? "默认访问 — 工作区写入需要批准 (点击切换)"
+        : "只读 — 不修改项目，不执行网络命令 (点击切换)";
+
+    // First-level sidebar nav: 5 entries from plan §4. Only "新对话" is
+    // wired in Sprint 0.5; the other 4 are no-op stubs with a "Wave X"
+    // tag rendered in the XAML so the user sees them as "coming soon"
+    // rather than placeholders-without-backing (plan §5.4).
+    [RelayCommand]
+    private void NewChat() => NewConversation();
+
+    [RelayCommand]
+    private void OpenPullRequests()
+        => _toast.Show("拉取请求 — Wave 6 暂未开放", ToastLevel.Info);
+
+    [RelayCommand]
+    private void OpenSites()
+    {
+        if (!CanOpenModal())
+        {
+            return;
+        }
+        IsSitesOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseSites() => IsSitesOpen = false;
+
+    [RelayCommand]
+    private void OpenScheduled()
+    {
+        if (!CanOpenModal())
+        {
+            return;
+        }
+        IsScheduledOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseScheduled() => IsScheduledOpen = false;
+
+    [RelayCommand]
+    private void OpenPlugins()
+    {
+        // Wave 8 (parity plan §7 Wave 8): open the Plugins modal.
+        // The first slice is read-only (list installed + reload),
+        // so we just flip the IsPluginsOpen flag the same way
+        // Settings / MemoryEditor / GitStatus do. The modal's
+        // content (PluginsView) binds to PluginsViewModel which
+        // is constructed eagerly from the registered
+        // IPluginRegistry — see AppHost / ServiceRegistration.
+        if (!CanOpenModal())
+        {
+            return;
+        }
+        IsPluginsOpen = true;
+    }
+
+    [RelayCommand]
+    private void ClosePlugins() => IsPluginsOpen = false;
+
+    [RelayCommand]
+    private void ToggleEnvironmentPanel()
+    {
+        EnvironmentPanelOpen = !EnvironmentPanelOpen;
+        _settings.EnvironmentPanelOpen = EnvironmentPanelOpen;
+        _ = PersistSettingsFireAndForget();
+    }
+
+    // The badge is a clickable chip. Cycle through the 3 permission
+    // states on each click:
+    //   default-access → full-access → read-only → default-access
+    // This matches the Codex convention of clicking the badge to open
+    // a quick toggle. The 2-toggle settings page (Wave 4 / 10) will be
+    // the more discoverable surface; this is the keyboard-fast path.
+    [RelayCommand]
+    private void CyclePermissionState()
+    {
+        if (DefaultAccess && !FullAccessEnabled)
+        {
+            FullAccessEnabled = true;
+        }
+        else if (FullAccessEnabled)
+        {
+            DefaultAccess = false;
+            FullAccessEnabled = false;
+        }
+        else
+        {
+            DefaultAccess = true;
+            FullAccessEnabled = false;
+        }
+        PersistPermissionSettings();
+        _ = _agentHost.RecomputeContextInputTokensAsync(_agentHost.DraftPrompt);
+    }
+
+    private void PersistPermissionSettings()
+    {
+        _settings.DefaultAccess = DefaultAccess;
+        _settings.FullAccessEnabled = FullAccessEnabled;
+        _ = PersistSettingsFireAndForget();
+    }
+
+    private async Task PersistSettingsFireAndForget()
+    {
+        try
+        {
+            await _repository.SaveSettingsAsync(_settings);
+        }
+        catch
+        {
+            // Best-effort. The user can recover next launch by re-toggling.
+        }
+    }
+
     // Keyboard-shortcuts cheat sheet modal. The "?" titlebar button
-    // and the ⌘? global shortcut both surface this — both paths
+    // and the ⌘/ global shortcut both surface this — both paths
     // route through OpenShortcutsCommand / CloseShortcutsCommand
     // so the modals always open to a fresh state.
     [ObservableProperty]
@@ -226,6 +461,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     [RelayCommand]
     private void OpenCommandPalette()
     {
+        if (!CanOpenModal())
+        {
+            return;
+        }
+
         // v1 bug B-2 fix: reset palette state on every open. Previously the
         // second open inherited the previous search text and selected index
         // because the palette's own IsOpen was never written (only this
@@ -240,7 +480,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     private void CloseCommandPalette() => IsCommandPaletteOpen = false;
 
     [RelayCommand]
-    private void OpenSettings() => IsSettingsOpen = true;
+    private void OpenSettings()
+    {
+        if (CanOpenModal())
+        {
+            IsSettingsOpen = true;
+        }
+    }
 
     [RelayCommand]
     private void CloseSettings() => IsSettingsOpen = false;
@@ -248,6 +494,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     [RelayCommand]
     private void OpenMemoryEditor()
     {
+        if (!CanOpenModal())
+        {
+            return;
+        }
+
+        if (!HasSelectedProject())
+        {
+            StatusMessage = "请先选择一个项目，再编辑项目记忆。";
+            _toast.Show("请先选择一个项目。", ToastLevel.Info);
+            return;
+        }
+
         // Refresh the list every time the modal opens so a memory
         // added by the agent during a run is reflected immediately.
         _memoryEditor.Refresh();
@@ -260,6 +518,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     [RelayCommand]
     public async Task OpenGitStatusAsync()
     {
+        if (!CanOpenModal())
+        {
+            return;
+        }
+
+        if (!HasSelectedProject())
+        {
+            StatusMessage = "请先选择一个项目，再查看 Git 状态。";
+            _toast.Show("请先选择一个项目。", ToastLevel.Info);
+            return;
+        }
+
         IsGitStatusOpen = true;
         // Re-fetch every open so an agent run that just landed
         // shows up immediately. Cheap (single git status call) and
@@ -271,22 +541,156 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     [RelayCommand]
     private void CloseGitStatus() => IsGitStatusOpen = false;
 
+    [RelayCommand]
+    private void OpenRunHistory()
+    {
+        if (!CanOpenModal())
+        {
+            return;
+        }
+
+        if (!HasSelectedProject())
+        {
+            StatusMessage = "请先选择一个项目，再查看运行记录。";
+            _toast.Show("请先选择一个项目。", ToastLevel.Info);
+            return;
+        }
+
+        RunHistory.Refresh();
+        IsRunHistoryOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseRunHistory() => IsRunHistoryOpen = false;
+
     // Keyboard-shortcuts cheat sheet modal. The "?" titlebar button
-    // and the ⌘? global shortcut both go through OpenShortcuts so
+    // and the ⌘/ global shortcut both go through OpenShortcuts so
     // the user can always reach the list (the global shortcut is
     // the user-discoverable path; the titlebar button is the
     // always-visible entry point for first-time users).
     [RelayCommand]
-    private void OpenShortcuts() => IsShortcutsOpen = true;
+    private void OpenShortcuts()
+    {
+        if (CanOpenModal())
+        {
+            IsShortcutsOpen = true;
+        }
+    }
+
+    private bool CanOpenModal() => !_approvalViewModel.HasPendingApproval;
+
+    private bool HasSelectedProject() =>
+        _sidebar.CurrentProject is { } p && !string.IsNullOrEmpty(p.TryGetPrimaryPath());
 
     [RelayCommand]
     private void CloseShortcuts() => IsShortcutsOpen = false;
 
+    // Standalone conversation list (Wave 3: plan §3.1 普通聊天)。
+    // Standalone sessions 不绑 project — 跑不需要项目工具的功能(查资料、
+    // 写脚本、问问题)。在 sidebar 独立 section 显示,跟 project
+    // sessions 分开,UI 不会把 "新对话" 的草稿串到项目会话。
+    public ObservableCollection<ConversationCardViewModel> StandaloneConversations { get; } = [];
+
+    // Standalone 与 Project 分两条路径走:Project 走 ConversationListViewModel
+    // (按 project filter),Standalone 走 MainWindowViewModel 自己(全 app
+    // 共一份)。这个 list 给 sidebar "Standalone" section 直接绑。
+    private IReadOnlyList<Standalone> _standaloneSessions = [];
+
     [RelayCommand]
     private void NewConversation()
     {
+        _agentHost.ClearPreparedRunLink();
         ActivityFeed.Clear();
         StatusMessage = "新对话。";
+    }
+
+    [RelayCommand]
+    private async Task NewStandaloneConversationAsync()
+    {
+        // Wave 3: ⌘N 真正创建并持久化一个 Standalone ChatSession,
+        // 让"新对话"不是一个 ephemeral placeholder。
+        // 1. 创建 domain 对象
+        var session = new Standalone
+        {
+            Title = "新任务",
+            UpdatedAt = DateTimeOffset.Now,
+        };
+        // 2. 写盘(append 进 sessions.json 的 Standalone 列表)
+        var all = (await _repository.LoadSessionsAsync()).ToList();
+        all.Add(session);
+        await _repository.SaveSessionsAsync(all);
+        _standaloneSessions = all.OfType<Standalone>().ToList();
+        // 3. 推到 sidebar
+        StandaloneConversations.Insert(0, MakeStandaloneCard(session));
+        // 4. 清 agent 草稿 + activity feed,等用户开始打字
+        _agentHost.ClearPreparedRunLink();
+        ActivityFeed.Clear();
+        StatusMessage = "新对话。";
+        _toast.Show("新对话已创建 — 不绑定项目,直接开始。", ToastLevel.Info);
+    }
+
+    private ConversationCardViewModel MakeStandaloneCard(Standalone session)
+    {
+        return new ConversationCardViewModel(
+            session.Id,
+            string.IsNullOrWhiteSpace(session.Title) ? "新任务" : session.Title,
+            session.UpdatedAt.ToLocalTime().ToString("M月d日 HH:mm"),
+            // Standalone 标题改完直接写盘(跟 project 一样);onTitleChange
+            // 接 MainWindowViewModel.PersistStandaloneTitleAsync
+            PersistStandaloneTitleAsync);
+    }
+
+    // Public: 给 ConversationCardViewModel 的重命名回调。
+    public async Task PersistStandaloneTitleAsync(string sessionId, string newTitle)
+    {
+        var trimmed = newTitle?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0) return;
+        var target = _standaloneSessions.FirstOrDefault(s =>
+            string.Equals(s.Id, sessionId, StringComparison.OrdinalIgnoreCase));
+        if (target is null || target.Title == trimmed) return;
+        target.Title = trimmed;
+        target.UpdatedAt = DateTimeOffset.Now;
+        var all = (await _repository.LoadSessionsAsync()).ToList();
+        // 同步更新 in-memory list + 写盘
+        var saved = all.OfType<Standalone>().FirstOrDefault(s => s.Id == sessionId);
+        if (saved is not null) saved.Title = trimmed;
+        await _repository.SaveSessionsAsync(all);
+        // sidebar card 同步
+        var card = StandaloneConversations.FirstOrDefault(c => c.Id == sessionId);
+        if (card is not null) card.Title = trimmed;
+    }
+
+    // 启动 + 切 sidebar 时刷新 standalone 列表
+    public async Task RefreshStandaloneConversationsAsync()
+    {
+        var all = await _repository.LoadSessionsAsync();
+        _standaloneSessions = all.OfType<Standalone>()
+            .OrderByDescending(s => s.UpdatedAt)
+            .ToList();
+        StandaloneConversations.Clear();
+        foreach (var session in _standaloneSessions)
+        {
+            StandaloneConversations.Add(MakeStandaloneCard(session));
+        }
+    }
+
+    // Wave 3: load a Standalone session from disk + push to the
+    // activity feed. Mirror of how OnConversationSelected (project
+    // side) routes a project session to ActivityFeed.LoadConversation.
+    public async Task OpenStandaloneConversationAsync(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId)) return;
+        var all = await _repository.LoadSessionsAsync();
+        var session = all.OfType<Standalone>().FirstOrDefault(s =>
+            string.Equals(s.Id, sessionId, StringComparison.OrdinalIgnoreCase));
+        if (session is null)
+        {
+            StatusMessage = "找不到对应的 Standalone 对话。";
+            return;
+        }
+        _agentHost.ClearPreparedRunLink();
+        ActivityFeed.LoadConversation(session);
+        StatusMessage = $"已打开 Standalone 对话：{session.Title}";
     }
 
     [RelayCommand]
@@ -323,19 +727,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     // view-model. The activity feed still belongs here; the parent reacts
     // to ConversationSelected events to load messages.
     public ConversationListViewModel ConversationList => _conversationList;
-
-    // Phase 1: file tree for the current project. Listens to
-    // ProjectSelected internally so the XAML just binds
-    // FileTree.Root and the tree rebuilds whenever the user
-    // picks a different project.
-    public FileTreeViewModel FileTree => _fileTree;
-
-    // Phase 1: read-only file preview. Populated when the user
-    // picks a file leaf in the tree; the file→preview wiring
-    // lives in the constructor (FileTreeViewModel.FileSelected
-    // event → PreviewAsync), so the XAML just binds
-    // FilePreview.HasFile to a Border IsVisible.
-    public FilePreviewViewModel FilePreview => _filePreview;
 
     // PR-6: tool approval dialog and Approve / Reject commands live in a
     // dedicated view-model. The IApprovalService is what the agent
@@ -391,9 +782,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         IClipboardService clipboard,
         MemoryEditorViewModel memoryEditor,
         GitStatusViewModel gitStatus,
+        PluginsViewModel pluginsViewModel,
+        ScheduledViewModel scheduledViewModel,
+        SitesViewModel sitesViewModel,
         AIChat.Application.Workspace.IWorkspaceChangeService workspace,
-        FileTreeViewModel fileTree,
-        FilePreviewViewModel filePreview)
+        InputArtifactFileStore artifactFileStore,
+        AIChat.Application.BackgroundProcesses.IBackgroundProcessSupervisor processSupervisor)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -410,32 +804,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _clipboard = clipboard;
         _memoryEditor = memoryEditor;
         _gitStatus = gitStatus;
+        _pluginsViewModel = pluginsViewModel;
+        _scheduledViewModel = scheduledViewModel;
+        _sitesViewModel = sitesViewModel;
         _workspace = workspace;
-        _fileTree = fileTree;
-        _filePreview = filePreview;
-
-        // Phase 1 wiring: file leaf picked in the tree → load
-        // the file into the preview pane. The tree emits the
-        // project's relative path; the preview resolves it
-        // against the sidebar's current project root.
-        _fileTree.FileSelected += async (_, args) =>
-        {
-            await _filePreview.PreviewAsync(_sidebar.CurrentProject?.Path, args.RelativePath);
-        };
-        // File-tree errors (opener failed, build failed, etc.)
-        // bubble up to the host's existing status surface rather
-        // than the tree VM owning its own toast.
-        _fileTree.StatusMessageRequested += (_, message) => StatusMessage = message;
-        // Project switch while a file is open: clear the preview
-        // so the user doesn't see "stale" content from the
-        // previous project.
-        _sidebar.ProjectSelected += (_, args) =>
-        {
-            if (args.Project?.Path != _filePreview.ProjectRoot)
-            {
-                _filePreview.ClearCommand.Execute(null);
-            }
-        };
 
         // App-status surface (active provider / model / readiness
         // pill / in-flight test flag / derived Greeting + HasProject
@@ -447,14 +819,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // because the commands live on AgentHost, not on the
         // status VM.)
         _appStatus = new AppStatusViewModel(sidebar);
-        _appStatus.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(AppStatusViewModel.IsProviderTesting))
-            {
-                _agentHost.SendTaskCommand.NotifyCanExecuteChanged();
-                _agentHost.StopTaskCommand.NotifyCanExecuteChanged();
-            }
-        };
 
         // Construct the agent host (which in turn owns the
         // AgentRunnerViewModel + the per-run CTS + the run state).
@@ -474,7 +838,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             setStatusMessage: value => StatusMessage = value,
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode,
-            getIsProviderTesting: () => _appStatus.IsProviderTesting);
+            getIsProviderTesting: () => _appStatus.IsProviderTesting,
+            artifactFileStore: artifactFileStore);
+        _appStatus.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppStatusViewModel.IsProviderTesting))
+            {
+                _agentHost.SendTaskCommand.NotifyCanExecuteChanged();
+                _agentHost.StopTaskCommand.NotifyCanExecuteChanged();
+            }
+        };
 
         // The slash-command handler is a small static helper that
         // currently expects the host VM (it reads /status fields off
@@ -485,6 +858,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _agentHost.RegisterSlashHandler(prompt =>
             SlashCommandHandler.TryExecuteAsync(prompt, this));
 
+        RunHistory = new RunHistoryViewModel(
+            sidebar,
+            RetryHistoricalRun,
+            ContinueHistoricalRun);
+
         _provider.Saved += OnProviderSaved;
         _provider.TestStarted += OnProviderTestStarted;
         _provider.TestCompleted += OnProviderTestCompleted;
@@ -493,6 +871,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _conversationList.ConversationSelected += OnConversationSelected;
         _approvalViewModel.RequestPresented += OnApprovalPresented;
         _approvalViewModel.RequestResolved += OnApprovalResolved;
+
+        // Sprint 0.5: the right-side Environment panel. Constructed after
+        // _agentHost so it can attach to AgentHost.SubAgentRuns +
+        // PendingAttachments.Attachments for live counts. The panel
+        // also mirrors IBackgroundProcessSupervisor so the Background
+        // Processes section is real (Wave 7 follow-up, plan §13 P0
+        // risk "整个子进程树").
+        _environmentPanel = new EnvironmentPanelViewModel(
+            _workspace, processSupervisor, _agentHost, _sidebar);
+        _environmentPanel.AttachTo();
 
         // Sidebar.SelectedProjectName → HasProject / Greeting /
         // SubGreeting forwarding now lives inside AppStatusViewModel
@@ -503,23 +891,41 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _ = RefreshAsync();
     }
 
-    private void OnSidebarProjectSelected(object? sender, ProjectSelectionChangedEventArgs args)
+    private async void OnSidebarProjectSelected(object? sender, ProjectSelectionChangedEventArgs args)
     {
         // AgentHost also subscribes to ProjectSelected to drive
         // the context-budget recompute + status message. The host
         // keeps the conversation list refresh here because the
         // sidebar / conversation VMs are its concern. The two
         // handlers are independent — both fire on the same event.
-        _conversationList.Refresh(_sidebar.CurrentProject);
+        // Wave 2: 先 reload sessions(sidebar 异步),再刷新 conversation list
+        // / run history —— 它们都从 CurrentProjectSessions 读。
+        try
+        {
+            await _sidebar.ReloadCurrentProjectSessionsAsync();
+            _conversationList.Refresh(_sidebar.CurrentProject, _sidebar.CurrentProjectSessions);
+            RunHistory.Refresh();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"加载项目失败: {ex.Message}";
+        }
     }
 
     private void OnSidebarProjectAdded(object? sender, ProjectAddedEventArgs args)
     {
-        _conversationList.Refresh(_sidebar.CurrentProject);
+        // Wave 2: AddProjectAsync 已经把 current project 切到新加的;再
+        // reload sessions 让 conversation list 跟 run history 跟上。
+        OnSidebarProjectSelected(sender, new ProjectSelectionChangedEventArgs
+        {
+            Project = args.Project,
+            StatusMessage = args.StatusMessage,
+        });
     }
 
     private void OnConversationSelected(object? sender, ConversationSelectedEventArgs args)
     {
+        _agentHost.ClearPreparedRunLink();
         ActivityFeed.LoadConversation(args.Conversation);
         // Persist the selection so the next launch can restore the
         // same conversation. AppSettings.LastActiveConversationId
@@ -558,7 +964,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
                 "配置模型提供方、API Key、Base URL",
                 "⌘ ,",
                 "M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z",
-                () => { IsSettingsOpen = true; return Task.FromResult(true); }),
+                () => { OpenSettings(); return Task.FromResult(true); }),
             new CommandItem(
                 "切换主题",
                 "在浅色 / 深色 / 跟随系统之间循环",
@@ -620,6 +1026,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
                     return true;
                 }),
             new CommandItem(
+                "打开运行记录",
+                "浏览、筛选、重试或继续当前项目的历史运行",
+                "",
+                "M4 6 H20 M4 12 H20 M4 18 H14",
+                () => { OpenRunHistory(); return Task.FromResult(true); }),
+            new CommandItem(
                 "打开 Memory 编辑器",
                 "查看、添加、删除当前项目的 memory 记录",
                 "⌘ ⇧ M",
@@ -665,12 +1077,40 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     private void OnApprovalPresented(object? sender, ToolApprovalPresentedEventArgs args)
     {
+        // A new tool approval must take precedence over
+        // every other modal — if a modal is up and the
+        // user couldn't see the approval prompt, the
+        // modal has to close. CloseAllModals() is the
+        // single source of truth for the modal list
+        // (keep it in sync with the escape handler in
+        // MainWindow.axaml.cs — both are reviewed
+        // together).
+        CloseAllModals();
         _activeApprovalBubble = new ActivityItemViewModel(
             "需要确认",
             args.Request.Preview.Summary,
             "等待");
         ActivityFeed.Add(_activeApprovalBubble);
         StatusMessage = args.StatusMessage;
+    }
+
+    // Close every modal in one shot. Used by the Escape
+    // handler in MainWindow.axaml.cs and by
+    // OnApprovalPresented (which has to drop any modal
+    // that might be hiding the approval prompt). The
+    // ordered list mirrors the escape-handler's priority
+    // order so both paths land in the same shape.
+    public void CloseAllModals()
+    {
+        IsCommandPaletteOpen = false;
+        IsSettingsOpen = false;
+        IsMemoryEditorOpen = false;
+        IsGitStatusOpen = false;
+        IsRunHistoryOpen = false;
+        IsShortcutsOpen = false;
+        IsPluginsOpen = false;
+        IsScheduledOpen = false;
+        IsSitesOpen = false;
     }
 
     private void OnApprovalResolved(object? sender, ToolApprovalResolvedEventArgs args)
@@ -696,15 +1136,59 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _activeApprovalBubble = null;
     }
 
+    private void RetryHistoricalRun(RunHistoryItemViewModel item)
+    {
+        _conversationList.SelectConversation(item.ConversationId);
+        IsRunHistoryOpen = false;
+        _agentHost.RetryRun(item.Run);
+    }
+
+    private void ContinueHistoricalRun(RunHistoryItemViewModel item)
+    {
+        _conversationList.SelectConversation(item.ConversationId);
+        IsRunHistoryOpen = false;
+        _agentHost.PrepareContinuation(item.Run);
+    }
+
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        await _refreshGate.WaitAsync();
+        try
+        {
+            await RefreshCoreAsync();
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
+    }
+
+    private async Task RefreshCoreAsync()
+    {
+        // 2026-08-03: show a one-time warning if a previous run crashed
+        // (i.e. the CrashReporter append-only log grew since the last
+        // call to TryGetLastCrashSinceLastSeen). The toast is best-
+        // effort: if it fails, the user can still read crash.log
+        // directly from the path Toast points at.
+        var crashSummary = CrashReporter.TryGetLastCrashSinceLastSeen();
+        if (!string.IsNullOrWhiteSpace(crashSummary))
+        {
+            _toast.Show(
+                $"上轮异常退出 ({crashSummary}) — 详情 {CrashReporter.LogPath}",
+                ToastLevel.Warning);
+        }
+
+        // Wave 3: refresh Standalone sessions alongside the project tree
+        // and conversations. The Standalone list is global (not project-
+        // scoped), so loading it here once at startup + on F5 is the
+        // cheapest correct place to wire it.
+        await RefreshStandaloneConversationsAsync();
         // Same RelayCommand-exception-escape risk as SendTaskAsync
         // (d7b179c): F5 (KeyBinding) and the palette both invoke
         // RefreshCommand directly with no SafeRun wrapper. The body
         // touches settings + projects + JSON normalization; any of
-        // them can throw (corrupt file, permission denied, removed
-        // drive). Catch and surface to the status bar so the user
+        // them can throw (corrupt file, permission denied, removed        // drive). Catch and surface to the status bar so the user
         // sees what happened instead of the app silently dying.
         StatusMessage = "正在读取本地状态...";
         try
@@ -727,7 +1211,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             _settings.ConversationContextRatio = Math.Clamp(_settings.ConversationContextRatio, 0.3, 1.0);
             ToolSettingsService.Normalize(_settings, _toolRegistry);
 
-            var projects = (await _repository.LoadProjectsAsync()).ToList();
+            // Sprint 0.5: restore the 2-toggle permission state +
+            // Environment panel visibility. The two permission toggles
+            // are the source of truth in _settings; NoWriteMode is a
+            // derived convenience for the existing agent-host bridge
+            // and the page-header pill.
+            EnvironmentPanelOpen = _settings.EnvironmentPanelOpen;
+            DefaultAccess = _settings.DefaultAccess;
+            FullAccessEnabled = _settings.FullAccessEnabled;
+            // NoWriteMode = !DefaultAccess so the existing ⌘⇧R
+            // shortcut (which flips NoWriteMode) stays meaningful.
+            NoWriteMode = !DefaultAccess;
+
+            var workspaces = (await _repository.LoadWorkspacesAsync()).ToList();
             var active = ProviderSettingsService.GetSelectedProvider(_settings);
 
             _appStatus.ActiveProvider = active is null ? "未配置模型" : active.Name;
@@ -745,7 +1241,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             // mirror anymore.
             _settingsViewModel.Refresh();
 
-            _sidebar.Refresh(projects);
+            _sidebar.Refresh(workspaces);
+            // Wave 2: reload sessions,再让 conversation list / run history 跟上
+            await _sidebar.ReloadCurrentProjectSessionsAsync();
             // Restore the last-active conversation if its id still
             // matches a conversation on the current project.
             // ConversationListViewModel.Refresh already handles the
@@ -753,7 +1251,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             // recent conversation / "new" placeholder, so a stale id
             // from a deleted conversation degrades silently rather
             // than throwing.
-            _conversationList.Refresh(_sidebar.CurrentProject, _settings.LastActiveConversationId);
+            _conversationList.Refresh(_sidebar.CurrentProject, _sidebar.CurrentProjectSessions, _settings.LastActiveConversationId);
+            RunHistory.Refresh();
             _provider.Refresh();
             _settingsViewModel.Refresh();
             // Recompute the context budget after the settings +
@@ -767,7 +1266,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
                 ActivityFeed.Clear();
             }
 
-            StatusMessage = "已加载。";
+            StatusMessage = AppRuntimeProfile.IsIsolated
+                ? "已加载（隔离会话：不读取系统钥匙串）。"
+                : "已加载。";
         }
         catch (Exception ex)
         {
@@ -805,7 +1306,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _appStatus.ActiveProvider = args.ProviderName;
         _appStatus.ActiveModel = args.ModelId;
         _appStatus.Readiness = "可运行";
-        StatusMessage = args.AlreadyExisted ? "已更新模型配置。" : "已保存模型配置。";
+        StatusMessage = args.WarningMessage ??
+                        (args.AlreadyExisted ? "已更新模型配置。" : "已保存模型配置。");
     }
 
     // Tracks the "正在连接 X" bubble dropped by OnProviderTestStarted
