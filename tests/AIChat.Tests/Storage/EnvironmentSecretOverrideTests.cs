@@ -21,6 +21,12 @@ public sealed class EnvironmentSecretOverrideTests : IDisposable
     {
         _dataDirectory = Path.Combine(Path.GetTempPath(), "AIChat.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_dataDirectory);
+        // Redirect AppRuntimeProfile.DataDirectory at the per-test
+        // temp path so dotenv lookup lands in our throwaway
+        // directory. The previous value (production user's real
+        // path) is restored in Dispose.
+        _previousIsolatedRoot = Environment.GetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT");
+        Environment.SetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT", _dataDirectory);
         _protector = new TrackingSecretProtector();
         _repo = new JsonAppRepository(_dataDirectory, _protector);
         _previousMainEnv = Environment.GetEnvironmentVariable(EnvironmentSecretOverride.MainKeyEnvVar);
@@ -38,6 +44,7 @@ public sealed class EnvironmentSecretOverrideTests : IDisposable
         Environment.SetEnvironmentVariable(
             EnvironmentSecretOverride.ProviderKeyEnvVarPrefix + "MINIMAX" + EnvironmentSecretOverride.ProviderKeyEnvVarSuffix,
             _previousProviderEnv);
+        Environment.SetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT", _previousIsolatedRoot);
         try
         {
             if (Directory.Exists(_dataDirectory))
@@ -49,6 +56,8 @@ public sealed class EnvironmentSecretOverrideTests : IDisposable
         {
         }
     }
+
+    private readonly string? _previousIsolatedRoot;
 
     [Fact]
     public async Task MainKey_EnvOverride_ReturnsEnvironmentValue()
@@ -132,6 +141,137 @@ public sealed class EnvironmentSecretOverrideTests : IDisposable
         Assert.Equal("MINI_MAX_PRO", EnvironmentSecretOverride.NormalizeProviderName("Mini Max-Pro"));
         Assert.Equal("OPENAI", EnvironmentSecretOverride.NormalizeProviderName("OpenAI"));
         Assert.Equal("", EnvironmentSecretOverride.NormalizeProviderName(""));
+    }
+
+    [Fact]
+    public void ApiKeyFile_EnvVarPath_OverridesMainKey()
+    {
+        // 2026-08-03: macOS GUI apps do NOT inherit shell rc, so the
+        // env-var-only path silently fails when the app is launched
+        // from Finder / Dock / Spotlight. AICHAT_API_KEY_FILE points
+        // at a single-purpose secret file (CI-friendly, GUI-friendly,
+        // no shell dependency) and its contents become the main key.
+        var keyFile = Path.Combine(_dataDirectory, "main-key");
+        File.WriteAllText(keyFile, "file-secret-789\n");
+        Environment.SetEnvironmentVariable(EnvironmentSecretOverride.ApiKeyFileEnvVar, keyFile);
+        try
+        {
+            var ok = EnvironmentSecretOverride.TryGetMainKey(out var value);
+            Assert.True(ok);
+            Assert.Equal("file-secret-789", value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(EnvironmentSecretOverride.ApiKeyFileEnvVar, null);
+        }
+    }
+
+    [Fact]
+    public void DotEnv_File_OverridesMainKey_WhenNoEnvVarOrKeyFile()
+    {
+        // The data-directory `.env` is the catch-all that works for
+        // every launcher (shell, Finder, Dock, Spotlight). Bare-line
+        // format: the whole line is the main key. Users with a single
+        // key do not have to remember dotenv syntax.
+        var dotEnvPath = Path.Combine(_dataDirectory, ".env");
+        File.WriteAllText(dotEnvPath, "dotenv-secret-xyz\n");
+        Environment.SetEnvironmentVariable(EnvironmentSecretOverride.MainKeyEnvVar, null);
+        try
+        {
+            var ok = EnvironmentSecretOverride.TryGetMainKey(out var value);
+            Assert.True(ok);
+            Assert.Equal("dotenv-secret-xyz", value);
+        }
+        finally
+        {
+            try { File.Delete(dotEnvPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void DotEnv_File_KeyEqualsValue_OverridesProviderKey()
+    {
+        var dotEnvPath = Path.Combine(_dataDirectory, ".env");
+        File.WriteAllText(dotEnvPath, "AICHAT_PROVIDER_MINIMAX_API_KEY=dotenv-provider-key\n");
+        Environment.SetEnvironmentVariable(
+            EnvironmentSecretOverride.ProviderKeyEnvVarPrefix + "MINIMAX" + EnvironmentSecretOverride.ProviderKeyEnvVarSuffix,
+            null);
+        try
+        {
+            var ok = EnvironmentSecretOverride.TryGetProviderKey("MiniMax", out var value);
+            Assert.True(ok);
+            Assert.Equal("dotenv-provider-key", value);
+        }
+        finally
+        {
+            try { File.Delete(dotEnvPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void DotEnv_File_CommentsAndBlankLines_AreIgnored()
+    {
+        var dotEnvPath = Path.Combine(_dataDirectory, ".env");
+        File.WriteAllText(dotEnvPath, """
+            # This is a comment
+            AICHAT_API_KEY=real-key-123
+
+            # Another comment
+            AICHAT_PROVIDER_MINIMAX_API_KEY=provider-key-456
+            """);
+        Environment.SetEnvironmentVariable(EnvironmentSecretOverride.MainKeyEnvVar, null);
+        try
+        {
+            Assert.True(EnvironmentSecretOverride.TryGetMainKey(out var main));
+            Assert.Equal("real-key-123", main);
+            Assert.True(EnvironmentSecretOverride.TryGetProviderKey("MiniMax", out var prov));
+            Assert.Equal("provider-key-456", prov);
+        }
+        finally
+        {
+            try { File.Delete(dotEnvPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void DotEnv_File_QuotedValue_StripsSurroundingQuotes()
+    {
+        var dotEnvPath = Path.Combine(_dataDirectory, ".env");
+        File.WriteAllText(dotEnvPath, "AICHAT_API_KEY=\"quoted-secret\"\n");
+        Environment.SetEnvironmentVariable(EnvironmentSecretOverride.MainKeyEnvVar, null);
+        try
+        {
+            Assert.True(EnvironmentSecretOverride.TryGetMainKey(out var value));
+            Assert.Equal("quoted-secret", value);
+        }
+        finally
+        {
+            try { File.Delete(dotEnvPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void ApiKeyFile_TakesPrecedenceOverDotEnv()
+    {
+        // The precedence order is env > key-file > dotenv. When two
+        // sources are both present, the higher-priority one wins so
+        // an operator can override the on-disk value without
+        // touching the file.
+        var keyFile = Path.Combine(_dataDirectory, "main-key");
+        File.WriteAllText(keyFile, "key-file-value\n");
+        var dotEnvPath = Path.Combine(_dataDirectory, ".env");
+        File.WriteAllText(dotEnvPath, "AICHAT_API_KEY=dotenv-value\n");
+        Environment.SetEnvironmentVariable(EnvironmentSecretOverride.ApiKeyFileEnvVar, keyFile);
+        try
+        {
+            Assert.True(EnvironmentSecretOverride.TryGetMainKey(out var value));
+            Assert.Equal("key-file-value", value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(EnvironmentSecretOverride.ApiKeyFileEnvVar, null);
+            try { File.Delete(dotEnvPath); } catch { }
+        }
     }
 
     [Fact]

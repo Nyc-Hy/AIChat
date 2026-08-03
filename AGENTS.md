@@ -228,29 +228,40 @@ titlebar `?` 按钮 + ⌘/ 全局快捷键，调出 18+ 快捷键 cheat sheet（
 
 **Daily driver 痛点**：用户每次启动都撞 macOS Keychain 弹"允许访问"对话框，2 次（主 key + provider key 同份但存 2 个 purpose）。原因：settings.json 顶层 + `configuredProviders[]` 列表各存一份 keychain ref，Load 时 RestoreAfterLoad 触发 2 次 Unprotect。
 
-**两层方案**（`/Users/lanxin/Documents/Code/AIChat/docs/SHIP_REPORT_2026-08-02.md` 后补这一段）：
+**三层方案**（`/Users/lanxin/Documents/Code/AIChat/docs/SHIP_REPORT_2026-08-02.md` 后补这一段）：
 
 1. **macOS Keychain Access UI 一劳永逸**：打开 `Keychain Access.app` → 搜 `AIChat` → 两个条目都 `Get Info` → `Access Control` → 选 "Allow all applications to access this item"。之后再不弹窗。访问 2 次不变，但 0 弹窗。
-2. **Env var override（推荐，2026-08-03 ship）**：`AICHAT_API_KEY` 环境变量 → `JsonAppRepository.LoadSettingsAsync` 短路整个 RestoreAfterLoad，**0 次** keychain access，0 弹窗。Settings.json 里 `protectedApiKey` 字段保留原 keychain ref，**不**写回（`unset` 即可切回 keychain 模式，不丢 secret）。
+2. **Env var override（2026-08-03 初版，但仅 shell-launched 有效）**：`AICHAT_API_KEY` 环境变量 → `JsonAppRepository.LoadSettingsAsync` 短路整个 RestoreAfterLoad，**0 次** keychain access，0 弹窗。Settings.json 里 `protectedApiKey` 字段保留原 keychain ref，**不**写回。
+3. **File-based override（2026-08-03 修，daily driver 推荐）**：macOS GUI app 从 Finder / Dock / Spotlight 启动时**不**继承 shell rc，所以方案 2 静默失效。改用以下两种文件来源：
+   - `AICHAT_API_KEY_FILE` env var 指向的文件 → 文件内容（trim）= main key
+   - 默认 `<dataDir>/.env` → dotenv 格式（`AICHAT_API_KEY=xxx` / `AICHAT_PROVIDER_<NAME>_API_KEY=xxx` 一行一个；`#` 注释；`"..."` 包裹值会脱引号；裸行 = main key）
+   - **`<dataDir>`**：macOS = `~/Library/Application Support/AIChat/`、Linux = `~/.config/AIChat/`、Windows = `%LOCALAPPDATA%\AIChat\`
+   - 推荐用法：`echo "sk-xxx" > ~/Library/Application\ Support/AIChat/.env`（一行就行），Finder 启动 AIChat 也能命中
 
-**Env var 设计**（`src/AIChat.Storage.Json/EnvironmentSecretOverride.cs`）：
-- `AICHAT_API_KEY` — main key + 默认 provider key
-- `AICHAT_PROVIDER_<NAME>_API_KEY` — 特定 provider（`<NAME>` = `ConfiguredLlmProvider.Name` upper + 非字母数字 → `_`，如 `Mini Max-Pro` → `AICHAT_PROVIDER_MINI_MAX_PRO_API_KEY`）
-- 优先级：provider-specific > main env var > keychain
+**优先级**（高 → 低）：
+- `AICHAT_API_KEY` / `AICHAT_PROVIDER_<NAME>_API_KEY` env var
+- `AICHAT_API_KEY_FILE` env var 指向的文件
+- `<dataDir>/.env` 文件
+- platform credential vault（keychain / DPAPI / secret service）
 
 **关键实现细节**：
 - `LoadSettingsAsync` 短路：`IsActive` → 跳过 `RestoreAfterLoad` + legacy migration + cache 填
 - `SaveSettingsAsync(persistSecretChanges=false)` 默认走 cache 命中 → **不**调 `Protect` 写回 keychain
 - `_secretCache.Clear()` 强制下次 save 走 cache-miss（仍走"不 persist"分支，因为 `PrepareForSave` cache 命中时不调 `secretProtector.Protect`）
-- Env var 是 source of truth；用户 `unset` 后**不重启**也能恢复（Load 重新走 RestoreAfterLoad）
+- Env / file override 是 source of truth；用户删除后**不重启**也能恢复（Load 重新走 RestoreAfterLoad）
 
-**Test 覆盖**（`tests/AIChat.Tests/Storage/EnvironmentSecretOverrideTests.cs`，8 个 Fact）：
+**Test 覆盖**（`tests/AIChat.Tests/Storage/EnvironmentSecretOverrideTests.cs`，14 个 Fact）：
 - main env override 覆盖 keychain 值
-- 没设 env 时回退到 keychain
 - provider-specific env 优先于 main
 - 0 次 Unprotect 验证（mock protector tracking）
 - Save 不改 settings.json 的 protectedApiKey 字段
 - 边界：provider name 含特殊字符（`-` / 空格）→ 正确 normalize 成 `_`
+- `AICHAT_API_KEY_FILE` 路径 → 文件内容 = main key
+- `<dataDir>/.env` dotenv 解析：comments / blank lines / quoted values / key=value
+- file 优先级：AICHAT_API_KEY_FILE > .env
+
+**Provider prune 升级 BaseUrl 修复**（2026-08-03 ship）：
+0.5 升级用户的 settings.json 里 BaseUrl 指向已删 provider（`api.anthropic.com` / `api.deepseek.com` / `token-plan-cn.xiaomimimo.com` / `api.xiaomimimo.com`）→ 1.0 静默发送消息到错误端点 → 401/404。`ProviderSettingsService.Normalize` 加 `LegacyProviderHosts` 名单，命中即重写为 `provider.DefaultBaseUrl`。`NormalizeConfiguredProvider` 同样处理。Self-hosted proxy（如 `proxy.example.com`）不受影响。Test 4 个 InlineData 覆盖 4 个 legacy host + 1 个 custom host 保留 + 1 个 configuredProviders 列表路径。
 
 **Provider prune 升级 BaseUrl 修复**（2026-08-03 ship）：
 0.5 升级用户的 settings.json 里 BaseUrl 指向已删 provider（`api.anthropic.com` / `api.deepseek.com` / `token-plan-cn.xiaomimimo.com` / `api.xiaomimimo.com`）→ 1.0 静默发送消息到错误端点 → 401/404。`ProviderSettingsService.Normalize` 加 `LegacyProviderHosts` 名单，命中即重写为 `provider.DefaultBaseUrl`。`NormalizeConfiguredProvider` 同样处理。Self-hosted proxy（如 `proxy.example.com`）不受影响。Test 4 个 InlineData 覆盖 4 个 legacy host + 1 个 custom host 保留 + 1 个 configuredProviders 列表路径。
