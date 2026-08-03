@@ -498,24 +498,26 @@
                                 <!-- Coding Agent 的主导航是任务历史,不是 IDE 文件浏览器。
                                      文件输入走 @file，修改结果走 Git diff。 -->
 
-                                <!-- Codex parity: "最近" section. Sits between 项目
-                                     and 对话, mirroring Codex's sidebar order. Hardcoded
-                                     items for now (Wave 6 wires a real Activity / Search
-                                     history store behind the same property). -->
+                                <!--
+                                  1.0.1: "最近" section. Now
+                                  mirrors
+                                  ConversationList.Conversations
+                                  (same 8-row UpdatedAt-desc
+                                  projection the "对话"
+                                  section shows) and clicking
+                                  a row routes through
+                                  SelectedConversationCard so
+                                  the activity feed + selected
+                                  styling + status message all
+                                  land. The XAML tag carries
+                                  the full RecentItemViewModel
+                                  (Title + ConversationId) so
+                                  RecentItem_OnClick can look
+                                  up the live card by id.
+                                -->
                                 <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
                                 <StackPanel Spacing="2">
                                     <ItemsControl ItemsSource="{Binding RecentItems}">
-                                        <!--
-                                          Virtualize the "最近" / conversation
-                                          history list. A heavy daily-driver user
-                                          can have 200+ sessions accumulated; the
-                                          default StackPanel instantiates every
-                                          row's Button (with its own template +
-                                          hover state) and the sidebar starts
-                                          to jank when the user scrolls back
-                                          through deep history. VirtualizingStackPanel
-                                          only realises the visible window.
-                                        -->
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
                                                 <VirtualizingStackPanel/>
@@ -527,7 +529,7 @@
                                                         HorizontalAlignment="Stretch"
                                                         HorizontalContentAlignment="Stretch"
                                                         Click="RecentItem_OnClick"
-                                                        Tag="{Binding Title}">
+                                                        Tag="{Binding}">
                                                     <TextBlock Text="{Binding Title}"
                                                                FontFamily="{StaticResource FontSans}"
                                                                FontSize="12"

@@ -24,11 +24,25 @@ namespace AIChat.App.Avalonia.ViewModels;
 // One row in the sidebar "最近" section. Just a title — clicking
 // routes to the conversation / search the user was last on.
 // Wave 6 replaces this with a real conversation id / search query
-// pointer; for now it's display-only so the parity surface is
-// visible in the layout.
-public sealed class RecentItemViewModel(string title)
+// 1.0.1: per-row "最近" sidebar item. The
+// previous shape had only a Title and the
+// click was a placeholder toast — a daily-
+// driver user clicking a "最近" entry
+// expected to jump to that conversation, not
+// see a "Wave 6 接入" stub. ConversationId
+// is the ConversationCardViewModel.Id the
+// click handler routes through
+// ConversationList.SetSelectedConversation
+// to drive the existing
+// ConversationSelected event (which the
+// activity feed + status message already
+// hook into). Title stays as the display
+// label so the XAML doesn't need a
+// ConversationCard-shaped template.
+public sealed class RecentItemViewModel(string title, string conversationId)
 {
     public string Title { get; } = title;
+    public string ConversationId { get; } = conversationId;
 }
 
 public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHost
@@ -274,24 +288,55 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     // See docs/CODEX_DESKTOP_PARITY_PLAN.md §13.5 deviation #1.
     public EnvironmentPanelViewModel EnvironmentPanel => _environmentPanel;
 
-    // Codex parity: "最近" section in the sidebar. The list mixes
-    // recent agent runs / searches / planned tasks — Codex surfaces
-    // these as a flat list independent of "对话" so the user can
-    // jump back into something they did last week. Wave 6 wires
-    // this to a real Activity / Search history store; for now we
-    // expose a fixed demo list so the visual surface is in place.
-    public ObservableCollection<RecentItemViewModel> RecentItems { get; } = new()
+    // 1.0.1: "最近" section in the sidebar.
+    // Previously a hard-coded 9-item demo list
+    // with a placeholder toast on click
+    // (\"Wave 6 接入\"). Now mirrors
+    // ConversationList.Conversations (which
+    // itself is sorted UpdatedAt desc by
+    // ConversationListViewModel.Refresh) —
+    // the same 8-row projection the \"对话\"
+    // section shows, just rendered without
+    // the inline-rename + selected-style
+    // surface so the two sections read as
+    // distinct lists in the sidebar. The
+    // CollectionChanged subscription keeps
+    // the projection in lock-step when the
+    // user adds / renames / deletes a
+    // conversation.
+    public ObservableCollection<RecentItemViewModel> RecentItems { get; } = new();
+
+    // 1.0.1: rebuild the \"最近\" projection from
+    // ConversationList.Conversations. Called
+    // from the CollectionChanged subscription
+    // in the ctor; also callable from a test
+    // that adds / removes conversations
+    // directly. The Clear + re-add pattern
+    // matches what the EnvironmentPanel does
+    // for its Sources list — the count is
+    // small (max 8) so the cost is
+    // negligible and the alternative
+    // (incremental diff) is more code than
+    // the win is worth.
+    private void RecomputeRecentItems()
     {
-        new("规划定制键盘模具轴驱动"),
-        new("设计 LLM 驱动 A 股交易工具"),
-        new("开放 Agent 工程师路径访问"),
-        new("我想做一个 app 读取摄像头,在通过 ai 分析"),
-        new("定制 WMS MVP 计划"),
-        new("分析项目现状"),
-        new("分析项目现状"),
-        new("分析项目现状"),
-        new("提取现实作品名单"),
-    };
+        RecentItems.Clear();
+        // The \"最近\" list is rendered as a
+        // simple title-only row (no inline
+        // rename, no selected style, no
+        // context flyout) so we don't need
+        // a full ConversationCardViewModel
+        // for each entry — just Title + Id
+        // + the time-of-update string the
+        // XAML shows as the muted sub-text.
+        foreach (var card in _conversationList.Conversations.Take(8))
+        {
+            RecentItems.Add(new RecentItemViewModel(
+                title: card.Title,
+                conversationId: card.Id));
+        }
+    }
+
     private EnvironmentPanelViewModel _environmentPanel = null!;
 
     [ObservableProperty]
@@ -826,6 +871,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _sitesViewModel = sitesViewModel;
         _workspace = workspace;
 
+        // 1.0.1: keep the \"最近\" sidebar projection
+        // in lock-step with ConversationList.Conversations.
+        // ConversationList.Refresh() already sorts the
+        // collection UpdatedAt desc, so a Clear + re-add
+        // gives us the right order without a separate
+        // sort. The handler runs synchronously (the
+        // observable is mutated on the UI thread by
+        // ConversationList, so no dispatcher hop is
+        // needed); the projection itself is also small
+        // (max 8 rows).
+        _conversationList.Conversations.CollectionChanged += (_, _) => RecomputeRecentItems();
+        RecomputeRecentItems();
         // App-status surface (active provider / model / readiness
         // pill / in-flight test flag / derived Greeting + HasProject
         // + StatusBarModel). Sidebar subscription lives inside

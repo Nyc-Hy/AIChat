@@ -138,6 +138,47 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.True(withNotes.HasNotes);
     }
 
+    // ---- 1.0.1: send button is dim when the composer is empty ----
+
+    [Fact]
+    public void SendTaskCommand_Disabled_WhenDraftPromptIsEmpty()
+    {
+        // The XAML send button and the ⌘↵ key
+        // path both gate on CanSendTask, which
+        // now also requires a non-empty
+        // DraftPrompt. Empty composer + click
+        // = no-op (the XAML button is dim,
+        // the key path is a no-op).
+        var (host, _, _, _) = CreateHost();
+        Assert.False(host.SendTaskCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SendTaskCommand_Enabled_WhenDraftPromptHasContent()
+    {
+        var (host, _, _, _) = CreateHost();
+        host.DraftPrompt = "summarise the last 5 commits";
+        Assert.True(host.SendTaskCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SendTaskCommand_ReEvaluatesAsDraftPromptChanges()
+    {
+        // OnDraftPromptChanged calls
+        // NotifyCanExecuteChanged so the user
+        // sees the send button dim / un-dim
+        // as they clear / type in the
+        // composer without having to first
+        // toggle some other piece of state.
+        var (host, _, _, _) = CreateHost();
+        host.DraftPrompt = "hello";
+        Assert.True(host.SendTaskCommand.CanExecute(null));
+        host.DraftPrompt = "";
+        Assert.False(host.SendTaskCommand.CanExecute(null));
+        host.DraftPrompt = "   ";
+        Assert.False(host.SendTaskCommand.CanExecute(null));
+    }
+
     // ---- 1.0.1: insert @-reference at composer caret ----
 
     [Fact]

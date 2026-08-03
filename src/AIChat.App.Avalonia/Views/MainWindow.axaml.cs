@@ -617,16 +617,48 @@ internal partial class MainWindow : Window
         _toast?.Show("新建入口 — 用 ⌘O 加项目 / ⌘N 新对话", ToastLevel.Info);
     }
 
-    // Codex parity: clicking a "最近" item is a no-op for now — the
-    // real routing (open the conversation / re-run the search) lands
-    // in Wave 6. We toast the title so the user sees the click landed
-    // and knows which item they triggered.
+    // 1.0.1: clicking a "最近" entry jumps to
+    // the matching conversation. The
+    // SelectedConversationCard setter
+    // drives the same ConversationSelected
+    // event the "对话" section's row click
+    // drives (OnSelectedConversationCardChanged
+    // → SelectConversation), so the activity
+    // feed + status message + selected-style
+    // visual all land without any new wiring.
+    // The XAML tag carries the
+    // RecentItem.ConversationId (see
+    // RecentItemViewModel — the title is just
+    // for display, the id is the routing key).
     private void RecentItem_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Button { Tag: string title })
+        if (sender is not Button { Tag: RecentItemViewModel item }
+            || DataContext is not MainWindowViewModel viewModel)
         {
-            _toast?.Show($"打开最近：{title}（Wave 6 接入）", ToastLevel.Info);
+            return;
         }
+        // Find the card behind the
+        // RecentItem — RecentItem only
+        // holds the id + title, the live
+        // ConversationCardViewModel is
+        // what the selection wants.
+        var card = viewModel.ConversationList.Conversations
+            .FirstOrDefault(c => string.Equals(
+                c.Id, item.ConversationId, StringComparison.OrdinalIgnoreCase));
+        if (card is null)
+        {
+            // Stale projection — the
+            // conversation was removed
+            // from ConversationList
+            // between the sidebar's
+            // last re-mirror and the
+            // click. Toast so the user
+            // knows the click didn't
+            // strand.
+            _toast?.Show("该对话已被删除。", ToastLevel.Warning);
+            return;
+        }
+        viewModel.ConversationList.SelectedConversationCard = card;
     }
 
     // Wave 3 (plan §3.1): sidebar "Standalone" section "+" button.

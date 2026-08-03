@@ -260,6 +260,13 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     partial void OnDraftPromptChanged(string value)
     {
         _ = RecomputeContextInputTokensAsync(value);
+        // 1.0.1: the send button is CanExecute-gated
+        // on !string.IsNullOrWhiteSpace(DraftPrompt)
+        // (see CanSendTask). Re-raise so a user
+        // emptying the composer sees the send
+        // button dim out without having to first
+        // change some other piece of state.
+        SendTaskCommand.NotifyCanExecuteChanged();
     }
 
     // 1.0.1: insert a Source's @-reference at the given
@@ -635,7 +642,23 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // clear. TestStarted/TestCompleted flip the host's
     // IsProviderTesting through the Func<bool> bridge so the
     // underlying state stays on the host (where the events arrive).
-    private bool CanSendTask() => !IsRunning && !IsVerifying && !_getIsProviderTesting();
+    // 1.0.1: also gated on a non-empty
+    // DraftPrompt so the send button is
+    // visibly dim when the composer is
+    // empty. SendTaskAsync's body still
+    // has its own prompt-empty guard (the
+    // toast "请先输入任务" path) so the
+    // two layers don't drift — the XAML
+    // dim is the discoverable signal,
+    // the toast is the runtime safety
+    // net for any caller that bypasses
+    // the CanExecute gate. OnDraftPromptChanged
+    // calls NotifyCanExecuteChanged
+    // directly so the dim updates as the
+    // user types / clears.
+    private bool CanSendTask() =>
+        !IsRunning && !IsVerifying && !_getIsProviderTesting()
+        && !string.IsNullOrWhiteSpace(DraftPrompt);
     private bool CanStopTask() => IsRunning;
 
     [RelayCommand(CanExecute = nameof(CanRunVerification))]
