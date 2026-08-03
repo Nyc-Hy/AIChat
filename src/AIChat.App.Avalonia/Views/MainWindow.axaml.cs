@@ -717,47 +717,42 @@ internal partial class MainWindow : Window
 
     private void AddFileAttachment_OnClick(object? sender, RoutedEventArgs e)
     {
-        // Compose the same flow the Add Project button uses: project
-        // picker → if a single file is chosen, we attach it to the
-        // current run. For now the picker is folder-only, so this
-        // routes through AddProjectAsync and reuses the same OS
-        // dialog. A dedicated file picker is a Wave 6 follow-up; for
-        // Wave 4 the menu's existence + the toast feedback is the
-        // visible surface we ship.
-        if (DataContext is not MainWindowViewModel viewModel)
-        {
-            return;
-        }
-        // Use the existing Add Project picker as a stand-in; the user
-        // can pick any folder root and we attach the path as a
-        // file-context. The full file picker (multi-file) lands in
-        // Wave 6 alongside the @file reference picker.
-        _ = _picker.PickProjectFolderAsync().ContinueWith(task =>
-        {
-            if (task.Result is PickerResult.Picked picked && !string.IsNullOrEmpty(picked.Path))
-            {
-                // For a real file picker the path would be a file URI;
-                // for the folder picker stand-in we paste the path into
-                // the prompt as a @-reference so the agent knows the
-                // file/folder the user is interested in.
-                viewModel.AgentHost.DraftPrompt += $" @{picked.Path} ";
-                _toast?.Show($"已附加：{picked.Path}", ToastLevel.Info);
-            }
-        });
+        // "+" → "添加文件" menu. The earlier shape of this
+        // handler routed through the project folder picker
+        // as a stand-in ("A dedicated file picker is a Wave 6
+        // follow-up") and pasted the chosen folder path into
+        // the prompt as an @-reference. That was misleading
+        // for two reasons: (1) the menu label said "添加文件"
+        // (add a file) but the user got a folder picker, and
+        // (2) pasting the path into the prompt rather than
+        // attaching the file as a real PendingAttachment
+        // meant the agent never saw the bytes. Both bugs hit
+        // a daily-driver user the first time they tried to
+        // attach a file.
+        //
+        // This slice re-routes the click through the same
+        // OpenFilePickerAsync path the "粘贴图片" menu uses —
+        // the file picker accepts any extension, the result
+        // lands in PendingAttachments via AddFile, and the
+        // file shows up as a real attachment chip on the
+        // composer (the bytes the agent actually sees on
+        // send).
+        _ = OpenAttachmentPickerAsync(imagePreferred: false);
     }
 
-    // "+" → "图片 / 文件" submenu. Opens a StorageProvider file
-    // picker that accepts arbitrary file types (not just images,
-    // despite the menu label) and forwards the selected paths
-    // through the same PendingAttachments.AddFile path that
-    // drag-and-drop uses. The 1.0 shape was a placeholder toast
-    // pointing the user at ⌘V — 1.0.1 wires the real picker so
-    // the composer "+" surface actually does what it advertises.
+    // Shared helper for the "添加文件…" and "粘贴图片" menu
+    // items. OpenFilePickerAsync with multi-select + a
+    // filter bias (imagePreferred=true surfaces images at
+    // the top of the dialog; false puts the "all files"
+    // entry first so a non-image attach feels natural).
+    // The selected paths go through
+    // PendingAttachments.AddFile — the same path drag-and-
+    // drop and the keyboard shortcut land on.
     //
-    // Cancellation (user closes the dialog with no selection) is
-    // silent — same convention as ExportConversationMenuItem and
-    // the project picker.
-    private async void AddImageAttachment_OnClick(object? sender, RoutedEventArgs e)
+    // Cancellation (the user closes the dialog with no
+    // selection) is silent, matching the project picker +
+    // URL dialog conventions.
+    private async Task OpenAttachmentPickerAsync(bool imagePreferred)
     {
         if (DataContext is not MainWindowViewModel viewModel)
         {
@@ -767,15 +762,21 @@ internal partial class MainWindow : Window
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "添加附件",
+                Title = imagePreferred ? "添加图片" : "添加文件",
                 AllowMultiple = true,
-                FileTypeFilter = new[]
-                {
-                    new FilePickerFileType("所有文件") { Patterns = new[] { "*.*" } },
-                    new FilePickerFileType("图片") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.svg" } },
-                    new FilePickerFileType("文档") { Patterns = new[] { "*.pdf", "*.doc", "*.docx", "*.txt", "*.md", "*.rtf" } },
-                    new FilePickerFileType("代码 / 数据") { Patterns = new[] { "*.json", "*.xml", "*.yaml", "*.yml", "*.csv", "*.tsv" } },
-                },
+                FileTypeFilter = imagePreferred
+                    ? new[]
+                    {
+                        new FilePickerFileType("图片") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.svg" } },
+                        new FilePickerFileType("所有文件") { Patterns = new[] { "*.*" } },
+                    }
+                    : new[]
+                    {
+                        new FilePickerFileType("所有文件") { Patterns = new[] { "*.*" } },
+                        new FilePickerFileType("图片") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.gif", "*.webp", "*.bmp", "*.svg" } },
+                        new FilePickerFileType("文档") { Patterns = new[] { "*.pdf", "*.doc", "*.docx", "*.txt", "*.md", "*.rtf" } },
+                        new FilePickerFileType("代码 / 数据") { Patterns = new[] { "*.json", "*.xml", "*.yaml", "*.yml", "*.csv", "*.tsv" } },
+                    },
             });
             if (files is null || files.Count == 0)
             {
@@ -807,11 +808,33 @@ internal partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            // The CrashReporter hook will already have caught
-            // any unexpected exception; we just want a user-
-            // visible message instead of a silent failure.
+            // The CrashReporter hook will already have
+            // caught any unexpected exception; we just
+            // want a user-visible message instead of a
+            // silent failure.
             viewModel.StatusMessage = $"添加附件失败：{ex.Message}";
         }
+    }
+
+    // "+" → "图片 / 文件" submenu. Opens a StorageProvider file
+    // picker that accepts arbitrary file types (not just images,
+    // despite the menu label) and forwards the selected paths
+    // through the same PendingAttachments.AddFile path that
+    // drag-and-drop uses. The 1.0 shape was a placeholder toast
+    // pointing the user at ⌘V — 1.0.1 wires the real picker so
+    // the composer "+" surface actually does what it advertises.
+    //
+    // Cancellation (user closes the dialog with no selection) is
+    // silent — same convention as ExportConversationMenuItem and
+    // the project picker.
+    private async void AddImageAttachment_OnClick(object? sender, RoutedEventArgs e)
+    {
+        // "+" → "粘贴图片" menu. Routes through the shared
+        // picker helper with imagePreferred=true so the
+        // image filter is at the top of the dialog and a
+        // non-image attach still works (the "所有文件"
+        // entry is the second option).
+        await OpenAttachmentPickerAsync(imagePreferred: true);
     }
 
     private void AddAtFile_OnClick(object? sender, RoutedEventArgs e)
