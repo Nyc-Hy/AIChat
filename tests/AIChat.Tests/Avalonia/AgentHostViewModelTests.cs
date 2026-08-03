@@ -113,6 +113,7 @@ public sealed class AgentHostViewModelTests : IDisposable
             new ConversationListViewModel(repository),
             activity,
             toast,
+            new InMemorySourceRegistry(),
             _ => { },
             () => settingsHolder.Current,
             () => false,

@@ -9,6 +9,7 @@ using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
+using AIChat.Application.Sources;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Application.Verification;
@@ -70,6 +71,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     private readonly IToastService _toast;
     private readonly IAppRepository _repository;
     private readonly IApprovalService _approval;
+    private readonly ISourceRegistry _sourceRegistry;
     private readonly IChatCompletionService _chatService;
     private readonly AgentToolRegistry _toolRegistry;
     private readonly ConversationListViewModel _conversationList;
@@ -196,6 +198,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         ConversationListViewModel conversationList,
         ActivityFeedViewModel activityFeed,
         IToastService toast,
+        ISourceRegistry sourceRegistry,
         Action<string> setStatusMessage,
         Func<AppSettings> getSettings,
         Func<bool> getNoWriteMode,
@@ -211,6 +214,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         _conversationList = conversationList;
         _activityFeed = activityFeed;
         _toast = toast;
+        _sourceRegistry = sourceRegistry;
         _setStatusMessage = setStatusMessage;
         _getSettings = getSettings;
         _getNoWriteMode = getNoWriteMode;
@@ -415,6 +419,21 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             if (PendingAttachments.Count > 0)
             {
                 await PromotePendingAttachmentsAsync(_sidebar.CurrentProject);
+            }
+
+            // Wave 7 (parity plan §7 Wave 7) third slice:
+            // resolve any @-references in the prompt
+            // (e.g. "@web:abc123" / "@clip:def456") and
+            // attach the referenced Source bodies as
+            // InputArtifacts. The @-text stays in the
+            // prompt so the user / agent can see what
+            // was referenced; the body is duplicated as
+            // a separate artifact so the agent loop can
+            // render it as a system-prompt section via
+            // AgentRequestFactory.
+            if (prompt.Contains('@'))
+            {
+                await PromoteSourceReferencesAsync(prompt, _sidebar.CurrentProject);
             }
 
             // Replace any prior CTS. A new run cancels nothing —
@@ -736,6 +755,121 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         // managed copies in the artifact store are now the source
         // of truth).
         PendingAttachments.Clear();
+    }
+
+    // Wave 7 (parity plan §7 Wave 7) third slice: @-references
+    // in the composer's prompt get promoted to project-
+    // level InputArtifacts the same way the pending-
+    // attachment strip does. The user types something
+    // like "@web:abc123 用一句话总结" and the agent
+    // receives the original prompt (with the @-text
+    // intact, so it can see what was referenced) PLUS a
+    // separate InputArtifact carrying the page text.
+    //
+    // Why a separate artifact instead of inlining the
+    // text into the prompt: the prompt stays short (the
+    // token count is the user's "first-glance" reading),
+    // and the artifact pipeline already has a clean
+    // path for the system-prompt section the agent
+    // reads via AgentRequestFactory.
+    //
+    // Per-reference failure isolation matches the
+    // attachment path: a single bad reference doesn't
+    // kill the send; we record a system bubble so the
+    // user notices without the run being blocked.
+    private async Task PromoteSourceReferencesAsync(
+        string prompt,
+        WorkspaceProject project)
+    {
+        var references = SourceReferenceParser.Parse(prompt, _sourceRegistry.Sources);
+        if (references.Count == 0)
+        {
+            return;
+        }
+
+        var artifactService = new AIChat.Application.Artifacts.InputArtifactService();
+        foreach (var reference in references)
+        {
+            try
+            {
+                var source = reference.Source;
+                // The Source.Content is already plain
+                // text (the clipboard capture path
+                // stores the clipboard text directly;
+                // the web-fetch path stores the
+                // HtmlToText-reduced output). We use
+                // the same "kind" the InputArtifact
+                // classifier uses so the agent loop
+                // gets the right text extractor.
+                var kind = ClassifySourceKind(source);
+                var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["source"] = $"@reference:{source.Kind}",
+                    ["kind"] = kind.ToString(),
+                    ["capturedAt"] = source.CapturedAt.ToString("O"),
+                };
+                if (source.Metadata.TryGetValue("url", out var url))
+                {
+                    metadata["url"] = url;
+                }
+                var request = new AIChat.Application.Artifacts.InputArtifactCreateRequest
+                {
+                    ProjectId = project.Id,
+                    ConversationId = "",
+                    MessageId = "",
+                    FileName = source.DisplayName,
+                    MimeType = source.MimeTypeOrFallback(kind),
+                    ContentText = source.Content,
+                    FileBytes = System.Text.Encoding.UTF8.GetBytes(source.Content),
+                    Metadata = metadata,
+                };
+                var artifact = artifactService.Create(request);
+                await _artifactFileStore.StoreBytesAsync(artifact, request.FileBytes, ".txt");
+                project.InputArtifacts.Add(artifact);
+            }
+            catch (Exception ex)
+            {
+                _activityFeed.Add(
+                    "引用失败",
+                    $"{reference.Source.DisplayName}: {ex.Message}",
+                    "附件");
+            }
+        }
+
+        // Persist the updated workspace so the
+        // @-referenced artifacts survive an app
+        // restart. Same shape as the pending-
+        // attachments path.
+        var workspaces = (await _repository.LoadWorkspacesAsync()).ToList();
+        var index = workspaces.FindIndex(p => p.Id == project.Id);
+        if (index >= 0)
+        {
+            workspaces[index] = project;
+        }
+        else
+        {
+            workspaces.Add(project);
+        }
+        await _repository.SaveWorkspacesAsync(workspaces);
+    }
+
+    // Map a Source's Kind to the InputArtifactKind the
+    // classifier would have assigned. The Source
+    // registry's free-form Kind string ('web' /
+    // 'clipboard' / future 'connector') maps cleanly to
+    // the same enum the paste-image path uses, so the
+    // agent loop's existing text-extraction code can
+    // pick the right reader without a new branch.
+    private static AIChat.Domain.Artifacts.InputArtifactKind ClassifySourceKind(
+        AIChat.Domain.Sources.Source source)
+    {
+        return source.Kind.ToLowerInvariant() switch
+        {
+            "web" or "webpage" => AIChat.Domain.Artifacts.InputArtifactKind.Document,
+            "clipboard" => AIChat.Domain.Artifacts.InputArtifactKind.Text,
+            "image" => AIChat.Domain.Artifacts.InputArtifactKind.Image,
+            _ => AIChat.Domain.Artifacts.InputArtifactKind.Text,
+        };
     }
 
     // Rebuild PlanItems from the current AgentPlan. Called by the

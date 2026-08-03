@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using AIChat.Domain.Artifacts;
 
 namespace AIChat.Domain.Sources;
 
@@ -46,4 +47,24 @@ public sealed class Source
     [JsonPropertyName("metadata")]
     public Dictionary<string, string> Metadata { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
+
+    // 1.0.1 (Wave 7 third slice): the MimeType the
+    // agent-loop's InputArtifactCreateRequest wants.
+    // For "text" / "markdown" / "web fetch" Sources the
+    // body is plain UTF-8 text; the mime is "text/plain"
+    // for everything that isn't a pre-classified image.
+    // The paste-image path already sets the right
+    // mime on the PendingAttachment; this helper
+    // mirrors the same rule for the @-reference path
+    // so the agent sees a consistent artifact shape
+    // regardless of where the bytes came from.
+    public string MimeTypeOrFallback(InputArtifactKind kind)
+    {
+        return kind switch
+        {
+            InputArtifactKind.Image => "image/png",
+            InputArtifactKind.Screenshot => "image/png",
+            _ => "text/plain",
+        };
+    }
 }

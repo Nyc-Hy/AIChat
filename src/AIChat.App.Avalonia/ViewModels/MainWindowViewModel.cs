@@ -852,6 +852,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             conversationList,
             ActivityFeed,
             toast,
+            sourceRegistry,
             setStatusMessage: value => StatusMessage = value,
             getSettings: () => _settings,
             getNoWriteMode: () => NoWriteMode,

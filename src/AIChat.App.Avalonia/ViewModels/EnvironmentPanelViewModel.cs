@@ -196,16 +196,39 @@ public sealed class BackgroundProcessViewModel
 // "web" / "plugin") so the XAML can drive the icon glyph off it.
 public sealed class SourceRowViewModel
 {
+    public string Id { get; }
     public string Kind { get; }
     public string DisplayName { get; }
     public string? Detail { get; }
 
-    public SourceRowViewModel(string kind, string displayName, string? detail = null)
+    // Per-row "insert @-reference" command. The
+    // per-row button binds to this; the parent
+    // EnvironmentPanelViewModel wires the actual
+    // DraftPrompt append so this VM stays decoupled
+    // from AgentHost. Null when the row is a
+    // pending attachment (no Source.Id to
+    // reference — the paste path sends the image
+    // as a normal artifact, not an @-reference).
+    public System.Windows.Input.ICommand? InsertReferenceCommand { get; set; }
+
+    public SourceRowViewModel(
+        string id,
+        string kind,
+        string displayName,
+        string? detail = null)
     {
+        Id = id;
         Kind = kind;
         DisplayName = displayName;
         Detail = detail;
     }
+
+    // Back-compat shim for the pending-attachment
+    // rows that don't have a Source.Id — synthesise
+    // a stable id from the file name so the XAML
+    // can still bind without nullability noise.
+    public static SourceRowViewModel ForPendingAttachment(string fileName, string? detail = null) =>
+        new($"pending:{fileName}", "image", fileName, detail);
 }
 
 // Sprint 0.5: right-side Environment panel ViewModel (plan §4 / §7 Wave 5).
@@ -638,9 +661,8 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
         Sources.Clear();
         foreach (var attachment in attachments)
         {
-            Sources.Add(new SourceRowViewModel(
-                kind: "image",
-                displayName: attachment.FileName,
+            Sources.Add(SourceRowViewModel.ForPendingAttachment(
+                fileName: attachment.FileName,
                 detail: "剪贴板图像（待发送）"));
         }
         // The Wave 7 first-slice: persisted Sources
@@ -653,11 +675,61 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
         // append-on-add order, reversed.
         foreach (var source in persisted.AsEnumerable().Reverse())
         {
-            Sources.Add(new SourceRowViewModel(
+            var row = new SourceRowViewModel(
+                id: source.Id,
                 kind: source.Kind,
                 displayName: source.DisplayName,
-                detail: $"剪贴板快照 · {source.CapturedAt.LocalDateTime:MM-dd HH:mm}"));
+                detail: FormatSourceDetail(source));
+            // Per-row "insert @-reference" button
+            // appends the source's id-prefixed
+            // reference to the composer prompt. The
+            // path through AgentHost keeps this VM
+            // decoupled from the agent loop (it just
+            // mutates DraftPrompt — the agent's
+            // SendTaskCommand reads DraftPrompt
+            // again, runs the @-parser, and attaches
+            // the resolved Source body as an
+            // InputArtifact).
+            row.InsertReferenceCommand = new RelayCommand(() =>
+                _agentHost.DraftPrompt = InsertReference(_agentHost.DraftPrompt, source));
+            Sources.Add(row);
         }
+    }
+
+    // Inserts a unique @-reference into the prompt
+    // (dedupes against the user's existing prompt so
+    // clicking the button 3 times doesn't insert
+    // 3 copies). The reference text is owned by
+    // SourceReferenceParser.FormatReference so a
+    // future syntax change only touches one place.
+    private static string InsertReference(string currentPrompt, AIChat.Domain.Sources.Source source)
+    {
+        var reference = AIChat.Application.Sources.SourceReferenceParser.FormatReference(source);
+        if (currentPrompt.Contains(reference, StringComparison.Ordinal))
+        {
+            return currentPrompt;
+        }
+        // Leading space when the prompt is non-empty
+        // so the inserted reference doesn't fuse
+        // onto the previous word.
+        var prefix = string.IsNullOrWhiteSpace(currentPrompt) ? "" : " ";
+        return currentPrompt + prefix + reference;
+    }
+
+    private static string FormatSourceDetail(AIChat.Domain.Sources.Source source)
+    {
+        // The web-fetch path stamps Metadata["url"];
+        // surface that in the row detail so the user
+        // can see the source at a glance.
+        if (source.Metadata.TryGetValue("url", out var url) && !string.IsNullOrWhiteSpace(url))
+        {
+            return url;
+        }
+        return source.Kind switch
+        {
+            "clipboard" => $"剪贴板快照 · {source.CapturedAt.LocalDateTime:MM-dd HH:mm}",
+            _ => source.CapturedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm"),
+        };
     }
 
     // Pulled out of RecountSources so the
