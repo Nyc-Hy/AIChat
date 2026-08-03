@@ -777,6 +777,68 @@ public sealed class EnvironmentPanelViewModelTests
         Assert.Single(vm.Sources);
     }
 
+    // ---- 1.0.1: per-row inline expand ----
+
+    [Fact]
+    public void SourceRow_IsExpanded_DefaultsFalseAndToggles()
+    {
+        // The row starts collapsed and
+        // toggles on the header click. Each
+        // row holds its own state so two
+        // rows can be expanded at once
+        // (useful for comparing a clipboard
+        // snapshot against a web fetch).
+        var row = new SourceRowViewModel("a", "web", "A");
+        Assert.False(row.IsExpanded);
+        row.IsExpanded = !row.IsExpanded;
+        Assert.True(row.IsExpanded);
+    }
+
+    [Fact]
+    public void SourceRow_DetailContent_DerivesFromSource()
+    {
+        // The XAML inline expand panel
+        // binds to DetailContent. For a
+        // row that carries a real Source
+        // (clipboard / web fetch), it
+        // returns the captured body so
+        // the SelectableTextBlock has
+        // something to render.
+        var source = new AIChat.Domain.Sources.Source
+        {
+            Id = "a",
+            Kind = "web",
+            DisplayName = "A",
+            Content = "the full body of the article",
+        };
+        var row = new SourceRowViewModel("a", "web", "A") { Source = source };
+        Assert.Equal("the full body of the article", row.DetailContent);
+    }
+
+    [Fact]
+    public void SourceRow_DetailContent_NullForPendingAttachment()
+    {
+        // Pending attachments reuse the
+        // visual surface but don't carry a
+        // Source (the row is built via
+        // SourceRowViewModel.ForPendingAttachment
+        // which leaves Source null). The
+        // expand panel's Visibility binding
+        // is driven by IsExpanded, not by
+        // DetailContent != null, but the
+        // latter is what the binding
+        // reaches for when it tries to
+        // render the text — null here
+        // means the SelectableTextBlock
+        // just shows an empty block, which
+        // is the right visual signal (the
+        // row doesn't have readable text
+        // to inline).
+        var row = SourceRowViewModel.ForPendingAttachment("clip.png");
+        Assert.Null(row.Source);
+        Assert.Null(row.DetailContent);
+    }
+
     private static (EnvironmentPanelViewModel Vm, AgentHostViewModel Host, ProjectSidebarViewModel Sidebar,
         Mock<IWorkspaceChangeService> Workspace, SourceRegistry Registry)
         CreateViewModelWithSourceRegistry()

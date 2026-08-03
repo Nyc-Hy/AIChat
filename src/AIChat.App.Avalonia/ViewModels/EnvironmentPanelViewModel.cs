@@ -194,7 +194,7 @@ public sealed class BackgroundProcessViewModel
 // source kinds (web search, connector, plugin) can plug in without
 // changing the XAML. Kind is a free-form string ("image" / "file" /
 // "web" / "plugin") so the XAML can drive the icon glyph off it.
-public sealed class SourceRowViewModel
+public sealed partial class SourceRowViewModel : ObservableObject
 {
     public string Id { get; }
     public string Kind { get; }
@@ -213,6 +213,30 @@ public sealed class SourceRowViewModel
     // EnvironmentPanelView.axaml.cs was deleted
     // — dead code, removed.
     public AIChat.Domain.Sources.Source? Source { get; set; }
+
+    // 1.0.1: inline-expand state for the per-row
+    // detail panel. The Sources list's per-row
+    // chevron button toggles this so the user can
+    // see the full captured body without leaving
+    // the side panel (the row's display name is
+    // truncated to 60 chars in the list and the
+    // full Source.Content lives behind a click).
+    // Each row holds its own state so two rows
+    // can be expanded at once — useful for
+    // comparing a clipboard snapshot against a
+    // web fetch.
+    [ObservableProperty]
+    private bool isExpanded;
+
+    // The full body of the captured Source, or
+    // null when the row is a pending attachment
+    // (no Source to show — pending attachments
+    // own a different file-payload path and have
+    // no readable text to inline). The XAML
+    // binds Visibility to "Content != null" so
+    // the expand panel just doesn't render for
+    // pending rows.
+    public string? DetailContent => Source?.Content;
 
     public SourceRowViewModel(
         string id,

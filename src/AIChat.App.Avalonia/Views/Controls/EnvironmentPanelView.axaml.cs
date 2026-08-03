@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using AIChat.App.Avalonia.ViewModels;
@@ -185,5 +186,28 @@ public partial class EnvironmentPanelView : UserControl
                 // leaving the row in place.
             }
         }
+    }
+
+    // 1.0.1: per-row header click toggles the
+    // row's inline expand panel. The display
+    // name is the natural click target — the
+    // user reads the truncated 60-char
+    // preview, sees it's not the full body,
+    // and clicks to see the rest. PointerPressed
+    // (rather than Click) because the XAML
+    // wraps the header in a non-Button
+    // StackPanel; Click is a Button-only event
+    // and we want the entire header strip to
+    // register the press. Mark Handled so the
+    // bubbling press doesn't double-fire
+    // through the parent ItemsControl.
+    private void SourceRowHeader_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not StackPanel { DataContext: SourceRowViewModel row })
+        {
+            return;
+        }
+        row.IsExpanded = !row.IsExpanded;
+        e.Handled = true;
     }
 }

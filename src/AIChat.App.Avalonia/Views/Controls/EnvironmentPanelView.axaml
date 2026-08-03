@@ -335,64 +335,103 @@
                           IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:SourceRowViewModel">
-                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,1">
-                    <Path Grid.Column="0"
-                          Data="M3 5 h12 v10 h-12 z M3 9 h12 M7 5 v10 M3 15 l-2 2 h16 l-2 -2"
-                          Stroke="{DynamicResource MutedBrush}"
-                          StrokeThickness="1.3" StrokeLineCap="Round"
-                          Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding DisplayName}"
-                                 FontSize="12" Foreground="{DynamicResource Text2Brush}"
-                                 TextTrimming="CharacterEllipsis" MaxLines="1"/>
-                      <TextBlock Text="{Binding Detail}"
-                                 Classes="muted" FontSize="10"
-                                 FontFamily="{StaticResource FontMono}"/>
-                    </StackPanel>
+                  <Grid RowDefinitions="Auto,Auto">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,1">
+                      <Path Grid.Column="0"
+                            Data="M3 5 h12 v10 h-12 z M3 9 h12 M7 5 v10 M3 15 l-2 2 h16 l-2 -2"
+                            Stroke="{DynamicResource MutedBrush}"
+                            StrokeThickness="1.3" StrokeLineCap="Round"
+                            Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                      <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center"
+                                  PointerPressed="SourceRowHeader_OnPointerPressed">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="12" Foreground="{DynamicResource Text2Brush}"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                        <TextBlock Text="{Binding Detail}"
+                                   Classes="muted" FontSize="10"
+                                   FontFamily="{StaticResource FontMono}"/>
+                      </StackPanel>
+                      <!--
+                        Per-row "insert @-reference" button. Hidden
+                        for pending attachment rows (no Source.Id
+                        to reference — the paste path sends the
+                        image as a normal artifact, not an
+                        @-reference; the button's IsVisible binding
+                        checks Source != null).
+                      -->
+                      <Button Grid.Column="2"
+                              Classes="chrome-button"
+                              Padding="6,1"
+                              IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                              Click="SourceInsert_OnClick"
+                              Tag="{Binding}"
+                              ToolTip.Tip="在光标位置插入 @-引用到 composer">
+                        <TextBlock Text="引用" FontSize="10"/>
+                      </Button>
+                      <!--
+                        Per-row "×" delete button. Same
+                        visibility rule as 引用 (hidden
+                        for pending attachment rows —
+                        the Sources list reuses the
+                        visual surface but pending
+                        attachments are owned by
+                        PendingAttachments, not the
+                        registry). The Tag carries the
+                        Source.Id so the click handler
+                        can target the right registry
+                        entry without taking a
+                        dependency on the row's full
+                        Source object.
+                      -->
+                      <Button Grid.Column="3"
+                              Classes="chrome-button"
+                              Padding="4,1"
+                              IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                              Click="SourceRemove_OnClick"
+                              Tag="{Binding Id}"
+                              ToolTip.Tip="从数据源删除">
+                        <Path Data="M6 6 L18 18 M18 6 L6 18"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              StrokeThickness="1.6" StrokeLineCap="Round"
+                              Width="10" Height="10" Stretch="Uniform"/>
+                      </Button>
+                    </Grid>
                     <!--
-                      Per-row "insert @-reference" button. Hidden
-                      for pending attachment rows (no Source.Id
-                      to reference — the paste path sends the
-                      image as a normal artifact, not an
-                      @-reference; the button's IsVisible binding
-                      checks Source != null).
+                      1.0.1: per-row inline expand panel.
+                      Toggled by the row's IsExpanded
+                      property (currently driven by
+                      the SourceToggleExpand_OnClick
+                      handler in
+                      EnvironmentPanelView.axaml.cs,
+                      but the click target is the
+                      row's display name rather than
+                      a separate chevron — the daily-
+                      driver user reaching for the
+                      captured body reads the name,
+                      sees the truncated 60-char
+                      preview, and naturally clicks
+                      the row). Hidden for pending
+                      attachment rows (no Source to
+                      show).
                     -->
-                    <Button Grid.Column="2"
-                            Classes="chrome-button"
-                            Padding="6,1"
-                            IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
-                            Click="SourceInsert_OnClick"
-                            Tag="{Binding}"
-                            ToolTip.Tip="在光标位置插入 @-引用到 composer">
-                      <TextBlock Text="引用" FontSize="10"/>
-                    </Button>
-                    <!--
-                      Per-row "×" delete button. Same
-                      visibility rule as 引用 (hidden
-                      for pending attachment rows —
-                      the Sources list reuses the
-                      visual surface but pending
-                      attachments are owned by
-                      PendingAttachments, not the
-                      registry). The Tag carries the
-                      Source.Id so the click handler
-                      can target the right registry
-                      entry without taking a
-                      dependency on the row's full
-                      Source object.
-                    -->
-                    <Button Grid.Column="3"
-                            Classes="chrome-button"
-                            Padding="4,1"
-                            IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
-                            Click="SourceRemove_OnClick"
-                            Tag="{Binding Id}"
-                            ToolTip.Tip="从数据源删除">
-                      <Path Data="M6 6 L18 18 M18 6 L6 18"
-                            Stroke="{Binding $parent[Button].Foreground}"
-                            StrokeThickness="1.6" StrokeLineCap="Round"
-                            Width="10" Height="10" Stretch="Uniform"/>
-                    </Button>
+                    <Border Grid.Row="1"
+                            IsVisible="{Binding IsExpanded}"
+                            Background="{DynamicResource CodeBgBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusSm}"
+                            Padding="{StaticResource Padding3}"
+                            Margin="18,2,0,4">
+                      <ScrollViewer MaxHeight="160"
+                                    HorizontalScrollBarVisibility="Disabled"
+                                    VerticalScrollBarVisibility="Auto">
+                        <SelectableTextBlock Text="{Binding DetailContent}"
+                                             FontSize="11"
+                                             FontFamily="{StaticResource FontMono}"
+                                             Foreground="{DynamicResource CodeFgBrush}"
+                                             TextWrapping="Wrap"/>
+                      </ScrollViewer>
+                    </Border>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
