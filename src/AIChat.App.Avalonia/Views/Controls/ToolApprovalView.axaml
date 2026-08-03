@@ -3,14 +3,14 @@
              xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
              x:DataType="vm:MainWindowViewModel"
              x:Class="AIChat.App.Avalonia.Views.Controls.ToolApprovalView">
-    <Border Background="{StaticResource ScrimBrush}"
+    <Border Background="{DynamicResource ScrimBrush}"
             PointerPressed="ToolApprovalScrim_OnClick">
-        <Border Background="{StaticResource SurfaceBrush}"
+        <Border Background="{DynamicResource SurfaceBrush}"
                 Width="560"
                 MaxHeight="480"
                 Padding="{StaticResource Padding6}"
                 CornerRadius="{StaticResource RadiusLg}"
-                BoxShadow="{StaticResource Elevation5Shadow}"
+                BoxShadow="{DynamicResource Elevation5Shadow}"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 PointerPressed="ToolApprovalContent_OnPointerPressed">
@@ -32,8 +32,8 @@
                 </StackPanel>
 
                 <Border Grid.Row="3"
-                        Background="{StaticResource CodeBgBrush}"
-                        BorderBrush="{StaticResource LineSoftBrush}"
+                        Background="{DynamicResource CodeBgBrush}"
+                        BorderBrush="{DynamicResource LineSoftBrush}"
                         BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMd}"
                         Padding="{StaticResource Padding3}">
@@ -42,7 +42,7 @@
                         <TextBlock Text="{Binding Approval.PendingApprovalPreview}"
                                    FontFamily="{StaticResource FontMono}"
                                    FontSize="12"
-                                   Foreground="{StaticResource CodeFgBrush}"
+                                   Foreground="{DynamicResource CodeFgBrush}"
                                    TextWrapping="NoWrap"/>
                     </ScrollViewer>
                 </Border>

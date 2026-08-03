@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AIChat.Application.Workspace;
+using AIChat.Domain.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -54,6 +55,30 @@ public sealed partial class GitStatusViewModel : ViewModelBase
     [ObservableProperty]
     private string? selectedPath;
 
+    // Stage / commit / restore surface (XAML-bound). 真功能(走
+    // IWorkspaceChangeService.StageAsync / CommitAsync / RestoreFileAsync)
+    // 由 Wave 5 补。当前 Wave 2 只加让 build 过的最小 stub。
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
+    private string commitMessage = "";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StageSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(UnstageSelectedCommand))]
+    [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RequestRestoreSelectedCommand))]
+    private bool isMutating;
+
+    [ObservableProperty]
+    private string operationMessage = "";
+
+    [ObservableProperty]
+    private bool isRestoreConfirmationOpen;
+
+    public string RestoreConfirmationText => SelectedChange?.IsUntracked == true
+        ? $"“{SelectedChange.Path}” 是未跟踪文件，继续会永久删除该文件。"
+        : $"撤销 “{SelectedChange?.Path}” 的未提交改动？此操作无法从 AIChat 内恢复。";
+
     public ObservableCollection<GitFileChangeViewModel> Changes { get; } = [];
 
     public bool IsAvailable => _sidebar.CurrentProject is not null;
@@ -89,7 +114,7 @@ public sealed partial class GitStatusViewModel : ViewModelBase
     public async Task RefreshAsync()
     {
         var project = _sidebar.CurrentProject;
-        if (project is null || string.IsNullOrWhiteSpace(project.Path))
+        if (project is null || string.IsNullOrWhiteSpace(project.TryGetPrimaryPath()))
         {
             Branch = "";
             Changes.Clear();
@@ -111,7 +136,7 @@ public sealed partial class GitStatusViewModel : ViewModelBase
             WorkspaceChangeSet changeSet;
             try
             {
-                changeSet = await _workspace.GetChangesAsync(project.Path);
+                changeSet = await _workspace.GetChangesAsync(project.TryGetPrimaryPath());
             }
             catch (Exception ex)
             {
@@ -197,7 +222,7 @@ public sealed partial class GitStatusViewModel : ViewModelBase
         {
             try
             {
-                var diff = await _workspace.GetDiffAsync(project.Path, change.Path);
+                var diff = await _workspace.GetDiffAsync(project.TryGetPrimaryPath(), change.Path);
                 DiffText = diff.DiffText;
                 IsDiffTruncated = diff.IsTruncated;
                 SelectedPath = change.Path;
@@ -241,6 +266,117 @@ public sealed partial class GitStatusViewModel : ViewModelBase
 
     [RelayCommand]
     private Task Refresh() => RefreshAsync();
+
+    // ===== Wave 6: real stage / unstage / restore wiring =====
+    // All four commands route through IWorkspaceChangeService. The
+    // path argument is the file path (relative to the project root
+    // for the porcelain shell-out). After every successful mutation
+    // we call RefreshAsync so the diff list / counts stay in sync
+    // with on-disk state.
+
+    [RelayCommand]
+    private async Task StageSelected()
+    {
+        if (SelectedChange is null) return;
+        var project = _sidebar.CurrentProject;
+        var path = project?.TryGetPrimaryPath();
+        if (project is null || string.IsNullOrEmpty(path)) return;
+        try
+        {
+            await _workspace.StageAsync(path, new[] { SelectedChange.Path });
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StageError = $"Stage 失败：{ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task UnstageSelected()
+    {
+        if (SelectedChange is null) return;
+        var project = _sidebar.CurrentProject;
+        var path = project?.TryGetPrimaryPath();
+        if (project is null || string.IsNullOrEmpty(path)) return;
+        try
+        {
+            await _workspace.UnstageAsync(path, new[] { SelectedChange.Path });
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StageError = $"Unstage 失败：{ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void RequestRestoreSelected() => IsRestoreConfirmationOpen = true;
+
+    [RelayCommand]
+    private void CancelRestoreSelected() => IsRestoreConfirmationOpen = false;
+
+    [RelayCommand]
+    private async Task ConfirmRestoreSelected()
+    {
+        IsRestoreConfirmationOpen = false;
+        if (SelectedChange is null) return;
+        var project = _sidebar.CurrentProject;
+        var path = project?.TryGetPrimaryPath();
+        if (project is null || string.IsNullOrEmpty(path)) return;
+        try
+        {
+            var deleteUntracked = SelectedChange.IsUntracked == true;
+            await _workspace.RestoreFileAsync(
+                path,
+                SelectedChange.Path,
+                deleteUntracked: deleteUntracked);
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StageError = $"Restore 失败：{ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task Commit()
+    {
+        if (string.IsNullOrWhiteSpace(CommitMessage)) return;
+        var project = _sidebar.CurrentProject;
+        var path = project?.TryGetPrimaryPath();
+        if (project is null || string.IsNullOrEmpty(path)) return;
+        try
+        {
+            // Staged paths are the union of all selected changes plus
+            // the file the user is currently looking at. The service
+            // accepts a list so the user can scope a commit to a
+            // subset of the staged changes. We pass the full list of
+            // paths the user touched (selected + already-staged) so
+            // the service can decide which paths to actually pass to
+            // `git commit -- <paths>`.
+            var paths = Changes
+                .Where(c => c.IsSelected)
+                .Select(c => c.Path)
+                .ToList();
+            var result = await _workspace.CommitAsync(path, CommitMessage.Trim(), paths);
+            CommitMessage = "";
+            // CommitAsync throws on failure; the result object is
+            // the success payload (commit hash + message + paths).
+            LastCommitDisplay = result.Message ?? CommitMessage;
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StageError = $"Commit 失败：{ex.Message}";
+        }
+    }
+
+    [ObservableProperty]
+    private string stageError = "";
+
+    [ObservableProperty]
+    private string lastCommitDisplay = "";
 }
 
 // Per-row VM. The display status collapses the raw "M " / "??"

@@ -14,13 +14,20 @@ public static class RuntimeSettingsBuilder
     // round budget so a stuck agent doesn't burn the whole budget.
     public static AppSettings ReadOnly(AppSettings source, AgentToolRegistry registry)
     {
+        var configured = ResolveConfiguredTools(source, registry);
         var enabledToolIds = registry.All
+            .Where(tool => configured.EnabledIds.Contains(tool.Id))
             .Where(tool => tool.Risk == AgentToolRisk.ReadOnly || IsUpdatePlan(tool.Id))
+            .Where(tool => configured.Modes[tool.Id] != ToolPermissionMode.Disabled)
             .Select(tool => tool.Id)
             .ToList();
-        var modes = ToModeDictionary(registry, enabledToolIds,
-            granted: ToolPermissionMode.AutoReadOnly,
-            restricted: ToolPermissionMode.Disabled);
+        var enabledSet = enabledToolIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var modes = registry.All.ToDictionary(
+            tool => tool.Id,
+            tool => enabledSet.Contains(tool.Id)
+                ? configured.Modes[tool.Id]
+                : ToolPermissionMode.Disabled,
+            StringComparer.OrdinalIgnoreCase);
 
         return new AppSettings
         {
@@ -37,21 +44,29 @@ public static class RuntimeSettingsBuilder
             AgentExecutionMode = source.AgentExecutionMode,
             AgentMaxToolRounds = Math.Min(source.AgentMaxToolRounds, 8),
             EnabledToolIds = enabledToolIds,
-            ToolPermissionModes = modes
+            ToolPermissionModes = modes,
+            AgentAdaptiveStrategiesEnabled = source.AgentAdaptiveStrategiesEnabled,
+            AgentAdaptiveBudgetAndExplorerEnabled = source.AgentAdaptiveBudgetAndExplorerEnabled
         };
     }
 
-    // Standard GUI mode: all tools enabled, read-only tools auto-allowed,
-    // everything else requires per-call approval. Verification and auto-fix
-    // are preserved from the user settings.
+    // Standard GUI mode preserves the user's enabled-tool set and permission
+    // matrix. Missing values fall back to registry defaults, but an explicit
+    // Disabled value or an omitted enabled ID is never silently re-enabled.
     public static AppSettings Gui(AppSettings source, AgentToolRegistry registry)
     {
-        var toolIds = registry.All.Select(tool => tool.Id).ToList();
+        var configured = ResolveConfiguredTools(source, registry);
+        var toolIds = registry.All
+            .Where(tool => configured.EnabledIds.Contains(tool.Id))
+            .Where(tool => configured.Modes[tool.Id] != ToolPermissionMode.Disabled)
+            .Select(tool => tool.Id)
+            .ToList();
+        var enabledSet = toolIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var modes = registry.All.ToDictionary(
             tool => tool.Id,
-            tool => tool.Risk == AgentToolRisk.ReadOnly || IsUpdatePlan(tool.Id)
-                ? ToolPermissionMode.AutoReadOnly
-                : ToolPermissionMode.ConfirmEachTime,
+            tool => enabledSet.Contains(tool.Id)
+                ? configured.Modes[tool.Id]
+                : ToolPermissionMode.Disabled,
             StringComparer.OrdinalIgnoreCase);
 
         return new AppSettings
@@ -71,23 +86,38 @@ public static class RuntimeSettingsBuilder
             EnabledToolIds = toolIds,
             ToolPermissionModes = modes,
             AutoVerifyAgentRuns = source.AutoVerifyAgentRuns,
-            MaxAutoFixRounds = source.MaxAutoFixRounds
+            MaxAutoFixRounds = source.MaxAutoFixRounds,
+            AgentAdaptiveStrategiesEnabled = source.AgentAdaptiveStrategiesEnabled,
+            AgentAdaptiveBudgetAndExplorerEnabled = source.AgentAdaptiveBudgetAndExplorerEnabled
         };
     }
 
     private static bool IsUpdatePlan(string toolId)
         => string.Equals(toolId, "update_plan", StringComparison.OrdinalIgnoreCase);
 
-    private static Dictionary<string, ToolPermissionMode> ToModeDictionary(
-        AgentToolRegistry registry,
-        IReadOnlyCollection<string> grantedToolIds,
-        ToolPermissionMode granted,
-        ToolPermissionMode restricted)
+    private static ResolvedToolConfiguration ResolveConfiguredTools(
+        AppSettings source,
+        AgentToolRegistry registry)
     {
-        var grantedSet = new HashSet<string>(grantedToolIds, StringComparer.OrdinalIgnoreCase);
-        return registry.All.ToDictionary(
+        var knownIds = registry.All.Select(tool => tool.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hasExplicitConfiguration = source.EnabledToolIds.Count > 0 ||
+                                       source.ToolPermissionModes.Count > 0;
+        var enabledIds = hasExplicitConfiguration
+            ? source.EnabledToolIds.Where(knownIds.Contains)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(knownIds, StringComparer.OrdinalIgnoreCase);
+        var modes = registry.All.ToDictionary(
             tool => tool.Id,
-            tool => grantedSet.Contains(tool.Id) ? granted : restricted,
+            tool => source.ToolPermissionModes.TryGetValue(tool.Id, out var configured)
+                ? configured
+                : registry.GetMetadata(tool.Id).DefaultPermissionMode,
             StringComparer.OrdinalIgnoreCase);
+
+        return new ResolvedToolConfiguration(enabledIds, modes);
     }
+
+    private sealed record ResolvedToolConfiguration(
+        HashSet<string> EnabledIds,
+        Dictionary<string, ToolPermissionMode> Modes);
 }

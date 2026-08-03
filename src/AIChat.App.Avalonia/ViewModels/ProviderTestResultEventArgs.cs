@@ -12,6 +12,7 @@ public sealed class ProviderSavedEventArgs : EventArgs
     public required string ModelId { get; init; }
     public required bool AlreadyExisted { get; init; }
     public string? ErrorMessage { get; init; }
+    public string? WarningMessage { get; init; }
 }
 
 // Event payload raised by ProviderConfigViewModel before a connection test

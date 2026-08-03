@@ -20,15 +20,15 @@
     standard modal pattern; Esc matches the user's existing
     "Esc closes overlays" muscle memory.
   -->
-  <Border Background="{StaticResource ScrimBrush}"
+  <Border Background="{DynamicResource ScrimBrush}"
           KeyDown="KeyboardShortcutsScrim_OnKeyDown"
           PointerPressed="KeyboardShortcutsScrim_OnClick">
-    <Border Background="{StaticResource SurfaceBrush}"
+    <Border Background="{DynamicResource SurfaceBrush}"
             Width="720"
             MaxHeight="600"
             Padding="{StaticResource Padding6}"
             CornerRadius="{StaticResource RadiusLg}"
-            BoxShadow="{StaticResource Elevation5Shadow}"
+            BoxShadow="{DynamicResource Elevation5Shadow}"
             VerticalAlignment="Center"
             HorizontalAlignment="Center"
             PointerPressed="KeyboardShortcutsContent_OnPointerPressed">
@@ -37,7 +37,7 @@
         <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
           <StackPanel Spacing="4">
             <TextBlock Text="键盘快捷键" Classes="page-title"/>
-            <TextBlock Text="按 ? 随时调出。Esc 或点击外部关闭。"
+            <TextBlock Text="按 ⌘/ 随时调出。Esc 或点击外部关闭。"
                        Classes="muted"/>
           </StackPanel>
           <Button Grid.Column="1" Classes="chrome-button"
@@ -61,7 +61,7 @@
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ ↵" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="聚焦输入框" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ L" Classes="kbd-display" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="重试上一次任务" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="继续上一次任务" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ R" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="停止当前任务" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ ." Classes="kbd-display" VerticalAlignment="Center"/>
@@ -87,8 +87,8 @@
               <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="命令面板" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ K" Classes="kbd-display" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="帮助 (slash /help)" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ ?" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="键盘快捷键" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ /" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="当前项目 git 状态" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ G" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="3" Grid.Column="0" Text="Git 状态 viewer" Classes="body" VerticalAlignment="Center"/>

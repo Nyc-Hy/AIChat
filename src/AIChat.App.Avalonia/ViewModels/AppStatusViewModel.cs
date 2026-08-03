@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using AIChat.Abstractions.Configuration;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AIChat.App.Avalonia.ViewModels;
@@ -75,7 +76,7 @@ public sealed partial class AppStatusViewModel : ObservableObject
                               && _sidebar.SelectedProjectName != "未配置路径"
                               && _sidebar.SelectedProjectName != "未选择项目";
 
-    public bool IsReady => Readiness == "可运行";
+    public bool IsReady => HasProject && Readiness == "可运行";
     public bool NeedsConfiguration => Readiness == "需要密钥" || Readiness == "需检查";
 
     public string Greeting => HasProject ? "今天要完成什么？" : "选一个项目开始";
@@ -86,6 +87,14 @@ public sealed partial class AppStatusViewModel : ObservableObject
     public string StatusBarModel => string.IsNullOrEmpty(ActiveModel)
         ? ActiveProvider
         : $"{ActiveProvider} · {ActiveModel}";
+
+    // Sprint 0.5 polish: surfaced to the status-bar's shield icon so the
+    // user gets a visual cue (not just the "（隔离会话…）" text suffix)
+    // when the session is reading / writing to a temp data root instead
+    // of the real ~/Library/Application Support/AIChat. AppRuntimeProfile
+    // is a static helper that resolves AICHAT_ISOLATED_DATA_ROOT once at
+    // startup.
+    public bool IsIsolatedMode => AppRuntimeProfile.IsIsolated;
 
     // Forward PropertyChanged for the sidebar's
     // SelectedProjectName / Projects to the derived properties.
@@ -106,6 +115,7 @@ public sealed partial class AppStatusViewModel : ObservableObject
             || e.PropertyName == nameof(ProjectSidebarViewModel.Projects))
         {
             OnPropertyChanged(nameof(HasProject));
+            OnPropertyChanged(nameof(IsReady));
             OnPropertyChanged(nameof(Greeting));
             OnPropertyChanged(nameof(SubGreeting));
         }
@@ -119,6 +129,7 @@ public sealed partial class AppStatusViewModel : ObservableObject
     private void OnSidebarProjectsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         OnPropertyChanged(nameof(HasProject));
+        OnPropertyChanged(nameof(IsReady));
         OnPropertyChanged(nameof(Greeting));
         OnPropertyChanged(nameof(SubGreeting));
     }

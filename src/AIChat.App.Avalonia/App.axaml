@@ -1,7 +1,15 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="AIChat.App.Avalonia.App"
+             Name="AIChat"
              RequestedThemeVariant="Default">
+
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="关于 AIChat…" Click="About_OnClick" />
+            <NativeMenuItem Header="设置…" Click="Settings_OnClick" />
+        </NativeMenu>
+    </NativeMenu.Menu>
 
     <!--
       Token dictionaries. Tokens.axaml carries the light-mode base; the
@@ -77,7 +85,7 @@
                           ListBoxItem:focus-visible,
                           ToggleSwitch:focus-visible,
                           CheckBox:focus-visible">
-            <Setter Property="BorderBrush" Value="{StaticResource FocusRingBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
 
@@ -93,27 +101,27 @@
             <Setter Property="FontSize" Value="{StaticResource FontOverline}" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="LetterSpacing" Value="0.66" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
         </Style>
         <Style Selector="TextBlock.body">
             <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
             <Setter Property="LineHeight" Value="21" />
-            <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
         </Style>
         <Style Selector="TextBlock.muted">
             <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
         </Style>
         <Style Selector="TextBlock.kbd-display">
             <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
             <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="HorizontalAlignment" Value="Left" />
         </Style>
         <Style Selector="TextBlock.page-title">
             <Setter Property="FontSize" Value="{StaticResource FontH1}" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         </Style>
         <Style Selector="TextBlock.hero-title">
             <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
@@ -121,7 +129,7 @@
             <Setter Property="FontSize" Value="{StaticResource FontDisplay}" />
             <Setter Property="LineHeight" Value="44" />
             <Setter Property="LetterSpacing" Value="{StaticResource TrackingDisplay}" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
         </Style>
 
         <!-- ===== Surfaces (Border) ===== -->
@@ -132,8 +140,8 @@
             <Setter Property="Padding" Value="{StaticResource Padding4}" />
         </Style>
         <Style Selector="Border.surface">
-            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
@@ -162,18 +170,18 @@
               which read as a heavier, more AI-product form field. Going
               back: cream floating block, no border, soft shadow.
             -->
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
-            <Setter Property="BoxShadow" Value="{StaticResource Elevation3Shadow}" />
+            <Setter Property="BoxShadow" Value="{DynamicResource Elevation3Shadow}" />
         </Style>
         <Style Selector="Border.input-floating:focus-within">
             <!-- Focus indicator: deepen the shadow one elevation step. The
                  2px AccentBrush border on the inner TextBox is removed so
                  the cream block doesn't get a blue stripe inside it. -->
-            <Setter Property="BoxShadow" Value="{StaticResource Elevation4Shadow}" />
+            <Setter Property="BoxShadow" Value="{DynamicResource Elevation4Shadow}" />
         </Style>
 
         <!--
@@ -183,8 +191,8 @@
           section. System = no bubble, just text.
         -->
         <Style Selector="Border.bubble-user">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Accent100Brush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent100Brush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
@@ -199,8 +207,8 @@
           background deepens one step.
         -->
         <Style Selector="Button.bubble-user">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Accent100Brush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent100Brush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
@@ -209,11 +217,11 @@
             <Setter Property="Cursor" Value="IBeam" />
         </Style>
         <Style Selector="Button.bubble-user:pointerover">
-            <Setter Property="Background" Value="{StaticResource Accent100Brush}" />
+            <Setter Property="Background" Value="{DynamicResource Accent100Brush}" />
         </Style>
         <Style Selector="Border.bubble-ai">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="0,0,0,1" />
             <Setter Property="CornerRadius" Value="0" />
             <Setter Property="Padding" Value="0,0,0,12" />
@@ -227,12 +235,12 @@
           ActivityItemViewModel.IsFailed / IsStopped.
         -->
         <Style Selector="Border.bubble-ai.failed">
-            <Setter Property="BorderBrush" Value="{StaticResource ErrorBorderBrush}" />
-            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
         </Style>
         <Style Selector="Border.bubble-ai.stopped">
-            <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />
-            <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
         </Style>
         <!--
           Status-chip color when an AI bubble is in a terminal
@@ -241,10 +249,10 @@
           user can read the chip at a glance.
         -->
         <Style Selector="TextBlock.muted.failed">
-            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
         </Style>
         <Style Selector="TextBlock.muted.stopped">
-            <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
         </Style>
 
         <!--
@@ -255,8 +263,8 @@
           the model is running.
         -->
         <Style Selector="Button.send-button">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
             <Setter Property="Width" Value="36" />
             <Setter Property="Height" Value="36" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
@@ -264,11 +272,11 @@
             <Setter Property="BorderThickness" Value="0" />
         </Style>
         <Style Selector="Button.send-button:pointerover">
-            <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
         </Style>
         <Style Selector="Button.send-button:disabled">
-            <Setter Property="Background" Value="{StaticResource LineBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Background" Value="{DynamicResource LineBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
         </Style>
         <!--
           Stop button: same shape as the send button (36px circle) but
@@ -277,17 +285,17 @@
           IsRunning.
         -->
         <Style Selector="Button.stop-button">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
             <Setter Property="Width" Value="36" />
             <Setter Property="Height" Value="36" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
             <Setter Property="Padding" Value="0" />
         </Style>
         <Style Selector="Button.stop-button:pointerover">
-            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
         </Style>
         <!--
           Retry button: a secondary ghost button that only shows up after
@@ -296,16 +304,16 @@
         -->
         <Style Selector="Button.retry-button">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
             <Setter Property="Height" Value="36" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
             <Setter Property="Padding" Value="12,0" />
         </Style>
         <Style Selector="Button.retry-button:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
         </Style>
 
         <!--
@@ -315,16 +323,16 @@
           deepens the background.
         -->
         <Style Selector="Button.secondary">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
             <Setter Property="Padding" Value="16,10" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="Button.secondary:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
 
         <!--
@@ -336,17 +344,17 @@
             <Setter Property="Width" Value="28" />
             <Setter Property="Height" Value="28" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="BorderThickness" Value="0" />
         </Style>
         <Style Selector="Button.icon-toggle:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
         <Style Selector="Button.icon-toggle:checked">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
 
         <!--
@@ -356,8 +364,8 @@
           the accent.
         -->
         <Style Selector="Button.quick-action">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
             <Setter Property="Padding" Value="14,12" />
@@ -365,8 +373,8 @@
             <Setter Property="Margin" Value="0,0,10,10" />
         </Style>
         <Style Selector="Button.quick-action:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
 
         <!--
@@ -386,10 +394,10 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
         </Style>
         <Style Selector="Button.provider-card:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
         <Style Selector="Button.provider-card.active">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
 
         <!--
@@ -406,80 +414,153 @@
             <Setter Property="Margin" Value="0,0,0,2" />
         </Style>
         <Style Selector="Button.sidebar-row:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
         <Style Selector="Button.sidebar-row.selected">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
         </Style>
 
         <!--
-          plain-row: a button with no chrome at all. Used for
-          file-tree leaves where the chevron is the only visual
-          cue that the row is a clickable affordance — adding
-          the sidebar-row hover wash makes file rows look like
-          navigation items, which they aren't.
+          Right-side Environment panel rows (交付物 list). Slightly
+          tighter padding than sidebar-row since each row is a 2-line
+          file card (name + size/age), not a single-line nav entry.
         -->
-        <Style Selector="Button.plain-row">
+        <Style Selector="Button.env-row">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-        </Style>
-        <Style Selector="Button.plain-row:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.env-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
 
         <!--
-          sidebar-section-header: a section title that's also
-          clickable (used by the collapsible "最近" section in
-          Phase 1.5). Inherits the muted text style of the
-          other section titles; the pointerover wash tells the
-          user it's a button, not a static label.
+          Codex parity: inline project popover that expands under the
+          selected project row in the sidebar. Sits on a slightly
+          tinted background so the user can tell the popover is a
+          sub-surface of the project, not another row in the list.
         -->
-        <Style Selector="Button.sidebar-section-header">
+        <Style Selector="Border.project-popover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Sprint 0.5: 5 first-level nav icons at the top of the sidebar.
+          The .active class highlights the current entry; .disabled
+          fades the icon + text so the user sees "this is coming, not
+          available right now" without the design dead-ending at a
+          clickable empty action (plan §5.4).
+        -->
+        <Style Selector="Button.sidebar-icon-row">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,8" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-row.active">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-row.disabled">
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+
+        <!--
+          Codex parity: text+icon first-level nav rows. The icon is on
+          the left, the label on the right, full-row hover. Same .active /
+          .disabled classes so the sidebar visual language matches across
+          nav and project/conversation lists.
+        -->
+        <Style Selector="Button.sidebar-nav-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-row.active">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-row.disabled">
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+
+        <!--
+          Sprint 0.5+: sidebar top navigation layer. Matches Codex's
+          "Codex ▽" mode switcher + search + bell trio (top of sidebar).
+          The brand button is taller to hold a 14pt text label, the icon
+          buttons are square (32x32) to balance visually with the 5-icon
+          row below.
+        -->
+        <Style Selector="Button.sidebar-brand">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
-        <Style Selector="Button.sidebar-section-header:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+        <Style Selector="Button.sidebar-icon-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,6" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
 
         <!--
-          file-preview: the read-only file panel that drops in at
-          the top of the conversation. Sits inside the .panel
-          conversation border so the activity feed remains below
-          it. Light sunken background, hairline border, rounded
-          corners to match the existing "code block" visual.
+          Sprint 0.5: permission badge (default / full / read-only). Lives in
+          the composer. The .permission-full class flips the foreground
+          to the warning/amber tone (not red) so the user sees "this is
+          a deliberate grant of broad access" rather than "this is an
+          error state" — matches Codex Desktop's 完全访问 badge.
         -->
-        <Style Selector="Border.file-preview">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
-            <Setter Property="Padding" Value="0" />
+        <Style Selector="Button.chrome-button.permission-full">
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
+        </Style>
+        <Style Selector="Button.chrome-button.permission-readonly">
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Ellipse.permission-dot-full">
+            <Setter Property="Fill" Value="{DynamicResource WarningBrush}" />
+        </Style>
+        <Style Selector="Ellipse.permission-dot-default">
+            <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Ellipse.permission-dot-readonly">
+            <Setter Property="Fill" Value="{DynamicResource MutedBrush}" />
         </Style>
 
-        <!-- Model chip: small flat rectangle with a status dot + name. -->
+        <!-- Model chip: small flat rectangle with a status dot + name.
+             Sprint 0.5: padding tightened (6,4) so the chip doesn't crowd
+             the permission badge + 验证 button in the 3-column layout. -->
         <Style Selector="Border.model-chip">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
-            <Setter Property="Padding" Value="8,5" />
+            <Setter Property="Padding" Value="6,4" />
         </Style>
 
         <Style Selector="Border.section-divider">
-            <Setter Property="Background" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="Height" Value="1" />
             <Setter Property="Margin" Value="0,16" />
         </Style>
 
         <!-- ===== Badges ===== -->
         <Style Selector="Border.badge">
-            <Setter Property="Background" Value="{StaticResource InfoBgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InfoBgBrush}" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
             <Setter Property="Padding" Value="9,4" />
         </Style>
@@ -493,8 +574,8 @@
           and "conflict" rows without reading the code.
         -->
         <Style Selector="Border.git-status-badge">
-            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Padding" Value="6,2" />
@@ -510,51 +591,51 @@
           one status language.
         -->
         <Style Selector="Border.toast-success">
-            <Setter Property="BorderBrush" Value="{StaticResource SuccessBorderBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
             <Setter Property="BorderThickness" Value="3,1,1,1" />
         </Style>
         <Style Selector="Border.toast-warning">
-            <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
             <Setter Property="BorderThickness" Value="3,1,1,1" />
         </Style>
         <Style Selector="Border.toast-error">
-            <Setter Property="BorderBrush" Value="{StaticResource ErrorBorderBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
             <Setter Property="BorderThickness" Value="3,1,1,1" />
         </Style>
         <Style Selector="Border.git-status-badge.modified">
-            <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource WarningBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.modified > TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.added">
-            <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource SuccessBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SuccessBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.added > TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource SuccessFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SuccessFgBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.deleted, Border.git-status-badge.conflict">
-            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource ErrorBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.deleted > TextBlock, Border.git-status-badge.conflict > TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.untracked">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Accent300Brush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent300Brush}" />
         </Style>
         <Style Selector="Border.git-status-badge.untracked > TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.renamed, Border.git-status-badge.copied">
-            <Setter Property="Background" Value="{StaticResource InfoBgBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource InfoBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InfoBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource InfoBorderBrush}" />
         </Style>
         <Style Selector="Border.git-status-badge.renamed > TextBlock, Border.git-status-badge.copied > TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource InfoFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource InfoFgBrush}" />
         </Style>
         <!--
           Sub-agent status colour map. The plan panel renders a row
@@ -571,19 +652,19 @@
           skipped     — muted gray (coordinator declined)
         -->
         <Style Selector="TextBlock.sub-agent-status.running">
-            <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         </Style>
         <Style Selector="TextBlock.sub-agent-status.completed">
-            <Setter Property="Foreground" Value="{StaticResource SuccessFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource SuccessFgBrush}" />
         </Style>
         <Style Selector="TextBlock.sub-agent-status.failed">
-            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
         </Style>
         <Style Selector="TextBlock.sub-agent-status.budget">
-            <Setter Property="Foreground" Value="{StaticResource WarningFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
         </Style>
         <Style Selector="TextBlock.sub-agent-status.cancelled, TextBlock.sub-agent-status.skipped">
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
         </Style>
         <!--
           Pending image attachment: 56x56 square thumbnail that sits
@@ -593,8 +674,8 @@
           not a permanent card.
         -->
         <Style Selector="Border.pending-attachment">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Width" Value="56" />
@@ -602,8 +683,8 @@
             <Setter Property="ClipToBounds" Value="True" />
         </Style>
         <Style Selector="Button.pending-attachment-remove">
-            <Setter Property="Background" Value="{StaticResource ScrimBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ScrimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Width" Value="18" />
             <Setter Property="Height" Value="18" />
             <Setter Property="Padding" Value="0" />
@@ -613,8 +694,8 @@
             <Setter Property="Margin" Value="0,2,2,0" />
         </Style>
         <Style Selector="Button.pending-attachment-remove:pointerover">
-            <Setter Property="Background" Value="{StaticResource ErrorBgBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource ErrorFgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
         </Style>
         <!--
           Floating "↓ N 条新消息" pill. Anchored to the bottom-center
@@ -624,21 +705,21 @@
           not a status row. Hover deepens the border for affordance.
         -->
         <Style Selector="Button.new-message-pill">
-            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Accent300Brush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent300Brush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
             <Setter Property="Padding" Value="14,7" />
-            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
         </Style>
         <Style Selector="Button.new-message-pill:pointerover">
-            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
         <Style Selector="Border.badge.success">
-            <Setter Property="Background" Value="{StaticResource SuccessBgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SuccessBgBrush}" />
         </Style>
         <Style Selector="Border.badge.warning">
-            <Setter Property="Background" Value="{StaticResource WarningBgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
         </Style>
 
         <!--
@@ -651,7 +732,7 @@
         <Style Selector="Ellipse.thinking-dot">
             <Setter Property="Width" Value="6" />
             <Setter Property="Height" Value="6" />
-            <Setter Property="Fill" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Fill" Value="{DynamicResource MutedBrush}" />
             <Style.Animations>
                 <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut">
                     <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
@@ -681,18 +762,18 @@
 
         <!-- ===== Buttons ===== -->
         <Style Selector="Button.primary">
-            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
             <Setter Property="Padding" Value="16,10" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="Button.primary:pointerover">
-            <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
         </Style>
         <Style Selector="Button.chrome-button">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Width" Value="40" />
@@ -701,18 +782,18 @@
             <Setter Property="FontWeight" Value="Normal" />
         </Style>
         <Style Selector="Button.chrome-button:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource Text2Brush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
         </Style>
         <Style Selector="Button.chrome-button.close:pointerover">
-            <Setter Property="Background" Value="{StaticResource ErrorFgBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource AccentFgBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
         </Style>
 
         <!-- ===== Inputs ===== -->
         <Style Selector="TextBox">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
             <Setter Property="Padding" Value="{StaticResource Padding3}" />
@@ -751,8 +832,8 @@
         </Style>
 
         <Style Selector="Border.kbd-pill">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource LineSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Padding" Value="6,2" />
@@ -766,13 +847,13 @@
             <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
         </Style>
         <Style Selector="ListBox.command-list ListBoxItem:pointerover">
-            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
         </Style>
         <Style Selector="ListBox.command-list ListBoxItem:selected">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
         </Style>
         <Style Selector="ListBox.command-list ListBoxItem:selected:pointerover">
-            <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
         </Style>
     </Application.Styles>
 </Application>

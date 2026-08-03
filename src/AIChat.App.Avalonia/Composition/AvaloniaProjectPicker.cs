@@ -53,7 +53,11 @@ public sealed class AvaloniaProjectPicker : IProjectPicker
             return new PickerResult.Cancelled();
         }
 
-        var path = folder.Path.LocalPath;
+        // IStorageItem.Path may be an empty/non-file URI on macOS for
+        // folders returned by the native picker. Avalonia's helper is
+        // deliberately defensive and returns null instead of letting
+        // Uri.LocalPath throw, which would otherwise break first-run.
+        var path = folder.TryGetLocalPath();
         if (string.IsNullOrEmpty(path))
         {
             return new PickerResult.Failed("选中的目录路径为空。");

@@ -55,6 +55,9 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
     [ObservableProperty]
     private bool isTestInFlight;
 
+    [ObservableProperty]
+    private string lastSaveWarning = "";
+
     public ObservableCollection<ProviderTemplateViewModel> ProviderTemplates { get; } = [];
     public ObservableCollection<ProviderCardViewModel> AdvancedProviders { get; } = [];
 
@@ -126,7 +129,11 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
 
         ProviderSettingsService.ApplySelectedProvider(settings);
         ProviderSettingsService.NormalizeModelParameters(settings);
-        await _repository.SaveSettingsAsync(settings);
+        await _repository.SaveSettingsWithSecretsAsync(settings);
+
+        LastSaveWarning = string.Equals(result.Provider.ApiKeyProtection, "session-only", StringComparison.OrdinalIgnoreCase)
+            ? "系统凭据库不可用：密钥只在本次运行中有效，重启后需要重新输入。密钥没有写入明文文件。"
+            : "";
 
         ProviderApiKey = "";
         var active = ProviderSettingsService.GetSelectedProvider(settings);
@@ -138,7 +145,8 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
             Settings = settings,
             ProviderName = result.Provider.Name,
             ModelId = result.Provider.SelectedModelId,
-            AlreadyExisted = result.AlreadyExisted
+            AlreadyExisted = result.AlreadyExisted,
+            WarningMessage = string.IsNullOrEmpty(LastSaveWarning) ? null : LastSaveWarning
         });
     }
 
@@ -208,7 +216,9 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
             AdvancedProviders.Add(new ProviderCardViewModel(
                 provider.Name,
                 provider.DefaultModel,
-                isActive ? "当前" : "可用",
+                isActive
+                    ? string.IsNullOrWhiteSpace(active!.ApiKey) ? "未配置" : "当前"
+                    : "已支持",
                 provider.Id,
                 isActive,
                 SelectTemplate));

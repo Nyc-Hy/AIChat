@@ -37,7 +37,7 @@ public partial class CommandPaletteView : UserControl
         input?.Focus();
     }
 
-    private void CommandPalette_OnKeyDown(object? sender, KeyEventArgs e)
+    private async void CommandPalette_OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
         {
@@ -46,25 +46,50 @@ public partial class CommandPaletteView : UserControl
 
         if (e.Key == Key.Enter)
         {
-            // Fire-and-forget the async execute. The palette closes
-            // on success (the action sets IsCommandPaletteOpen=false
-            // through the host's OpenCommandPaletteCommand). The
-            // SafeRun pattern is for event handlers, not palette
-            // key handlers — the execute swallows its own errors
-            // and the user's next key press dismisses the palette
-            // even if the action failed.
-            _ = viewModel.CommandPalette.ExecuteSelectedAsync();
             e.Handled = true;
+            await ExecuteSelectedSafelyAsync(viewModel);
         }
         else if (e.Key == Key.Down)
         {
-            viewModel.CommandPalette.SelectedIndex++;
+            viewModel.CommandPalette.MoveNextCommand.Execute(null);
             e.Handled = true;
         }
         else if (e.Key == Key.Up)
         {
-            viewModel.CommandPalette.SelectedIndex--;
+            viewModel.CommandPalette.MovePreviousCommand.Execute(null);
             e.Handled = true;
+        }
+    }
+
+    private async void CommandPaletteItem_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel ||
+            sender is not Control { DataContext: CommandItem item })
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var index = viewModel.CommandPalette.FilteredCommands.IndexOf(item);
+        if (index >= 0)
+        {
+            viewModel.CommandPalette.SelectedIndex = index;
+        }
+        await ExecuteSelectedSafelyAsync(viewModel);
+    }
+
+    private static async Task ExecuteSelectedSafelyAsync(MainWindowViewModel viewModel)
+    {
+        try
+        {
+            if (await viewModel.CommandPalette.ExecuteSelectedAsync())
+            {
+                viewModel.IsCommandPaletteOpen = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            viewModel.StatusMessage = $"操作失败：{ex.Message}";
         }
     }
 

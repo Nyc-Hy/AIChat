@@ -8,7 +8,7 @@ namespace AIChat.App.Avalonia.ViewModels;
 // reads go through ProjectSidebarViewModel.CurrentProject.
 public sealed class ProjectSelectionChangedEventArgs : EventArgs
 {
-    public required ProjectWorkspace Project { get; init; }
+    public WorkspaceProject? Project { get; init; }
     public required string StatusMessage { get; init; }
 }
 
@@ -17,7 +17,7 @@ public sealed class ProjectSelectionChangedEventArgs : EventArgs
 // the outcome in the status line and in the activity log if desired.
 public sealed class ProjectAddedEventArgs : EventArgs
 {
-    public ProjectWorkspace? Project { get; init; }
+    public WorkspaceProject? Project { get; init; }
     public required string StatusMessage { get; init; }
     public bool Succeeded => Project is not null;
 }

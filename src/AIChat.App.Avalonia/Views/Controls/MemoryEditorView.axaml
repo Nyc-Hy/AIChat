@@ -3,14 +3,14 @@
              xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
              x:DataType="vm:MainWindowViewModel"
              x:Class="AIChat.App.Avalonia.Views.Controls.MemoryEditorView">
-    <Border Background="{StaticResource ScrimBrush}"
+    <Border Background="{DynamicResource ScrimBrush}"
             PointerPressed="MemoryEditorScrim_OnClick">
-        <Border Background="{StaticResource SurfaceBrush}"
+        <Border Background="{DynamicResource SurfaceBrush}"
                 Width="720"
                 MaxHeight="640"
                 Padding="{StaticResource Padding6}"
                 CornerRadius="{StaticResource RadiusLg}"
-                BoxShadow="{StaticResource Elevation4Shadow}"
+                BoxShadow="{DynamicResource Elevation4Shadow}"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 PointerPressed="MemoryEditorContent_OnPointerPressed">
@@ -22,7 +22,7 @@
                         <TextBlock Classes="page-title">
                             <Run Text="Memory"/>
                             <Run Text=" — "/>
-                            <Run Text="{Binding MemoryEditor.ProjectName}" Foreground="{StaticResource MutedBrush}"/>
+                            <Run Text="{Binding MemoryEditor.ProjectName}" Foreground="{DynamicResource MutedBrush}"/>
                         </TextBlock>
                         <TextBlock Text="为当前项目添加笔记 / 偏好 / 任务进度。"
                                    Classes="muted"/>
@@ -50,7 +50,7 @@
                                Text="{Binding MemoryEditor.ErrorMessage}"
                                Classes="muted"
                                FontSize="12"
-                               Foreground="{StaticResource ErrorFgBrush}"
+                               Foreground="{DynamicResource ErrorFgBrush}"
                                IsVisible="{Binding MemoryEditor.ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                TextWrapping="Wrap"/>
                     <ComboBox Grid.Row="1" Grid.Column="1"

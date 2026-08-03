@@ -19,6 +19,19 @@
 
   <ItemGroup>
     <!--
+      Expose internal types (MainWindow, MainWindowViewModel
+      internals, etc.) to the test assembly so the DI lock
+      in AppHostTests can reference them. Without this the
+      lock can only cover public types — the internal
+      `MainWindow` class is the most-wanted target because
+      every modal/Window the host adds depends on it being
+      resolvable from DI.
+    -->
+    <InternalsVisibleTo Include="AIChat.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
       Plain embedded resource (not AvaloniaResource) so the
       /help body can be loaded via Assembly.GetManifestResourceStream
       without an Avalonia asset pipeline — important for the
@@ -32,7 +45,6 @@
     <ProjectReference Include="..\AIChat.Abstractions\AIChat.Abstractions.csproj" />
     <ProjectReference Include="..\AIChat.Application\AIChat.Application.csproj" />
     <ProjectReference Include="..\AIChat.Domain\AIChat.Domain.csproj" />
-    <ProjectReference Include="..\AIChat.Providers.Anthropic\AIChat.Providers.Anthropic.csproj" />
     <ProjectReference Include="..\AIChat.Providers.OpenAI\AIChat.Providers.OpenAI.csproj" />
     <ProjectReference Include="..\AIChat.Storage.Json\AIChat.Storage.Json.csproj" />
   </ItemGroup>

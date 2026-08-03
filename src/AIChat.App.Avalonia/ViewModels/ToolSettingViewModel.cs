@@ -8,10 +8,9 @@ namespace AIChat.App.Avalonia.ViewModels;
 // Per-row view-model for the "工具权限" matrix in the settings
 // modal. The XAML renders one row per registered tool, with a
 // ComboBox bound to SelectedMode for the per-tool permission
-// override. SelectedMode writes through OnSelectedModeChanged to
-// the host's _settings.ToolPermissionModes dictionary (or removes
-// the entry when the user picks Disabled, since the absence-vs-
-// default distinction lives in the settings service).
+// override. SettingsViewModel writes SelectedMode through to the host's
+// _settings.ToolPermissionModes dictionary. Disabled is persisted explicitly
+// so an empty EnabledToolIds list is not mistaken for first-run defaults.
 public sealed partial class ToolSettingViewModel : ViewModelBase
 {
     [ObservableProperty]

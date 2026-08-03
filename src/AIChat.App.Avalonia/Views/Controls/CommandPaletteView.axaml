@@ -3,15 +3,15 @@
              xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
              x:DataType="vm:MainWindowViewModel"
              x:Class="AIChat.App.Avalonia.Views.Controls.CommandPaletteView">
-    <Border Background="{StaticResource ScrimBrush}"
+    <Border Background="{DynamicResource ScrimBrush}"
             KeyDown="CommandPalette_OnKeyDown"
             PointerPressed="CommandPaletteScrim_OnClick">
-        <Border Background="{StaticResource SurfaceBrush}"
+        <Border Background="{DynamicResource SurfaceBrush}"
                 Width="640"
                 MaxHeight="480"
                 Padding="{StaticResource Padding3}"
                 CornerRadius="{StaticResource RadiusLg}"
-                BoxShadow="{StaticResource Elevation5Shadow}"
+                BoxShadow="{DynamicResource Elevation5Shadow}"
                 VerticalAlignment="Top"
                 Margin="0,80,0,0"
                 PointerPressed="CommandPaletteContent_OnPointerPressed">
@@ -19,7 +19,7 @@
                 <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                     <Path Grid.Column="0"
                           Data="M11 19 a8 8 0 1 0 0 -16 a8 8 0 1 0 0 16 M21 21 L16.65 16.65"
-                          Stroke="{StaticResource MutedBrush}"
+                          Stroke="{DynamicResource MutedBrush}"
                           StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
                           Width="18" Height="18" Stretch="Uniform"
                           VerticalAlignment="Center"/>
@@ -32,7 +32,7 @@
                              FontSize="14"
                              KeyDown="CommandPalette_OnKeyDown"/>
                     <Border Grid.Column="2" Classes="kbd-pill">
-                        <TextBlock Text="ESC" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                        <TextBlock Text="ESC" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{DynamicResource MutedBrush}"/>
                     </Border>
                 </Grid>
 
@@ -47,13 +47,14 @@
                          MaxHeight="360">
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:CommandItem">
-                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="8,6">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12" Margin="8,6"
+                                  PointerPressed="CommandPaletteItem_OnPointerPressed">
                                 <Border Grid.Column="0"
                                         Width="28" Height="28"
                                         CornerRadius="6"
-                                        Background="{StaticResource SurfaceSunkenBrush}">
+                                        Background="{DynamicResource SurfaceSunkenBrush}">
                                     <Path Data="{Binding Glyph}"
-                                          Stroke="{StaticResource MutedBrush}"
+                                          Stroke="{DynamicResource MutedBrush}"
                                           StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
                                           Width="16" Height="16" Stretch="Uniform"
                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -63,7 +64,7 @@
                                     <TextBlock Text="{Binding Subtitle}" Classes="muted" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                                 <Border Grid.Column="2" Classes="kbd-pill" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Shortcut}" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+                                    <TextBlock Text="{Binding Shortcut}" FontFamily="{StaticResource FontMono}" FontSize="10" Foreground="{DynamicResource MutedBrush}"/>
                                 </Border>
                             </Grid>
                         </DataTemplate>

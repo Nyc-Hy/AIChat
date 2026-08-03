@@ -9,6 +9,6 @@ namespace AIChat.App.Avalonia.ViewModels;
 public sealed class ConversationSelectedEventArgs : EventArgs
 {
     // Null when the selection is the "new" placeholder.
-    public Conversation? Conversation { get; init; }
+    public ChatSession? Conversation { get; init; }
     public required string StatusMessage { get; init; }
 }

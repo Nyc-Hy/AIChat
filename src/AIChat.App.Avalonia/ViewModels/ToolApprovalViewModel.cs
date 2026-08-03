@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
-// Owns the right-rail "tool approval" surface: the pending decision state,
+// Owns the window-modal tool approval surface: the pending decision state,
 // the Approve / Reject commands, and the TaskCompletionSource that bridges
 // the agent-run thread (the awaiter) to the UI thread (the user).
 //
@@ -17,6 +17,7 @@ namespace AIChat.App.Avalonia.ViewModels;
 public sealed partial class ToolApprovalViewModel : ViewModelBase
 {
     private TaskCompletionSource<ToolApprovalDecision>? _pending;
+    private TaskCompletionSource<ToolApprovalDecision>? _presented;
     private readonly object _gate = new();
 
     [ObservableProperty]
@@ -53,29 +54,42 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
         {
             return Task.FromResult(ToolApprovalDecision.Reject("只读模式已开启。"));
         }
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled<ToolApprovalDecision>(cancellationToken);
+        }
 
         TaskCompletionSource<ToolApprovalDecision> completion;
+        TaskCompletionSource<ToolApprovalDecision>? superseded;
         lock (_gate)
         {
             // Cancel any in-flight request so we never strand an awaiter.
-            _pending?.TrySetCanceled();
+            superseded = _pending;
             _pending = completion = new TaskCompletionSource<ToolApprovalDecision>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
+        superseded?.TrySetCanceled();
 
-        cancellationToken.Register(() =>
+        var cancellationRegistration = cancellationToken.Register(
+            () => CancelPending(completion, cancellationToken));
+        _ = completion.Task.ContinueWith(
+            _ => cancellationRegistration.Dispose(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        RunOnUiThread(() =>
         {
             lock (_gate)
             {
-                if (ReferenceEquals(_pending, completion))
+                if (!ReferenceEquals(_pending, completion) ||
+                    completion.Task.IsCompleted ||
+                    cancellationToken.IsCancellationRequested)
                 {
-                    _pending = null;
+                    return;
                 }
+                _presented = completion;
             }
-            completion.TrySetCanceled(cancellationToken);
-        });
 
-        Dispatcher.UIThread.Post(() =>
-        {
             PendingApprovalTitle = FriendlyApprovalTitle(request.ToolCall.Name);
             PendingApprovalSummary = request.Preview.Summary;
             PendingApprovalPreview = FirstNonBlank(
@@ -91,6 +105,55 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
         });
 
         return completion.Task;
+    }
+
+    private void CancelPending(
+        TaskCompletionSource<ToolApprovalDecision> completion,
+        CancellationToken cancellationToken)
+    {
+        bool wasCurrent;
+        bool wasPresented;
+        lock (_gate)
+        {
+            wasCurrent = ReferenceEquals(_pending, completion);
+            wasPresented = ReferenceEquals(_presented, completion);
+            if (wasCurrent)
+            {
+                _pending = null;
+            }
+            if (wasPresented)
+            {
+                _presented = null;
+            }
+        }
+
+        completion.TrySetCanceled(cancellationToken);
+        if (!wasCurrent)
+        {
+            return;
+        }
+
+        RunOnUiThread(() =>
+        {
+            lock (_gate)
+            {
+                // A newer request owns the surface now; never clear it from an
+                // older cancellation callback.
+                if (_pending is not null)
+                {
+                    return;
+                }
+            }
+
+            ClearPendingSurface();
+            if (wasPresented)
+            {
+                RequestResolved?.Invoke(this, new ToolApprovalResolvedEventArgs
+                {
+                    Decision = ToolApprovalDecision.Reject("任务已取消。")
+                });
+            }
+        });
     }
 
     [RelayCommand(CanExecute = nameof(CanResolve))]
@@ -118,15 +181,35 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
         {
             completion = _pending;
             _pending = null;
+            _presented = null;
         }
 
+        ClearPendingSurface();
+
+        completion?.TrySetResult(decision);
+        RequestResolved?.Invoke(this, new ToolApprovalResolvedEventArgs { Decision = decision });
+    }
+
+    private void ClearPendingSurface()
+    {
         HasPendingApproval = false;
         PendingApprovalTitle = "";
         PendingApprovalSummary = "";
         PendingApprovalPreview = "";
+    }
 
-        completion?.TrySetResult(decision);
-        RequestResolved?.Invoke(this, new ToolApprovalResolvedEventArgs { Decision = decision });
+    private static void RunOnUiThread(Action action)
+    {
+        // Unit-test and non-visual hosts do not own a live Avalonia
+        // Application. In that case there is no UI thread to marshal to and
+        // executing inline keeps the view-model contract deterministic.
+        if (global::Avalonia.Application.Current is null || Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(action);
     }
 
     private static string FriendlyApprovalTitle(string toolName) => toolName switch

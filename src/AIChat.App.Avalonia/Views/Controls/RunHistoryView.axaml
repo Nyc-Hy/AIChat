@@ -1,0 +1,185 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="AIChat.App.Avalonia.Views.Controls.RunHistoryView">
+    <Border Background="{DynamicResource ScrimBrush}"
+            PointerPressed="RunHistoryScrim_OnPointerPressed">
+        <Border Background="{DynamicResource SurfaceBrush}"
+                Width="980"
+                MaxHeight="700"
+                Padding="{StaticResource Padding6}"
+                CornerRadius="{StaticResource RadiusLg}"
+                BoxShadow="{DynamicResource Elevation4Shadow}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                PointerPressed="RunHistoryContent_OnPointerPressed">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="运行记录" Classes="page-title"/>
+                        <TextBlock Text="{Binding RunHistory.RunCountText}" Classes="muted"/>
+                    </StackPanel>
+                    <ComboBox Grid.Column="1"
+                              Width="130"
+                              AutomationProperties.Name="按状态筛选运行记录"
+                              ItemsSource="{Binding RunHistory.StatusFilters}"
+                              SelectedItem="{Binding RunHistory.SelectedStatusFilter}"/>
+                    <Button Grid.Column="2"
+                            Classes="chrome-button"
+                            AutomationProperties.Name="关闭运行记录"
+                            Command="{Binding CloseRunHistoryCommand}"
+                            ToolTip.Tip="关闭 (Esc)">
+                        <Path Data="M6 6 L18 18 M18 6 L6 18"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              StrokeThickness="1.6" StrokeLineCap="Round"
+                              Width="14" Height="14" Stretch="Uniform"/>
+                    </Button>
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="360,*" ColumnSpacing="14" MinHeight="470">
+                    <Border Grid.Column="0"
+                            Background="{DynamicResource SurfaceSunkenBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}">
+                        <Grid>
+                            <TextBlock Text="{Binding RunHistory.EmptyStateMessage}"
+                                       Classes="muted"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       IsVisible="{Binding !RunHistory.HasRuns}"/>
+                            <ListBox ItemsSource="{Binding RunHistory.Runs}"
+                                     SelectedItem="{Binding RunHistory.SelectedRun}"
+                                     AutomationProperties.Name="运行记录列表"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Padding="6"
+                                     IsVisible="{Binding RunHistory.HasRuns}">
+                                <ListBox.Resources>
+                                    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush"
+                                                     Color="{DynamicResource AccentSoftColor}"/>
+                                    <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush"
+                                                     Color="{DynamicResource Accent100Color}"/>
+                                    <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush"
+                                                     Color="{DynamicResource Accent500Color}"/>
+                                </ListBox.Resources>
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem:selected">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                    </Style>
+                                </ListBox.Styles>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RunHistoryItemViewModel">
+                                        <Grid RowDefinitions="Auto,Auto,Auto" Margin="6" RowSpacing="4">
+                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock Text="{Binding ConversationTitle}"
+                                                           Classes="body"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxLines="1"/>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding StatusDisplay}"
+                                                           Classes="muted"
+                                                           FontWeight="SemiBold"/>
+                                            </Grid>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding Goal}"
+                                                       Classes="muted"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxLines="2"/>
+                                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding StartedAtDisplay}" Classes="muted" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DurationDisplay}" Classes="muted" FontSize="11"/>
+                                            </Grid>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1"
+                            Background="{DynamicResource SurfaceRaisedBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding5}">
+                        <Grid>
+                            <TextBlock Text="选择一条运行查看详情。"
+                                       Classes="muted"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       IsVisible="{Binding !RunHistory.HasSelection}"/>
+                            <ScrollViewer IsVisible="{Binding RunHistory.HasSelection}">
+                                <StackPanel Spacing="14">
+                                    <StackPanel Spacing="5">
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.Goal}"
+                                                   Classes="body"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.LineageDisplay}" Classes="muted"/>
+                                    </StackPanel>
+
+                                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="8">
+                                        <TextBlock Grid.Row="0" Text="状态" Classes="section-title"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.StatusDisplay}" Classes="body"/>
+                                        <TextBlock Grid.Row="1" Text="模型" Classes="section-title"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.ModelDisplay}" Classes="body"/>
+                                        <TextBlock Grid.Row="2" Text="上下文" Classes="section-title"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.ContextDisplay}" Classes="body"/>
+                                        <TextBlock Grid.Row="3" Text="执行" Classes="section-title"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.MetricsDisplay}" Classes="body" TextWrapping="Wrap"/>
+                                        <TextBlock Grid.Row="4" Text="验证" Classes="section-title"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.VerificationDisplay}" Classes="body"/>
+                                    </Grid>
+
+                                    <Border Background="{DynamicResource InfoBgBrush}"
+                                            BorderBrush="{DynamicResource InfoBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusMd}"
+                                            Padding="{StaticResource Padding3}">
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.UsageNote}"
+                                                   Foreground="{DynamicResource InfoFgBrush}"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"/>
+                                    </Border>
+
+                                    <StackPanel Spacing="5">
+                                        <TextBlock Text="结束原因" Classes="section-title"/>
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.CompletionReasonDisplay}" Classes="body" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <StackPanel Spacing="5">
+                                        <TextBlock Text="文件变更" Classes="section-title"/>
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.FileChangesDisplay}"
+                                                   Classes="body"
+                                                   FontFamily="{StaticResource FontMono}"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0"
+                               Text="继续会载入原对话并等待新的要求；重试会重新发送原任务。"
+                               Classes="muted"
+                               VerticalAlignment="Center"/>
+                    <Button Grid.Column="1"
+                            Content="继续此运行"
+                            AutomationProperties.Name="继续所选运行"
+                            Command="{Binding RunHistory.ContinueSelectedCommand}"/>
+                    <Button Grid.Column="2"
+                            Classes="primary"
+                            Content="重试原任务"
+                            AutomationProperties.Name="重试所选运行的原任务"
+                            Command="{Binding RunHistory.RetrySelectedCommand}"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

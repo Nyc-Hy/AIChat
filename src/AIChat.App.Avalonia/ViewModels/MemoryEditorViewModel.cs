@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using AIChat.Abstractions.Persistence;
 using AIChat.Application.Memory;
 using AIChat.Domain.Memory;
+using AIChat.Domain.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -168,23 +169,22 @@ public sealed partial class MemoryEditorViewModel : ViewModelBase
     // up to the ItemsControl's DataContext).
     internal Task DeleteEntryAsync(MemoryEntryViewModel entry) => DeleteAsync(entry);
 
-    // Persist the current project (with the updated Memories list)
-    // back to the repository. The repo's contract is "save the full
-    // list of projects" — same pattern AgentRunnerViewModel uses
-    // after an agent run adds memory.
+    // Persist the current workspace (with the updated Memories list)
+    // back to the repository. v1 跟 v0 不同,只写 workspaces;memory
+    // 是 workspace 上的字段,跟 sessions 无关。
     private async Task SaveAsync()
     {
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(project => project.Id == _sidebar.CurrentProject?.Id);
+        var workspaces = (await _repository.LoadWorkspacesAsync()).ToList();
+        var index = workspaces.FindIndex(workspace => workspace.Id == _sidebar.CurrentProject?.Id);
         if (index >= 0 && _sidebar.CurrentProject is not null)
         {
-            projects[index] = _sidebar.CurrentProject;
+            workspaces[index] = _sidebar.CurrentProject;
         }
         else if (_sidebar.CurrentProject is not null)
         {
-            projects.Add(_sidebar.CurrentProject);
+            workspaces.Add(_sidebar.CurrentProject);
         }
-        await _repository.SaveProjectsAsync(projects);
+        await _repository.SaveWorkspacesAsync(workspaces);
     }
 }
 

@@ -3,18 +3,18 @@
              xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
              x:DataType="vm:MainWindowViewModel"
              x:Class="AIChat.App.Avalonia.Views.Controls.GitStatusView">
-    <Border Background="{StaticResource ScrimBrush}"
+    <Border Background="{DynamicResource ScrimBrush}"
             PointerPressed="GitStatusScrim_OnClick">
-        <Border Background="{StaticResource SurfaceBrush}"
+        <Border Background="{DynamicResource SurfaceBrush}"
                 Width="960"
                 MaxHeight="680"
                 Padding="{StaticResource Padding6}"
                 CornerRadius="{StaticResource RadiusLg}"
-                BoxShadow="{StaticResource Elevation4Shadow}"
+                BoxShadow="{DynamicResource Elevation4Shadow}"
                 VerticalAlignment="Center"
                 HorizontalAlignment="Center"
                 PointerPressed="GitStatusContent_OnPointerPressed">
-            <Grid RowDefinitions="Auto,Auto,*" RowSpacing="14">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
 
                 <!-- Header: title + branch + refresh + close -->
                 <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
@@ -22,7 +22,7 @@
                         <TextBlock Classes="page-title">
                             <Run Text="Git"/>
                             <Run Text=" — "/>
-                            <Run Text="{Binding GitStatus.ProjectName}" Foreground="{StaticResource MutedBrush}"/>
+                            <Run Text="{Binding GitStatus.ProjectName}" Foreground="{DynamicResource MutedBrush}"/>
                         </TextBlock>
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <TextBlock Text="分支:" Classes="muted" FontSize="12"/>
@@ -103,14 +103,14 @@
                      indicator). Same pattern as the MemoryEditor
                      error message. -->
                 <Border Grid.Row="1"
-                        Background="{StaticResource ErrorBgBrush}"
-                        BorderBrush="{StaticResource ErrorBorderBrush}"
+                        Background="{DynamicResource ErrorBgBrush}"
+                        BorderBrush="{DynamicResource ErrorBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="{StaticResource RadiusMd}"
                         Padding="{StaticResource Padding2}"
                         IsVisible="{Binding GitStatus.ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                     <TextBlock Text="{Binding GitStatus.ErrorMessage}"
-                               Foreground="{StaticResource ErrorFgBrush}"
+                               Foreground="{DynamicResource ErrorFgBrush}"
                                FontSize="12"
                                TextWrapping="Wrap"/>
                 </Border>
@@ -120,8 +120,8 @@
 
                     <!-- File list (left column) -->
                     <Border Grid.Column="0"
-                            Background="{StaticResource SurfaceSunkenBrush}"
-                            BorderBrush="{StaticResource LineSoftBrush}"
+                            Background="{DynamicResource SurfaceSunkenBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
                             BorderThickness="1,1,1,1"
                             CornerRadius="{StaticResource RadiusMd}">
                         <Grid RowDefinitions="Auto,*">
@@ -192,8 +192,8 @@
 
                     <!-- Diff viewer (right column) -->
                     <Border Grid.Column="1"
-                            Background="{StaticResource CodeBgBrush}"
-                            BorderBrush="{StaticResource LineSoftBrush}"
+                            Background="{DynamicResource CodeBgBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
                             BorderThickness="1"
                             CornerRadius="{StaticResource RadiusMd}"
                             Margin="10,0,0,0">
@@ -209,7 +209,7 @@
                                            Text="(diff 已截断)"
                                            Classes="muted"
                                            FontSize="11"
-                                           Foreground="{StaticResource WarningFgBrush}"
+                                           Foreground="{DynamicResource WarningFgBrush}"
                                            IsVisible="{Binding GitStatus.IsDiffTruncated}"/>
                             </Grid>
                             <Border Grid.Row="1" Classes="section-divider" Margin="0,0,0,4"/>
@@ -223,7 +223,7 @@
                                          BorderThickness="0"
                                          FontFamily="{StaticResource FontMono}"
                                          FontSize="12"
-                                         Foreground="{StaticResource CodeFgBrush}"
+                                         Foreground="{DynamicResource CodeFgBrush}"
                                          TextWrapping="NoWrap"
                                          AcceptsReturn="True"
                                          CaretBrush="Transparent"/>
@@ -231,6 +231,65 @@
                         </Grid>
                     </Border>
                 </Grid>
+
+                <StackPanel Grid.Row="3" Spacing="8">
+                    <Border Background="{DynamicResource SuccessBgBrush}"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding2}"
+                            IsVisible="{Binding GitStatus.OperationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding GitStatus.OperationMessage}" FontSize="12" Foreground="{DynamicResource SuccessFgBrush}"/>
+                    </Border>
+
+                    <Border Background="{DynamicResource WarningBgBrush}"
+                            BorderBrush="{DynamicResource WarningBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            IsVisible="{Binding GitStatus.IsRestoreConfirmationOpen}">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <TextBlock Text="{Binding GitStatus.RestoreConfirmationText}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="取消" Command="{Binding GitStatus.CancelRestoreSelectedCommand}"/>
+                            <Button Grid.Column="2" Content="确认撤销" Classes="danger" Command="{Binding GitStatus.ConfirmRestoreSelectedCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!--
+                      Wave 6: surface Stage / Commit failures and the
+                      last-commit line. Without these the user has no
+                      way to see why a stage / unstage / commit didn't
+                      land (silent failure was the old behaviour).
+                    -->
+                    <Border Background="{DynamicResource ErrorBgBrush}"
+                            BorderBrush="{DynamicResource ErrorBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            IsVisible="{Binding GitStatus.StageError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding GitStatus.StageError}"
+                                   Foreground="{DynamicResource ErrorBorderBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                    <TextBlock Text="{Binding GitStatus.LastCommitDisplay, StringFormat=上次提交：{0}}"
+                               Classes="muted"
+                               FontSize="11"
+                               FontFamily="{StaticResource FontMono}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding GitStatus.LastCommitDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="8">
+                        <Button Content="暂存所选" Command="{Binding GitStatus.StageSelectedCommand}"/>
+                        <Button Grid.Column="1" Content="取消暂存" Command="{Binding GitStatus.UnstageSelectedCommand}"/>
+                        <Button Grid.Column="2" Content="撤销文件" Classes="danger" Command="{Binding GitStatus.RequestRestoreSelectedCommand}"/>
+                        <TextBox Grid.Column="3"
+                                 Text="{Binding GitStatus.CommitMessage}"
+                                 PlaceholderText="提交说明"
+                                 IsEnabled="{Binding !GitStatus.IsMutating}"/>
+                        <Button Grid.Column="4"
+                                Content="提交全部变更"
+                                Command="{Binding GitStatus.CommitCommand}"/>
+                    </Grid>
+                </StackPanel>
             </Grid>
         </Border>
     </Border>

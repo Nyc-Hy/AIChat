@@ -3,9 +3,9 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
-// Row in the "可用的提供方" list in the settings modal. Each card shows
-// the provider's display name + default model + a status badge ("当前"
-// for the active provider, "可用" otherwise). Clicking the card
+// Row in the provider list in the settings modal. Each card shows the
+// provider's display name + default model + a truthful status badge
+// ("当前", "未配置", or "已支持"). Clicking the card
 // SelectCommand switches the template dropdown at the top of the modal
 // to that provider, which through OnSelectedProviderTemplateChanged
 // re-seeds the model / base-url inputs from the catalog defaults (or

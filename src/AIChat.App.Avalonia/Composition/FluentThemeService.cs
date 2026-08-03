@@ -2,6 +2,7 @@ using AIChat.Abstractions.Configuration;
 using AIChat.Abstractions.Persistence;
 using Avalonia;
 using Avalonia.Styling;
+using Avalonia.Threading;
 
 namespace AIChat.App.Avalonia.Composition;
 
@@ -34,7 +35,14 @@ public sealed class FluentThemeService : IThemeService
         };
         if (global::Avalonia.Application.Current is { } app)
         {
-            app.RequestedThemeVariant = variant;
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                app.RequestedThemeVariant = variant;
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() => app.RequestedThemeVariant = variant);
+            }
         }
 
         // Persist asynchronously; if the save fails the in-memory

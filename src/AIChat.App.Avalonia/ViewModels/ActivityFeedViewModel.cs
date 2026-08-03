@@ -46,7 +46,7 @@ public sealed partial class ActivityFeedViewModel : ViewModelBase
     // HasConversation for every Add; if we let it run mid-loop the empty
     // state and the conversation panel swap multiple times in one frame.
     // Suppress notifications for the bulk update, then recompute once.
-    public void LoadConversation(Conversation? conversation)
+    public void LoadConversation(ChatSession? conversation)
     {
         if (conversation is null)
         {
