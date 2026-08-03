@@ -837,11 +837,104 @@ internal partial class MainWindow : Window
         await OpenAttachmentPickerAsync(imagePreferred: true);
     }
 
-    private void AddAtFile_OnClick(object? sender, RoutedEventArgs e)
+    private async void AddAtFile_OnClick(object? sender, RoutedEventArgs e)
     {
-        // @file picker (Wave 6 follow-up — for Wave 4 we just paste a
-        // placeholder so the user can see the menu surface respond).
-        _toast?.Show("@file 引用 — Wave 6 接入完整 picker", ToastLevel.Info);
+        // "+" / "引用文件 (@file)…" menu. Past shape was
+        // a placeholder toast ("@file 引用 — Wave 6 接入
+        // 完整 picker") — a daily-driver user clicking
+        // the menu got nothing but a stub message and
+        // probably wondered whether the menu was
+        // broken. This slice wires a single-file picker
+        // that appends an "@file:<path>" hint to the
+        // prompt at the live CaretIndex. The Source
+        // parser doesn't know about the "file" kind, so
+        // the @-reference doesn't promote into an
+        // InputArtifact — but the @file text stays in
+        // the prompt (the parser is non-stripping by
+        // design) and the agent sees the path verbatim,
+        // which is the right signal to use the
+        // read_file tool on the next turn. The
+        // difference from "添加文件…": the file picker
+        // here is single-select and the file is
+        // referenced by path, not attached as bytes —
+        // useful for large files where the user wants
+        // the agent to read on demand rather than
+        // pre-load.
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "引用文件",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("所有文件") { Patterns = new[] { "*.*" } },
+                },
+            });
+            if (files is null || files.Count == 0)
+            {
+                return;
+            }
+            var path = files[0].TryGetLocalPath();
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+            // Splice "@file:<path>" into the prompt at
+            // the live caret. No kind-mapped Source
+            // exists for "file" (the parser's known
+            // kinds are "web" / "clipboard"), so this
+            // path deliberately skips the Source
+            // registry — the text lands in the prompt
+            // raw and the agent picks it up as a
+            // read_file hint.
+            AppendFileReferenceToPrompt(viewModel, path);
+            PromptInput.Focus();
+        }
+        catch (Exception ex)
+        {
+            viewModel.StatusMessage = $"引用文件失败：{ex.Message}";
+        }
+    }
+
+    // Appends "@file:<path>" to DraftPrompt at the live
+    // TextBox caret. Reuses the same
+    // InsertSourceReferenceAtCaret machinery for
+    // caret-aware splicing + dedupe + smart space
+    // handling — the only thing different is the
+    // source we hand it (an in-memory Source with
+    // kind="file" that the registry doesn't know
+    // about, so the parser's kind-match step skips
+    // it on send and the @-text just stays in the
+    // prompt as a read_file hint).
+    private void AppendFileReferenceToPrompt(
+        MainWindowViewModel viewModel,
+        string path)
+    {
+        var source = new AIChat.Domain.Sources.Source
+        {
+            // Unique-per-click id so the parser's
+            // "no @-reference for unknown id"
+            // dedup doesn't fire on a re-click
+            // (the previous click's @file text is
+            // already in the prompt; without the
+            // id mismatch, the second click would
+            // be a no-op).
+            Id = Guid.NewGuid().ToString("N"),
+            Kind = "file",
+            DisplayName = Path.GetFileName(path),
+            Content = path,
+            CapturedAt = DateTimeOffset.UtcNow,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["path"] = path,
+            },
+        };
+        viewModel.AgentHost.InsertSourceReferenceAtCaret(source, PromptInput.CaretIndex);
     }
 
     private async void AddClipboardSource_OnClick(object? sender, RoutedEventArgs e)
