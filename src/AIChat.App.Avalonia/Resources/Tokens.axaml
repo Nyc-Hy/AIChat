@@ -81,72 +81,80 @@
   <Color x:Key="HeroGradientEndColor">#e8e9d8</Color>
   <Color x:Key="ScrimColor">#80000000</Color>
   <Color x:Key="FocusRingColor">#2f6f5e</Color>
+  <!-- 1.0.1: drag-and-drop overlay wash. Teal-200 at 20% alpha so the
+       cream page background still bleeds through. -->
+  <Color x:Key="OverlayWashColor">#33e8c4</Color>
 
   <!-- ============================================================ 7. Brushes -->
-  <SolidColorBrush x:Key="BgBrush"                Color="{StaticResource BgColor}" />
-  <SolidColorBrush x:Key="SurfaceSunkenBrush"     Color="{StaticResource SurfaceSunkenColor}" />
-  <SolidColorBrush x:Key="SurfaceBrush"           Color="{StaticResource SurfaceColor}" />
-  <SolidColorBrush x:Key="SurfaceRaisedBrush"     Color="{StaticResource SurfaceRaisedColor}" />
-  <SolidColorBrush x:Key="SurfaceOverlayBrush"    Color="{StaticResource SurfaceOverlayColor}" />
+  <SolidColorBrush x:Key="BgBrush"                Color="{DynamicResource BgColor}" />
+  <SolidColorBrush x:Key="SurfaceSunkenBrush"     Color="{DynamicResource SurfaceSunkenColor}" />
+  <SolidColorBrush x:Key="SurfaceBrush"           Color="{DynamicResource SurfaceColor}" />
+  <SolidColorBrush x:Key="SurfaceRaisedBrush"     Color="{DynamicResource SurfaceRaisedColor}" />
+  <SolidColorBrush x:Key="SurfaceOverlayBrush"    Color="{DynamicResource SurfaceOverlayColor}" />
+  <!-- 1.0.1: translucent accent wash for the drag-and-drop overlay.
+       Routed through a DynamicResource so the dark theme can swap
+       the alpha (the lighter teal washes out against the near-black
+       dark surface). -->
+  <SolidColorBrush x:Key="OverlayWashBrush"       Color="{DynamicResource OverlayWashColor}" />
 
-  <SolidColorBrush x:Key="LineBrush"              Color="{StaticResource LineColor}" />
-  <SolidColorBrush x:Key="LineSoftBrush"          Color="{StaticResource LineSoftColor}" />
-  <SolidColorBrush x:Key="LineStrongBrush"        Color="{StaticResource LineStrongColor}" />
+  <SolidColorBrush x:Key="LineBrush"              Color="{DynamicResource LineColor}" />
+  <SolidColorBrush x:Key="LineSoftBrush"          Color="{DynamicResource LineSoftColor}" />
+  <SolidColorBrush x:Key="LineStrongBrush"        Color="{DynamicResource LineStrongColor}" />
 
-  <SolidColorBrush x:Key="TextBrush"              Color="{StaticResource TextColor}" />
-  <SolidColorBrush x:Key="Text2Brush"             Color="{StaticResource Text2Color}" />
-  <SolidColorBrush x:Key="MutedBrush"             Color="{StaticResource MutedColor}" />
+  <SolidColorBrush x:Key="TextBrush"              Color="{DynamicResource TextColor}" />
+  <SolidColorBrush x:Key="Text2Brush"             Color="{DynamicResource Text2Color}" />
+  <SolidColorBrush x:Key="MutedBrush"             Color="{DynamicResource MutedColor}" />
 
-  <SolidColorBrush x:Key="AccentBrush"            Color="{StaticResource AccentColor}" />
-  <SolidColorBrush x:Key="Accent50Brush"          Color="{StaticResource Accent50Color}" />
-  <SolidColorBrush x:Key="Accent100Brush"         Color="{StaticResource Accent100Color}" />
-  <SolidColorBrush x:Key="Accent200Brush"         Color="{StaticResource Accent200Color}" />
-  <SolidColorBrush x:Key="Accent300Brush"         Color="{StaticResource Accent300Color}" />
-  <SolidColorBrush x:Key="Accent400Brush"         Color="{StaticResource Accent400Color}" />
-  <SolidColorBrush x:Key="Accent500Brush"         Color="{StaticResource AccentColor}" />
-  <SolidColorBrush x:Key="Accent600Brush"         Color="{StaticResource Accent600Color}" />
-  <SolidColorBrush x:Key="Accent700Brush"         Color="{StaticResource Accent700Color}" />
-  <SolidColorBrush x:Key="Accent800Brush"         Color="{StaticResource Accent800Color}" />
-  <SolidColorBrush x:Key="Accent900Brush"         Color="{StaticResource Accent900Color}" />
-  <SolidColorBrush x:Key="AccentSoftBrush"        Color="{StaticResource AccentSoftColor}" />
-  <SolidColorBrush x:Key="AccentHoverBrush"       Color="{StaticResource AccentHoverColor}" />
-  <SolidColorBrush x:Key="AccentActiveBrush"      Color="{StaticResource AccentActiveColor}" />
-  <SolidColorBrush x:Key="AccentFgBrush"          Color="{StaticResource AccentFgColor}" />
+  <SolidColorBrush x:Key="AccentBrush"            Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="Accent50Brush"          Color="{DynamicResource Accent50Color}" />
+  <SolidColorBrush x:Key="Accent100Brush"         Color="{DynamicResource Accent100Color}" />
+  <SolidColorBrush x:Key="Accent200Brush"         Color="{DynamicResource Accent200Color}" />
+  <SolidColorBrush x:Key="Accent300Brush"         Color="{DynamicResource Accent300Color}" />
+  <SolidColorBrush x:Key="Accent400Brush"         Color="{DynamicResource Accent400Color}" />
+  <SolidColorBrush x:Key="Accent500Brush"         Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="Accent600Brush"         Color="{DynamicResource Accent600Color}" />
+  <SolidColorBrush x:Key="Accent700Brush"         Color="{DynamicResource Accent700Color}" />
+  <SolidColorBrush x:Key="Accent800Brush"         Color="{DynamicResource Accent800Color}" />
+  <SolidColorBrush x:Key="Accent900Brush"         Color="{DynamicResource Accent900Color}" />
+  <SolidColorBrush x:Key="AccentSoftBrush"        Color="{DynamicResource AccentSoftColor}" />
+  <SolidColorBrush x:Key="AccentHoverBrush"       Color="{DynamicResource AccentHoverColor}" />
+  <SolidColorBrush x:Key="AccentActiveBrush"      Color="{DynamicResource AccentActiveColor}" />
+  <SolidColorBrush x:Key="AccentFgBrush"          Color="{DynamicResource AccentFgColor}" />
 
-  <SolidColorBrush x:Key="InfoBgBrush"            Color="{StaticResource InfoBgColor}" />
-  <SolidColorBrush x:Key="InfoFgBrush"            Color="{StaticResource InfoFgColor}" />
-  <SolidColorBrush x:Key="InfoBorderBrush"        Color="{StaticResource InfoBorderColor}" />
-  <SolidColorBrush x:Key="SuccessBgBrush"         Color="{StaticResource SuccessBgColor}" />
-  <SolidColorBrush x:Key="SuccessFgBrush"         Color="{StaticResource SuccessFgColor}" />
-  <SolidColorBrush x:Key="SuccessBorderBrush"     Color="{StaticResource SuccessBorderColor}" />
-  <SolidColorBrush x:Key="WarningBgBrush"         Color="{StaticResource WarningBgColor}" />
-  <SolidColorBrush x:Key="WarningFgBrush"         Color="{StaticResource WarningFgColor}" />
-  <SolidColorBrush x:Key="WarningBorderBrush"     Color="{StaticResource WarningBorderColor}" />
-  <SolidColorBrush x:Key="ErrorBgBrush"           Color="{StaticResource ErrorBgColor}" />
-  <SolidColorBrush x:Key="ErrorFgBrush"           Color="{StaticResource ErrorFgColor}" />
-  <SolidColorBrush x:Key="ErrorBorderBrush"       Color="{StaticResource ErrorBorderColor}" />
+  <SolidColorBrush x:Key="InfoBgBrush"            Color="{DynamicResource InfoBgColor}" />
+  <SolidColorBrush x:Key="InfoFgBrush"            Color="{DynamicResource InfoFgColor}" />
+  <SolidColorBrush x:Key="InfoBorderBrush"        Color="{DynamicResource InfoBorderColor}" />
+  <SolidColorBrush x:Key="SuccessBgBrush"         Color="{DynamicResource SuccessBgColor}" />
+  <SolidColorBrush x:Key="SuccessFgBrush"         Color="{DynamicResource SuccessFgColor}" />
+  <SolidColorBrush x:Key="SuccessBorderBrush"     Color="{DynamicResource SuccessBorderColor}" />
+  <SolidColorBrush x:Key="WarningBgBrush"         Color="{DynamicResource WarningBgColor}" />
+  <SolidColorBrush x:Key="WarningFgBrush"         Color="{DynamicResource WarningFgColor}" />
+  <SolidColorBrush x:Key="WarningBorderBrush"     Color="{DynamicResource WarningBorderColor}" />
+  <SolidColorBrush x:Key="ErrorBgBrush"           Color="{DynamicResource ErrorBgColor}" />
+  <SolidColorBrush x:Key="ErrorFgBrush"           Color="{DynamicResource ErrorFgColor}" />
+  <SolidColorBrush x:Key="ErrorBorderBrush"       Color="{DynamicResource ErrorBorderColor}" />
 
-  <SolidColorBrush x:Key="CodeBgBrush"            Color="{StaticResource CodeBgColor}" />
-  <SolidColorBrush x:Key="CodeFgBrush"            Color="{StaticResource CodeFgColor}" />
-  <SolidColorBrush x:Key="HeroGradientStartBrush" Color="{StaticResource HeroGradientStartColor}" />
-  <SolidColorBrush x:Key="HeroGradientEndBrush"   Color="{StaticResource HeroGradientEndColor}" />
-  <SolidColorBrush x:Key="ScrimBrush"             Color="{StaticResource ScrimColor}" />
-  <SolidColorBrush x:Key="FocusRingBrush"         Color="{StaticResource FocusRingColor}" />
+  <SolidColorBrush x:Key="CodeBgBrush"            Color="{DynamicResource CodeBgColor}" />
+  <SolidColorBrush x:Key="CodeFgBrush"            Color="{DynamicResource CodeFgColor}" />
+  <SolidColorBrush x:Key="HeroGradientStartBrush" Color="{DynamicResource HeroGradientStartColor}" />
+  <SolidColorBrush x:Key="HeroGradientEndBrush"   Color="{DynamicResource HeroGradientEndColor}" />
+  <SolidColorBrush x:Key="ScrimBrush"             Color="{DynamicResource ScrimColor}" />
+  <SolidColorBrush x:Key="FocusRingBrush"         Color="{DynamicResource FocusRingColor}" />
 
   <!-- Badge foregrounds: for text inside the colored badge backgrounds. -->
-  <SolidColorBrush x:Key="BadgeFgBrush"           Color="{StaticResource TextColor}" />
-  <SolidColorBrush x:Key="InfoBadgeFgBrush"       Color="{StaticResource InfoFgColor}" />
-  <SolidColorBrush x:Key="SuccessBadgeFgBrush"    Color="{StaticResource SuccessFgColor}" />
-  <SolidColorBrush x:Key="WarningBadgeFgBrush"    Color="{StaticResource WarningFgColor}" />
-  <SolidColorBrush x:Key="AccentVariantFgBrush"   Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="BadgeFgBrush"           Color="{DynamicResource TextColor}" />
+  <SolidColorBrush x:Key="InfoBadgeFgBrush"       Color="{DynamicResource InfoFgColor}" />
+  <SolidColorBrush x:Key="SuccessBadgeFgBrush"    Color="{DynamicResource SuccessFgColor}" />
+  <SolidColorBrush x:Key="WarningBadgeFgBrush"    Color="{DynamicResource WarningFgColor}" />
+  <SolidColorBrush x:Key="AccentVariantFgBrush"   Color="{DynamicResource AccentColor}" />
 
   <!-- Backward-compatible aliases for the few pre-ramp keys that XAML still references. -->
-  <SolidColorBrush x:Key="AccentBlueBrush"        Color="{StaticResource AccentColor}" />
-  <SolidColorBrush x:Key="HoverBgBrush"           Color="{StaticResource SurfaceSunkenColor}" />
-  <SolidColorBrush x:Key="HoverBg2Brush"          Color="{StaticResource LineColor}" />
-  <SolidColorBrush x:Key="DividerBrush"           Color="{StaticResource LineColor}" />
-  <SolidColorBrush x:Key="CloseHoverBrush"        Color="{StaticResource ErrorFgColor}" />
-  <SolidColorBrush x:Key="TextOnAccentBrush"      Color="{StaticResource AccentFgColor}" />
+  <SolidColorBrush x:Key="AccentBlueBrush"        Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="HoverBgBrush"           Color="{DynamicResource SurfaceSunkenColor}" />
+  <SolidColorBrush x:Key="HoverBg2Brush"          Color="{DynamicResource LineColor}" />
+  <SolidColorBrush x:Key="DividerBrush"           Color="{DynamicResource LineColor}" />
+  <SolidColorBrush x:Key="CloseHoverBrush"        Color="{DynamicResource ErrorFgColor}" />
+  <SolidColorBrush x:Key="TextOnAccentBrush"      Color="{DynamicResource AccentFgColor}" />
 
   <!-- ============================================================ 8. Type ramp -->
   <x:Double x:Key="FontDisplay">40</x:Double>
