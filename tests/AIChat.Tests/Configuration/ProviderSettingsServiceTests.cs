@@ -4,6 +4,12 @@ using AIChat.Application.Llm.Routing;
 
 namespace AIChat.Tests.Configuration;
 
+// 2026-08-02: the catalog is now MiniMax-only. Tests that previously
+// stood up DeepSeek-shaped settings (provider id, model id, base url)
+// are rewritten against MiniMax / MiniMax-M3 — the only ship target.
+// The contracts they pin (legacy-key migration, dedup, normalization,
+// vision override, validator semantics, custom model id allowance) are
+// all provider-agnostic; the only change is the concrete id strings.
 public sealed class ProviderSettingsServiceTests
 {
     [Fact]
@@ -11,19 +17,19 @@ public sealed class ProviderSettingsServiceTests
     {
         var settings = new AppSettings
         {
-            ProviderId = "deepseek",
+            ProviderId = "minimax",
             ApiKey = "legacy-key",
-            Model = "deepseek-v4-flash",
+            Model = "MiniMax-M3",
             ConfiguredProviders = []
         };
 
         ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
 
         var configured = Assert.Single(settings.ConfiguredProviders);
-        Assert.Equal("deepseek", configured.TemplateId);
+        Assert.Equal("minimax", configured.TemplateId);
         Assert.Equal("legacy-key", configured.ApiKey);
         Assert.Equal(configured.Id, settings.ActiveConfiguredProviderId);
-        Assert.Equal("deepseek-v4-flash", settings.Model);
+        Assert.Equal("MiniMax-M3", settings.Model);
     }
 
     [Fact]
@@ -32,20 +38,20 @@ public sealed class ProviderSettingsServiceTests
         var first = new ConfiguredLlmProvider
         {
             Id = "first",
-            TemplateId = "deepseek",
+            TemplateId = "minimax",
             ApiKey = "same-key",
-            SelectedModelId = "deepseek-chat"
+            SelectedModelId = "MiniMax-M3"
         };
         var active = new ConfiguredLlmProvider
         {
             Id = "active",
-            TemplateId = "deepseek",
+            TemplateId = "minimax",
             ApiKey = "same-key",
-            SelectedModelId = "deepseek-v4-pro"
+            SelectedModelId = "MiniMax-M3"
         };
         var settings = new AppSettings
         {
-            ProviderId = "deepseek",
+            ProviderId = "minimax",
             ActiveConfiguredProviderId = active.Id,
             ConfiguredProviders = [first, active]
         };
@@ -55,7 +61,138 @@ public sealed class ProviderSettingsServiceTests
         var configured = Assert.Single(settings.ConfiguredProviders);
         Assert.Equal("active", configured.Id);
         Assert.Equal("active", settings.ActiveConfiguredProviderId);
-        Assert.Equal("deepseek-v4-pro", settings.Model);
+        Assert.Equal("MiniMax-M3", settings.Model);
+    }
+
+    [Fact]
+    public void Normalize_PreservesUserBaseUrl_WhenSelfHosted()
+    {
+        // Regression guard for the 2026-08-02 fix: a user with a
+        // self-hosted proxy (e.g. a private gateway at
+        // https://proxy.example.com/v1) used to see their BaseUrl
+        // silently overwritten by Normalize on every startup,
+        // shipping the next message to the wrong endpoint. The
+        // fix: keep a valid http(s) BaseUrl as-is; only fill the
+        // provider default when the stored value is missing or
+        // malformed.
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            BaseUrl = "https://proxy.example.com/v1",
+            Model = "MiniMax-M3"
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        Assert.Equal("https://proxy.example.com/v1", settings.BaseUrl);
+    }
+
+    [Theory]
+    [InlineData("https://api.anthropic.com/v1")]
+    [InlineData("https://api.deepseek.com/v1")]
+    [InlineData("https://token-plan-cn.xiaomimimo.com/v1")]
+    [InlineData("https://api.xiaomimimo.com/v1")]
+    public void Normalize_RewritesLegacyProviderHost_ToCatalogDefault(string legacyBaseUrl)
+    {
+        // Regression guard for the 1.0 upgrade path: a 0.5 user with a
+        // stored BaseUrl pointing at a provider that was removed in
+        // the Provider prune would otherwise see a silent 401 / 404
+        // on the next message. Force-rewrite to the catalog default.
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            BaseUrl = legacyBaseUrl,
+            Model = "MiniMax-M3"
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        Assert.Equal(ChatProviderCatalog.MiniMax.DefaultBaseUrl, settings.BaseUrl);
+    }
+
+    [Fact]
+    public void Normalize_KeepsCustomBaseUrl_WhenHostIsNotInLegacyList()
+    {
+        // Self-hosted MiniMax-style proxy at a non-legacy host
+        // (e.g. corporate gateway) must survive Normalize. Only the
+        // hard-coded legacy hosts trigger the rewrite.
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            BaseUrl = "https://proxy.example.com/v1",
+            Model = "MiniMax-M3"
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        Assert.Equal("https://proxy.example.com/v1", settings.BaseUrl);
+    }
+
+    [Fact]
+    public void Normalize_RewritesLegacyProviderHost_InConfiguredProviders()
+    {
+        // Same rewrite applies to per-provider entries: a 0.5 user
+        // with a stored DeepSeek entry in `configuredProviders` must
+        // not silently ship traffic to api.deepseek.com after the
+        // catalog shrinks to MiniMax-only.
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            Model = "MiniMax-M3",
+            ConfiguredProviders =
+            [
+                new ConfiguredLlmProvider
+                {
+                    Id = "legacy-1",
+                    TemplateId = "minimax",
+                    ApiKey = "kept-key",
+                    BaseUrl = "https://api.deepseek.com/v1",
+                    SelectedModelId = "MiniMax-M3"
+                }
+            ]
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        var configured = Assert.Single(settings.ConfiguredProviders);
+        Assert.Equal(ChatProviderCatalog.MiniMax.DefaultBaseUrl, configured.BaseUrl);
+        Assert.Equal("kept-key", configured.ApiKey);
+    }
+
+    [Fact]
+    public void Normalize_FillsProviderDefault_WhenBaseUrlIsBlank()
+    {
+        // Brand-new install path: BaseUrl is empty by
+        // construction, so the provider's default fills in.
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            BaseUrl = "",
+            Model = "MiniMax-M3"
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        Assert.Equal(ChatProviderCatalog.MiniMax.DefaultBaseUrl, settings.BaseUrl);
+    }
+
+    [Fact]
+    public void Normalize_FillsProviderDefault_WhenBaseUrlIsMalformed()
+    {
+        // Stale / hand-typed BaseUrl that's not a valid http(s)
+        // URL gets replaced with the provider default rather than
+        // being passed through to the chat completion client (which
+        // would throw at request time).
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            BaseUrl = "not a url",
+            Model = "MiniMax-M3"
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        Assert.Equal(ChatProviderCatalog.MiniMax.DefaultBaseUrl, settings.BaseUrl);
     }
 
     [Fact]
@@ -66,7 +203,7 @@ public sealed class ProviderSettingsServiceTests
             Id = "existing",
             TemplateId = "minimax",
             ApiKey = "key-1",
-            SelectedModelId = "MiniMax-M2"
+            SelectedModelId = "MiniMax-M3"
         };
         var settings = new AppSettings
         {
@@ -79,39 +216,43 @@ public sealed class ProviderSettingsServiceTests
         Assert.Same(existing, result.Provider);
         Assert.Single(settings.ConfiguredProviders);
         Assert.Equal("existing", settings.ActiveConfiguredProviderId);
-        Assert.Equal("MiniMax-M2", settings.Model);
+        Assert.Equal("MiniMax-M3", settings.Model);
     }
 
     [Fact]
-    public void AddConfiguredProvider_SupportsOpenAICompatibleTemplate()
+    public void AddConfiguredProvider_DefaultsToMiniMaxTemplate()
     {
+        // The catalog is now single-provider. AddConfiguredProvider
+        // with the catalog's only id lands on MiniMax with the
+        // current default model.
         var settings = new AppSettings();
 
-        var result = ProviderSettingsService.AddConfiguredProvider(settings, "openai-compatible", "key-1");
+        var result = ProviderSettingsService.AddConfiguredProvider(settings, "minimax", "key-1");
 
         Assert.False(result.AlreadyExisted);
-        Assert.Equal("openai-compatible", result.Provider.TemplateId);
+        Assert.Equal("minimax", result.Provider.TemplateId);
         Assert.Equal("openai", result.Provider.ProtocolId);
-        Assert.Equal("gpt-5", result.Provider.SelectedModelId);
+        Assert.Equal(ChatProviderCatalog.MiniMax.DefaultModel, result.Provider.SelectedModelId);
         Assert.Equal(result.Provider.Id, settings.ActiveConfiguredProviderId);
     }
 
     [Fact]
     public void NormalizeModelParameterValues_DropsUnknownAndResetsInvalidOption()
     {
+        // The MiniMax catalog exposes a single parameter
+        // (`minimax.reasoning_split`). Bogus values get reset to
+        // the empty default; unknown keys get dropped.
         var values = ProviderSettingsService.NormalizeModelParameterValues(
-            "deepseek",
-            "deepseek-v4-pro",
+            "minimax",
+            "MiniMax-M3",
             new Dictionary<string, string>
             {
-                ["deepseek.thinking"] = "nonsense",
+                ["minimax.reasoning_split"] = "nonsense",
                 ["unknown"] = "keep-me"
             });
 
         Assert.DoesNotContain("unknown", values.Keys);
-        Assert.Equal("", values["deepseek.thinking"]);
-        Assert.True(values.ContainsKey("deepseek.reasoning_effort"));
-        Assert.True(values.ContainsKey("deepseek.response_format"));
+        Assert.Equal("", values["minimax.reasoning_split"]);
     }
 
     [Fact]
@@ -125,8 +266,8 @@ public sealed class ProviderSettingsServiceTests
                 new ConfiguredLlmProvider
                 {
                     Id = "no-key",
-                    TemplateId = "deepseek",
-                    SelectedModelId = "deepseek-v4-pro"
+                    TemplateId = "minimax",
+                    SelectedModelId = "MiniMax-M3"
                 }
             ]
         };
@@ -147,9 +288,9 @@ public sealed class ProviderSettingsServiceTests
                 new ConfiguredLlmProvider
                 {
                     Id = "vision-provider",
-                    TemplateId = "deepseek",
+                    TemplateId = "minimax",
                     ApiKey = "key-1",
-                    SelectedModelId = "deepseek-v4-pro",
+                    SelectedModelId = "MiniMax-M3",
                     SupportsVisionOverride = true
                 }
             ]
@@ -166,15 +307,15 @@ public sealed class ProviderSettingsServiceTests
     {
         var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
         {
-            ProviderId = "deepseek",
+            ProviderId = "minimax",
             ProtocolId = "openai",
-            ProviderName = "DeepSeek",
+            ProviderName = "MiniMax",
             BaseUrl = "not a url",
             ApiKey = "",
-            Model = "deepseek-v4-pro",
+            Model = "MiniMax-M3",
             Temperature = 0.3,
             MaxOutputTokens = 4096,
-            ModelContextLimit = 128_000
+            ModelContextLimit = 200_000
         });
 
         Assert.False(result.IsValid);
@@ -183,39 +324,53 @@ public sealed class ProviderSettingsServiceTests
     }
 
     [Fact]
-    public void ValidateEffectiveSettings_RejectsUnsupportedModelForTools()
+    public void ValidateEffectiveSettings_RejectsBadTemperature()
     {
+        // After the 2026-08-02 catalog prune, MiniMax accepts any
+        // model id (it's an OpenAI-compatible endpoint and users
+        // may run a self-hosted proxy / private deployment). The
+        // "missing-model gets rejected" test that used to pin the
+        // catalog-as-gate contract was retired with it; this test
+        // keeps the validation suite honest by exercising a
+        // different error path (out-of-range temperature) that
+        // doesn't depend on catalog model membership.
         var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
         {
-            ProviderId = "deepseek",
+            ProviderId = "minimax",
             ProtocolId = "openai",
-            ProviderName = "DeepSeek",
-            BaseUrl = "https://api.deepseek.com",
+            ProviderName = "MiniMax",
+            BaseUrl = "https://api.minimax.io/v1",
             ApiKey = "key",
-            Model = "missing-model",
-            Temperature = 0.3,
+            Model = "MiniMax-M3",
+            Temperature = 9.9,
             MaxOutputTokens = 4096,
-            ModelContextLimit = 128_000
-        }, requireTools: true);
+            ModelContextLimit = 200_000
+        });
 
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, issue => issue.Code == "provider.model");
+        Assert.Contains(result.Errors, issue => issue.Code == "provider.temperature");
     }
 
     [Fact]
-    public void ValidateEffectiveSettings_AllowsCustomOpenAICompatibleModel()
+    public void ValidateEffectiveSettings_AllowsCustomMiniMaxModel()
     {
+        // MiniMax exposes an OpenAI-compatible endpoint, so users
+        // running against a self-hosted proxy / private deployment
+        // can type any model id and have it bind. The catalog's
+        // model list is a defaults source, not a gate — same
+        // contract the previous "AllowsCustomOpenAICompatibleModel"
+        // test pinned, just for the only remaining provider.
         var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
         {
-            ProviderId = "openai-compatible",
+            ProviderId = "minimax",
             ProtocolId = "openai",
-            ProviderName = "OpenAI-compatible",
+            ProviderName = "MiniMax",
             BaseUrl = "https://gateway.example.com/v1",
             ApiKey = "key",
-            Model = "vendor-coder-latest",
+            Model = "private-cluster-2026-08",
             Temperature = 0.3,
             MaxOutputTokens = 4096,
-            ModelContextLimit = 128_000
+            ModelContextLimit = 200_000
         }, requireTools: true);
 
         Assert.True(result.IsValid);
@@ -227,15 +382,15 @@ public sealed class ProviderSettingsServiceTests
     {
         var result = ProviderConfigurationValidator.ValidateEffectiveSettings(new AppSettings
         {
-            ProviderId = "deepseek",
+            ProviderId = "minimax",
             ProtocolId = "openai",
-            ProviderName = "DeepSeek",
-            BaseUrl = "https://api.deepseek.com",
+            ProviderName = "MiniMax",
+            BaseUrl = "https://api.minimax.io/v1",
             ApiKey = "key",
-            Model = "deepseek-v4-pro",
+            Model = "MiniMax-M3",
             Temperature = 0.3,
             MaxOutputTokens = 4096,
-            ModelContextLimit = 128_000,
+            ModelContextLimit = 200_000,
             ModelParameters = new Dictionary<string, string>
             {
                 ["unknown"] = "value"
@@ -257,12 +412,12 @@ public sealed class ProviderSettingsServiceTests
                 new ConfiguredLlmProvider
                 {
                     Id = "custom",
-                    TemplateId = "deepseek",
+                    TemplateId = "minimax",
                     ProtocolId = "openai",
-                    Name = "DeepSeek",
+                    Name = "MiniMax",
                     BaseUrl = "https://proxy.example.com/v1",
                     ApiKey = "key",
-                    SelectedModelId = "deepseek-v4-pro"
+                    SelectedModelId = "MiniMax-M3"
                 }
             ]
         };
