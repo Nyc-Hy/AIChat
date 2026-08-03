@@ -6,19 +6,18 @@ using Moq;
 
 namespace AIChat.Tests.Avalonia;
 
-// Unit tests for the PR-4 extraction. ConversationListViewModel only
-// touches pure CLR types (no Avalonia runtime calls), so these tests run
-// without the headless platform.
-public class ConversationListViewModelTests
+// Wave 2: ConversationListViewModel 切到 v1 (ChatSession + 外部 sessions)。
+// Refresh 现在吃 (project, sessions, preferredId) 而不是只看 project 嵌入的 conversations。
+public sealed class ConversationListViewModelTests
 {
     [Fact]
     public void Refresh_WithNullProject_ShowsNewPlaceholderAndRaisesEvent()
     {
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
         var captured = new List<ConversationSelectedEventArgs>();
         vm.ConversationSelected += (_, args) => captured.Add(args);
 
-        vm.Refresh(project: null);
+        vm.Refresh(project: null, sessions: []);
 
         var card = Assert.Single(vm.Conversations);
         Assert.Equal("new", card.Id);
@@ -31,10 +30,10 @@ public class ConversationListViewModelTests
     [Fact]
     public void Refresh_WithProjectHavingNoConversations_ShowsNewPlaceholder()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Empty", Path = "" };
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
 
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: []);
 
         var card = Assert.Single(vm.Conversations);
         Assert.Equal("new", card.Id);
@@ -43,23 +42,17 @@ public class ConversationListViewModelTests
     [Fact]
     public void Refresh_WithProjectHavingConversations_PicksMostRecentAndRaisesEvent()
     {
-        var older = NewConversation("older", "Old", DateTimeOffset.Now.AddDays(-2));
-        var newer = NewConversation("newer", "New", DateTimeOffset.Now);
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Sample",
-            Path = "",
-            Conversations = { older, newer }
-        };
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
+        var older = NewSession("older", "Old", DateTimeOffset.Now.AddDays(-2));
+        var newer = NewSession("newer", "New", DateTimeOffset.Now);
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
         var captured = new List<ConversationSelectedEventArgs>();
         vm.ConversationSelected += (_, args) => captured.Add(args);
 
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: [older, newer]);
 
         Assert.Equal(2, vm.Conversations.Count);
-        Assert.Equal("newer", vm.Conversations[0].Id); // sorted desc by UpdatedAt
+        Assert.Equal("newer", vm.Conversations[0].Id);
         Assert.Equal("newer", vm.SelectedConversationCard!.Id);
         var args = Assert.Single(captured);
         Assert.Same(newer, args.Conversation);
@@ -69,11 +62,8 @@ public class ConversationListViewModelTests
     [Fact]
     public void SelectConversation_WithNewId_ShowsNewPlaceholderAndRaisesEvent()
     {
-        // The "new" card is only present when the project is null or has
-        // no conversations — that is the only situation where the user can
-        // actually pick "new" from the visible list.
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
-        vm.Refresh(project: null);
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project: null, sessions: []);
         var captured = new List<ConversationSelectedEventArgs>();
         vm.ConversationSelected += (_, args) => captured.Add(args);
 
@@ -88,16 +78,11 @@ public class ConversationListViewModelTests
     [Fact]
     public void SelectConversation_WithKnownId_LoadsThatConversation()
     {
-        var target = NewConversation("target", "Target", DateTimeOffset.Now);
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Sample",
-            Path = "",
-            Conversations = { NewConversation("other", "Other", DateTimeOffset.Now.AddDays(-1)), target }
-        };
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
-        vm.Refresh(project);
+        var target = NewSession("target", "Target", DateTimeOffset.Now);
+        var other = NewSession("other", "Other", DateTimeOffset.Now.AddDays(-1));
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, sessions: [other, target]);
         var captured = new List<ConversationSelectedEventArgs>();
         vm.ConversationSelected += (_, args) => captured.Add(args);
 
@@ -111,18 +96,10 @@ public class ConversationListViewModelTests
     [Fact]
     public void SelectConversation_WithUnknownId_KeepsSelectionAndRaisesNewPromptEvent()
     {
-        // When the project has real conversations, an unknown id does not
-        // change the list selection — only the activity feed switches to
-        // the "new conversation" prompt via the event.
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Sample",
-            Path = "",
-            Conversations = { NewConversation("c1", "One", DateTimeOffset.Now) }
-        };
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
-        vm.Refresh(project);
+        var session = NewSession("c1", "One", DateTimeOffset.Now);
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, sessions: [session]);
         var originalSelection = vm.SelectedConversationCard;
         var captured = new List<ConversationSelectedEventArgs>();
         vm.ConversationSelected += (_, args) => captured.Add(args);
@@ -137,19 +114,11 @@ public class ConversationListViewModelTests
     [Fact]
     public void SelectConversation_MarksIsSelectedOnChosenCard()
     {
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Sample",
-            Path = "",
-            Conversations =
-            {
-                NewConversation("a", "A", DateTimeOffset.Now.AddMinutes(-2)),
-                NewConversation("b", "B", DateTimeOffset.Now)
-            }
-        };
-        var vm = new ConversationListViewModel(Mock.Of<AIChat.Abstractions.Persistence.IAppRepository>());
-        vm.Refresh(project);
+        var a = NewSession("a", "A", DateTimeOffset.Now.AddMinutes(-2));
+        var b = NewSession("b", "B", DateTimeOffset.Now);
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, sessions: [a, b]);
 
         vm.SelectConversationCommand.Execute("a");
 
@@ -160,25 +129,14 @@ public class ConversationListViewModelTests
     }
 
     [Fact]
-    public async Task RemoveConversation_RemovesFromProjectAndSaves()
+    public async Task RemoveConversation_RemovesFromListAndSaves()
     {
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Alpha",
-            Path = "/tmp/alpha",
-            Conversations =
-            {
-                NewConversation("a", "First", DateTimeOffset.UtcNow),
-                NewConversation("b", "Second", DateTimeOffset.UtcNow)
-            }
-        };
+        var a = NewSession("a", "First", DateTimeOffset.UtcNow);
+        var b = NewSession("b", "Second", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
         var repository = Mock.Of<IAppRepository>();
-        Mock.Get(repository)
-            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { project });
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: [a, b]);
         Assert.Equal(2, vm.Conversations.Count);
 
         var captured = new List<ConversationSelectedEventArgs>();
@@ -186,16 +144,13 @@ public class ConversationListViewModelTests
 
         await vm.RemoveConversationCommand.ExecuteAsync("a");
 
-        Assert.Single(project.Conversations);
-        Assert.Equal("b", project.Conversations[0].Id);
+        // v1: vm 写 SaveSessionsAsync(sessions),不是 SaveProjectsAsync
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.Is<IReadOnlyList<ChatSession>>(list => list.Count == 1 && list[0].Id == "b"),
+            It.IsAny<CancellationToken>()), Times.Once);
         Assert.Single(vm.Conversations);
         Assert.Equal("b", vm.Conversations[0].Id);
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.Is<List<ProjectWorkspace>>(list => list.Count == 1 && list[0].Conversations.Count == 1),
-            It.IsAny<CancellationToken>()), Times.Once);
-        // Refresh fires its own ConversationSelected event when it
-        // rebuilds the list after the delete. Filter to the delete
-        // event specifically.
+
         var deleteEvent = captured.FirstOrDefault(args => args.StatusMessage?.Contains("已删除对话") == true);
         Assert.NotNull(deleteEvent);
         Assert.Null(deleteEvent!.Conversation);
@@ -205,128 +160,194 @@ public class ConversationListViewModelTests
     [Fact]
     public async Task RemoveConversation_WithUnknownId_DoesNothing()
     {
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Alpha",
-            Path = "/tmp/alpha",
-            Conversations = { NewConversation("a", "First", DateTimeOffset.UtcNow) }
-        };
+        var project = NewProject("p1", "/tmp/alpha");
+        var session = NewSession("a", "First", DateTimeOffset.UtcNow);
         var repository = Mock.Of<IAppRepository>();
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: [session]);
 
         await vm.RemoveConversationCommand.ExecuteAsync("nope");
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task RemoveConversation_WithNewPlaceholder_DoesNothing()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = NewProject("p1", "/tmp/alpha");
         var repository = Mock.Of<IAppRepository>();
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: []);
 
         await vm.RemoveConversationCommand.ExecuteAsync("new");
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task RenameConversation_UpdatesTitleAndSaves()
     {
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Alpha",
-            Path = "/tmp/alpha",
-            Conversations = { NewConversation("a", "Old title", DateTimeOffset.UtcNow) }
-        };
+        var session = NewSession("a", "Old title", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
         var repository = Mock.Of<IAppRepository>();
-        Mock.Get(repository)
-            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { project });
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: [session]);
 
         await vm.RenameConversationAsync("a", "  New title  ");
 
-        Assert.Equal("New title", project.Conversations[0].Title);
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Assert.Equal("New title", session.Title);
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.Is<IReadOnlyList<ChatSession>>(list => list.Any(s => s.Id == "a" && s.Title == "New title")),
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task RenameConversation_WithNewPlaceholder_DoesNothing()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = NewProject("p1", "/tmp/alpha");
         var repository = Mock.Of<IAppRepository>();
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: []);
 
         await vm.RenameConversationAsync("new", "Whatever");
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task RenameConversation_WithWhitespaceOnly_DoesNothing()
     {
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Alpha",
-            Path = "/tmp/alpha",
-            Conversations = { NewConversation("a", "Original", DateTimeOffset.UtcNow) }
-        };
+        var session = NewSession("a", "Original", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
         var repository = Mock.Of<IAppRepository>();
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: [session]);
 
         await vm.RenameConversationAsync("a", "   ");
 
-        Assert.Equal("Original", project.Conversations[0].Title);
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Assert.Equal("Original", session.Title);
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
     public async Task RenameConversation_WithUnchangedTitle_DoesNothing()
     {
-        var project = new ProjectWorkspace
-        {
-            Id = "p1",
-            Name = "Alpha",
-            Path = "/tmp/alpha",
-            Conversations = { NewConversation("a", "Same", DateTimeOffset.UtcNow) }
-        };
+        var session = NewSession("a", "Same", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
         var repository = Mock.Of<IAppRepository>();
         var vm = new ConversationListViewModel(repository);
-        vm.Refresh(project);
+        vm.Refresh(project, sessions: [session]);
 
         await vm.RenameConversationAsync("a", "  Same  ");
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    private static Conversation NewConversation(string id, string title, DateTimeOffset updatedAt)
-        => new()
+    [Fact]
+    public async Task ExportConversationToPath_WritesMarkdown()
+    {
+        // 2026-08-03: the right-click 'Export as Markdown' menu
+        // delegates the file pick to MainWindow's code-behind
+        // and the actual file write to this method. Verify the
+        // contract: given a real conversation id + a writable
+        // path, the file is created with the rendered Markdown.
+        var session = NewSession("c1", "Title", DateTimeOffset.Now);
+        session.Messages.Add(new ChatMessage
+        {
+            Role = ChatRole.User,
+            Content = "怎么配 keychain?",
+            CreatedAt = DateTimeOffset.Now,
+        });
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, [session]);
+
+        var path = Path.Combine(Path.GetTempPath(), "aichat-export-" + Guid.NewGuid().ToString("N") + ".md");
+        try
+        {
+            var bytes = await vm.ExportConversationToPathAsync("c1", path);
+            Assert.NotNull(bytes);
+            Assert.True(bytes > 0);
+            var content = await File.ReadAllTextAsync(path);
+            Assert.Contains("# Title", content);
+            Assert.Contains("怎么配 keychain?", content);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task ExportConversationToPath_ReturnsNullForPlaceholderId()
+    {
+        var session = NewSession("c1", "Title", DateTimeOffset.Now);
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, [session]);
+
+        // "new" is the placeholder id; we must not let the user
+        // export a phantom empty session.
+        var bytes = await vm.ExportConversationToPathAsync("new", "/tmp/whatever.md");
+        Assert.Null(bytes);
+    }
+
+    [Fact]
+    public async Task ExportConversationToPath_ReturnsNullForUnknownId()
+    {
+        var session = NewSession("c1", "Title", DateTimeOffset.Now);
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, [session]);
+
+        var bytes = await vm.ExportConversationToPathAsync("does-not-exist", "/tmp/whatever.md");
+        Assert.Null(bytes);
+    }
+
+    [Fact]
+    public async Task ExportConversationToPath_ReturnsNullOnUnwritablePath()
+    {
+        // Force a write failure: a directory that does not exist
+        // throws DirectoryNotFoundException, which the method
+        // converts to a null return so the host can toast '导出失败'.
+        var session = NewSession("c1", "Title", DateTimeOffset.Now);
+        var project = NewProject("p1", "/tmp");
+        var vm = new ConversationListViewModel(Mock.Of<IAppRepository>());
+        vm.Refresh(project, [session]);
+
+        var badPath = Path.Combine(Path.GetTempPath(), "no-such-dir-" + Guid.NewGuid().ToString("N"), "x.md");
+        var bytes = await vm.ExportConversationToPathAsync("c1", badPath);
+        Assert.Null(bytes);
+    }
+
+    private static WorkspaceProject NewProject(string id, string path)
+    {
+        var folderId = "f1";
+        return new WorkspaceProject
         {
             Id = id,
-            ProjectId = "p1",
+            Name = id,
+            Folders = [new WorkspaceFolder { Id = folderId, Path = path }],
+            PrimaryFolderId = folderId,
+        };
+    }
+
+    private static ChatSession NewSession(string id, string title, DateTimeOffset updatedAt)
+        => new Project
+        {
+            Id = id,
+            WorkspaceId = "p1",
             Title = title,
-            UpdatedAt = updatedAt
+            UpdatedAt = updatedAt,
         };
 }

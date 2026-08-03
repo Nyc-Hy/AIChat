@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AIChat.Abstractions.Persistence;
+using AIChat.Application.Chat;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,22 +11,27 @@ namespace AIChat.App.Avalonia.ViewModels;
 // Owns the "recent conversations" list and the "currently selected
 // conversation" state. PR-4 scope: pure extraction from MainWindowViewModel.
 //
-// The selected Conversation (a Domain type) is exposed through the
+// The selected ChatSession (a Domain type) is exposed through the
 // ConversationSelected event; the activity feed lives on the parent and
 // is updated in response. The currently-selected conversation card is
 // exposed as SelectedConversationCard for XAML binding.
+//
+// Wave 2: switched from Conversation (v0, embedded in ProjectWorkspace) to
+// ChatSession (v1, separate sessions.json keyed by workspaceId).
 public sealed partial class ConversationListViewModel : ViewModelBase
 {
     private const string NewConversationId = "new";
 
     private readonly IAppRepository _repository;
     private bool _isApplyingConversationSelection;
-    private ProjectWorkspace? _currentProject;
+    private WorkspaceProject? _currentProject;
+    private IReadOnlyList<ChatSession> _sessions = [];
 
     [ObservableProperty]
     private ConversationCardViewModel? selectedConversationCard;
 
     public ObservableCollection<ConversationCardViewModel> Conversations { get; } = [];
+    public int HistoryCount => _sessions.Count;
 
     public event EventHandler<ConversationSelectedEventArgs>? ConversationSelected;
 
@@ -42,12 +48,10 @@ public sealed partial class ConversationListViewModel : ViewModelBase
     private Task PersistTitleChangeAsync(string conversationId, string newTitle)
         => RenameConversationAsync(conversationId, newTitle);
 
-    // Updates the underlying Conversation.Title in the current
-    // project, then re-saves the project list. No-op for the
+    // Updates the underlying ChatSession.Title in the current
+    // workspace, then re-saves the session list. No-op for the
     // "new" placeholder id or unknown ids, and no-op when the
-    // trimmed value matches the existing title (the card already
-    // skipped the save in that case, but we double-check here to
-    // avoid a wasted repo write on whitespace-only renames).
+    // trimmed value matches the existing title.
     public async Task RenameConversationAsync(string conversationId, string newTitle)
     {
         if (string.IsNullOrWhiteSpace(conversationId) ||
@@ -63,8 +67,8 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             return;
         }
 
-        var target = _currentProject.Conversations.FirstOrDefault(conversation =>
-            string.Equals(conversation.Id, conversationId, StringComparison.OrdinalIgnoreCase));
+        var target = _sessions.FirstOrDefault(session =>
+            string.Equals(session.Id, conversationId, StringComparison.OrdinalIgnoreCase));
         if (target is null || target.Title == trimmed)
         {
             return;
@@ -73,29 +77,23 @@ public sealed partial class ConversationListViewModel : ViewModelBase
         target.Title = trimmed;
         target.UpdatedAt = DateTimeOffset.Now;
 
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(project => project.Id == _currentProject.Id);
-        if (index >= 0)
-        {
-            projects[index] = _currentProject;
-        }
-        else
-        {
-            projects.Add(_currentProject);
-        }
-        await _repository.SaveProjectsAsync(projects);
+        await _repository.SaveSessionsAsync(_sessions);
     }
 
-    // Replaces the conversation list with the project's recent
-    // conversations. If the project is null or has no conversations,
+    // Replaces the conversation list with the workspace's recent
+    // sessions. If the workspace is null or has no sessions,
     // a single "new" placeholder card is shown. Raises
     // ConversationSelected so the parent can update the activity feed.
-    public void Refresh(ProjectWorkspace? project, string? preferredConversationId = null)
+    //
+    // `sessions` should be pre-filtered to those belonging to the
+    // current workspace (or all Standalone sessions for a "no project" view).
+    public void Refresh(WorkspaceProject? project, IReadOnlyList<ChatSession> sessions, string? preferredConversationId = null)
     {
         _currentProject = project;
+        _sessions = sessions;
         Conversations.Clear();
 
-        if (project is null || project.Conversations.Count == 0)
+        if (project is null || sessions.Count == 0)
         {
             Conversations.Add(new ConversationCardViewModel(
                 NewConversationId,
@@ -111,16 +109,16 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             return;
         }
 
-        var sorted = project.Conversations
-                     .OrderByDescending(conversation => conversation.UpdatedAt)
+        var sorted = sessions
+                     .OrderByDescending(session => session.UpdatedAt)
                      .Take(8)
                      .ToList();
-        foreach (var conversation in sorted)
+        foreach (var session in sorted)
         {
             Conversations.Add(new ConversationCardViewModel(
-                conversation.Id,
-                string.IsNullOrWhiteSpace(conversation.Title) ? "未命名任务" : conversation.Title,
-                conversation.UpdatedAt.ToLocalTime().ToString("M月d日 HH:mm"),
+                session.Id,
+                string.IsNullOrWhiteSpace(session.Title) ? "未命名任务" : session.Title,
+                session.UpdatedAt.ToLocalTime().ToString("M月d日 HH:mm"),
                 PersistTitleChangeAsync));
         }
 
@@ -128,24 +126,20 @@ public sealed partial class ConversationListViewModel : ViewModelBase
                            ?? Conversations.FirstOrDefault();
         SetSelectedConversation(selectedCard);
 
-        var selectedConversation = project.Conversations.FirstOrDefault(item =>
+        var selectedSession = sessions.FirstOrDefault(item =>
             string.Equals(item.Id, selectedCard?.Id, StringComparison.OrdinalIgnoreCase));
         ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
         {
-            Conversation = selectedConversation,
-            StatusMessage = selectedConversation is null
+            Conversation = selectedSession,
+            StatusMessage = selectedSession is null
                 ? "已打开新对话。"
-                : $"已打开对话：{selectedConversation.Title}"
+                : $"已打开对话：{selectedSession.Title}"
         });
     }
 
     // Public so the view code-behind can call it via MainWindowViewModel
     // passthrough. Selects the conversation with the given id, or the
-    // "new" placeholder if id is "new" or unknown. Matches the original
-    // behaviour: when the project has real conversations, the list does
-    // not contain a "new" card, so clicking "new" or an unknown id does
-    // not change the list selection — it just raises the event so the
-    // parent can show the "new conversation" prompt.
+    // "new" placeholder if id is "new" or unknown.
     [RelayCommand]
     public void SelectConversation(string? conversationId)
     {
@@ -162,10 +156,6 @@ public sealed partial class ConversationListViewModel : ViewModelBase
 
         if (conversationId == NewConversationId)
         {
-            // The "new" card only exists when the project is null or empty.
-            // If we get here with a real project, the list selection stays
-            // where it was — only the activity feed switches to the
-            // "new conversation" prompt via the event.
             ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
             {
                 Conversation = null,
@@ -174,12 +164,10 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             return;
         }
 
-        var conversation = _currentProject.Conversations.FirstOrDefault(item =>
+        var session = _sessions.FirstOrDefault(item =>
             string.Equals(item.Id, conversationId, StringComparison.OrdinalIgnoreCase));
-        if (conversation is null)
+        if (session is null)
         {
-            // Unknown id: same as "new" — list selection stays, only the
-            // activity feed changes.
             ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
             {
                 Conversation = null,
@@ -188,12 +176,12 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             return;
         }
 
-        var card = Conversations.FirstOrDefault(item => item.Id == conversation.Id);
+        var card = Conversations.FirstOrDefault(item => item.Id == session.Id);
         SetSelectedConversation(card);
         ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
         {
-            Conversation = conversation,
-            StatusMessage = $"已打开对话：{conversation.Title}"
+            Conversation = session,
+            StatusMessage = $"已打开对话：{session.Title}"
         });
     }
 
@@ -220,16 +208,10 @@ public sealed partial class ConversationListViewModel : ViewModelBase
     }
 
     // Removes the conversation with the given id from the current
-    // project. The activity feed and conversation list both
+    // workspace. The activity feed and conversation list both
     // refresh — the conversation list drops the row, the activity
     // feed switches to a fresh "new conversation" prompt via
     // ConversationSelected.
-    //
-    // The project JSON is the source of truth; AgentRunnerViewModel
-    // re-reads from the repo on the next SendTaskCommand. Any
-    // pending run on this conversation would already be over by
-    // the time the user reaches for the right-click menu, so we
-    // don't worry about mid-run cancellation.
     [RelayCommand]
     public async Task RemoveConversationAsync(string? conversationId)
     {
@@ -240,38 +222,75 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             return;
         }
 
-        var target = _currentProject.Conversations.FirstOrDefault(conversation =>
-            string.Equals(conversation.Id, conversationId, StringComparison.OrdinalIgnoreCase));
+        var target = _sessions.FirstOrDefault(session =>
+            string.Equals(session.Id, conversationId, StringComparison.OrdinalIgnoreCase));
         if (target is null)
         {
             return;
         }
 
-        _currentProject.Conversations.Remove(target);
+        _sessions = _sessions.Where(session => !ReferenceEquals(session, target)).ToList();
 
-        // Save the updated project list back to the repo. Mirrors
-        // the pattern AgentRunnerViewModel.SaveProjectsAsync uses
-        // after a run lands a memory update.
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(project => project.Id == _currentProject.Id);
-        if (index >= 0)
-        {
-            projects[index] = _currentProject;
-        }
-        else
-        {
-            projects.Add(_currentProject);
-        }
-        await _repository.SaveProjectsAsync(projects);
+        await _repository.SaveSessionsAsync(_sessions);
 
         // Refresh the list so the deleted row disappears, then
         // re-emit ConversationSelected with null so the host's
         // activity feed switches to the "new conversation" prompt.
-        Refresh(_currentProject);
+        Refresh(_currentProject, _sessions);
         ConversationSelected?.Invoke(this, new ConversationSelectedEventArgs
         {
             Conversation = null,
             StatusMessage = $"已删除对话：{target.Title}"
         });
+    }
+
+    // 2026-08-03: render the named conversation as Markdown and
+    // write it to outputPath. The host (MainWindow code-behind)
+    // is responsible for showing the SaveFilePicker and routing
+    // the resulting path here. Splitting the path picker from the
+    // file write keeps this view-model testable (no Avalonia
+    // StorageProvider dependency) and makes the call site easy
+    // to wire from a right-click menu in the conversation card
+    // XAML.
+    //
+    // Returns the byte count written, or null when the id is
+    // unknown / the new-conversation placeholder / the path is
+    // not writable. The host toasts on null so the user gets
+    // "导出失败" feedback instead of a silent no-op.
+    public async Task<int?> ExportConversationToPathAsync(string? conversationId, string outputPath)
+    {
+        if (string.IsNullOrWhiteSpace(conversationId) ||
+            conversationId == NewConversationId ||
+            _currentProject is null)
+        {
+            return null;
+        }
+
+        var target = _sessions.FirstOrDefault(session =>
+            string.Equals(session.Id, conversationId, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var markdown = MarkdownConversationExporter.Export(target);
+            await File.WriteAllTextAsync(outputPath, markdown, System.Text.Encoding.UTF8).ConfigureAwait(false);
+            return System.Text.Encoding.UTF8.GetByteCount(markdown);
+        }
+        catch
+        {
+            // The host surfaces a generic "导出失败" toast; the
+            // exception text is already in the user's terminal
+            // via the global CrashReporter hook if it was a real
+            // fault, and is otherwise a benign I/O error.
+            return null;
+        }
     }
 }

@@ -1,7 +1,9 @@
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using AIChat.Abstractions.Configuration;
 using AIChat.App.Avalonia.Composition;
@@ -752,6 +754,68 @@ internal partial class MainWindow : Window
             if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
             return viewModel.SelectConversationFromUiAsync(conversationId);
         });
+    }
+
+    // 2026-08-03: right-click "Export as Markdown" handler. The
+    // view-model owns the export + write; the code-behind owns
+    // the SaveFilePicker (Avalonia StorageProvider, requires a
+    // live TopLevel) so the picker can be swapped for a headless
+    // fake in tests without going through the file system.
+    private async void ExportConversationMenuItem_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string conversationId } ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        try
+        {
+            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "导出对话为 Markdown",
+                DefaultExtension = "md",
+                ShowOverwritePrompt = true,
+                SuggestedFileName = SanitizeFileName($"{conversationId}.md"),
+                FileTypeChoices = new[]
+                {
+                    new FilePickerFileType("Markdown") { Patterns = new[] { "*.md" } },
+                },
+            });
+            if (file is null)
+            {
+                return; // User cancelled.
+            }
+
+            var bytes = await viewModel.ConversationList.ExportConversationToPathAsync(
+                conversationId, file.Path.LocalPath);
+            if (bytes is null)
+            {
+                _toast.Show("导出失败，请检查目标路径是否可写。", ToastLevel.Error);
+            }
+            else
+            {
+                _toast.Show($"已导出 {bytes} 字节到 {file.Name}。", ToastLevel.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            // The CrashReporter hook will already have caught
+            // any unexpected exception; we just want a user-
+            // visible message instead of a silent failure.
+            _toast.Show($"导出失败：{ex.Message}", ToastLevel.Error);
+        }
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var buffer = new StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            buffer.Append(Array.IndexOf(invalid, ch) >= 0 ? '_' : ch);
+        }
+        return buffer.ToString();
     }
 
     // Inline-rename keyboard handler. Enter commits, Esc cancels.
