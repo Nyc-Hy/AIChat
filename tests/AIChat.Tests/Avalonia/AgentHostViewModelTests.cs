@@ -95,6 +95,49 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.Equal("", host.DraftPrompt);
     }
 
+    // ---- 1.0.1: plan items surface Notes + IsExpanded ----
+
+    [Fact]
+    public void PlanItem_DefaultsToCollapsedAndToggles()
+    {
+        // Same single-state-per-row pattern the
+        // SourceRowViewModel uses. Two plan
+        // rows can be expanded at once (useful
+        // for comparing a "read file X" step
+        // against an "edit file X" step).
+        var item = new PlanItemViewModel
+        {
+            Title = "read foo.cs",
+            Status = AIChat.Domain.Chat.AgentPlanItemStatus.InProgress,
+        };
+        Assert.False(item.IsExpanded);
+        item.IsExpanded = !item.IsExpanded;
+        Assert.True(item.IsExpanded);
+    }
+
+    [Fact]
+    public void PlanItem_HasNotes_DerivesFromString()
+    {
+        // The XAML row's IsEnabled binding is
+        // wired to HasNotes so empty-Notes rows
+        // are inert — no clickable area, no
+        // expand affordance. The user sees a
+        // single-line title and that's it.
+        var empty = new PlanItemViewModel
+        {
+            Title = "short step",
+            Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending,
+        };
+        Assert.False(empty.HasNotes);
+        var withNotes = new PlanItemViewModel
+        {
+            Title = "long step",
+            Notes = "use Read tool on /Users/me/foo.cs",
+            Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending,
+        };
+        Assert.True(withNotes.HasNotes);
+    }
+
     // ---- 1.0.1: insert @-reference at composer caret ----
 
     [Fact]

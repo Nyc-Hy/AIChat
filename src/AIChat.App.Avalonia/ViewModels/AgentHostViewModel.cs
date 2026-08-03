@@ -975,6 +975,17 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             PlanItems.Add(new PlanItemViewModel
             {
                 Title = item.Title,
+                // 1.0.1: the runner / planner
+                // can attach tool names,
+                // file paths, and rationale
+                // to a step via Notes. The
+                // XAML row hides the
+                // expand affordance when
+                // Notes is empty so the
+                // clickable area doesn't
+                // pretend there's more
+                // to see.
+                Notes = item.Notes,
                 Status = item.Status
             });
         }

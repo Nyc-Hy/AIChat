@@ -1,13 +1,28 @@
 using AIChat.Domain.Chat;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
 // Wraps a domain AgentPlanItem with a Glyph property so the XAML can
 // render the right status icon without a value converter. Kept in the
 // UI layer so the domain model stays free of display concerns.
-public sealed class PlanItemViewModel
+public sealed partial class PlanItemViewModel : ObservableObject
 {
     public string Title { get; init; } = "";
+
+    // 1.0.1: extra context the runner / planner
+    // can attach to a step (tool name, file path,
+    // rationale, etc.). The XAML row only shows
+    // Title in the collapsed state; the user
+    // clicks the row to expand and read the
+    // Notes inline. Empty Notes hide the
+    // expand affordance — the row is just a
+    // single line in that case, no clickable
+    // gap below the title.
+    public string Notes { get; init; } = "";
+
+    public bool HasNotes => !string.IsNullOrWhiteSpace(Notes);
+
     public AgentPlanItemStatus Status { get; init; }
 
     public string Glyph => Status switch
@@ -21,4 +36,17 @@ public sealed class PlanItemViewModel
     };
 
     public bool IsCompleted => Status == AgentPlanItemStatus.Completed;
+
+    // 1.0.1: per-row expand state for the inline
+    // Notes panel. Same single-state-per-row
+    // pattern the SourceRowViewModel uses —
+    // two plan rows can be expanded at once
+    // (useful for comparing a "read file X"
+    // step against a "edit file X" step). The
+    // XAML IsVisible binding is driven by this
+    // flag, so the row grows to fit a wrapped
+    // Notes block when the user clicks the
+    // title.
+    [ObservableProperty]
+    private bool isExpanded;
 }

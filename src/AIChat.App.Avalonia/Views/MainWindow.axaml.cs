@@ -1257,6 +1257,31 @@ internal partial class MainWindow : Window
     // image: text pastes fall through to the default TextBox handler
     // (we don't touch them), image pastes are saved as pending
     // attachments and shown above the input.
+
+    // 1.0.1: per-plan-item click handler. Toggles
+    // the row's inline Notes panel so a daily-
+    // driver user can read the runner's attached
+    // tool name / file path / rationale without
+    // leaving the plan panel. Same pattern as
+    // EnvironmentPanelView.SourceRowHeader_OnPointerPressed
+    // — click the title text, the row grows to
+    // fit the wrapped Notes block. PointerPressed
+    // (not Click) because the XAML wraps the
+    // title in a TextBlock; Click is a Button-only
+    // event. The TextBlock.IsEnabled binding is
+    // tied to HasNotes, so empty-Notes rows are
+    // inert (no toggle fires) and don't pretend
+    // there's more to see.
+    private void PlanItemHeader_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not TextBlock { DataContext: PlanItemViewModel row } || !row.HasNotes)
+        {
+            return;
+        }
+        row.IsExpanded = !row.IsExpanded;
+        e.Handled = true;
+    }
+
     private void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
     {
         SafeRun(async () =>

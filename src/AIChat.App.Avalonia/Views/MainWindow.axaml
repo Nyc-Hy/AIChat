@@ -945,20 +945,38 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PlanItemViewModel">
-                                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,2">
-                                                    <TextBlock Grid.Column="0"
-                                                               Text="{Binding Glyph}"
-                                                               FontFamily="{StaticResource FontMono}"
-                                                               FontSize="13"
-                                                               Foreground="{DynamicResource AccentBrush}"
-                                                               VerticalAlignment="Center"
-                                                               MinWidth="14"/>
-                                                    <TextBlock Grid.Column="1"
-                                                               Text="{Binding Title}"
-                                                               Classes="body"
-                                                               Foreground="{DynamicResource Text2Brush}"
-                                                               TextWrapping="Wrap"
-                                                               VerticalAlignment="Center"/>
+                                                <Grid RowDefinitions="Auto,Auto" Margin="0,2">
+                                                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Glyph}"
+                                                                   FontFamily="{StaticResource FontMono}"
+                                                                   FontSize="13"
+                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                   VerticalAlignment="Center"
+                                                                   MinWidth="14"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Title}"
+                                                                   Classes="body"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   TextWrapping="Wrap"
+                                                                   VerticalAlignment="Center"
+                                                                   IsEnabled="{Binding HasNotes}"
+                                                                   PointerPressed="PlanItemHeader_OnPointerPressed"/>
+                                                    </Grid>
+                                                    <Border Grid.Row="1"
+                                                            IsVisible="{Binding IsExpanded}"
+                                                            Margin="22,2,0,2"
+                                                            Padding="{StaticResource Padding3}"
+                                                            Background="{DynamicResource CodeBgBrush}"
+                                                            BorderBrush="{DynamicResource LineSoftBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="{StaticResource RadiusSm}">
+                                                        <SelectableTextBlock Text="{Binding Notes}"
+                                                                             FontSize="11"
+                                                                             FontFamily="{StaticResource FontMono}"
+                                                                             Foreground="{DynamicResource CodeFgBrush}"
+                                                                             TextWrapping="Wrap"/>
+                                                    </Border>
                                                 </Grid>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
