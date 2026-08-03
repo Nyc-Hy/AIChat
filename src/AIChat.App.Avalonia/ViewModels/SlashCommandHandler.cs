@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 
 namespace AIChat.App.Avalonia.ViewModels;
@@ -102,6 +103,8 @@ public static class SlashCommandHandler
                 return (true, new Result("Git 状态", await host.GetGitStatusSummaryAsync()));
             case "/copy":
                 return (true, await TryCopyLastAssistantAsync(host));
+            case "/search":
+                return (true, TrySearchConversations(prompt, host));
             default:
                 return (true, new Result(
                     "未知命令",
@@ -196,7 +199,7 @@ public static class SlashCommandHandler
             ? $"模型: {host.ActiveProvider}"
             : $"模型: {host.ActiveProvider} · {host.ActiveModel}";
 
-        var conversationCount = host.ConversationList.Conversations.Count;
+        var conversationCount = host.ConversationList.HistoryCount;
         var conversationLine = $"对话数: {conversationCount}";
 
         // ContextBudgetPercent is the rough fraction of the
@@ -235,5 +238,110 @@ public static class SlashCommandHandler
         var lines = new[] { projectLine, modelLine, conversationLine, contextLine, safetyLine, lastRunLine, status }
             .Where(line => line is not null);
         return string.Join("\n", lines);
+    }
+
+    // /search <query>: scan every cached ChatSession for matches in
+    // title + message content. Renders up to 10 hits with title +
+    // first matching message excerpt, so the user can scan the
+    // result inline and pick the conversation they want to open.
+    // Hit count is reported so a 0-result search is obvious; the
+    // daily driver's main use case is 'I had a conversation
+    // about <topic> last week, where was it?'.
+    //
+    // Search is case-insensitive substring on the title and each
+    // message's content. Tool-trace arguments + result content
+    // are included so a search for a tool name surfaces the
+    // conversation that used it. A follow-up slice can add
+    // token-level highlighting via Markdown in the result body.
+    private static Result TrySearchConversations(string prompt, ISlashCommandHost host)
+    {
+        var spaceIdx = prompt.IndexOf(' ');
+        var query = spaceIdx < 0 ? "" : prompt[(spaceIdx + 1)..].Trim();
+        if (string.IsNullOrEmpty(query))
+        {
+            return new Result("搜索", "用法: `/search <关键词>`，例如 `/search keychain`");
+        }
+
+        var hits = new List<(string Title, string Excerpt)>();
+        foreach (var session in host.AllSessions)
+        {
+            if (session.Title.Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                hits.Add((session.Title, "(标题命中)"));
+                continue;
+            }
+            foreach (var message in session.Messages)
+            {
+                if (message.Content.Contains(query, StringComparison.OrdinalIgnoreCase))
+                {
+                    var excerpt = ExtractExcerpt(message.Content, query);
+                    hits.Add((session.Title, excerpt));
+                    break;
+                }
+                // Tool traces count as content too. A search for
+                // "git_commit" should surface conversations that
+                // used the git_commit tool, not just ones that
+                // typed the literal string.
+                foreach (var trace in message.ToolTraces)
+                {
+                    if ((trace.ToolName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (trace.ArgumentsJson?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (trace.ResultContent?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                    {
+                        var excerpt = $"工具 {trace.ToolName} 调用匹配";
+                        hits.Add((session.Title, excerpt));
+                        break;
+                    }
+                }
+                if (hits.Count > 0 && hits[^1].Title == session.Title)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (hits.Count == 0)
+        {
+            return new Result("搜索", $"没有找到包含「{query}」的对话。");
+        }
+
+        const int max = 10;
+        var body = new System.Text.StringBuilder();
+        body.Append("匹配 ").Append(hits.Count).AppendLine(" 个对话:");
+        for (var i = 0; i < Math.Min(hits.Count, max); i++)
+        {
+            body.Append(i + 1).Append(". **").Append(hits[i].Title).Append("** — ");
+            body.AppendLine(hits[i].Excerpt);
+        }
+        if (hits.Count > max)
+        {
+            body.Append("（还有 ").Append(hits.Count - max).AppendLine(" 个匹配未显示。缩小关键词以精确查找。）");
+        }
+        return new Result($"搜索 \"{query}\"", body.ToString());
+    }
+
+    // Returns a window of up to 80 characters around the first
+    // match of needle in source, with the match surrounded by
+    // '…' markers so the user can see the surrounding context.
+    private static string ExtractExcerpt(string source, string needle)
+    {
+        if (string.IsNullOrEmpty(source))
+        {
+            return "(空消息)";
+        }
+        var idx = source.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+        {
+            // No match in the message — caller should not have
+            // asked for an excerpt. Fall back to the first 60
+            // characters so the search result row is not blank.
+            return source.Length > 60 ? source[..60] + "…" : source;
+        }
+        const int radius = 40;
+        var start = Math.Max(0, idx - radius);
+        var end = Math.Min(source.Length, idx + needle.Length + radius);
+        var prefix = start > 0 ? "…" : "";
+        var suffix = end < source.Length ? "…" : "";
+        return prefix + source[start..end] + suffix;
     }
 }

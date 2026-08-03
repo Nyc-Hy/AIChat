@@ -101,4 +101,114 @@ public class SlashCommandHandlerTests
 
         Assert.IsAssignableFrom<ISlashCommandHost>(viewModel);
     }
+
+    [Fact]
+    public async Task Search_NoQuery_ShowsUsage()
+    {
+        // /search without a query shows the usage line so the
+        // user knows to pass a needle. The body intentionally
+        // does not mention a count so a 0-result case looks
+        // distinct from a real search.
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/search", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("/search", result!.Body);
+    }
+
+    [Fact]
+    public async Task Search_EmptyHost_ReportsNoMatches()
+    {
+        // A fresh AppHost (no sessions loaded) yields a "no
+        // matches" body. The 'found' counter must be 0 so the
+        // user can tell 'no sessions' from 'no matches'.
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/search keychain", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("没有找到", result!.Body);
+    }
+
+    [Fact]
+    public async Task Search_HitInTitle_SurfacesFirst()
+    {
+        // 2026-08-03: title hit should be the top result, with
+        // a '(标题命中)' excerpt so the user can tell at a
+        // glance that the match was on the title, not the
+        // message body.
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+        var session = new AIChat.Domain.Chat.Standalone
+        {
+            Id = "s-keychain",
+            Title = "keychain 弹窗排查",
+            UpdatedAt = DateTimeOffset.Now,
+            Messages =
+            [
+                new AIChat.Domain.Chat.ChatMessage
+                {
+                    Role = AIChat.Domain.Chat.ChatRole.User,
+                    Content = "为什么 macOS 一直弹?",
+                    CreatedAt = DateTimeOffset.Now,
+                },
+            ],
+        };
+        var repo = host.GetRequiredService<AIChat.Abstractions.Persistence.IAppRepository>();
+        await repo.SaveSessionsAsync([session]);
+        await viewModel.RefreshStandaloneConversationsAsync();
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/search keychain", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("keychain 弹窗排查", result!.Body);
+        Assert.Contains("标题命中", result.Body);
+    }
+
+    [Fact]
+    public async Task Search_HitInMessageContent_ShowsExcerpt()
+    {
+        // Body match should produce an excerpt window around
+        // the match (40 chars before / after, with … markers
+        // when truncated), not the full message text. This
+        // matters because a long assistant reply would
+        // otherwise dominate the result bubble.
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+        var session = new AIChat.Domain.Chat.Standalone
+        {
+            Id = "s-nested",
+            Title = "无关键",
+            UpdatedAt = DateTimeOffset.Now,
+            Messages =
+            [
+                new AIChat.Domain.Chat.ChatMessage
+                {
+                    Role = AIChat.Domain.Chat.ChatRole.Assistant,
+                    Content = new string('a', 100) + " MATCHED " + new string('b', 100),
+                    CreatedAt = DateTimeOffset.Now,
+                },
+            ],
+        };
+        var repo = host.GetRequiredService<AIChat.Abstractions.Persistence.IAppRepository>();
+        await repo.SaveSessionsAsync([session]);
+        await viewModel.RefreshStandaloneConversationsAsync();
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/search MATCHED", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("无关键", result!.Body);
+        // The full message is 211 chars; the excerpt is at most
+        // 80 + 2 ellipses. If the full body were in the result
+        // the row would dominate the bubble and obscure the
+        // other hits.
+        Assert.DoesNotContain(new string('a', 100), result.Body);
+    }
 }

@@ -595,6 +595,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     // (按 project filter),Standalone 走 MainWindowViewModel 自己(全 app
     // 共一份)。这个 list 给 sidebar "Standalone" section 直接绑。
     private IReadOnlyList<Standalone> _standaloneSessions = [];
+    // 2026-08-03: cache the full cross-project session list for
+    // /search. MainWindowViewModel owns the lifetime of the
+    // cache (RefreshAsync refreshes it, RemoveConversationAsync
+    // invalidates it) so the slash handler does not have to
+    // hit disk on every search invocation. Empty list is
+    // safe — the search command treats an empty cache as
+    // 'no sessions yet', which is correct for a fresh install.
+    private IReadOnlyList<ChatSession> _allSessions = [];
+    public IReadOnlyList<ChatSession> AllSessions => _allSessions;
 
     [RelayCommand]
     private void NewConversation()
@@ -667,6 +676,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _standaloneSessions = all.OfType<Standalone>()
             .OrderByDescending(s => s.UpdatedAt)
             .ToList();
+        // /search cache: refresh the full session list here so
+        // the search slash command has a current view of every
+        // project. Standalone-only today; a follow-up slice
+        // adds Project sessions (the workspace change service
+        // owns their storage path).
+        _allSessions = all.OrderByDescending(s => s.UpdatedAt).ToList();
         StandaloneConversations.Clear();
         foreach (var session in _standaloneSessions)
         {
@@ -879,7 +894,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // Processes section is real (Wave 7 follow-up, plan §13 P0
         // risk "整个子进程树").
         _environmentPanel = new EnvironmentPanelViewModel(
-            _workspace, processSupervisor, _agentHost, _sidebar);
+            _workspace, processSupervisor, _agentHost, _sidebar, _clipboard);
         _environmentPanel.AttachTo();
 
         // Sidebar.SelectedProjectName → HasProject / Greeting /

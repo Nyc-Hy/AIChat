@@ -1,3 +1,6 @@
+using AIChat.Domain.Chat;
+using AIChat.Domain.Projects;
+
 namespace AIChat.App.Avalonia.ViewModels;
 
 // Narrow surface the slash command handler depends on. Pulled out
@@ -33,6 +36,14 @@ public interface ISlashCommandHost
     string ActiveModel { get; }
 
     bool NoWriteMode { get; }
+
+    // /search: the full cross-project session list, regardless
+    // of which project is currently active. MainWindowViewModel
+    // caches the last-loaded IReadOnlyList<ChatSession> from
+    // LoadSessionsAsync so this stays an O(N) read on the cached
+    // collection — a full disk load on every /search would be
+    // wasteful for a daily-driver with 100+ sessions.
+    IReadOnlyList<ChatSession> AllSessions { get; }
 
     // ---- Side-effect actions ----
 
