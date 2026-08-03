@@ -11,8 +11,30 @@ permissions:
   contents: write
 
 jobs:
+  verify:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore AIChat.sln
+
+      - name: Build
+        run: dotnet build AIChat.sln --no-restore -m:1 -v:minimal
+
+      - name: Test
+        run: dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
+
   publish-desktop:
     name: Publish Desktop
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -50,6 +72,57 @@ jobs:
       - name: Remove debug symbols
         shell: bash
         run: find artifacts/${{ matrix.artifact }} -name "*.pdb" -delete
+
+      - name: Prepare desktop layout
+        shell: bash
+        run: |
+          publish_dir="artifacts/${{ matrix.artifact }}"
+          runtime="${{ matrix.runtime }}"
+          project_version="$(dotnet msbuild src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj -nologo -getProperty:Version | tail -n 1 | tr -d '\r')"
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            version="$project_version"
+          fi
+          bundle_short_version="$(printf '%s' "$version" | sed -E 's/[-+].*$//')"
+          if [[ "$runtime" == osx-* ]]; then
+            app_dir="$publish_dir/AIChat.app"
+            mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
+            mv "$publish_dir/AIChat.App.Avalonia" "$app_dir/Contents/MacOS/aichat"
+            chmod +x "$app_dir/Contents/MacOS/aichat"
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="UTF-8"?>' \
+              '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+              '<plist version="1.0"><dict>' \
+              '<key>CFBundleExecutable</key><string>aichat</string>' \
+              '<key>CFBundleIdentifier</key><string>com.nychy.aichat</string>' \
+              '<key>CFBundleName</key><string>AIChat</string>' \
+              '<key>CFBundleDisplayName</key><string>AIChat</string>' \
+              '<key>CFBundlePackageType</key><string>APPL</string>' \
+              "<key>CFBundleShortVersionString</key><string>$bundle_short_version</string>" \
+              "<key>CFBundleVersion</key><string>${GITHUB_RUN_NUMBER}</string>" \
+              '<key>NSHighResolutionCapable</key><true/>' \
+              '</dict></plist>' > "$app_dir/Contents/Info.plist"
+          elif [[ "$runtime" == win-* ]]; then
+            mv "$publish_dir/AIChat.App.Avalonia.exe" "$publish_dir/aichat.exe"
+          else
+            mv "$publish_dir/AIChat.App.Avalonia" "$publish_dir/aichat"
+            chmod +x "$publish_dir/aichat"
+          fi
+          cp README.md LICENSE docs/INSTALL.md docs/LAUNCH_PLAN.md "$publish_dir/"
+
+      - name: Validate package layout
+        shell: bash
+        run: |
+          publish_dir="artifacts/${{ matrix.artifact }}"
+          runtime="${{ matrix.runtime }}"
+          if [[ "$runtime" == osx-* ]]; then
+            test -x "$publish_dir/AIChat.app/Contents/MacOS/aichat"
+            test -f "$publish_dir/AIChat.app/Contents/Info.plist"
+          elif [[ "$runtime" == win-* ]]; then
+            test -f "$publish_dir/aichat.exe"
+          else
+            test -x "$publish_dir/aichat"
+          fi
 
       - name: Package archive
         shell: pwsh
