@@ -27,22 +27,20 @@ Each release also includes SHA-256 checksum files for verification.
 
 ```bash
 # Verify checksum
-shasum -a 256 aichat-desktop-osx-arm64.zip
-cat aichat-desktop-osx-arm64.sha256
+shasum -a 256 -c aichat-desktop-osx-arm64.zip.sha256
 
-# Unpack — the archive contains a single self-contained Mach-O binary
-# named 'aichat', plus README / LICENSE / INSTALL / LAUNCH_PLAN.
+# Unpack — the archive contains a real AIChat.app bundle,
+# plus README / LICENSE / INSTALL / LAUNCH_PLAN.
 unzip aichat-desktop-osx-arm64.zip -d aichat-desktop
-chmod +x ./aichat-desktop/aichat
+chmod +x ./aichat-desktop/AIChat.app/Contents/MacOS/aichat
 
 # Optional: install to /Applications
-mkdir -p /Applications/AIChat.app/Contents/MacOS
-mv ./aichat-desktop/aichat /Applications/AIChat.app/Contents/MacOS/aichat
+ditto ./aichat-desktop/AIChat.app /Applications/AIChat.app
 ln -sf /Applications/AIChat.app/Contents/MacOS/aichat /usr/local/bin/aichat
 
 # First launch: macOS Gatekeeper will block an unsigned binary the first time
-xattr -d com.apple.quarantine /Applications/AIChat.app/Contents/MacOS/aichat 2>/dev/null || true
-/Applications/AIChat.app/Contents/MacOS/aichat
+xattr -dr com.apple.quarantine /Applications/AIChat.app 2>/dev/null || true
+open -a /Applications/AIChat.app
 ```
 
 If macOS still blocks the app, allow it from **System Settings → Privacy & Security**, then re-launch.
@@ -50,10 +48,10 @@ If macOS still blocks the app, allow it from **System Settings → Privacy & Sec
 ## Linux x64
 
 ```bash
-shasum -a 256 aichat-desktop-linux-x64.tar.gz
-cat aichat-desktop-linux-x64.sha256
+sha256sum -c aichat-desktop-linux-x64.tar.gz.sha256
 
-tar -xzf aichat-desktop-linux-x64.tar.gz
+mkdir -p aichat-desktop
+tar -xzf aichat-desktop-linux-x64.tar.gz -C aichat-desktop
 # The archive contains a single self-contained ELF binary named 'aichat'
 # plus README / LICENSE / INSTALL / LAUNCH_PLAN.
 chmod +x ./aichat-desktop/aichat
@@ -76,7 +74,7 @@ EOF
 ```powershell
 # Verify checksum
 Get-FileHash -Algorithm SHA256 .\aichat-desktop-win-x64.zip
-Get-Content .\aichat-desktop-win-x64.sha256
+Get-Content .\aichat-desktop-win-x64.zip.sha256
 
 # Unpack — the archive contains aichat.exe (self-contained PE binary)
 # plus README / LICENSE / INSTALL / LAUNCH_PLAN.
@@ -96,8 +94,8 @@ Open a new terminal and run `aichat`.
 The first time the app starts it will show the **Avalonia main window** with the project sidebar empty. The onboarding flow covers:
 
 1. Pick a project folder (the **Add project** button on the sidebar).
-2. Configure a model provider (the **Advanced** expander on the right rail — API key, model, base URL).
-3. Run a smoke test (the **Test connection** button next to the provider config).
+2. Open **Settings** and configure a model provider (API key, model, base URL).
+3. Run a smoke test with **Test connection** in Settings.
 4. Send a task in the bottom input box.
 
 Project settings and provider credentials are persisted to:
@@ -108,20 +106,44 @@ Project settings and provider credentials are persisted to:
 | Linux | `~/.config/AIChat/` |
 | Windows | `%APPDATA%\AIChat\` |
 
-## Verifying Checksums
+API keys use Windows DPAPI, macOS Keychain, or Linux Secret Service. If the
+platform credential store is unavailable, AIChat keeps the key only for the
+current process, shows a warning, and never falls back to plaintext storage.
+On a normal launch AIChat restores saved provider credentials once per process
+and keeps an in-memory cache for later refreshes. That initial restore is why
+macOS may show a Keychain access prompt; repeated F5 refreshes do not need
+another vault read.
 
-macOS / Linux:
+For a demo, screenshot pass, or automated UI trial, use a separate profile that
+never reads the production settings or system credential vault:
 
 ```bash
-shasum -a 256 aichat-desktop-osx-arm64.zip
-cat aichat-desktop-osx-arm64.sha256
+AICHAT_ISOLATED_DATA_ROOT="$(mktemp -d)" \
+  dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj
+```
+
+`AICHAT_ISOLATED_DATA_ROOT` must be an absolute path. In this mode all app data
+and attachments stay under that root, and API keys are session-only.
+
+## Verifying Checksums
+
+macOS:
+
+```bash
+shasum -a 256 -c aichat-desktop-osx-arm64.zip.sha256
+```
+
+Linux:
+
+```bash
+sha256sum -c aichat-desktop-linux-x64.tar.gz.sha256
 ```
 
 Windows:
 
 ```powershell
 Get-FileHash -Algorithm SHA256 .\aichat-desktop-win-x64.zip
-Get-Content .\aichat-desktop-win-x64.sha256
+Get-Content .\aichat-desktop-win-x64.zip.sha256
 ```
 
 ## Build From Source

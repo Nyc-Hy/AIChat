@@ -1,5 +1,14 @@
 # AIChat 重构计划（daily driver 化）
 
+> **Status: 历史计划 / 已废止。** 本文档保留为历史参考，但**不再作为产品方向**。
+>
+> - 产品目标已被 **[`docs/CODEX_DESKTOP_PARITY_PLAN.md`](CODEX_DESKTOP_PARITY_PLAN.md)** 取代：Codex Desktop 操作对等（12 Wave）取代了"对标 ClaudeCode 完整度 + Linear/Notion 气质"。
+> - §0 "现状速写"（文件体量 / 死代码清单）作为清理证据仍有参考价值，可在 Wave 1 schema 迁移前的工程债盘点中复用。
+> - §1–§4 的阶段计划（止血 / 拆 harness / 死代码清理 / 气质收敛）已下线，部分工作已由 `git log` 中 `front-end MVP pass`（commits `c0d0bf8..323d281`）和"真的很劣质"清理 wave（`320cedc` / `e356ee5` / `8d98050`）零散完成。
+> - 主开发线下一步以 [parity 追踪表](PARITY_TRACKING.md) 的 Wave 0 退出条件为准。
+>
+> **不要**再按本计划的阶段顺序推进新工作；只允许作为"已完成清理 vs 未完成清理"的对照表使用。
+
 > 目标对标 ClaudeCode 完整度 + Linear/Notion 私人工具感。
 > 阶段顺序：先收口可见债 → 再清死代码 → 再做气质。每一阶段都自带
 > build + test 验收门槛，不留"半重构"半成品。

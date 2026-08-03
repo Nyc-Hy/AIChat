@@ -1,5 +1,10 @@
 # AIChat Product Baseline
 
+> **Status: superseded.** This document is preserved for historical reference only.
+> The current product baseline, information architecture, and acceptance criteria are defined in **[`docs/CODEX_DESKTOP_PARITY_PLAN.md`](CODEX_DESKTOP_PARITY_PLAN.md)**, which is the single authoritative planning entry point.
+> Some user-experience values (quiet UI, dense work-focused layout, conservative defaults) still inform design — see parity plan §5.1 and the [parity tracking table](PARITY_TRACKING.md) for live feature-by-feature status.
+> Do **not** make product baseline decisions against this document; defer to the parity plan.
+
 AIChat is a Vibe Coding tool. The product baseline is a small, clear, fast coding assistant that helps users complete repository tasks with high execution accuracy, low token cost, and visible context economics.
 
 ## Product Standard
