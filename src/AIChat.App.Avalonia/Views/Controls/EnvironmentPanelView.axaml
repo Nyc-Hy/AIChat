@@ -1,0 +1,532 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.EnvironmentPanelView"
+             x:DataType="vm:EnvironmentPanelViewModel">
+
+  <!--
+    Sprint 0.5 Environment panel (right column).
+
+    Sections (top → bottom):
+      1. 变更 — git change count from WorkspaceChangeService
+      2. 本地 — current branch name
+      3. 子智能体 — Active / Completed / Failed counts from AgentHost.SubAgentRuns
+      4. 来源 — pending attachment count
+
+    "未实现" sections (Background Process / PR / Worktree / Diff 5 视图) are
+    intentionally NOT shown as buttons — the plan §5.4 rule "no placeholder
+    nav" applies. When those Waves land, add a new section with a real
+    command behind it.
+  -->
+  <Border Classes="rail"
+          BorderBrush="{DynamicResource LineSoftBrush}"
+          BorderThickness="1,0,0,0">
+    <DockPanel>
+      <!-- Header: title + refresh button. The refresh is per-section; we
+           use one button for the whole panel because all sections read
+           the same WorkspaceChangeService state on refresh. -->
+      <Grid DockPanel.Dock="Top"
+            ColumnDefinitions="*,Auto"
+            Margin="{StaticResource Padding3}">
+        <TextBlock Text="环境信息"
+                   Classes="section-title"
+                   VerticalAlignment="Center"/>
+        <Button Grid.Column="1"
+                Classes="chrome-button"
+                Click="Refresh_OnClick"
+                ToolTip.Tip="刷新环境信息">
+          <Path Data="M5 12 a7 7 0 1 0 1.5 -4.2 M5 4 V8 H9"
+                Stroke="{Binding $parent[Button].Foreground}"
+                StrokeThickness="1.6" StrokeLineCap="Round"
+                Width="14" Height="14" Stretch="Uniform"/>
+        </Button>
+      </Grid>
+
+      <ScrollViewer Padding="{StaticResource Padding3}"
+                    VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="{StaticResource Space5}">
+
+          <!-- ===== 1. 变更 (Codex parity: +X -Y split + Diff 入口) =====
+               Codex surfaces added / removed counts in green / red.
+               We already carry both counts in the VM (ChangeAdded /
+               ChangeRemoved). The chevron button on the right opens
+               the Diff view (Wave 6 follow-up — for now it's a toast
+               so the user can see the affordance). -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="变更" Classes="section-title"/>
+              <Button Grid.Column="1"
+                      Classes="chrome-button"
+                      Padding="4,1"
+                      Click="OpenDiff_OnClick"
+                      IsVisible="{Binding !IsProjectRequired}"
+                      ToolTip.Tip="查看变更 Diff (Wave 6 接入)">
+                <Path Data="M9 6 L15 6 L15 12 M9 12 L15 12 M9 18 L15 18 M4 6 L4 18 M5 17 L3 18 L5 19"
+                      Stroke="{Binding $parent[Button].Foreground}"
+                      StrokeThickness="1.4" StrokeLineCap="Round"
+                      Width="12" Height="12" Stretch="Uniform"/>
+              </Button>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="6"
+                        IsVisible="{Binding !IsProjectRequired}">
+              <TextBlock Text="{Binding ChangeAdded, StringFormat=+{0}}"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource SuccessBadgeFgBrush}"/>
+              <TextBlock Text="{Binding ChangeRemoved, StringFormat=-{0}}"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource ErrorBorderBrush}"/>
+              <TextBlock Text="个变更文件"
+                         Classes="muted"
+                         FontSize="11"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="(无项目,无法读取)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding IsProjectRequired}"/>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 2. 本地 (Codex parity: 2-level fold) =====
+               The "本地" header stays flat; underneath it we list the
+               current branch as a sub-row the user can click. The
+               chevron rotates on click (a future slice can wire that
+               to a "switch branch" picker). -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+              <TextBlock Grid.Column="0"
+                         Text="本地"
+                         Classes="section-title"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="2"
+                         Text="⌄"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         Foreground="{DynamicResource MutedBrush}"
+                         VerticalAlignment="Center"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding !IsProjectRequired}"
+                  Margin="8,2,0,2">
+              <Path Grid.Column="0"
+                    Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z"
+                    Stroke="{DynamicResource MutedBrush}"
+                    StrokeThickness="1.3" StrokeLineCap="Round"
+                    Width="13" Height="13" Stretch="Uniform"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,0"/>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding BranchName}"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         Foreground="{DynamicResource Text2Brush}"
+                         TextTrimming="CharacterEllipsis"
+                         MaxLines="1"
+                         VerticalAlignment="Center"/>
+            </Grid>
+            <TextBlock Text="(未选择项目)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding IsProjectRequired}"/>
+            <StackPanel Orientation="Horizontal" Spacing="6"
+                        IsVisible="{Binding !IsProjectRequired}"
+                        Margin="0,4,0,0">
+              <Button Classes="chrome-button"
+                      Click="CommitOrPush_OnClick"
+                      IsEnabled="False"
+                      ToolTip.Tip="提交或推送（Wave 6 实现）">
+                <TextBlock Text="提交或推送" FontSize="11"/>
+              </Button>
+              <Button Classes="chrome-button"
+                      Click="CreatePr_OnClick"
+                      IsEnabled="False"
+                      ToolTip.Tip="创建拉取请求（Wave 6 实现）">
+                <TextBlock Text="创建拉取请求" FontSize="11"/>
+              </Button>
+            </StackPanel>
+            <!--
+              Wave 5 (plan §5): Worktree 2-level fold under 本地.
+              Clicking the row opens a worktree picker (placeholder
+              toast for now; the real picker + creation flow lands in
+              Wave 6 alongside branch / restore). The chevron rotates
+              on expand to match Codex's visual hint.
+            -->
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  IsVisible="{Binding !IsProjectRequired}"
+                  Margin="8,6,0,2">
+              <TextBlock Grid.Column="0" Text="Worktree"
+                         Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="(默认)"
+                         Classes="muted" FontSize="11"
+                         FontFamily="{StaticResource FontMono}"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="2" Text="⌄"
+                         FontFamily="{StaticResource FontMono}" FontSize="10"
+                         Foreground="{DynamicResource MutedBrush}"
+                         Margin="6,0,0,0" VerticalAlignment="Center"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding !IsProjectRequired}"
+                  Margin="8,2,0,2">
+              <TextBlock Grid.Column="0" Text="Remote"
+                         Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="(未配置)"
+                         Classes="muted" FontSize="11"
+                         FontFamily="{StaticResource FontMono}"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center"/>
+            </Grid>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 3. 子智能体 (Codex parity: color dots + "66 完成" 数字) =====
+               Codex surfaces sub-agent state as a row of small colored
+               dots (one per template) followed by "N 完成" total. The
+               dots are driven by a fixed palette of 4 (explorer /
+               coder / reviewer / researcher) so the visual stays
+               stable across runs. Wave 7 adds the per-run list so
+               the user can see the most recent dispatch + status /
+               duration / tool-call count without leaving the panel. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="子智能体" Classes="section-title"/>
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasSubAgents}">
+              <ItemsControl ItemsSource="{Binding SubAgentTemplateDots}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SubAgentTemplateDotViewModel">
+                    <Ellipse Width="8" Height="8"
+                             Fill="{Binding ColorBrush}"
+                             ToolTip.Tip="{Binding Label}"/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="muted"
+                         FontSize="12"
+                         VerticalAlignment="Center"
+                         Text="{Binding SubAgentCompleted, StringFormat={}{0} 完成}"/>
+            </StackPanel>
+            <TextBlock Text="(暂无子智能体)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding SubAgentTotal, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+            <!--
+              Wave 7: per-run list. Each row shows template + status +
+              duration + tool-call count, so the user can tell at a
+              glance whether the most recent sub-agent dispatch
+              completed cleanly or got budget-cancelled. The list
+              is bound to SubAgentRuns (mirrors AgentHost.SubAgentRuns
+              — see RefreshSubAgentDots / RecountSubAgents for the
+              wiring).
+
+              The status dot uses the same fixed palette as the
+              sub-agent template dots in the section header (green /
+              amber / red / grey) so a user scanning the panel can
+              read state without reading the label. Hover exposes
+              the full summary when the run produced one.
+            -->
+            <ItemsControl ItemsSource="{Binding SubAgentRuns}"
+                          IsVisible="{Binding HasSubAgents}"
+                          Margin="0,4,0,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SubAgentRunViewModel">
+                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="0,2">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding TemplateDisplay}"
+                               Classes="muted"
+                               FontSize="10"
+                               FontFamily="{StaticResource FontMono}"
+                               VerticalAlignment="Center"
+                               MinWidth="50"/>
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Task}"
+                               FontSize="11"
+                               Foreground="{DynamicResource Text2Brush}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="1"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding Summary}"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Ellipse Width="6" Height="6"
+                               Fill="{Binding StatusBrush}"
+                               VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Status}"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="62"/>
+                      <TextBlock Text="{Binding DurationDisplay}"
+                                 Classes="muted"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="36"/>
+                      <TextBlock Text="{Binding ToolCallCount, StringFormat=↻{0}}"
+                                 Classes="muted"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 4. 来源 (Codex parity: list of source items) =====
+               Codex lists each "source" — clipboard snapshots, web
+               searches, attached files — as its own row. Wave 7
+               ships with the pasted-image surface: every ⌘V image
+               the user added shows up here with the same file name
+               as the attachment strip above the composer, so the
+               right rail mirrors what will actually travel with
+               the next message.
+
+               Future source kinds (web search / connector / plugin)
+               will plug in through the same ItemsControl binding
+               by adding rows to the VM's Sources collection with a
+               different Kind value. The "+" button is hidden
+               because no real "add source from the right rail"
+               action exists yet; the user adds images via the
+               composer's "+" → "粘贴图片" menu.
+            -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="来源" Classes="section-title"/>
+              <TextBlock Grid.Column="1"
+                         Classes="muted"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Text="{Binding SourceSummary}"/>
+            </Grid>
+            <TextBlock Text="(暂无来源 — 粘贴图像后会显示在这里)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+            <ItemsControl ItemsSource="{Binding Sources}"
+                          IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SourceRowViewModel">
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6" Margin="0,1">
+                    <Path Grid.Column="0"
+                          Data="M3 5 h12 v10 h-12 z M3 9 h12 M7 5 v10 M3 15 l-2 2 h16 l-2 -2"
+                          Stroke="{DynamicResource MutedBrush}"
+                          StrokeThickness="1.3" StrokeLineCap="Round"
+                          Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding DisplayName}"
+                                 FontSize="12" Foreground="{DynamicResource Text2Brush}"
+                                 TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                      <TextBlock Text="{Binding Detail}"
+                                 Classes="muted" FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"/>
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="env-row" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                    Click="ViewAllSources_OnClick"
+                    ToolTip.Tip="查看全部来源（Wave 7 后续接入历史记录）">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Path Data="M5 12 H19 M5 6 H19 M5 18 H15"
+                      Stroke="{Binding $parent[Button].Foreground}"
+                      StrokeThickness="1.4" StrokeLineCap="Round"
+                      Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                <TextBlock Text="查看全部" FontSize="12" Foreground="{DynamicResource Text2Brush}" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 5. Background Processes (Codex parity, Wave 7 follow-up) =====
+               Codex surfaces long-running background processes (build
+               watchers, dev servers, sub-agent scratch spaces, local
+               site previews) as a collapsible list. Wave 7 follow-up
+               wires the real BackgroundProcessSupervisor: each row
+               shows the process name + colored status dot + status
+               label + PID, and exposes a Stop button that signals
+               the whole process tree (plan §13 P0 risk "整个子进程树").
+
+               The plan §7.7 rule ("supervisor 未建前不得展示入口")
+               is now satisfied — the supervisor is built and
+               registered in DI, so ShowBackgroundProcesses defaults
+               to true. An empty list still shows the empty-state
+               hint so the user understands the section is alive. -->
+          <StackPanel Spacing="4" IsVisible="{Binding ShowBackgroundProcesses}">
+            <TextBlock Text="Background Processes" Classes="section-title"/>
+            <TextBlock Text="(暂无后台进程)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding !HasBackgroundProcesses}"/>
+            <ItemsControl ItemsSource="{Binding BackgroundProcesses}"
+                          IsVisible="{Binding HasBackgroundProcesses}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:BackgroundProcessViewModel">
+                  <StackPanel Margin="0,2">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                          ColumnSpacing="6">
+                      <Ellipse Grid.Column="0"
+                               Width="8" Height="8"
+                               Fill="{Binding StatusBrush}"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding CommandLine}"/>
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding DisplayName}"
+                                 FontSize="12"
+                                 Foreground="{DynamicResource Text2Brush}"
+                                 TextTrimming="CharacterEllipsis" MaxLines="1"
+                                 VerticalAlignment="Center"
+                                 ToolTip.Tip="{Binding CommandLine}"/>
+                      <TextBlock Grid.Column="2"
+                                 Text="{Binding StatusLabel}"
+                                 Classes="muted" FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="50"/>
+                      <Button Grid.Column="3"
+                              Classes="chrome-button"
+                              Padding="4,1"
+                              IsVisible="{Binding IsRunning}"
+                              Click="StopBackgroundProcess_OnClick"
+                              Tag="{Binding Id}"
+                              ToolTip.Tip="停止该进程 (会发信号到整个进程树)">
+                        <TextBlock Text="停止" FontSize="10"/>
+                      </Button>
+                      <ToggleButton Grid.Column="4"
+                                    Classes="chrome-button"
+                                    Padding="4,1"
+                                    IsVisible="{Binding HasLog}"
+                                    x:Name="LogToggle"
+                                    ToolTip.Tip="展开/收起最近日志">
+                        <TextBlock Text="日志" FontSize="10"/>
+                      </ToggleButton>
+                    </Grid>
+                    <Border Background="{DynamicResource SurfaceSunkenBrush}"
+                            BorderBrush="{DynamicResource LineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusSm}"
+                            Padding="8,6"
+                            Margin="22,2,0,4"
+                            IsVisible="{Binding #LogToggle.IsChecked}"
+                            MaxHeight="160">
+                      <TextBlock Text="{Binding LogTail}"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 TextWrapping="Wrap"
+                                 TextTrimming="CharacterEllipsis"
+                                 Foreground="{DynamicResource Text2Brush}"/>
+                    </Border>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="(进程在运行中显示停止按钮;点击会向整个进程组发 SIGTERM,5 秒后升级为 SIGKILL)"
+                       Classes="muted" FontSize="11"
+                       IsVisible="{Binding HasBackgroundProcesses}"/>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 6. 进度 (Mavis / Codex parity) ===== -->
+          <!--
+            Mirrors the "what is the agent doing right now" line that
+            sits next to the session id in Mavis. Two rows: while a
+            task is running we show "正在跑: <prompt excerpt>"; once
+            it ends we keep the last status visible (上次运行: 完成)
+            so the section never collapses to nothing between runs
+            — the user can always answer "did the last task land?".
+          -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="进度" Classes="section-title"/>
+            <TextBlock Text="{Binding LastRunSummary}"
+                       FontSize="12"
+                       Foreground="{DynamicResource Text2Brush}"
+                       FontFamily="{StaticResource FontSans}"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="2"
+                       TextWrapping="Wrap"/>
+            <TextBlock Text="(本节显示当前任务 / 上次运行状态)"
+                       Classes="muted"
+                       FontSize="11"
+                       IsVisible="{Binding LastRunSummary, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 6. 交付物 (Mavis / Codex parity) ===== -->
+          <!--
+            Lists the 5 most recent files in art/ (the directory we
+            use for image_synthesize outputs and user screenshots).
+            Click handler opens the file in the system default app
+            via the OpenDeliverable command below. Empty when the
+            directory is missing or has no files — the section
+            collapses via the HasDeliverables binding so the panel
+            doesn't show a "no deliverables" empty state at the
+            top of the day.
+          -->
+          <StackPanel Spacing="4" IsVisible="{Binding HasDeliverables}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="交付物" Classes="section-title"/>
+              <TextBlock Grid.Column="1"
+                         Classes="muted"
+                         FontSize="11"
+                         Text="{Binding Deliverables.Count, StringFormat={}{0} 个}"/>
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Deliverables}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DeliverableViewModel">
+                  <Button Classes="env-row"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch"
+                          Click="Deliverable_OnClick"
+                          Tag="{Binding FullPath}"
+                          ToolTip.Tip="{Binding FullPath}">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="12"
+                                 Foreground="{DynamicResource TextBrush}"
+                                 TextTrimming="CharacterEllipsis"
+                                 MaxLines="1"/>
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding DisplaySize}"
+                                   Classes="muted"
+                                   FontSize="10"
+                                   FontFamily="{StaticResource FontMono}"/>
+                        <TextBlock Text="·" Classes="muted" FontSize="10"/>
+                        <TextBlock Text="{Binding ModifiedDisplay}"
+                                   Classes="muted"
+                                   FontSize="10"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== footer: last refresh time ===== -->
+          <TextBlock Text="{Binding LastRefreshDisplay, StringFormat=上次刷新: {0}}"
+                     Classes="muted"
+                     FontFamily="{StaticResource FontMono}"
+                     FontSize="10"/>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</UserControl>
