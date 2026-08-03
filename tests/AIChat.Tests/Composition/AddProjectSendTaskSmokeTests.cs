@@ -37,14 +37,14 @@ public class AddProjectSendTaskSmokeTests : IDisposable
         // factory so successive calls don't share state. The IReadOnlyList
         // wrapper cast is what nudges Moq's overload resolution to pick
         // the factory form instead of the captured-value form.
-        var emptyProjects = (IReadOnlyList<ProjectWorkspace>)Array.Empty<ProjectWorkspace>();
-        _repo.Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(emptyProjects);
+        var emptyWorkspaces = (IReadOnlyList<WorkspaceProject>)Array.Empty<WorkspaceProject>();
+        _repo.Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(emptyWorkspaces);
         _repo.Setup(repo => repo.LoadSettingsAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new AppSettings());
         _repo.Setup(repo => repo.SaveSettingsAsync(It.IsAny<AppSettings>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
-        _repo.Setup(repo => repo.SaveProjectsAsync(It.IsAny<IReadOnlyList<ProjectWorkspace>>(), It.IsAny<CancellationToken>()))
+        _repo.Setup(repo => repo.SaveWorkspacesAsync(It.IsAny<IReadOnlyList<WorkspaceProject>>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
     }
 
@@ -72,12 +72,12 @@ public class AddProjectSendTaskSmokeTests : IDisposable
         // 4. ProjectAdded fired so the host can re-derive derived state
         //    (LastActiveProjectId, conversation list refresh).
         Assert.NotNull(viewModel.Sidebar.CurrentProject);
-        Assert.Equal(_tempRoot, viewModel.Sidebar.CurrentProject!.Path);
+        Assert.Equal(_tempRoot, viewModel.Sidebar.CurrentProject!.TryGetPrimaryPath());
 
         // 5. Repository saw the save call (the persistence round-trip works
         //    end-to-end through the in-memory mock).
-        _repo.Verify(repo => repo.SaveProjectsAsync(
-            It.Is<IReadOnlyList<ProjectWorkspace>>(list => list.Count == 1 && list[0].Path == _tempRoot),
+        _repo.Verify(repo => repo.SaveWorkspacesAsync(
+            It.Is<IReadOnlyList<WorkspaceProject>>(list => list.Count == 1 && list[0].PrimaryPath == _tempRoot),
             It.IsAny<CancellationToken>()), Times.AtLeastOnce);
     }
 
@@ -96,8 +96,8 @@ public class AddProjectSendTaskSmokeTests : IDisposable
         await viewModel.AddProjectFromUiAsync(bogus);
 
         Assert.Empty(viewModel.Sidebar.Projects);
-        _repo.Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<IReadOnlyList<ProjectWorkspace>>(),
+        _repo.Verify(repo => repo.SaveWorkspacesAsync(
+            It.IsAny<IReadOnlyList<WorkspaceProject>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 

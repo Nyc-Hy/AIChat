@@ -212,12 +212,18 @@ public sealed class OpenAICompatibleToolCallTests
 
     private static AppSettings CreateSettings()
     {
+        // The provider under test is the OpenAI-compatible adapter;
+        // 2026-08-02 the only ship target is MiniMax, so settings
+        // here use the MiniMax provider id / name with the
+        // OpenAI protocol. The adapter's CanHandle() matches via
+        // ProtocolId, which is the relevant field for the
+        // protocol-level tests in this file.
         return new AppSettings
         {
             ApiKey = "test-key",
             BaseUrl = "https://fake.api/v1",
-            ProviderName = "OpenAI Compatible",
-            ProviderId = "openai",
+            ProviderName = "MiniMax",
+            ProviderId = "minimax",
             ProtocolId = "openai"
         };
     }

@@ -41,7 +41,7 @@ public class GitStatusViewModelTests
         // non-empty result both set the timestamp — the user wants
         // confirmation that the modal re-fetched even on a clean
         // tree.
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var workspace = Mock.Of<IWorkspaceChangeService>();
         Mock.Get(workspace)
             .Setup(w => w.GetChangesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -63,7 +63,7 @@ public class GitStatusViewModelTests
     [Fact]
     public async Task RefreshAsync_PopulatesBranchAndChanges()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var changeSet = new WorkspaceChangeSet
         {
             Branch = "## main...origin/main [ahead 1]",
@@ -76,7 +76,7 @@ public class GitStatusViewModelTests
         };
         var workspace = Mock.Of<IWorkspaceChangeService>();
         Mock.Get(workspace)
-            .Setup(w => w.GetChangesAsync(project.Path, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(w => w.GetChangesAsync(project.TryGetPrimaryPath(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(changeSet);
         var (vm, _, _) = CreateViewModel(currentProject: project, workspace: workspace);
 
@@ -92,7 +92,7 @@ public class GitStatusViewModelTests
     [Fact]
     public async Task RefreshAsync_WithCleanWorkingTree_ShowsEmptyState()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var workspace = Mock.Of<IWorkspaceChangeService>();
         Mock.Get(workspace)
             .Setup(w => w.GetChangesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -110,7 +110,7 @@ public class GitStatusViewModelTests
     [Fact]
     public async Task RefreshAsync_WhenWorkspaceThrows_SetsErrorMessage()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var workspace = Mock.Of<IWorkspaceChangeService>();
         Mock.Get(workspace)
             .Setup(w => w.GetChangesAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
@@ -126,7 +126,7 @@ public class GitStatusViewModelTests
     [Fact]
     public async Task SelectChangeAsync_LoadsDiffForSelectedFile()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var changeSet = new WorkspaceChangeSet
         {
             Branch = "## main",
@@ -138,10 +138,10 @@ public class GitStatusViewModelTests
         };
         var workspace = Mock.Of<IWorkspaceChangeService>();
         Mock.Get(workspace)
-            .Setup(w => w.GetChangesAsync(project.Path, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(w => w.GetChangesAsync(project.TryGetPrimaryPath(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(changeSet);
         Mock.Get(workspace)
-            .Setup(w => w.GetDiffAsync(project.Path, "src/Added.cs", false, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(w => w.GetDiffAsync(project.TryGetPrimaryPath(), "src/Added.cs", false, It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new WorkspaceDiff
             {
                 Path = "src/Added.cs",
@@ -167,7 +167,7 @@ public class GitStatusViewModelTests
     [Fact]
     public async Task SelectChangeAsync_WhenDiffFails_SetsErrorDiffText()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var changeSet = new WorkspaceChangeSet
         {
             Branch = "## main",
@@ -192,7 +192,7 @@ public class GitStatusViewModelTests
     [Fact]
     public async Task RefreshAsync_RestoresSelection_WhenFileStillPresent()
     {
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var first = new WorkspaceChangeSet
         {
             Branch = "## main",
@@ -226,7 +226,7 @@ public class GitStatusViewModelTests
         // style can colour the badge by outcome. This test pins the
         // mapping: exactly one IsX is true per row, and it matches the
         // StatusKind the row was constructed with.
-        var project = new ProjectWorkspace { Id = "p1", Name = "Alpha", Path = "/tmp/alpha" };
+        var project = new WorkspaceProject { Id = "p1", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
         var changeSet = new WorkspaceChangeSet
         {
             Branch = "## main",
@@ -260,7 +260,7 @@ public class GitStatusViewModelTests
     }
 
     private static (GitStatusViewModel vm, IWorkspaceChangeService workspace, ProjectSidebarViewModel sidebar) CreateViewModel(
-        ProjectWorkspace? currentProject,
+        WorkspaceProject? currentProject,
         IWorkspaceChangeService? workspace = null)
     {
         workspace ??= Mock.Of<IWorkspaceChangeService>();

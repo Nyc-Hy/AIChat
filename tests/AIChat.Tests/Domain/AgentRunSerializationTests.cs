@@ -2,6 +2,12 @@ using System.Text.Json;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Memory;
 
+// v0 ProjectWorkspace is [Obsolete] since Wave 3. The "ProjectWorkspace_RoundTripsProjectToolPermissionModes"
+// test still pins the v0 shape to make sure the JsonSerializer keeps the
+// same field set — so v0→v1 migration's converter can keep reading v0
+// data. Suppress CS0618 at the file level.
+#pragma warning disable CS0618
+
 namespace AIChat.Tests.Domain;
 
 public sealed class AgentRunSerializationTests
@@ -30,8 +36,7 @@ public sealed class AgentRunSerializationTests
     [Fact]
     public void Conversation_RoundTripsAgentRunAndMessageLink()
     {
-        var conversation = new Conversation
-        {
+        var conversation = new Project {
             Id = "conversation-1",
             Messages =
             [
@@ -320,8 +325,7 @@ public sealed class AgentRunSerializationTests
     [Fact]
     public void Conversation_RoundTripsRunSourceIds()
     {
-        var conversation = new Conversation
-        {
+        var conversation = new Project {
             Id = "conversation-1",
             Messages = [],
             AgentRuns =
@@ -347,8 +351,7 @@ public sealed class AgentRunSerializationTests
     [Fact]
     public void Conversation_RoundTripsAgentPlan()
     {
-        var conversation = new Conversation
-        {
+        var conversation = new Project {
             Id = "conversation-1",
             Messages =
             [
@@ -429,8 +432,7 @@ public sealed class AgentRunSerializationTests
     [Fact]
     public void Conversation_RoundTripsFileChangeSnapshotAndHash()
     {
-        var conversation = new Conversation
-        {
+        var conversation = new Project {
             Id = "conversation-1",
             Messages = [],
             AgentRuns =
@@ -468,8 +470,7 @@ public sealed class AgentRunSerializationTests
     [Fact]
     public void Conversation_HandlesMissingPlanGracefully()
     {
-        var conversation = new Conversation
-        {
+        var conversation = new Project {
             Id = "conversation-1",
             Messages = [],
             AgentRuns =
@@ -574,7 +575,7 @@ public sealed class AgentRunSerializationTests
     {
         var provider = new AIChat.Abstractions.Llm.ConfiguredLlmProvider
         {
-            TemplateId = "deepseek",
+            TemplateId = "minimax",
             ApiKey = "key",
             SupportsVisionOverride = true
         };

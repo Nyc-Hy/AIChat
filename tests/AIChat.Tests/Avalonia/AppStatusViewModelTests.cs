@@ -52,10 +52,8 @@ public class AppStatusViewModelTests : IDisposable
     {
         var (status, sidebar) = Create();
 
-        sidebar.Refresh([new ProjectWorkspace
-        {
-            Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha")
-        }]);
+        sidebar.Refresh([new WorkspaceProject {
+            Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"}]);
 
         Assert.True(status.HasProject);
     }
@@ -68,10 +66,8 @@ public class AppStatusViewModelTests : IDisposable
         Assert.Equal("选一个项目开始", status.Greeting);
         Assert.Contains("添加本地代码仓库", status.SubGreeting);
 
-        sidebar.Refresh([new ProjectWorkspace
-        {
-            Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha")
-        }]);
+        sidebar.Refresh([new WorkspaceProject {
+            Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"}]);
 
         Assert.Equal("今天要完成什么？", status.Greeting);
         Assert.Contains("读取项目上下文", status.SubGreeting);
@@ -90,10 +86,8 @@ public class AppStatusViewModelTests : IDisposable
         var notifications = new List<string>();
         status.PropertyChanged += (_, e) => notifications.Add(e.PropertyName ?? "");
 
-        sidebar.Refresh([new ProjectWorkspace
-        {
-            Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha")
-        }]);
+        sidebar.Refresh([new WorkspaceProject {
+            Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"}]);
 
         // Should have re-raised HasProject + Greeting + SubGreeting.
         // The first 3 notifications are from OnSidebarProjectsChanged

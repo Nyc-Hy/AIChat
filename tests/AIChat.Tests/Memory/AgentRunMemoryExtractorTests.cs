@@ -9,7 +9,7 @@ public sealed class AgentRunMemoryExtractorTests
     [Fact]
     public void Extract_CreatesProjectTaskAndToolMemoriesForCompletedRun()
     {
-        var conversation = new Conversation { Id = "c1", Title = "Test" };
+        var conversation = new Project { Id = "c1", Title = "Test" };
         conversation.Messages.Add(new ChatMessage
         {
             ConversationId = conversation.Id,
@@ -51,7 +51,7 @@ public sealed class AgentRunMemoryExtractorTests
     [Fact]
     public void Extract_DoesNotAutoStoreUserPreferenceCandidate()
     {
-        var conversation = new Conversation { Id = "c1", Title = "Test" };
+        var conversation = new Project { Id = "c1", Title = "Test" };
         conversation.Messages.Add(new ChatMessage
         {
             ConversationId = conversation.Id,
@@ -75,7 +75,7 @@ public sealed class AgentRunMemoryExtractorTests
     [Fact]
     public void Extract_CreatesToolMemoryForFailedVerificationRun()
     {
-        var conversation = new Conversation { Id = "c1", Title = "Test" };
+        var conversation = new Project { Id = "c1", Title = "Test" };
         var run = new AgentRun
         {
             Id = "r1",
@@ -108,7 +108,7 @@ public sealed class AgentRunMemoryExtractorTests
     [Fact]
     public void Extract_SkipsIncompleteRunsAndSecrets()
     {
-        var conversation = new Conversation { Id = "c1", Title = "Test" };
+        var conversation = new Project { Id = "c1", Title = "Test" };
         var run = new AgentRun
         {
             Id = "r1",

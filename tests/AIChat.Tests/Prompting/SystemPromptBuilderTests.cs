@@ -68,30 +68,11 @@ public sealed class SystemPromptBuilderTests
         Assert.Contains("先调用 update_plan 创建计划", prompt);
     }
 
-    [Fact]
-    public void Build_IncludesDeepSeekInstructions_WhenProviderIsDeepSeek()
-    {
-        var prompt = new SystemPromptBuilder().Build(new SystemPromptContext
-        {
-            ProviderId = "deepseek",
-            EnabledToolIds = ["read_file"]
-        });
-
-        Assert.Contains("DeepSeek 模型提示", prompt);
-        Assert.Contains("思考模式", prompt);
-        Assert.Contains("推理强度", prompt);
-    }
-
-    [Fact]
-    public void Build_ExcludesDeepSeekInstructions_WhenProviderIsMiMo()
-    {
-        var prompt = new SystemPromptBuilder().Build(new SystemPromptContext
-        {
-            ProviderId = "tokenplan-mimo",
-            EnabledToolIds = ["read_file"]
-        });
-
-        Assert.DoesNotContain("DeepSeek 模型提示", prompt);
-    }
+    // 2026-08-02: the per-provider prompt section
+    // (`AppendProviderSpecificInstructions`) is gone — AIChat ships
+    // with MiniMax only, and the single MiniMax ModelProfile
+    // carries the per-provider guidance through
+    // `AppendModelProfile`. The two DeepSeek / MiMo tests above
+    // were retired with the prune.
 
 }

@@ -72,7 +72,7 @@ public class ProviderConfigViewModelTests
         Assert.Same(holder.Current, args.Settings);
 
         Mock.Get(repository).Verify(
-            repo => repo.SaveSettingsAsync(holder.Current, It.IsAny<CancellationToken>()),
+            repo => repo.SaveSettingsWithSecretsAsync(holder.Current, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

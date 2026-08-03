@@ -141,7 +141,10 @@ public class SlashCommandHandlerTests
         // 2026-08-03: title hit should be the top result, with
         // a '(标题命中)' excerpt so the user can tell at a
         // glance that the match was on the title, not the
-        // message body.
+        // message body. Per-test isolated data root so the
+        // SaveSessionsAsync write does not leak into other
+        // tests' view of the world.
+        using var isolatedRoot = new TestIsolatedDataRoot();
         using var host = AppHost.Build();
         var viewModel = host.GetRequiredService<MainWindowViewModel>();
         var session = new AIChat.Domain.Chat.Standalone
@@ -178,7 +181,10 @@ public class SlashCommandHandlerTests
         // the match (40 chars before / after, with … markers
         // when truncated), not the full message text. This
         // matters because a long assistant reply would
-        // otherwise dominate the result bubble.
+        // otherwise dominate the result bubble. Per-test
+        // isolated data root so SaveSessionsAsync write does
+        // not leak.
+        using var isolatedRoot = new TestIsolatedDataRoot();
         using var host = AppHost.Build();
         var viewModel = host.GetRequiredService<MainWindowViewModel>();
         var session = new AIChat.Domain.Chat.Standalone
@@ -210,5 +216,37 @@ public class SlashCommandHandlerTests
         // the row would dominate the bubble and obscure the
         // other hits.
         Assert.DoesNotContain(new string('a', 100), result.Body);
+    }
+
+    // 2026-08-03: per-test isolated data root. AppHost.Build
+    // does not set AICHAT_ISOLATED_DATA_ROOT, so the test
+    // would otherwise share the user's real settings.json
+    // with other test methods. Two /search tests that both
+    // call SaveSessionsAsync would race on the same file
+    // (one sees the other's session). The disposable
+    // isolated root solves both: each test gets a unique
+    // temp directory for AppRuntimeProfile.DataDirectory,
+    // restored when the test method returns.
+    private sealed class TestIsolatedDataRoot : IDisposable
+    {
+        private readonly string _previousRoot;
+
+        public TestIsolatedDataRoot()
+        {
+            _previousRoot = Environment.GetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT") ?? "";
+            var tempRoot = Path.Combine(
+                Path.GetTempPath(),
+                "aichat-slash-tests-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempRoot);
+            Environment.SetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT", tempRoot);
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT", _previousRoot);
+            // The temp directory is best-effort cleaned up by
+            // the OS temp cleaner; do not assert because a
+            // parallel run may still be reading it.
+        }
     }
 }

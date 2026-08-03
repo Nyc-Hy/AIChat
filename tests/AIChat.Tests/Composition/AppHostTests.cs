@@ -2,10 +2,11 @@ using AIChat.Abstractions.Llm;
 using AIChat.Abstractions.Persistence;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
+using AIChat.App.Avalonia.Views;
+using AIChat.Application.Artifacts;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
-using AIChat.Providers.Anthropic;
 using AIChat.Providers.OpenAI;
 using AIChat.Storage.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,15 +39,19 @@ public class AppHostTests
     }
 
     [Fact]
-    public void Build_RegistersBothProviderAdapters()
+    public void Build_RegistersOpenAICompatibleAdapter()
     {
+        // 2026-08-02: AIChat ships with MiniMax only, so the routed
+        // chat completion service gets a single OpenAI-compatible
+        // adapter (MiniMax is OpenAI-protocol). The previous
+        // "RegistersBothProviderAdapters" test (OpenAI + Anthropic)
+        // was retired when the Anthropic provider was removed.
         using var host = AppHost.Build();
 
         var providers = host.GetServices<IChatProvider>().ToList();
 
-        Assert.Equal(2, providers.Count);
+        Assert.Single(providers);
         Assert.Contains(providers, item => item is OpenAICompatibleChatProvider);
-        Assert.Contains(providers, item => item is AnthropicChatProvider);
     }
 
     [Fact]
@@ -125,6 +130,13 @@ public class AppHostTests
     [InlineData(typeof(ToolApprovalViewModel))]
     [InlineData(typeof(MemoryEditorViewModel))]
     [InlineData(typeof(GitStatusViewModel))]
+    [InlineData(typeof(PluginsViewModel))]
+    [InlineData(typeof(AIChat.Application.Plugins.IPluginRegistry))]
+    [InlineData(typeof(ScheduledViewModel))]
+    [InlineData(typeof(AIChat.Application.Scheduled.IScheduledTaskRegistry))]
+    [InlineData(typeof(SitesViewModel))]
+    [InlineData(typeof(AIChat.Application.Sites.ISiteRegistry))]
+    [InlineData(typeof(InputArtifactFileStore))]
     [InlineData(typeof(IApprovalService))]
     [InlineData(typeof(IThemeService))]
     [InlineData(typeof(IToastService))]
@@ -133,6 +145,7 @@ public class AppHostTests
     [InlineData(typeof(AvaloniaClipboardService))]
     [InlineData(typeof(IClipboardService))]
     [InlineData(typeof(MainWindowViewModel))]
+    [InlineData(typeof(AIChat.Application.BackgroundProcesses.IBackgroundProcessSupervisor))]
     public void Build_ResolvesTopLevelService(Type serviceType, bool expectMultiple = false)
     {
         using var host = AppHost.Build();

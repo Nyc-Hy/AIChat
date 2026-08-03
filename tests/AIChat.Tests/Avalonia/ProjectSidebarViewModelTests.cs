@@ -30,7 +30,7 @@ public class ProjectSidebarViewModelTests : IDisposable
     {
         var (vm, _, _) = CreateViewModel();
 
-        vm.Refresh(Array.Empty<ProjectWorkspace>());
+        vm.Refresh(Array.Empty<WorkspaceProject>());
 
         Assert.Null(vm.CurrentProject);
         Assert.Equal("未选择项目", vm.SelectedProjectName);
@@ -41,8 +41,8 @@ public class ProjectSidebarViewModelTests : IDisposable
     public void Refresh_WithProjects_PicksFirstNonEmptyAsCurrent()
     {
         var (vm, _, _) = CreateViewModel();
-        var first = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
-        var second = new ProjectWorkspace { Id = "b", Name = "Beta", Path = Path.Combine(_tempRoot, "beta") };
+        var first = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"};
+        var second = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "beta") }], PrimaryFolderId = "f1"};
 
         vm.Refresh([first, second]);
 
@@ -55,9 +55,9 @@ public class ProjectSidebarViewModelTests : IDisposable
     public async Task SelectProject_WithKnownId_PersistsLastActiveAndRaisesEvent()
     {
         var (vm, repository, holder) = CreateViewModel();
-        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
-        var beta = new ProjectWorkspace { Id = "b", Name = "Beta", Path = Path.Combine(_tempRoot, "beta") };
-        Mock.Get(repository).Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"};
+        var beta = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "beta") }], PrimaryFolderId = "f1"};
+        Mock.Get(repository).Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { alpha, beta });
 
         var captured = new List<ProjectSelectionChangedEventArgs>();
@@ -76,8 +76,8 @@ public class ProjectSidebarViewModelTests : IDisposable
     public async Task SelectProject_WithUnknownId_DoesNothing()
     {
         var (vm, repository, _) = CreateViewModel();
-        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
-        Mock.Get(repository).Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"};
+        Mock.Get(repository).Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { alpha });
 
         await vm.SelectProjectCommand.ExecuteAsync("nonexistent");
@@ -106,8 +106,8 @@ public class ProjectSidebarViewModelTests : IDisposable
         var (vm, repository, holder) = CreateViewModel();
         var alphaDir = Path.Combine(_tempRoot, "alpha");
         Directory.CreateDirectory(alphaDir);
-        Mock.Get(repository).Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ProjectWorkspace>());
+        Mock.Get(repository).Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<WorkspaceProject>());
 
         var captured = new List<ProjectAddedEventArgs>();
         vm.ProjectAdded += (_, args) => captured.Add(args);
@@ -118,21 +118,21 @@ public class ProjectSidebarViewModelTests : IDisposable
         Assert.True(args.Succeeded);
         Assert.NotNull(args.Project);
         Assert.Equal("alpha", args.Project!.Name);
-        Assert.Equal(alphaDir, args.Project.Path);
+        Assert.Equal(alphaDir, args.Project.TryGetPrimaryPath());
         Assert.Same(args.Project, vm.CurrentProject);
         Assert.Equal(args.Project.Id, holder.Current.LastActiveProjectId);
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(It.IsAny<List<ProjectWorkspace>>(), It.IsAny<CancellationToken>()), Times.Once);
+        Mock.Get(repository).Verify(repo => repo.SaveWorkspacesAsync(It.IsAny<List<WorkspaceProject>>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task RemoveProject_RemovesFromListAndSaves()
     {
-        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = "/tmp/alpha" };
-        var beta = new ProjectWorkspace { Id = "b", Name = "Beta", Path = "/tmp/beta" };
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
+        var beta = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/beta" }], PrimaryFolderId = "f1"};
         var (vm, repository, holder) = CreateViewModel();
         Mock.Get(repository)
-            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
+            .Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(new[] { alpha, beta });
         holder.Current.LastActiveProjectId = "a";
         vm.Refresh([alpha, beta]);
@@ -146,8 +146,8 @@ public class ProjectSidebarViewModelTests : IDisposable
         Assert.Single(vm.Projects);
         Assert.Equal("b", vm.Projects[0].Id);
         Assert.Equal("", holder.Current.LastActiveProjectId);
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.Is<List<ProjectWorkspace>>(list => list.Count == 1 && list[0].Id == "b"),
+        Mock.Get(repository).Verify(repo => repo.SaveWorkspacesAsync(
+            It.Is<List<WorkspaceProject>>(list => list.Count == 1 && list[0].Id == "b"),
             It.IsAny<CancellationToken>()), Times.Once);
         var args = Assert.Single(captured);
         Assert.Contains("Alpha", args.StatusMessage);
@@ -158,13 +158,13 @@ public class ProjectSidebarViewModelTests : IDisposable
     {
         var (vm, repository, _) = CreateViewModel();
         Mock.Get(repository)
-            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new[] { new ProjectWorkspace { Id = "a", Name = "Alpha", Path = "/tmp/alpha" } });
+            .Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"} });
 
         await vm.RemoveProjectCommand.ExecuteAsync("nope");
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Mock.Get(repository).Verify(repo => repo.SaveWorkspacesAsync(
+            It.IsAny<List<WorkspaceProject>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -173,13 +173,13 @@ public class ProjectSidebarViewModelTests : IDisposable
     {
         var (vm, repository, _) = CreateViewModel();
         Mock.Get(repository)
-            .Setup(repo => repo.LoadProjectsAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Array.Empty<ProjectWorkspace>());
+            .Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<WorkspaceProject>());
 
         await vm.RemoveProjectCommand.ExecuteAsync("");
 
-        Mock.Get(repository).Verify(repo => repo.SaveProjectsAsync(
-            It.IsAny<List<ProjectWorkspace>>(),
+        Mock.Get(repository).Verify(repo => repo.SaveWorkspacesAsync(
+            It.IsAny<List<WorkspaceProject>>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -195,8 +195,8 @@ public class ProjectSidebarViewModelTests : IDisposable
         // (including the null → real-project one on cold start), so
         // this test pins the post-fix behavior.
         var (vm, _, _) = CreateViewModel();
-        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
-        var beta = new ProjectWorkspace { Id = "b", Name = "Beta", Path = Path.Combine(_tempRoot, "beta") };
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"};
+        var beta = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "beta") }], PrimaryFolderId = "f1"};
         var captured = new List<ProjectSelectionChangedEventArgs>();
         vm.ProjectSelected += (_, args) => captured.Add(args);
 
@@ -215,7 +215,7 @@ public class ProjectSidebarViewModelTests : IDisposable
         // happens to land on the same CurrentProject. ReferenceEquals
         // guard inside ApplyProject prevents this.
         var (vm, _, _) = CreateViewModel();
-        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"};
         var captured = new List<ProjectSelectionChangedEventArgs>();
         vm.Refresh([alpha]);
         vm.ProjectSelected += (_, args) => captured.Add(args);
@@ -236,12 +236,12 @@ public class ProjectSidebarViewModelTests : IDisposable
         // hint instead of stale data. Pre-fix this transition was
         // silent because ApplyProject never fired on the null path.
         var (vm, _, _) = CreateViewModel();
-        var alpha = new ProjectWorkspace { Id = "a", Name = "Alpha", Path = Path.Combine(_tempRoot, "alpha") };
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = Path.Combine(_tempRoot, "alpha") }], PrimaryFolderId = "f1"};
         var captured = new List<ProjectSelectionChangedEventArgs>();
         vm.Refresh([alpha]);
         vm.ProjectSelected += (_, args) => captured.Add(args);
 
-        vm.Refresh(Array.Empty<ProjectWorkspace>());
+        vm.Refresh(Array.Empty<WorkspaceProject>());
 
         var args = Assert.Single(captured);
         Assert.Null(args.Project);

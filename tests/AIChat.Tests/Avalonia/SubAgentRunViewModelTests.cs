@@ -1,5 +1,6 @@
 using AIChat.App.Avalonia.ViewModels;
 using AIChat.Domain.Chat;
+using Avalonia.Media;
 
 namespace AIChat.Tests.Avalonia;
 
@@ -159,6 +160,37 @@ public class SubAgentRunViewModelTests
         Assert.Equal(isBudget, vm.IsBudgetExceeded);
         Assert.Equal(isCancelled, vm.IsCancelled);
         Assert.Equal(isSkipped, vm.IsSkipped);
+    }
+
+    [Theory]
+    [InlineData("Completed", "#5cd6a8")]
+    [InlineData("Failed", "#ff6b6b")]
+    [InlineData("Running", "#f5a623")]
+    [InlineData("Cancelled", "#9aa0a6")]
+    [InlineData("Skipped", "#9aa0a6")]
+    [InlineData("BudgetExceeded", "#9aa0a6")]
+    [InlineData("SomethingUnknown", "#9aa0a6")]
+    public void StatusBrush_TracksStateOutcomeWithFixedPalette(
+        string status, string expectedRgb)
+    {
+        // The per-row status dot in the Environment panel uses
+        // StatusBrush (a small fixed palette: green / red / amber /
+        // grey) so the user can scan the panel and read state from
+        // colour, not from reading the label. Pin the mapping so
+        // a future tweak of the palette doesn't drift without a
+        // failing test. SolidColorBrush's Color serialises with an
+        // explicit alpha prefix; we compare the RGB half (drop the
+        // leading "ff") so the test stays focused on the palette
+        // value rather than the alpha channel (which is always
+        // fully-opaque for these dots).
+        var run = NewRun(templateId: "explorer", task: "x");
+        run.Status = status;
+        var vm = new SubAgentRunViewModel(run);
+
+        var brush = (SolidColorBrush)vm.StatusBrush;
+        var actualHex = brush.Color.ToString().ToLowerInvariant();
+        // "#ffaabbcc" → "#aabbcc" (drop leading alpha).
+        Assert.Equal("#" + actualHex[(actualHex.Length - 6)..], expectedRgb);
     }
 
     private static AgentSubAgentRun NewRun(string templateId, string task, DateTimeOffset? startedAt = null, string summary = "")
