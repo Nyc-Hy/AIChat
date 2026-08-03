@@ -6,7 +6,18 @@ namespace AIChat.Application.Prompting;
 
 public sealed class SystemPromptContext
 {
-    public string ProviderId { get; init; } = "tokenplan-mimo";
+    // 2026-08-02: catalog is MiniMax only. The default here is
+    // just a shape placeholder — callers (AgentRunner / harness)
+    // pass the real provider id from AppSettings at build time.
+    // The legacy "tokenplan-mimo" string is no longer recognised
+    // by ChatProviderCatalog.Resolve (it falls through to MiniMax
+    // via the catalog's unknown-input fallback), so an unwritten
+    // default that landed here would silently look up the
+    // MiniMax ModelProfile. That's the right outcome, but having
+    // the default say "minimax" matches the rest of the codebase
+    // (AppSettings, JsonAppRepository.CreateInitialSettings) and
+    // keeps grep results clean.
+    public string ProviderId { get; init; } = "minimax";
     public string ProjectName { get; init; } = "AIChat";
     public string ProjectPath { get; init; } = "";
     public string ProjectLoadSnapshot { get; init; } = "";

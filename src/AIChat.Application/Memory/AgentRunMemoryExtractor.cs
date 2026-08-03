@@ -5,7 +5,7 @@ namespace AIChat.Application.Memory;
 
 public sealed class AgentRunMemoryExtractor
 {
-    public IReadOnlyList<MemoryCandidate> Extract(Conversation conversation, AgentRun run)
+    public IReadOnlyList<MemoryCandidate> Extract(ChatSession conversation, AgentRun run)
     {
         var failedVerifications = run.Verifications
             .Where(verification => !verification.IsSuccess)
@@ -110,7 +110,7 @@ public sealed class AgentRunMemoryExtractor
             .ToList();
     }
 
-    private static IEnumerable<MemoryCandidate> ExtractUserPreferenceCandidates(Conversation conversation, AgentRun run, string source)
+    private static IEnumerable<MemoryCandidate> ExtractUserPreferenceCandidates(ChatSession conversation, AgentRun run, string source)
     {
         var userMessages = conversation.Messages
             .Where(message => message.Role == ChatRole.User)

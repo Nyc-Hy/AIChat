@@ -1,8 +1,16 @@
-using System.Net.Http.Headers;
 using AIChat.Abstractions.Llm;
 
 namespace AIChat.Application.Llm.Routing;
 
+// Sends a "GET /models" probe against the configured provider's
+// BaseUrl to confirm the API key + endpoint shape are wired up
+// correctly. 2026-08-02: collapsed to OpenAI-compatible auth —
+// the catalog is MiniMax-only and MiniMax uses the OpenAI
+// protocol, so the Anthropic branch (x-api-key + anthropic-version
+// headers, /v1/models endpoint shape) that used to live here
+// is dead. Removing it keeps the tester honest: there's no
+// branch that claims to test a protocol the catalog no longer
+// exposes.
 public sealed class ProviderConnectionTester
 {
     private readonly HttpClient _httpClient;
@@ -28,8 +36,11 @@ public sealed class ProviderConnectionTester
         var template = ChatProviderCatalog.Resolve(provider.TemplateId);
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, BuildModelsEndpoint(template, provider.BaseUrl));
-            ApplyAuthHeaders(request, template, provider.ApiKey);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"{provider.BaseUrl.TrimEnd('/')}/models");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer", provider.ApiKey);
             using var response = await _httpClient.SendAsync(request, cancellationToken);
             if (response.IsSuccessStatusCode)
             {
@@ -44,25 +55,5 @@ public sealed class ProviderConnectionTester
         {
             return ProviderConnectionTestResult.Failure(ProviderErrorClassifier.FromException(ex, template.Name));
         }
-    }
-
-    private static string BuildModelsEndpoint(LlmProviderInfo template, string baseUrl)
-    {
-        var trimmed = baseUrl.TrimEnd('/');
-        return string.Equals(template.ProtocolId, "anthropic", StringComparison.OrdinalIgnoreCase)
-            ? $"{trimmed}/v1/models"
-            : $"{trimmed}/models";
-    }
-
-    private static void ApplyAuthHeaders(HttpRequestMessage request, LlmProviderInfo template, string apiKey)
-    {
-        if (string.Equals(template.ProtocolId, "anthropic", StringComparison.OrdinalIgnoreCase))
-        {
-            request.Headers.Add("x-api-key", apiKey);
-            request.Headers.Add("anthropic-version", "2023-06-01");
-            return;
-        }
-
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
     }
 }

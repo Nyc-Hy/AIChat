@@ -118,7 +118,11 @@ public sealed class SystemPromptBuilder
         AppendInputArtifacts(builder, context.InputArtifactRefs);
         AppendModelProfile(builder, context);
 
-        AppendProviderSpecificInstructions(builder, context.ProviderId);
+        // Per-provider prompt sections used to live here (DeepSeek
+        // thinking guidance, etc.). After the 2026-08-02 catalog
+        // prune, AIChat ships with MiniMax only and the catalog's
+        // single ModelProfile carries the per-provider guidance
+        // through AppendModelProfile above. No more branches here.
 
         return builder.ToString().Trim();
     }
@@ -192,19 +196,6 @@ public sealed class SystemPromptBuilder
         if (!string.IsNullOrWhiteSpace(value))
         {
             builder.AppendLine($"- {title}：{value.Trim()}");
-        }
-    }
-
-    private static void AppendProviderSpecificInstructions(StringBuilder builder, string providerId)
-    {
-        if (string.Equals(providerId, "deepseek", StringComparison.OrdinalIgnoreCase))
-        {
-            builder.AppendLine();
-            builder.AppendLine("DeepSeek 模型提示：");
-            builder.AppendLine("- 复杂推理、多步代码重构、算法设计等任务，建议启用思考模式（thinking）以获得更准确的结果。");
-            builder.AppendLine("- 简单问答、文件读取、状态查询等轻量任务，关闭思考模式可显著提速。");
-            builder.AppendLine("- 代码修改任务建议推理强度设为 high，确保逻辑严谨。");
-            builder.AppendLine("- 工具调用时，JSON 参数尽量一次传完整，DeepSeek 对复杂嵌套 JSON 有良好支持。");
         }
     }
 }
