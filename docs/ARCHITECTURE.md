@@ -11,8 +11,8 @@
 │  Agent Harness · Tools · Prompting · Context     │
 │  Verification · Routing · Workspace              │
 ├─────────────────────────────────────────────────┤
-│  AIChat.Providers.OpenAI │ AIChat.Providers.Anthropic │
-│  Protocol Adapters (IChatProvider)               │
+│  AIChat.Providers.OpenAI (only adapter; catalog ships with MiniMax) │
+│  Protocol Adapter (IChatProvider)                                  │
 ├─────────────────────────────────────────────────┤
 │              AIChat.Abstractions                 │
 │  Contracts · DTOs · Configuration                │

@@ -1,5 +1,10 @@
 # AIChat 开发路线图
 
+> **Status: superseded.** 本文档保留作为历史参考。
+> 当前唯一权威规划入口是 **[`docs/CODEX_DESKTOP_PARITY_PLAN.md`](CODEX_DESKTOP_PARITY_PLAN.md)**（Codex Desktop 操作对等 12 Wave 计划），取代了 1.0 milestone 模型。
+> 工程分层、权限/审计/路径保护、Provider 适配等仍有效的工程约束（见 parity plan §1、§5.1）继续生效；`A2A` / `Multi-Agent Queue` / `Benchmark` 等"未来功能"已从主开发线下线（见 parity plan §5.4 "明确不做"）。
+> 日常开发以 [parity 追踪表](PARITY_TRACKING.md) 中每个 Feature ID 的状态为准。
+
 本文档是 AIChat 当前的规划入口。它取代了早期按阶段交接的旧说明；那些说明在早期开发中有帮助，但在优化工作完成后已经不再准确。
 
 ## 当前状态
@@ -9,7 +14,7 @@ AIChat 是一个基于 .NET 10 的跨平台 Avalonia 桌面编程助手。**桌�
 目前稳定基础包括：
 
 - Avalonia 主 UI、项目级会话、设置和持久化运行历史。
-- OpenAI-compatible 和 Anthropic Provider 适配器，包括 tool-call 请求/响应处理。
+- OpenAI-compatible Provider 适配器（MiniMax M3 是当前唯一 catalog 条目；自定义 base URL 可指向其他 OpenAI-compatible 端点）。Anthropic 适配器已在 1.0 Beta Provider prune 删除。
 - Agent Harness，支持模型/工具循环、规划、执行、验证、自动修复、重试和继续。
 - 内置工具：文件读写编辑、搜索、补丁、Git 操作、构建/测试和 Shell 执行。
 - 工具权限、项目级覆盖、审批流程、Shell 安全检查和项目路径保护。
@@ -30,7 +35,7 @@ AIChat 是一个基于 .NET 10 的跨平台 Avalonia 桌面编程助手。**桌�
 | 中 | 上下文质量 | 提升相关性评分、最近文件选择和增量索引，避免增加提示词噪声。 |
 | 中 | 可观测性 | 通过更清晰的运行摘要、审计分组和验证输出，让 Agent 失败更容易排查。 |
 | 中低 | 打包 | 在 framework-dependent 发布路径稳定后，改进安装包和发布体验。 |
-| 中 | 跨平台加密存储 | 在 macOS / Linux 上对本地 Provider API key 做加密保护（与 Windows DPAPI 对齐）。 |
+| 中 | 跨平台凭据验收 | Keychain / Secret Service 已接入；在发布机器验证保存、读取、删除及 session-only 降级。 |
 
 ## 未来功能
 
@@ -58,10 +63,10 @@ AIChat 是一个基于 .NET 10 的跨平台 Avalonia 桌面编程助手。**桌�
 
 Avalonia 是桌面主线。桌面体验应复用 `AIChat.Application` 能力，不把业务逻辑重新塞回 UI 层。
 
-### 跨平台加密存储
+### 跨平台凭据存储验收
 
-- 在 macOS / Linux 上为 Provider API key 引入加密 at-rest 保护（与 Windows DPAPI 对齐）。
-- 不改变 UI 行为；纯后端存储升级。
+- 在发布机器上验证 macOS Keychain / Linux Secret Service 的保存、读取和删除。
+- 验证凭据库不可用时只保留 session-only key、显示明确警告，并确保 settings.json 不出现明文。
 
 ## 开发原则
 

@@ -1,6 +1,11 @@
 # AIChat Product Scope
 
-AIChat is a Vibe Coding assistant optimised for third-party coding models — DeepSeek, MiMo, MiniMAX, OpenAI-compatible providers, and Anthropic-compatible providers.
+> **Status: superseded.** This document is preserved for historical reference only.
+> The current product scope, information architecture, and development waves are defined in **[`docs/CODEX_DESKTOP_PARITY_PLAN.md`](CODEX_DESKTOP_PARITY_PLAN.md)**, which is the single authoritative planning entry point.
+> Engineering constraints that remain valid (layered architecture, tool approval, path protection, secret redaction, etc.) are still enforced — see parity plan §1 and §5.1.
+> Do **not** make product decisions against this document; defer to the parity plan and the versioned [parity tracking table](PARITY_TRACKING.md).
+
+AIChat is a Vibe Coding assistant optimised for third-party coding models. 1.0 ships with a single provider, **MiniMax** (M3, OpenAI-compatible protocol); any other OpenAI-compatible endpoint (self-hosted proxies, internal mirrors) works by setting a custom `BaseUrl` in Settings.
 
 The product goal is not to expose every agent framework capability. The goal is a small, reliable, low-cost coding workbench that can replace a Claude Code style workflow for day-to-day repository work.
 
@@ -46,13 +51,11 @@ Fast and Deep modes exist for explicit user intent. Fast optimises for low cost 
 
 ## Supported Model Families
 
-1.0.0 includes first-class model profiles for:
+1.0.0 ships one first-class model profile:
 
-- DeepSeek
-- MiMo
-- MiniMAX
-- Generic OpenAI-compatible providers
-- Anthropic-compatible providers
+- **MiniMax (M3)** — short action loop, tight tool parameter convergence, 200K context.
+
+Earlier 0.5 shipped first-class profiles for DeepSeek, MiMo, MiniMax, generic OpenAI-compatible, and Anthropic-compatible providers. The 1.0 Beta Provider prune retired all but MiniMax; the OpenAI-compatible protocol is the only wire format. Self-hosted MiniMax-style endpoints work by setting a custom `BaseUrl` in Settings.
 
 Model profiles tune prompts and execution policy without adding provider-specific complexity to the main user flow.
 

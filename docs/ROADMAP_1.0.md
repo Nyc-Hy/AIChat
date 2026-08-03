@@ -1,5 +1,10 @@
 # AIChat 1.0 Roadmap
 
+> **Status: superseded.** This document is preserved for historical reference only.
+> The current development plan is the **12-wave Codex Desktop operational parity** plan in **[`docs/CODEX_DESKTOP_PARITY_PLAN.md`](CODEX_DESKTOP_PARITY_PLAN.md)**, which replaces the 1.0 milestone model with a parity-milestone model.
+> Release-blocking criteria (P0 / P1 / P2) live in parity plan §10. The versioned [parity tracking table](PARITY_TRACKING.md) records the live acceptance status of every first-level entry.
+> Do **not** plan releases against this document; defer to the parity plan.
+
 AIChat 1.0 should make the Avalonia desktop UI reliable enough for everyday Vibe Coding work across macOS, Linux, and Windows.
 
 The 1.0 goal is not a larger feature surface. The goal is a smaller, sharper assistant that is accurate, fast, low-cost, cache-friendly, and easy to diagnose.
@@ -21,8 +26,8 @@ Product decisions should follow the baseline in [PRODUCT_BASELINE.md](PRODUCT_BA
 
 ### 0.6.0 Context and Cache Discipline — done
 
-- `aichat context` for project context diagnostics. The diagnostics live in `AIChat.Application`; the desktop right-rail **Context preview** panel surfaces them.
-- Project snapshot, file index shape, context token budget, included files, omitted relevant files, verification commands, and cache hints all visible from the UI.
+- Project context diagnostics live in `AIChat.Application`; the desktop status bar surfaces the current budget and a compact explanatory tooltip.
+- Project snapshots, file indexes, included/omitted candidates, verification commands, and cache hints feed the agent without adding a permanent file-tree panel.
 - Context diagnostics are model-free and read-only.
 
 ### 0.7.0 Avalonia Daily Use — done
@@ -54,9 +59,9 @@ Product decisions should follow the baseline in [PRODUCT_BASELINE.md](PRODUCT_BA
 
 ### 1.0.0 Stable — remaining
 
-- End-to-end Avalonia UI smoke with a real provider (DeepSeek / MiMo / MiniMAX) on macOS, Linux, and Windows.
+- End-to-end Avalonia UI smoke with a real MiniMax provider on macOS, Linux, and Windows.
 - Linux x64 release archive smoke-tested on a real machine.
-- Encrypted API key storage on macOS and Linux (currently a "plain" marker; tracked as a post-1.0 follow-up if not landed before 1.0.0).
+- Verify macOS Keychain and Linux Secret Service on release machines, including the explicit session-only warning when a vault is unavailable.
 - A regression run on a real coding task (project context → task → tool approval → verification → summary) to confirm the agent loop holds in the UI on each platform.
 
 ## 1.0 Acceptance Bar
@@ -66,7 +71,7 @@ Product decisions should follow the baseline in [PRODUCT_BASELINE.md](PRODUCT_BA
 - Avalonia app starts and covers the primary coding workflow.
 - Avalonia shows explicit project, conversation, context size, run status, and session usage summaries.
 - The provider config card supports an end-to-end "save → test connection → send task" flow with a real provider.
-- DeepSeek, MiMo, MiniMAX, and generic OpenAI-compatible providers have explicit model profiles or safe fallbacks.
+- MiniMax (M3) has an explicit model profile; custom OpenAI-compatible endpoints (self-hosted proxies, internal mirrors) work by setting a custom `BaseUrl` in Settings.
 - macOS, Linux, and Windows release packages are smoke-tested.
 - Release artifacts include SHA-256 checksums.
 

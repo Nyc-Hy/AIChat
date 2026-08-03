@@ -9,10 +9,10 @@ AIChat 的上线目标是成为一个跨平台的 Vibe Coding 编程助手，主
 可上线版本聚焦 Avalonia 桌面应用：
 
 - 支持 macOS (Apple Silicon / Intel) / Linux x64 / Windows x64。
-- 支持 DeepSeek、MiMo、MiniMAX、OpenAI-compatible、Anthropic-compatible 等已登记 provider。
+- 仅 MiniMax provider（OpenAI-compatible 协议）。自定义 base URL 可指向其他 OpenAI-compatible 端点。
 - 支持项目初始化、Provider 配置、模型列表、Task 一次性 / 连续任务执行。
 - 支持 `Fast` / `Standard` / `Deep` 执行模式。
-- 支持 DeepSeek / MiMo / MiniMAX 的第一版 `ModelProfile`。
+- 支持 MiniMax (M3) 第一版 `ModelProfile`。
 - 支持 Provider readiness 验证（**Test connection** 按钮 → `ProviderConnectionTester`）。
 - 支持文件读取、搜索、编辑、补丁、Git、构建、测试和 Shell 工具。
 - 默认单 Agent loop，避免 planner、sub-agent、benchmark、memory、plugin/MCP 进入主路径。
@@ -38,7 +38,7 @@ AIChat 的上线目标是成为一个跨平台的 Vibe Coding 编程助手，主
 
 - Avalonia 桌面应用：开窗、侧边栏、Provider 配置、Tool approval、Activity 流、Session metrics、Theme 切换。
 - Provider readiness 验证（`Test connection`）。
-- macOS Apple Silicon 真机烟测：build 0 错 / 621/621 测试通过 / Avalonia app 启动成功。
+- macOS Apple Silicon 真机烟测：build / test 通过，Avalonia app 启动成功。
 - Windows x64 真机烟测：build 0 错 / Avalonia app 启动成功。
 - Avalonia 自包含 single-file publish（osx-arm64 / linux-x64 / win-x64 都能产出）。
 - 发布包 SHA-256 校验文件流程。
@@ -52,16 +52,16 @@ AIChat 的上线目标是成为一个跨平台的 Vibe Coding 编程助手，主
 
 ## 1.0 Beta 之后（1.0.0 GA 收尾）
 
-- Avalonia 端到端冒烟：真实 provider（DeepSeek / MiMo / MiniMAX）走完"添加项目 → 配置 Provider → 发送任务 → Tool approval → 完成"全流程。
+- Avalonia 端到端冒烟：真实 MiniMax provider 走完"添加项目 → 配置 Provider → 发送任务 → Tool approval → 完成"全流程。
 - Linux x64 真机烟测。
-- macOS / Linux 上 Provider API key 加密 at-rest（与 Windows DPAPI 对齐）。
+- macOS Keychain / Linux Secret Service 已接入；在发布机器完成保存、读取、删除与 session-only 降级验收。
 - 真实 coding 任务回归：项目上下文 → 任务 → 工具审批 → 验证 → 总结，确认 agent loop 在桌面 UI 上每平台都成立。
 
 ## 之后版本
 
 1.0.0 之后按 [1.0 路线图](ROADMAP_1.0.md) 和 [开发路线图](REMAINING_DEVELOPMENT_PLAN.md) 推进：
 
-1. **跨平台加密存储**：macOS / Linux Provider API key 加密。
+1. **跨平台凭据验收**：在 macOS / Linux 发布机器验证已实现的 Keychain / Secret Service 集成。
 2. **上下文工程增强**：增量索引、相关文件智能评分。
 3. **MCP Client 集成**：通过 `IExternalToolProvider` 接入 MCP Server 工具。
 4. **可观测性**：运行摘要、审计分组、验证输出更清晰。
