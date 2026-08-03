@@ -6,7 +6,7 @@ namespace AIChat.Application.Agents;
 
 public sealed record AgentHarnessRunRequest
 {
-    public required Conversation Conversation { get; init; }
+    public required ChatSession Conversation { get; init; }
     public required string UserMessageId { get; init; }
     public required string AssistantMessageId { get; init; }
     public required string Goal { get; init; }

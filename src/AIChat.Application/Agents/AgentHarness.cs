@@ -47,8 +47,8 @@ public sealed partial class AgentHarness
         _executionPolicyBuilder = executionPolicyBuilder ?? new AgentTaskExecutionPolicyBuilder();
     }
 
-    // Per-run step counter. Starts at 1 (the first emitted step
-    // is number 1) and is bumped after each step is added. The
+    // Per-run step counter. Starts at 0 because each call site uses a
+    // pre-increment; the first emitted step is therefore number 1. The
     // counter is a private instance field rather than a local in
     // RunAsync because the eventual plan is to extract each
     // phase (planner / context / sub-agent / tool-loop) into its
@@ -58,7 +58,7 @@ public sealed partial class AgentHarness
     // is constructed per-run (AgentRunnerViewModel.cs new's one
     // harness per user message), so this field is never
     // concurrent across runs.
-    private int _nextStepNumber = 1;
+    private int _nextStepNumber;
 
     // Per-run execution request. Starts as the user-supplied
     // ChatRequest, then gets re-Appended to with a synthetic
@@ -265,6 +265,30 @@ public sealed partial class AgentHarness
                     })
                     .ToList();
 
+                // Surface real running rows before awaiting the layer.
+                // Each request carries the same id the scheduler will
+                // use for its completed result, so the UI can upsert the
+                // row instead of briefly creating a second sub-agent.
+                foreach (var subAgentRequest in requests)
+                {
+                    var runningRecord = ToAgentSubAgentRun(new SubAgentRun
+                    {
+                        Id = subAgentRequest.RunId,
+                        ParentRunId = subAgentRequest.ParentRunId,
+                        TemplateId = subAgentRequest.TemplateId,
+                        Task = subAgentRequest.Task,
+                        ContextPack = subAgentRequest.ContextPack,
+                        MaxToolCalls = subAgentRequest.MaxToolCalls
+                    });
+                    run.SubAgentRuns.Add(runningRecord);
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.SubAgentStarted,
+                        Run = run,
+                        SubAgentRun = runningRecord
+                    };
+                }
+
                 SubAgentRun[] results;
                 try
                 {
@@ -279,6 +303,7 @@ public sealed partial class AgentHarness
                     results = requests
                         .Select(request => new SubAgentRun
                         {
+                            Id = request.RunId,
                             ParentRunId = request.ParentRunId,
                             TemplateId = request.TemplateId,
                             Task = request.Task,
@@ -295,13 +320,15 @@ public sealed partial class AgentHarness
                 foreach (var (decision, subAgentRun) in layer.Zip(results))
                 {
                     var runRecord = ToAgentSubAgentRun(subAgentRun);
-                    run.SubAgentRuns.Add(runRecord);
-                    yield return new AgentHarnessEvent
+                    var runRecordIndex = run.SubAgentRuns.FindIndex(item => item.Id == runRecord.Id);
+                    if (runRecordIndex >= 0)
                     {
-                        Type = AgentHarnessEventType.SubAgentStarted,
-                        Run = run,
-                        SubAgentRun = runRecord
-                    };
+                        run.SubAgentRuns[runRecordIndex] = runRecord;
+                    }
+                    else
+                    {
+                        run.SubAgentRuns.Add(runRecord);
+                    }
                     var subAgentStep = AddCompletedStep(
                         run,
                         ++_nextStepNumber,
@@ -534,6 +561,27 @@ public sealed partial class AgentHarness
                         if (run.ToolBudgetExceeded)
                         {
                             await foreach (var evt in EmitTerminalAsync(run, "工具预算已用完，任务已暂停。", "预算暂停", AgentRunStatus.BudgetExceeded, isBudgetExceeded: true))
+                            {
+                                yield return evt;
+                            }
+                            yield break;
+                        }
+
+                        if (run.Status is AgentRunStatus.Cancelled or AgentRunStatus.Failed)
+                        {
+                            var terminalStatus = run.Status;
+                            var terminalTitle = terminalStatus == AgentRunStatus.Cancelled
+                                ? "自动修复已取消"
+                                : "自动修复失败";
+                            var terminalMessage = string.IsNullOrWhiteSpace(run.CompletionReason)
+                                ? terminalTitle
+                                : run.CompletionReason;
+                            await foreach (var evt in EmitTerminalAsync(
+                                               run,
+                                               terminalMessage,
+                                               terminalTitle,
+                                               terminalStatus,
+                                               isBudgetExceeded: false))
                             {
                                 yield return evt;
                             }

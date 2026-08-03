@@ -18,7 +18,7 @@ namespace AIChat.Application.Agents;
 
 public sealed record AgentRequestBuildRequest
 {
-    public required Conversation Conversation { get; init; }
+    public required ChatSession Conversation { get; init; }
     public required string AssistantMessageId { get; init; }
     public required AppSettings EffectiveSettings { get; init; }
     public required AppSettings RuntimeSettings { get; init; }
@@ -219,7 +219,7 @@ public sealed class AgentRequestFactory
     }
 
     public static AgentRequestSnapshot CreateSnapshot(
-        Conversation conversation,
+        ChatSession conversation,
         string assistantMessageId,
         AppSettings effectiveSettings,
         AppSettings runtimeSettings,
@@ -280,7 +280,7 @@ public sealed class AgentRequestFactory
                 : Convert.FromBase64String(part.DataBase64).Length);
     }
 
-    private static IReadOnlyList<ChatMessage> GetRequestMessages(Conversation conversation, string assistantMessageId)
+    private static IReadOnlyList<ChatMessage> GetRequestMessages(ChatSession conversation, string assistantMessageId)
     {
         return conversation.Messages
             .Where(message => message.Id != assistantMessageId &&
@@ -324,13 +324,18 @@ public sealed class AgentRequestFactory
 
     private static string BuildProjectLoadSnapshotFallback(AgentRequestBuildRequest request, string projectPath)
     {
-        var snapshot = ProjectLoadSnapshotBuilder.Build(new ProjectWorkspace
+        // 构造一个 fallback WorkspaceProject + 单 session 列表给 snapshot builder。
+        // fallback 路径通常意味着 caller 没传 ProjectLoadSnapshot（罕见），用
+        // 一个最小 WorkspaceProject 触发和真实路径一样的健康/画像/活动输出。
+        var folderId = Guid.NewGuid().ToString("N");
+        var fakeWorkspace = new WorkspaceProject
         {
             Name = string.IsNullOrWhiteSpace(request.ProjectName) ? "AIChat" : request.ProjectName,
-            Path = projectPath,
-            Conversations = [request.Conversation],
+            Folders = [new WorkspaceFolder { Id = folderId, Path = projectPath }],
+            PrimaryFolderId = folderId,
             VerificationCommands = request.VerificationCommands.ToList()
-        });
+        };
+        var snapshot = ProjectLoadSnapshotBuilder.Build(fakeWorkspace, [request.Conversation]);
         return string.Join(Environment.NewLine, [
             snapshot.HealthText,
             snapshot.ProfileText,

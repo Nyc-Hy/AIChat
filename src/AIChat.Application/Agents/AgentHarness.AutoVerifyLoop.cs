@@ -17,8 +17,9 @@ namespace AIChat.Application.Agents;
 // corresponding IAgentTool, records a verification result, and
 // on failure builds a synthetic "verification failed, please
 // fix" message that gets fed back to the main model for
-// another fix round. The loop runs up to context.MaxAutoFixRounds
-// times and terminates via yield break on Cancelled /
+// another fix round. Verification always runs once; MaxAutoFixRounds
+// limits only the number of repair attempts after that first pass.
+// The loop terminates via yield break on Cancelled /
 // BudgetExceeded / Error. Pulled out of the main file because
 // it was 220 lines of dense switch / event-stream handling that
 // distracted from reading the run loop above it.
@@ -32,8 +33,8 @@ public sealed partial class AgentHarness
         AgentRunContext context,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var maxRounds = context.MaxAutoFixRounds;
-        for (var round = 0; round < maxRounds; round++)
+        var maxFixRounds = Math.Max(0, context.MaxAutoFixRounds);
+        for (var verificationAttempt = 0; verificationAttempt <= maxFixRounds; verificationAttempt++)
         {
             var allPassed = true;
             var failureMessages = new List<string>();
@@ -44,10 +45,58 @@ public sealed partial class AgentHarness
                 var tool = CreateVerificationTool(toolName);
                 if (tool is null)
                 {
+                    var blockedMessage = "该验证命令不在安全允许列表中，未执行。";
+                    var blockedCallId = $"auto-verify-{run.Id}-{verificationAttempt}-{cmd.Id}";
+                    var blockedStep = AddRunningStep(
+                        run,
+                        run.Steps.Count + 1,
+                        AgentStepType.ToolCall,
+                        $"自动验证：{cmd.Name}",
+                        cmd.Command,
+                        blockedCallId,
+                        "verification_blocked");
+                    blockedStep.Output = blockedMessage;
+                    blockedStep.IsError = true;
+                    blockedStep.Status = AgentStepStatus.Failed;
+                    blockedStep.CompletedAt = DateTimeOffset.Now;
+                    stepByToolCallId[blockedCallId] = blockedStep;
+                    run.Verifications.Add(new AgentVerification
+                    {
+                        RunId = run.Id,
+                        StepId = blockedStep.Id,
+                        ToolCallId = blockedCallId,
+                        ToolName = "verification_blocked",
+                        Command = cmd.Command,
+                        ExitCode = 1,
+                        IsSuccess = false,
+                        Output = blockedMessage,
+                        Summary = "验证命令已阻止",
+                        CreatedAt = DateTimeOffset.Now
+                    });
+                    allPassed = false;
+                    failureMessages.Add($"[{cmd.Name}] {blockedMessage}");
+                    yield return new AgentHarnessEvent
+                    {
+                        Type = AgentHarnessEventType.ToolResult,
+                        Run = run,
+                        Step = blockedStep,
+                        ToolCall = new ChatToolCall
+                        {
+                            Id = blockedCallId,
+                            Name = "verification_blocked",
+                            ArgumentsJson = cmd.Command
+                        },
+                        ToolResult = new AgentToolResult
+                        {
+                            ToolName = "verification_blocked",
+                            IsError = true,
+                            Content = blockedMessage
+                        }
+                    };
                     continue;
                 }
 
-                var toolCallId = $"auto-verify-{run.Id}-{round}-{cmd.Id}";
+                var toolCallId = $"auto-verify-{run.Id}-{verificationAttempt}-{cmd.Id}";
                 var argsJson = BuildVerificationArgsJson(cmd, toolName);
                 var preview = await tool.PreviewAsync(argsJson, CreateToolContext(context), cancellationToken);
 
@@ -98,6 +147,20 @@ public sealed partial class AgentHarness
 
             if (allPassed)
             {
+                yield break;
+            }
+
+            if (verificationAttempt >= maxFixRounds)
+            {
+                run.CompletionReason = maxFixRounds == 0
+                    ? "自动验证失败，未配置自动修复轮次。"
+                    : $"自动验证在 {maxFixRounds} 轮修复后仍未通过。";
+                yield return new AgentHarnessEvent
+                {
+                    Type = AgentHarnessEventType.ContentDelta,
+                    Run = run,
+                    Content = run.CompletionReason
+                };
                 yield break;
             }
 
@@ -223,14 +286,17 @@ public sealed partial class AgentHarness
                         break;
                     case AgentRunEventType.BudgetExceeded:
                         run.ToolBudgetExceeded = true;
+                        run.Status = AgentRunStatus.BudgetExceeded;
                         run.CompletionReason = "自动修复阶段已达到工具调用轮数上限。";
                         yield break;
                     case AgentRunEventType.Cancelled:
+                        run.Status = AgentRunStatus.Cancelled;
                         run.CompletionReason = string.IsNullOrWhiteSpace(fixEvent.Content)
                             ? "自动修复阶段已取消。"
                             : SensitiveDataRedactor.RedactText(fixEvent.Content);
                         yield break;
                     case AgentRunEventType.Error:
+                        run.Status = AgentRunStatus.Failed;
                         run.CompletionReason = string.IsNullOrWhiteSpace(fixEvent.Content)
                             ? "自动修复阶段失败。"
                             : SensitiveDataRedactor.RedactText(fixEvent.Content);

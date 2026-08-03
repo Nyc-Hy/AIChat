@@ -31,8 +31,12 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
     public bool CanHandle(AppSettings settings)
     {
-        // Match by either product provider ID or lower-level protocol ID. This is
-        // why TokenPlan MIMO can reuse this adapter.
+        // Match by either product provider ID or lower-level protocol ID. The
+        // protocol match is what lets MiniMax (the only ship target after
+        // the 2026-08-02 catalog prune) reuse this adapter — MiniMax is
+        // OpenAI-protocol, the Info.Id check covers it for settings that
+        // carry the canonical "minimax" provider id, and the ProtocolId
+        // check covers any legacy settings that pre-date the prune.
         return string.Equals(settings.ProviderId, Info.Id, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(settings.ProtocolId, Info.ProtocolId, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(settings.ProviderName, Info.Name, StringComparison.OrdinalIgnoreCase);
@@ -115,12 +119,12 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
         // SSE frames may span multiple lines. Accumulate data: lines until a
         // blank line, then parse the complete event.
-        while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
             if (line is null)
             {
-                continue;
+                break;
             }
 
             if (string.IsNullOrWhiteSpace(line))
@@ -152,6 +156,17 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         foreach (var delta in FlushEventData(eventData))
         {
             AccumulateToolCalls(delta, toolCallChunks);
+            if (delta.IsCompleted)
+            {
+                foreach (var toolCall in FlushToolCalls(toolCallChunks))
+                {
+                    yield return new ChatDelta { ToolCalls = [toolCall] };
+                }
+
+                yield return StripInternalToolCallChunks(delta);
+                yield break;
+            }
+
             yield return StripInternalToolCallChunks(delta);
         }
 
@@ -167,7 +182,14 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         string? reasoningContent,
         IReadOnlyList<ChatToolCall>? toolCalls)
     {
-        // DeepSeek thinking mode requires reasoning_content to be passed back.
+        // Some OpenAI-compatible providers stream reasoning content
+        // separately from the final answer (DeepSeek's thinking mode
+        // was the original use case; MiniMax's interleaved thinking
+        // uses the same field). The OpenAI protocol field name is
+        // `reasoning_content`; we pass it back as a sibling of
+        // `content` so the model sees its own reasoning in the
+        // next turn. Without this the model loses its chain of
+        // thought across multi-turn reasoning tasks.
         if (!string.IsNullOrWhiteSpace(reasoningContent))
         {
             var result = new Dictionary<string, object?>
@@ -279,15 +301,15 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
             switch (parameter.Key)
             {
-                case "deepseek.thinking":
-                    payload["thinking"] = new { type = parameter.Value };
-                    break;
-                case "deepseek.reasoning_effort":
-                    payload["reasoning_effort"] = parameter.Value;
-                    break;
-                case "deepseek.response_format" when parameter.Value == "json_object":
-                    payload["response_format"] = new { type = "json_object" };
-                    break;
+                // 2026-08-02: DeepSeek-specific parameter shaping
+                // (`deepseek.thinking` / `deepseek.reasoning_effort`
+                // / `deepseek.response_format`) is gone — the
+                // DeepSeek provider was pruned from the catalog.
+                // Old settings files that still carry these keys
+                // fall through ProviderConfigurationValidator's
+                // "unknown parameter" warning path, and this
+                // switch silently skips them. The MiniMax shape
+                // below is the only one that survives.
                 case "minimax.reasoning_split" when bool.TryParse(parameter.Value, out var reasoningSplit):
                     payload["reasoning_split"] = reasoningSplit;
                     break;
