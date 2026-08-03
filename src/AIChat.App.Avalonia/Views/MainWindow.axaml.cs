@@ -21,6 +21,7 @@ internal partial class MainWindow : Window
     private readonly IToastService _toast;
     private readonly ISettingsHolder _settingsHolder;
     private readonly ISourceRegistry _sourceRegistry;
+    private readonly IWebPageFetcher _webPageFetcher;
     // Set to true once ApplyPersistedBounds has run so the closing
     // handler knows the live Position / Size are the user-adjusted
     // values rather than the values we just restored from disk.
@@ -43,7 +44,8 @@ internal partial class MainWindow : Window
         IThemeService theme,
         IToastService toast,
         ISettingsHolder settingsHolder,
-        ISourceRegistry sourceRegistry)
+        ISourceRegistry sourceRegistry,
+        IWebPageFetcher webPageFetcher)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -53,6 +55,7 @@ internal partial class MainWindow : Window
         _toast = toast;
         _settingsHolder = settingsHolder;
         _sourceRegistry = sourceRegistry;
+        _webPageFetcher = webPageFetcher;
         // The picker and clipboard service both need the window as its
         // TopLevel so the dialog / clipboard can attach to the right
         // window. We set it here rather than in App.axaml.cs because the
@@ -813,9 +816,50 @@ internal partial class MainWindow : Window
         _toast?.Show($"已捕获 {text.Length} 字符到数据源。", ToastLevel.Success);
     }
 
-    private void AddWebSearchSource_OnClick(object? sender, RoutedEventArgs e)
+    private async void AddWebSearchSource_OnClick(object? sender, RoutedEventArgs e)
     {
-        _toast?.Show("网页搜索 — Wave 7 接入", ToastLevel.Info);
+        // Wave 7 (parity plan §7 Wave 7) first slice:
+        // the "+" / "网页搜索" menu item now opens a
+        // URL input dialog, fetches the page, and
+        // persists it as a Source (kind=web). The
+        // existing Wave 7 placeholder toast is gone
+        // — the click is real.
+        var dialog = new UrlInputDialog(this);
+        var url = await dialog.ShowAsync();
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+        var result = await _webPageFetcher.FetchAsync(url);
+        if (result is null)
+        {
+            _toast?.Show($"无法抓取 {url}（网络失败 / 非 HTML / 内容过大）", ToastLevel.Warning);
+            return;
+        }
+        // Use the page's <title> as the display name;
+        // fall back to the host portion of the URL
+        // when the page didn't declare a title. The
+        // metadata keeps the original URL so the
+        // agent can reference the source by URL
+        // (rather than the full text) when it wants
+        // to cite it.
+        var display = string.IsNullOrWhiteSpace(result.Title)
+            ? new Uri(result.Url).Host
+            : result.Title;
+        var source = new AIChat.Domain.Sources.Source
+        {
+            Kind = "web",
+            DisplayName = display,
+            Content = result.Content,
+            CapturedAt = DateTimeOffset.UtcNow,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["url"] = result.Url,
+                ["statusCode"] = result.StatusCode.ToString(),
+            },
+        };
+        await _sourceRegistry.AddAsync(source);
+        _toast?.Show($"已抓取 {result.Content.Length} 字符到数据源。", ToastLevel.Success);
     }
 
     private void AddPluginAttachment_OnClick(object? sender, RoutedEventArgs e)

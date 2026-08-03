@@ -67,6 +67,13 @@ public static class ServiceRegistration
         // data the first time the user opens it.
         services.AddSingleton<ISourceRegistry, SourceRegistry>();
 
+        // 1.0.1: WebPageFetcher (singleton — the
+        // HttpClient lifetime is tied to the app, and
+        // the cron engine + AddWebSearchSource +
+        // future follow-up slices all share the same
+        // connection pool).
+        services.AddSingleton<IWebPageFetcher, WebPageFetcher>();
+
         // 1.0.1: the cron engine. Application-layer
         // ScheduledTaskRunner does the cadence math +
         // tick scan; the App-layer executor routes a
