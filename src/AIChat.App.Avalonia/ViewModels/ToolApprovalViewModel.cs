@@ -18,7 +18,21 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
 {
     private TaskCompletionSource<ToolApprovalDecision>? _pending;
     private TaskCompletionSource<ToolApprovalDecision>? _presented;
+    private DispatcherTimer? _unattendedTimer;
     private readonly object _gate = new();
+
+    // 1.0.1: seconds remaining until the unattended auto-reject fires.
+    // Bound by the modal so the user can see the countdown when the
+    // background scheduler is the one that parked the run on this gate.
+    // 0 means the countdown isn't active (i.e. a user-initiated
+    // approval that the cron engine isn't watching over). The modal
+    // hides the "auto-reject in Ns" line when this is 0 / the
+    // IsUnattendedCountdownActive flag is false.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnattendedCountdownActive))]
+    private int unattendedSecondsRemaining;
+
+    public bool IsUnattendedCountdownActive => UnattendedSecondsRemaining > 0;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApproveCommand))]
@@ -43,6 +57,16 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
 
     public event EventHandler<ToolApprovalPresentedEventArgs>? RequestPresented;
     public event EventHandler<ToolApprovalResolvedEventArgs>? RequestResolved;
+
+    // 1.0.1: fired when the unattended-countdown timer hit zero
+    // and auto-rejected the pending approval. The cron engine
+    // subscribes to this so it can record the run as Failed with
+    // a clear "无人值守 timeout" message in the run history (a
+    // user-driven Reject looks the same as an auto-reject from
+    // the agent's point of view — both end with the same tool
+    // error and the same "已完成" status — so the cron engine
+    // needs an explicit signal to override the status).
+    public event EventHandler? UnattendedTimeoutFired;
 
     // The single entry point used by the approval service. Thread-safe:
     // may be called from any thread (typically the agent run's background
@@ -133,6 +157,8 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
             return;
         }
 
+        StopUnattendedCountdown();
+
         RunOnUiThread(() =>
         {
             lock (_gate)
@@ -193,7 +219,79 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
         {
             return;
         }
+        StopUnattendedCountdown();
         Resolve(ToolApprovalDecision.Reject(reason));
+    }
+
+    // 1.0.1: arm the unattended auto-reject countdown. The cron engine
+    // calls this when a background run lands on an approval gate so the
+    // user has a visible "auto-reject in Ns" hint in the modal and the
+    // run doesn't strand on screen if they walk away. UI-initiated
+    // approvals (composer send) don't call this — the user is at the
+    // window and an auto-reject would be confusing. Idempotent: a
+    // second call before the first fires resets the deadline (used
+    // when the user clears a prior pending and a new one comes in).
+    public void StartUnattendedCountdown(TimeSpan timeout)
+    {
+        StopUnattendedCountdown();
+
+        var seconds = Math.Max(1, (int)Math.Ceiling(timeout.TotalSeconds));
+        UnattendedSecondsRemaining = seconds;
+
+        _unattendedTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _unattendedTimer.Tick += OnUnattendedTick;
+        _unattendedTimer.Start();
+    }
+
+    private void OnUnattendedTick(object? sender, EventArgs e)
+    {
+        // The user may have already resolved the request between
+        // timer ticks (Approve / Reject clicked, modal scrim
+        // clicked, an explicit CancelPending fired). In that case
+        // _pending is null and Resolve below is a no-op — the
+        // dispatcher keeps ticking for at most one extra interval
+        // before we stop ourselves.
+        if (_pending is null)
+        {
+            StopUnattendedCountdown();
+            return;
+        }
+
+        var next = UnattendedSecondsRemaining - 1;
+        if (next <= 0)
+        {
+            StopUnattendedCountdown();
+            // Tell the cron engine before Resolve so the engine's
+            // "is this an auto-reject?" flag is set before the
+            // status-update side effects land. Reason: by the time
+            // Resolve clears the surface and lets the agent run
+            // continue, the engine has already left its poll loop
+            // and is reading the final state — without the event
+            // the engine can't tell a user-driven Reject from a
+            // timer-driven one.
+            UnattendedTimeoutFired?.Invoke(this, EventArgs.Empty);
+            // Auto-reject with the same reason the cron engine would
+            // have used, so the user sees the same "auto-rejected
+            // (无人值守 timeout)" message in the run history either
+            // way. The agent's tool call errors out, the run ends,
+            // and the cron executor records the run as Failed.
+            RejectPendingIfAny("auto-rejected (无人值守 timeout)");
+            return;
+        }
+
+        UnattendedSecondsRemaining = next;
+    }
+
+    private void StopUnattendedCountdown()
+    {
+        if (_unattendedTimer is null)
+        {
+            return;
+        }
+        _unattendedTimer.Stop();
+        _unattendedTimer.Tick -= OnUnattendedTick;
+        _unattendedTimer = null;
+        UnattendedSecondsRemaining = 0;
     }
 
     private bool CanResolve() => HasPendingApproval;
@@ -208,6 +306,7 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
             _presented = null;
         }
 
+        StopUnattendedCountdown();
         ClearPendingSurface();
 
         completion?.TrySetResult(decision);

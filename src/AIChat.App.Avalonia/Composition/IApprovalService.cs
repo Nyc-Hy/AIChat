@@ -23,4 +23,27 @@ public interface IApprovalService
     // background run can't accidentally reject a
     // user-initiated approval that's in flight.
     void RejectPendingIfAny(string reason);
+
+    // 1.0.1: arm the unattended auto-reject countdown on the
+    // current pending approval (if any). The cron engine calls
+    // this when a background run lands on an approval gate so
+    // the modal shows a "auto-reject in Ns" hint and the run
+    // doesn't strand on screen if the user walks away. UI-
+    // initiated approvals (composer send) do NOT call this —
+    // the user is at the window and an auto-reject would be
+    // confusing. The desktop host forwards to the
+    // ToolApprovalViewModel; no-op when no approval is pending
+    // (a stray call from a run that already resolved or
+    // never landed on a gate doesn't surface stale state).
+    void StartUnattendedCountdown(TimeSpan timeout);
+
+    // 1.0.1: raised when the unattended-countdown timer hit zero
+    // and auto-rejected the pending approval. The cron engine
+    // subscribes to this so it can record the run as Failed with
+    // a clear "无人值守 timeout" message in the run history (a
+    // user-driven Reject looks the same as an auto-reject from
+    // the agent's point of view — both end with the same tool
+    // error and the same "已完成" status — so the cron engine
+    // needs an explicit signal to override the status).
+    event EventHandler? UnattendedTimeoutFired;
 }

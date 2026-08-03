@@ -60,6 +60,11 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _approval = approval ?? throw new ArgumentNullException(nameof(approval));
         _now = now ?? (() => DateTimeOffset.UtcNow);
+        // 1.0.1: the view-model owns the actual countdown (it ticks on
+        // the dispatcher and shows "auto-reject in Ns" in the modal),
+        // so we just listen for its "fired" signal to mark the run
+        // record as Failed with a clear reason.
+        _approval.UnattendedTimeoutFired += OnUnattendedTimeoutFired;
     }
 
     public async Task<ScheduledTaskRun> ExecuteAsync(
@@ -67,6 +72,7 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
         CancellationToken cancellationToken = default)
     {
         var startedAt = _now();
+        wasAutoRejected = false;
 
         // Already running — defer to next tick. We
         // record the run as Cancelled so the user
@@ -96,64 +102,47 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
 
         // Poll IsRunning / status until the run lands
         // OR the cancellation token fires. Inside
-        // the loop we track whether the run stopped
-        // at an approval gate so the outer code can
-        // record the run with the right status (the
-        // "user came back and approved" case is a
-        // normal Completed run; the "we auto-rejected"
-        // case is a Failed run with a clear message).
-        var wasAutoRejected = false;
-        var approvalDeadline = DateTimeOffset.MinValue;
+        // the loop we arm the view-model's
+        // unattended-countdown the first time we
+        // see the run parked at an approval gate;
+        // the view-model ticks the modal's
+        // "auto-reject in Ns" hint and fires
+        // UnattendedTimeoutFired when it hits
+        // zero. Our `wasAutoRejected` flag is set
+        // by that event so the post-loop status
+        // mapping can override the agent's
+        // "已完成" (the tool just didn't run, not
+        // an error) with a clear Failed + reason
+        // for the run history.
+        var countdownArmed = false;
         while (_agentHost.IsRunning && !cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);
 
-            // Approval gate: the agent has stopped
-            // at a tool that needs human sign-off.
-            // IsRunning flips false the moment the
-            // agent pauses for the approval, so this
-            // check fires before the IsRunning check
-            // breaks us out of the loop. We start a
-            // deadline the first time we see the
-            // status and fire RejectPendingIfAny on
-            // timeout. The user (if present) can
-            // still approve / deny in the modal —
-            // either flips IsRunning back to true as
-            // the agent resumes, and the next poll
-            // tick breaks us out of the approval-wait
-            // branch.
             if (string.Equals(_agentHost.LastAssistantStatus, "需要审批", StringComparison.Ordinal))
             {
-                if (approvalDeadline == DateTimeOffset.MinValue)
+                if (!countdownArmed)
                 {
-                    approvalDeadline = _now() + UnattendedApprovalTimeout;
-                }
-                else if (_now() >= approvalDeadline)
-                {
-                    // Auto-reject so the run doesn't
-                    // strand on the approval modal
-                    // forever. The tool call errors
-                    // out, the agent's run ends, and
-                    // the loop's IsRunning check
-                    // exits on the next poll. The
-                    // user sees the timeout reason
-                    // in the run history the next
-                    // time they open the modal.
-                    _approval.RejectPendingIfAny(
-                        "auto-rejected (无人值守 timeout)");
-                    wasAutoRejected = true;
-                    approvalDeadline = DateTimeOffset.MaxValue;
+                    // Idempotent inside the view-model:
+                    // a re-arm resets the deadline to
+                    // a fresh N seconds, which is the
+                    // right behaviour when a prior
+                    // approval in the same run was
+                    // approved and a new one comes in.
+                    _approval.StartUnattendedCountdown(UnattendedApprovalTimeout);
+                    countdownArmed = true;
                 }
             }
             else
             {
-                // Status moved off "需要审批" — the
-                // user either approved or denied, so
-                // the agent is running again (or
-                // finished). Reset the deadline so a
-                // later approval in the same run
-                // gets its own fresh timeout.
-                approvalDeadline = DateTimeOffset.MinValue;
+                // Status moved off the approval gate
+                // (user approved or rejected, or the
+                // run completed while we were
+                // watching). Re-arm the next time we
+                // see "需要审批" so the second
+                // approval in a multi-tool run gets
+                // its own fresh timeout.
+                countdownArmed = false;
             }
         }
 
@@ -192,6 +181,21 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
                 ? _agentHost.LastAssistantStatus
                 : null,
         };
+    }
+
+    // 1.0.1: set by the view-model's UnattendedTimeoutFired event
+    // handler. Read by the post-loop status mapping to override
+    // the agent's "已完成" with a Failed + "无人值守 timeout"
+    // reason in the run history. Marked volatile-style with a
+    // simple bool because the only writer is the dispatcher (the
+    // event handler) and the only reader is the executor's poll
+    // thread; .NET's memory model on a bool field read after a
+    // Task.Delay is plenty strong for this single-bit signal.
+    private bool wasAutoRejected;
+
+    private void OnUnattendedTimeoutFired(object? sender, EventArgs e)
+    {
+        wasAutoRejected = true;
     }
 
     private static ScheduledRunStatus MapAgentStatus(string? lastStatus)

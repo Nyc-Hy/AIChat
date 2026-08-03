@@ -19,6 +19,11 @@ public sealed class UIBoundApprovalService : IApprovalService
     public UIBoundApprovalService(ToolApprovalViewModel viewModel)
     {
         _viewModel = viewModel;
+        // Forward the view-model's countdown-firing event to the
+        // service's own surface so consumers (the cron engine in
+        // particular) can subscribe to IApprovalService without
+        // taking a direct dependency on the Avalonia view-model.
+        _viewModel.UnattendedTimeoutFired += (_, _) => UnattendedTimeoutFired?.Invoke(this, EventArgs.Empty);
     }
 
     public Task<ToolApprovalDecision> RequestApprovalAsync(ToolApprovalRequest request, CancellationToken cancellationToken)
@@ -26,4 +31,9 @@ public sealed class UIBoundApprovalService : IApprovalService
 
     public void RejectPendingIfAny(string reason)
         => _viewModel.RejectPendingIfAny(reason);
+
+    public void StartUnattendedCountdown(TimeSpan timeout)
+        => _viewModel.StartUnattendedCountdown(timeout);
+
+    public event EventHandler? UnattendedTimeoutFired;
 }

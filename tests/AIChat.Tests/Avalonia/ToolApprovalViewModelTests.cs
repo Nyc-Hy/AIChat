@@ -1,3 +1,4 @@
+using System.Reflection;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
 using AIChat.Application.Agents;
@@ -228,6 +229,184 @@ public class ToolApprovalViewModelTests
         vm.RejectPendingIfAny("auto-rejected (无人值守 timeout)");
 
         Assert.False(vm.HasPendingApproval);
+    }
+
+    // ---- 1.0.1: modal countdown (cron-engine "auto-reject in Ns" hint) ----
+
+    [Fact]
+    public void StartUnattendedCountdown_SetsSecondsRemainingAndActiveFlag()
+    {
+        // 30s is the cron engine's default
+        // (UnattendedApprovalTimeout in
+        // AgentHostScheduledTaskExecutor). The
+        // view-model should round 30s up to 30
+        // (Math.Ceiling, so any sub-second
+        // remainder counts as a full second).
+        var vm = new ToolApprovalViewModel();
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(30));
+
+        Assert.True(vm.IsUnattendedCountdownActive);
+        Assert.Equal(30, vm.UnattendedSecondsRemaining);
+    }
+
+    [Fact]
+    public void StartUnattendedCountdown_RoundsUpFractionalSeconds()
+    {
+        // 1.2s — the ceil rule keeps a slow
+        // dispatcher tick (which can land 50-100ms
+        // late on a busy box) from missing the
+        // timeout by zeroing one second too early.
+        var vm = new ToolApprovalViewModel();
+        vm.StartUnattendedCountdown(TimeSpan.FromMilliseconds(1200));
+
+        Assert.Equal(2, vm.UnattendedSecondsRemaining);
+    }
+
+    [Fact]
+    public async Task StartUnattendedCountdown_AfterResolve_StopsTicking()
+    {
+        // Approve before the timer expires —
+        // the countdown must be torn down so the
+        // modal's "auto-reject in Ns" line hides
+        // itself and the dispatcher doesn't keep
+        // running a stale timer that would fire
+        // a phantom reject on a later request.
+        var vm = new ToolApprovalViewModel();
+        var request = NewRequest("write_file");
+        var presented = vm.PresentRequestAsync(request, CancellationToken.None);
+
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(5));
+        Assert.True(vm.IsUnattendedCountdownActive);
+
+        vm.ApproveCommand.Execute(null);
+        await presented;
+
+        Assert.False(vm.IsUnattendedCountdownActive);
+        Assert.Equal(0, vm.UnattendedSecondsRemaining);
+    }
+
+    [Fact]
+    public async Task StartUnattendedCountdown_Reject_StopsCountdown()
+    {
+        var vm = new ToolApprovalViewModel();
+        var presented = vm.PresentRequestAsync(NewRequest("write_file"), CancellationToken.None);
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(5));
+        Assert.True(vm.IsUnattendedCountdownActive);
+
+        vm.RejectCommand.Execute(null);
+        await presented;
+
+        Assert.False(vm.IsUnattendedCountdownActive);
+        Assert.Equal(0, vm.UnattendedSecondsRemaining);
+    }
+
+    [Fact]
+    public async Task StartUnattendedCountdown_TimerFires_RejectsAndFiresEvent()
+    {
+        // The DispatcherTimer doesn't actually
+        // tick in a headless test host (no live
+        // Avalonia Application.Current to drive
+        // the dispatcher loop), so we drive the
+        // tick handler directly. The contract
+        // we care about: when OnUnattendedTick
+        // decrements past zero, the view-model
+        // (a) fires UnattendedTimeoutFired so
+        // the cron engine can mark the run as
+        // Failed, and (b) calls RejectPendingIfAny
+        // with the standard timeout reason so
+        // the awaiter sees a clear "auto-
+        // rejected (无人值守 timeout)" decision.
+        var vm = new ToolApprovalViewModel();
+        var request = NewRequest("write_file");
+        var presented = vm.PresentRequestAsync(request, CancellationToken.None);
+
+        var eventFired = false;
+        vm.UnattendedTimeoutFired += (_, _) => eventFired = true;
+
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, vm.UnattendedSecondsRemaining);
+
+        // Simulate the first 1Hz tick — VM
+        // decrements 1 → 0, hits the timeout
+        // branch, fires the event, rejects.
+        InvokeTick(vm);
+
+        Assert.True(eventFired);
+        Assert.False(vm.IsUnattendedCountdownActive);
+        var decision = await presented;
+        Assert.False(decision.IsApproved);
+        Assert.Contains("无人值守", decision.Reason ?? "",
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartUnattendedCountdown_IsIdempotent()
+    {
+        // Re-arming a live countdown resets
+        // the seconds-remaining back to the
+        // new timeout. Used when the user
+        // clears a prior pending and a new
+        // one comes in during the same run —
+        // we don't want the second approval
+        // to inherit a stale, half-expired
+        // deadline.
+        var vm = new ToolApprovalViewModel();
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(5));
+        Assert.Equal(5, vm.UnattendedSecondsRemaining);
+
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(30));
+        Assert.Equal(30, vm.UnattendedSecondsRemaining);
+        Assert.True(vm.IsUnattendedCountdownActive);
+    }
+
+    [Fact]
+    public async Task UIBoundApprovalService_ForwardsCountdownAndEvent()
+    {
+        // The cron engine talks to IApprovalService
+        // — the service must arm the countdown on
+        // the underlying view-model and forward
+        // UnattendedTimeoutFired so the engine
+        // never has to know about the Avalonia
+        // view-model directly.
+        var vm = new ToolApprovalViewModel();
+        IApprovalService service = new UIBoundApprovalService(vm);
+
+        // Headless test host: PresentRequestAsync
+        // runs the UI-marshal inline, so the
+        // surface is set up before the call
+        // returns. Service.StartUnattendedCountdown
+        // therefore has a pending request to arm.
+        var presented = service.RequestApprovalAsync(
+            NewRequest("write_file"), CancellationToken.None);
+
+        service.StartUnattendedCountdown(TimeSpan.FromSeconds(15));
+        Assert.Equal(15, vm.UnattendedSecondsRemaining);
+        Assert.True(vm.IsUnattendedCountdownActive);
+
+        // Drive a tick on the VM directly. The
+        // service's UnattendedTimeoutFired event
+        // should relay the VM's signal.
+        var serviceEventFired = false;
+        service.UnattendedTimeoutFired += (_, _) => serviceEventFired = true;
+
+        vm.StartUnattendedCountdown(TimeSpan.FromSeconds(1));
+        InvokeTick(vm);
+
+        Assert.True(serviceEventFired);
+        var decision = await presented;
+        Assert.False(decision.IsApproved);
+    }
+
+    private static void InvokeTick(ToolApprovalViewModel vm)
+    {
+        // The Timer.Tick handler is private; drive
+        // it through reflection so we can verify the
+        // countdown-decrement / auto-reject branch
+        // without owning a live Avalonia dispatcher.
+        var method = typeof(ToolApprovalViewModel)
+            .GetMethod("OnUnattendedTick", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        method!.Invoke(vm, new object?[] { null, EventArgs.Empty });
     }
 
     private static ToolApprovalRequest NewRequest(string toolName)
