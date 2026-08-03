@@ -3,17 +3,24 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using AIChat.Abstractions.Configuration;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
 using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.Views;
 
-public partial class MainWindow : Window
+internal partial class MainWindow : Window
 {
     private readonly AvaloniaProjectPicker _picker;
     private readonly AvaloniaClipboardService _clipboard;
     private readonly IThemeService _theme;
+    private readonly IToastService _toast;
+    private readonly ISettingsHolder _settingsHolder;
+    // Set to true once ApplyPersistedBounds has run so the closing
+    // handler knows the live Position / Size are the user-adjusted
+    // values rather than the values we just restored from disk.
+    private bool _boundsApplied;
 
     // Whether the user is currently parked at (or within ~32px of) the
     // bottom of the conversation view. Updated by the ScrollChanged
@@ -25,35 +32,21 @@ public partial class MainWindow : Window
     // the scroll is still settling.
     private bool _isUserAtBottom = true;
 
-    // Phase 1.5: the 最近 (conversations) section in the sidebar
-    // is collapsed by default. The file tree is the new primary
-    // navigation surface; the conversation list is secondary
-    // history. The user can still expand it on demand. State
-    // lives on the view (not the VM) because it's pure UI chrome
-    // with no semantic meaning for the rest of the app. A
-    // StyledProperty (not a plain CLR field) so the XAML
-    // bindings on the chevron + body actually re-evaluate when
-    // the title is clicked.
-    public static readonly StyledProperty<bool> IsConversationsSectionExpandedProperty =
-        AvaloniaProperty.Register<MainWindow, bool>(nameof(IsConversationsSectionExpanded), false);
-
-    public bool IsConversationsSectionExpanded
-    {
-        get => GetValue(IsConversationsSectionExpandedProperty);
-        set => SetValue(IsConversationsSectionExpandedProperty, value);
-    }
-
     public MainWindow(
         MainWindowViewModel viewModel,
         AvaloniaProjectPicker picker,
         AvaloniaClipboardService clipboard,
-        IThemeService theme)
+        IThemeService theme,
+        IToastService toast,
+        ISettingsHolder settingsHolder)
     {
         InitializeComponent();
         DataContext = viewModel;
         _picker = picker;
         _clipboard = clipboard;
         _theme = theme;
+        _toast = toast;
+        _settingsHolder = settingsHolder;
         // The picker and clipboard service both need the window as its
         // TopLevel so the dialog / clipboard can attach to the right
         // window. We set it here rather than in App.axaml.cs because the
@@ -117,8 +110,8 @@ public partial class MainWindow : Window
             // Same shape as the palette's "测试当前模型" entry
             // (which was also claiming the shortcut without backing).
             Gesture = new KeyGesture(Key.T, KeyModifiers.Meta),
-            Command = new RelayCommand(async () =>
-                await viewModel.Provider.TestProviderCommand.ExecuteAsync(null))
+            Command = new AsyncRelayCommand(() => RunSafelyAsync(
+                () => viewModel.Provider.TestProviderCommand.ExecuteAsync(null)))
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -127,8 +120,8 @@ public partial class MainWindow : Window
             // status-bar message). The palette was advertising this
             // shortcut without a binding.
             Gesture = new KeyGesture(Key.C, KeyModifiers.Meta | KeyModifiers.Shift),
-            Command = new RelayCommand(async () =>
-                await KeyCommandBridge.RunSlashCommandAsync(viewModel, "/copy"))
+            Command = new AsyncRelayCommand(() => RunSafelyAsync(
+                () => KeyCommandBridge.RunSlashCommandAsync(viewModel, "/copy")))
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -176,8 +169,8 @@ public partial class MainWindow : Window
             // re-fire it to refresh — the workspace change service reads
             // git state on every call, so there's no staleness.
             Gesture = new KeyGesture(Key.G, KeyModifiers.Meta),
-            Command = new RelayCommand(async () =>
-                await KeyCommandBridge.RunSlashCommandAsync(viewModel, "/git", "系统"))
+            Command = new AsyncRelayCommand(() => RunSafelyAsync(
+                () => KeyCommandBridge.RunSlashCommandAsync(viewModel, "/git", "系统")))
         });
         KeyBindings.Add(new KeyBinding
         {
@@ -207,7 +200,6 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
-            // ⌘/ is VS Code's "show help" convention. Drops a /help
             // The natural "show me help" gesture. Opens the
             // shortcuts cheat-sheet modal (the more discoverable,
             // visually richer alternative to the /help slash
@@ -227,24 +219,55 @@ public partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // Sprint 0.5: toggle the right-side Environment panel.
+            // ⌘⇧E follows the "Cmd+Shift+letter for app-level toggles"
+            // pattern (⌘⇧T theme, ⌘⇧V auto-verify, ⌘⇧R read-only,
+            // ⌘⇧M memory editor). The E key is free.
+            Gesture = new KeyGesture(Key.E, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = viewModel.ToggleEnvironmentPanelCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {
-                if (viewModel.IsCommandPaletteOpen)
+                if (viewModel.Approval.HasPendingApproval &&
+                    viewModel.Approval.RejectCommand.CanExecute(null))
                 {
-                    viewModel.IsCommandPaletteOpen = false;
+                    viewModel.Approval.RejectCommand.Execute(null);
+                    return;
                 }
-                else if (viewModel.IsSettingsOpen)
+                // Modal priority order — topmost wins. Each
+                // entry is a (isOpen, close) pair; first
+                // open one closes. Mirrors
+                // MainWindowViewModel.CloseAllModals for
+                // the "all modals down" path; both lists
+                // are kept in sync.
+                // Wave 11 refactor: previously this was 9
+                // explicit `else if` blocks; new modals
+                // added one branch each (Wave 8-10 grew
+                // the chain from 6 to 9). The priority
+                // list makes the next modal a 1-line
+                // append.
+                var priority = new (bool IsOpen, Action Close)[]
                 {
-                    viewModel.IsSettingsOpen = false;
-                }
-                else if (viewModel.IsMemoryEditorOpen)
+                    (viewModel.IsCommandPaletteOpen, () => viewModel.IsCommandPaletteOpen = false),
+                    (viewModel.IsSettingsOpen, () => viewModel.IsSettingsOpen = false),
+                    (viewModel.IsMemoryEditorOpen, () => viewModel.IsMemoryEditorOpen = false),
+                    (viewModel.IsGitStatusOpen, () => viewModel.IsGitStatusOpen = false),
+                    (viewModel.IsRunHistoryOpen, () => viewModel.IsRunHistoryOpen = false),
+                    (viewModel.IsShortcutsOpen, () => viewModel.IsShortcutsOpen = false),
+                    (viewModel.IsPluginsOpen, () => viewModel.IsPluginsOpen = false),
+                    (viewModel.IsScheduledOpen, () => viewModel.IsScheduledOpen = false),
+                    (viewModel.IsSitesOpen, () => viewModel.IsSitesOpen = false),
+                };
+                foreach (var modal in priority)
                 {
-                    viewModel.IsMemoryEditorOpen = false;
-                }
-                else if (viewModel.IsGitStatusOpen)
-                {
-                    viewModel.IsGitStatusOpen = false;
+                    if (modal.IsOpen)
+                    {
+                        modal.Close();
+                        return;
+                    }
                 }
             })
         });
@@ -355,6 +378,30 @@ public partial class MainWindow : Window
         BeginMoveDrag(e);
     }
 
+    // Sprint 0.5+: sidebar top navigation layer. All three buttons are
+    // present-but-disabled by design — they match the Codex visual surface
+    // so the user sees the parity shape, but the actions land in their
+    // respective waves:
+    //   - ModeSwitcher  → Wave 2 (multi-mode support)
+    //   - Search        → Wave 3 (history / settings search)
+    //   - Notifications → Wave 7 (subagent / background process events)
+    // For now they show a toast on click so the user knows the icon is
+    // alive and labelled with the wave that delivers it.
+    private void ModeSwitcher_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast.Show("模式切换 — 默认模式（Wave 2 接入）", ToastLevel.Info);
+    }
+
+    private void Search_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast.Show("搜索 — Wave 3 接入", ToastLevel.Info);
+    }
+
+    private void Notifications_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast.Show("通知 — Wave 7 接入", ToastLevel.Info);
+    }
+
     private void Minimize_OnClick(object? sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
@@ -425,6 +472,275 @@ public partial class MainWindow : Window
         });
     }
 
+    // Codex parity: trailing `...` button on the selected project row.
+    // Re-opens the row's context flyout so the existing 删除项目 entry
+    // (and any future ones — "重命名" / "在 Finder 中显示" / etc.) shows
+    // up under the cursor without the user having to right-click.
+    // Implemented via a manual open because the inner Button consumes
+    // the click event and prevents the outer ContextFlyout from auto-
+    // opening on this click. The outer Button's Click handler still
+    // fires first (we don't stop the event), so the project also gets
+    // selected — same as Codex.
+    private void ProjectMenu_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string projectId } button)
+        {
+            return;
+        }
+
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        SafeRun(() => viewModel.SelectProjectFromUiAsync(projectId));
+
+        // Find the parent project Button and open its context flyout.
+        // Walk up the visual tree until we find a Button whose Tag is
+        // this project's id; that's the row that owns the MenuFlyout.
+        // We use StyledElement (the base that exposes Parent) and cast
+        // each level to Button for the Tag-based lookup.
+        StyledElement? parent = button.Parent;
+        while (parent is not null)
+        {
+            if (parent is Button row
+                && row.Tag is string rowId
+                && string.Equals(rowId, projectId, StringComparison.OrdinalIgnoreCase)
+                && row.ContextFlyout is { } flyout)
+            {
+                flyout.ShowAt(row);
+                break;
+            }
+            parent = parent.Parent;
+        }
+    }
+
+    // Codex parity: trailing edit icon. Wave 6 will wire this to the
+    // inline rename popover; for now it just opens the same context
+    // flyout as the `...` button so the user gets a feedback signal
+    // that the click landed (Codex also has this fallback).
+    private void ProjectEdit_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string projectId })
+        {
+            return;
+        }
+        // Same UX as ProjectMenu_OnClick for now; future slices
+        // (Wave 6) replace the body with a popover showing the
+        // project path + rename / delete controls.
+        SafeRun(() =>
+        {
+            if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
+            return viewModel.SelectProjectFromUiAsync(projectId);
+        });
+        _toast?.Show("编辑项目 — Wave 6 接入", ToastLevel.Info);
+    }
+
+    // Codex parity: composer "+" (file picker). The ⌘V paste-into-prompt
+    // path already works; this button opens a system file picker (Wave
+    // 6+ lands the implementation, this click is the visible surface).
+    private void AddAttachment_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast?.Show("附件选择器 — Wave 7 接入（用 ⌘V 粘贴图片）", ToastLevel.Info);
+    }
+
+    // Codex parity: composer mic (push-to-talk). The actual STT wiring
+    // needs a model that supports audio input — Wave 4.5 picks the
+    // provider and records. For now the click just shows a toast so
+    // the user knows the click landed.
+    private void Mic_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast?.Show("语音输入 — Wave 4.5 接入", ToastLevel.Info);
+    }
+
+    // Codex parity: status bar "+" button. Opens a small popup with
+    // "新建项目 / 新建对话 / 新建计划" shortcuts. The popup itself
+    // lands in Wave 6; for now we trigger the existing new-project
+    // / new-conversation commands sequentially and let the user
+    // click again if they meant a different one. (Codex actually
+    // shows a single dropdown, but a click-through to a picker is
+    // a fine starting point.)
+    private void StatusBarAdd_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast?.Show("新建入口 — 用 ⌘O 加项目 / ⌘N 新对话", ToastLevel.Info);
+    }
+
+    // Codex parity: clicking a "最近" item is a no-op for now — the
+    // real routing (open the conversation / re-run the search) lands
+    // in Wave 6. We toast the title so the user sees the click landed
+    // and knows which item they triggered.
+    private void RecentItem_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string title })
+        {
+            _toast?.Show($"打开最近：{title}（Wave 6 接入）", ToastLevel.Info);
+        }
+    }
+
+    // Wave 3 (plan §3.1): sidebar "Standalone" section "+" button.
+    // Creates a new Standalone ChatSession and pushes it into the
+    // sidebar list. The main view-model owns the Standalone list
+    // (it spans the whole app, not per-project).
+    private void NewStandaloneInline_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        SafeRun(() =>
+        {
+            viewModel.NewStandaloneConversationCommand.Execute(null);
+            return Task.CompletedTask;
+        });
+    }
+
+    // Wave 3: clicking a Standalone conversation card routes to the
+    // activity feed (just like project conversations). The persisted
+    // session id is on the Tag; the full ChatSession roundtrip is
+    // done by the view-model (loads from disk, hands to ActivityFeed).
+    private void StandaloneConversation_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string sessionId })
+        {
+            return;
+        }
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        SafeRun(() => viewModel.OpenStandaloneConversationAsync(sessionId));
+    }
+
+    // Inline rename (Wave 3 + 7.4). Same shape as the project-side
+    // conversation rename: double-click / Enter commits, Esc rolls
+    // back. Wave 3 ships the visible affordance + persistence; the
+    // keybindings settle in a later polish pass.
+    private void StandaloneRename_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: ConversationCardViewModel card })
+        {
+            return;
+        }
+        if (e.Key == Key.Enter)
+        {
+            card.CommitRenameCommand.Execute(null);
+        }
+        else if (e.Key == Key.Escape)
+        {
+            card.CancelRenameCommand.Execute(null);
+        }
+    }
+
+    private void StandaloneRename_OnLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: ConversationCardViewModel card })
+        {
+            card.CommitRenameCommand.Execute(null);
+        }
+    }
+
+    // Wave 3 (plan §3.2): set primary folder on a multi-folder
+    // workspace. The Tag carries the folder id; the view-model
+    // (ProjectSidebarViewModel) finds the matching workspace, sets
+    // its PrimaryFolderId, and persists.
+    private void SetPrimaryFolder_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string folderId })
+        {
+            return;
+        }
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        SafeRun(() => viewModel.Sidebar.SetPrimaryFolderAsync(folderId));
+    }
+
+    // Wave 4 (plan §4): composer "+" menu items. Each opens the
+    // appropriate picker / paste / placeholder. File picker routes
+    // through the existing AvaloniaProjectPicker; image paste uses
+    // the system clipboard; @file and source items land in Wave 6/7
+    // (the menu shows them as disabled placeholders so the user can
+    // see the full surface now).
+
+    private void AddFileAttachment_OnClick(object? sender, RoutedEventArgs e)
+    {
+        // Compose the same flow the Add Project button uses: project
+        // picker → if a single file is chosen, we attach it to the
+        // current run. For now the picker is folder-only, so this
+        // routes through AddProjectAsync and reuses the same OS
+        // dialog. A dedicated file picker is a Wave 6 follow-up; for
+        // Wave 4 the menu's existence + the toast feedback is the
+        // visible surface we ship.
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        // Use the existing Add Project picker as a stand-in; the user
+        // can pick any folder root and we attach the path as a
+        // file-context. The full file picker (multi-file) lands in
+        // Wave 6 alongside the @file reference picker.
+        _ = _picker.PickProjectFolderAsync().ContinueWith(task =>
+        {
+            if (task.Result is PickerResult.Picked picked && !string.IsNullOrEmpty(picked.Path))
+            {
+                // For a real file picker the path would be a file URI;
+                // for the folder picker stand-in we paste the path into
+                // the prompt as a @-reference so the agent knows the
+                // file/folder the user is interested in.
+                viewModel.AgentHost.DraftPrompt += $" @{picked.Path} ";
+                _toast?.Show($"已附加：{picked.Path}", ToastLevel.Info);
+            }
+        });
+    }
+
+    private void AddImageAttachment_OnClick(object? sender, RoutedEventArgs e)
+    {
+        // The image paste flow lives on AgentHost.PendingAttachments
+        // and is wired to ⌘V in the prompt input. The menu item
+        // delegates to the same surface so the affordance is
+        // discoverable without remembering the keyboard shortcut.
+        _toast?.Show("请用 ⌘V 粘贴图片(也可拖拽到输入框)", ToastLevel.Info);
+    }
+
+    private void AddAtFile_OnClick(object? sender, RoutedEventArgs e)
+    {
+        // @file picker (Wave 6 follow-up — for Wave 4 we just paste a
+        // placeholder so the user can see the menu surface respond).
+        _toast?.Show("@file 引用 — Wave 6 接入完整 picker", ToastLevel.Info);
+    }
+
+    private void AddClipboardSource_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast?.Show("剪贴板快照 — Wave 7 接入", ToastLevel.Info);
+    }
+
+    private void AddWebSearchSource_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast?.Show("网页搜索 — Wave 7 接入", ToastLevel.Info);
+    }
+
+    private void AddPluginAttachment_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _toast?.Show("插件 — Wave 8 接入", ToastLevel.Info);
+    }
+
+    // Wave 4 (plan §4): "追加要求" button. The button is currently
+    // disabled — the actual queue / merge into the running agent's
+    // step loop is a follow-up slice (the real design has to coordinate
+    // with the agent's cancellation token + tool execution state).
+    // For now the click surface is wired so the user can see the
+    // parity shape land; the click handler is a no-op so the
+    // disabled state stays correct.
+    private void AppendFollowup_OnClick(object? sender, RoutedEventArgs e)
+    {
+        // No-op for now — the button is disabled. We don't even
+        // show a toast because the user shouldn't be able to click.
+        // This handler is here so the XAML click binding has a target;
+        // the Wave 4 follow-up will replace it with the real queue
+        // wiring (see plan §4 "发送、停止、追加要求、重试").
+    }
+
     private void ConversationButton_OnClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string conversationId })
@@ -436,15 +752,6 @@ public partial class MainWindow : Window
             if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
             return viewModel.SelectConversationFromUiAsync(conversationId);
         });
-    }
-
-    // Phase 1.5: clicking the "最近" section title toggles the
-    // expanded state. Lives on the view because it's pure UI
-    // chrome — the conversation list's content / state is
-    // unaffected, just whether it's visible in the sidebar.
-    private void ConversationsSection_OnClick(object? sender, RoutedEventArgs e)
-    {
-        IsConversationsSectionExpanded = !IsConversationsSectionExpanded;
     }
 
     // Inline-rename keyboard handler. Enter commits, Esc cancels.
@@ -485,6 +792,7 @@ public partial class MainWindow : Window
         SafeRun(async () =>
         {
             if (DataContext is not MainWindowViewModel viewModel) return;
+            if (viewModel.Approval.HasPendingApproval) return;
             var result = await _picker.PickProjectFolderAsync();
             switch (result)
             {
@@ -548,6 +856,11 @@ public partial class MainWindow : Window
     // safe pattern for XAML event handlers is "async void with a
     // try/catch at the root".
     private async void SafeRun(Func<Task> body)
+    {
+        await RunSafelyAsync(body);
+    }
+
+    private async Task RunSafelyAsync(Func<Task> body)
     {
         try
         {
@@ -641,7 +954,10 @@ public partial class MainWindow : Window
                     break;
                 case Key.Enter:
                     e.Handled = true;
-                    await viewModel.CommandPalette.ExecuteSelectedAsync();
+                    if (await viewModel.CommandPalette.ExecuteSelectedAsync())
+                    {
+                        viewModel.IsCommandPaletteOpen = false;
+                    }
                     break;
                 case Key.Escape:
                     e.Handled = true;
@@ -656,6 +972,111 @@ public partial class MainWindow : Window
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
+    }
+
+    // Sprint 0.5: plan §7 Wave 2 acceptance — the Composer (prompt input)
+    // should auto-receive focus on window open so the user can start
+    // typing without first ⌘L. We focus on first show, NOT on every
+    // activate (that would steal focus from the command palette while
+    // the user is searching).
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        // 2026-08-03: restore the persisted window position / size /
+        // maximised state on the next UI tick, by which point the
+        // settings holder is expected to have the loaded AppSettings
+        // (the main view-model's RefreshCoreAsync runs the JSON load
+        // before OnOpened fires). The bounds guard against a multi-
+        // monitor user who disconnected the secondary screen between
+        // sessions — if the saved origin is now off-screen we fall
+        // back to a centred position so the window is reachable.
+        Dispatcher.UIThread.Post(ApplyPersistedBounds, DispatcherPriority.Background);
+        Dispatcher.UIThread.Post(() => FocusPromptInput(), DispatcherPriority.Background);
+    }
+
+    private void ApplyPersistedBounds()
+    {
+        var settings = _settingsHolder.Current;
+        // A non-zero width / height means the user has positioned
+        // the window at least once. Zero (the schema default) is
+        // treated as "not yet positioned" so the host applies the
+        // platform default (Avalonia's WindowStartupLocation).
+        var hasPosition = settings.WindowX != 0 || settings.WindowY != 0;
+        var hasSize = settings.WindowWidth > 200 && settings.WindowHeight > 200;
+
+        if (hasSize)
+        {
+            Width = settings.WindowWidth;
+            Height = settings.WindowHeight;
+        }
+
+        if (hasPosition && IsPositionOnAnyScreen(settings.WindowX, settings.WindowY, Width, Height))
+        {
+            Position = new PixelPoint((int)settings.WindowX, (int)settings.WindowY);
+        }
+
+        if (settings.WindowMaximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+
+        _boundsApplied = true;
+    }
+
+    // Returns true if the rectangle at (x, y, w, h) overlaps at
+    // least one of the connected screen work areas. Used to keep a
+    // user whose secondary monitor was unplugged from launching
+    // AIChat on a screen they cannot see. The 64-pixel slop
+    // tolerates minor DPI / taskbar changes.
+    private bool IsPositionOnAnyScreen(double x, double y, double w, double h)
+    {
+        foreach (var screen in Screens.All)
+        {
+            var wa = screen.WorkingArea;
+            var left = wa.X;
+            var top = wa.Y;
+            var right = wa.X + wa.Width;
+            var bottom = wa.Y + wa.Height;
+            if (x + w > left + 64 && x < right - 64 &&
+                y + h > top + 64 && y < bottom - 64)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        base.OnClosing(e);
+        // Persist the live bounds so the next launch restores the
+        // user's preferred layout. We skip the write if the
+        // restore step never ran (e.g. the window was created and
+        // immediately torn down during a smoke test) so we do not
+        // overwrite a real position with the platform default
+        // origin.
+        if (!_boundsApplied)
+        {
+            return;
+        }
+
+        var settings = _settingsHolder.Current;
+        var maximised = WindowState == WindowState.Maximized;
+        settings.WindowMaximized = maximised;
+        if (maximised)
+        {
+            // When the window is maximised the Position / Width /
+            // Height are not user-meaningful (they are the
+            // maximised state). Keep whatever was last saved so
+            // un-maximising on the next launch restores the prior
+            // floating bounds rather than the OS default.
+            return;
+        }
+
+        settings.WindowX = Position.X;
+        settings.WindowY = Position.Y;
+        settings.WindowWidth = Width;
+        settings.WindowHeight = Height;
     }
 
     private static bool IsInsideButton(object? source)

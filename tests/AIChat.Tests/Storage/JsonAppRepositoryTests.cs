@@ -8,14 +8,27 @@ namespace AIChat.Tests.Storage;
 public sealed class JsonAppRepositoryTests : IDisposable
 {
     private readonly string _dataDirectory;
+    private readonly string? _previousIsolatedRoot;
 
     public JsonAppRepositoryTests()
     {
         _dataDirectory = Path.Combine(Path.GetTempPath(), "AIChat.Tests", Guid.NewGuid().ToString("N"));
+        // 2026-08-03: redirect AppRuntimeProfile.DataDirectory at
+        // the per-test temp path so the EnvironmentSecretOverride
+        // layer reads the .env we author (or its absence) inside
+        // this test's throwaway directory, not from the user's
+        // real ~/Library/Application Support/AIChat/.env on the
+        // test machine. Without this, a daily-driver user with
+        // AICHAT_API_KEY configured would see every test of this
+        // file silently pick up the production secret and
+        // "verify" the wrong value.
+        _previousIsolatedRoot = Environment.GetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT");
+        Environment.SetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT", _dataDirectory);
     }
 
     public void Dispose()
     {
+        Environment.SetEnvironmentVariable("AICHAT_ISOLATED_DATA_ROOT", _previousIsolatedRoot);
         try
         {
             if (Directory.Exists(_dataDirectory))
@@ -43,24 +56,41 @@ public sealed class JsonAppRepositoryTests : IDisposable
         Assert.Equal("test-model-xyz", loaded.Model);
 
         // Restore original
-        settings.Model = "mimo-v2.5-pro";
+        settings.Model = "MiniMax-M3";
         await repo.SaveSettingsAsync(settings);
     }
 
     [Fact]
-    public async Task SaveProjects_DoesNotCorruptOnConcurrentWrites()
+    public async Task SaveWorkspaces_DoesNotCorruptOnConcurrentWrites()
     {
+        // Wave 3: rewritten to use the v1 API (LoadWorkspacesAsync /
+        // SaveWorkspacesAsync). The v0 SaveProjectsAsync was deleted
+        // in this wave; the concurrent-write invariant it used to
+        // lock down now lives on the v1 path.
         var repo = new JsonAppRepository(_dataDirectory);
-        var projects = await repo.LoadProjectsAsync();
+        var workspaces = await repo.LoadWorkspacesAsync();
+        if (workspaces.Count == 0)
+        {
+            // First launch: seed one workspace so the concurrent
+            // writes have something to flush.
+            var folderId = Guid.NewGuid().ToString("N");
+            workspaces = [new WorkspaceProject
+            {
+                Id = folderId,
+                Name = "seed",
+                Folders = [new WorkspaceFolder { Id = folderId, Path = _dataDirectory }],
+                PrimaryFolderId = folderId,
+            }];
+        }
 
         // Fire multiple concurrent saves — should not throw or corrupt
         var tasks = Enumerable.Range(0, 5).Select(_ =>
-            repo.SaveProjectsAsync(projects));
+            repo.SaveWorkspacesAsync(workspaces));
 
         await Task.WhenAll(tasks);
 
         // Verify file is still valid JSON
-        var loaded = await repo.LoadProjectsAsync();
+        var loaded = await repo.LoadWorkspacesAsync();
         Assert.NotNull(loaded);
         Assert.True(loaded.Count > 0);
     }

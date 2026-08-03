@@ -7,15 +7,18 @@ using System.Text.Json.Serialization;
 // It lives in Abstractions because UI, storage, and providers all need this shape.
 public sealed class AppSettings
 {
-    public string ProviderId { get; set; } = "tokenplan-mimo";
+    // Monotonic local-storage revision. Repositories reject stale whole-document
+    // saves instead of silently overwriting settings written by another window.
+    public long PersistenceRevision { get; set; }
+    public string ProviderId { get; set; } = "minimax";
     public string ProtocolId { get; set; } = "openai";
-    public string ProviderName { get; set; } = "小米 MIMO (TokenPlan)";
-    public string BaseUrl { get; set; } = "https://token-plan-cn.xiaomimimo.com/v1";
+    public string ProviderName { get; set; } = "MiniMax";
+    public string BaseUrl { get; set; } = "https://api.minimax.io/v1";
     [JsonIgnore]
     public string ApiKey { get; set; } = "";
     public string ProtectedApiKey { get; set; } = "";
     public string ApiKeyProtection { get; set; } = "";
-    public string Model { get; set; } = "mimo-v2.5-pro";
+    public string Model { get; set; } = "MiniMax-M3";
     // Code-agent workflows benefit from stable, low-variance behavior.
     public double Temperature { get; set; } = 0.3;
     public int ModelContextLimit { get; set; } = 1_000_000;
@@ -59,4 +62,32 @@ public sealed class AppSettings
     // restarts. PR-9 added this; older settings files deserialise as
     // the default (System) which lets the platform decide.
     public ThemePreference ThemePreference { get; set; } = ThemePreference.System;
+
+    // ---- Sprint 0.5: 2-toggle permission model (Codex parity) ----
+    // Two independent toggles that compose into 4 effective states:
+    //   - both off         → "read only" (no writes, no network beyond workspace reads)
+    //   - default on only  → "default access" (workspace writes, prompt for network)
+    //   - both on          → "full access" (writes, network, no approvals)
+    // Matches Codex Desktop's two-toggles-in-Settings layout. See
+    // CODEX_DESKTOP_PARITY_PLAN.md §13.5 deviation #1.
+    public bool DefaultAccess { get; set; } = true;
+    public bool FullAccessEnabled { get; set; }
+
+    // Sprint 0.5: Environment panel right-column visibility. Persisted
+    // across launches so the user's preferred layout survives restart.
+    public bool EnvironmentPanelOpen { get; set; } = true;
+
+    // 2026-08-03: main window position + size + maximised state.
+    // Persisted across launches so a user with a multi-monitor
+    // setup, a 4K scaling preference, or a non-default layout keeps
+    // that layout after a restart. The defaults are deliberately
+    // numeric (not NaN) so the AppSettings JSON serialiser does
+    // not need a custom number-handling option to round-trip them.
+    // A 0 / 0 origin means "not yet positioned" — the host falls
+    // back to the platform default in that case.
+    public double WindowX { get; set; }
+    public double WindowY { get; set; }
+    public double WindowWidth { get; set; }
+    public double WindowHeight { get; set; }
+    public bool WindowMaximized { get; set; }
 }
