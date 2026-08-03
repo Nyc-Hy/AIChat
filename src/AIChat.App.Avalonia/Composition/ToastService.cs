@@ -8,30 +8,85 @@ namespace AIChat.App.Avalonia.Composition;
 // Show call schedules a 3-second auto-dismiss on the thread-pool.
 // All collection mutations are marshalled to the UI thread so the
 // ObservableCollection binding stays valid no matter who called in.
+//
+// Queue semantics (1.0.1): the surface used to silently drop the
+// oldest toast when a 4th arrived while 3 were still visible. The
+// user reading the dropped toast had no warning — the message just
+// vanished. The fix is a FIFO queue: every Show call enqueues an
+// item, the UI collection always shows at most MaxVisible (3), and
+// whenever a toast leaves the collection (auto-dismiss timer or
+// explicit Dismiss), the next queued item is promoted into the
+// visible window. The user sees every message they triggered; the
+// only thing that changes is the rate at which they appear.
 public sealed class ToastService : IToastService
 {
-    private const int MaxStacked = 3;
+    private const int MaxVisible = 3;
     private const int AutoDismissMs = 3000;
+    private readonly Action<Action> _dispatchToUi;
 
     public ObservableCollection<ToastItem> Toasts { get; } = new();
+
+    // Pending items waiting for a visible slot. Kept in a plain
+    // Queue<ToastItem> rather than an ObservableCollection because
+    // the XAML doesn't bind to it — only the head of the queue is
+    // ever read, and only when a visible slot opens up.
+    private readonly Queue<ToastItem> _pending = new();
+
+    public ToastService()
+        : this(PostToUi)
+    {
+    }
+
+    public ToastService(Action<Action> dispatchToUi)
+    {
+        _dispatchToUi = dispatchToUi ?? throw new ArgumentNullException(nameof(dispatchToUi));
+    }
 
     public void Show(string message, ToastLevel level = ToastLevel.Info)
     {
         var item = new ToastItem { Message = message, Level = level };
-        PostToUi(() =>
+        _dispatchToUi(() =>
         {
-            if (Toasts.Count >= MaxStacked)
+            if (Toasts.Count >= MaxVisible)
             {
-                Toasts.RemoveAt(0);
+                // No visible slot right now — enqueue and wait.
+                // The head will be promoted by PromoteQueuedAsync
+                // when the next auto-dismiss / Dismiss fires.
+                _pending.Enqueue(item);
             }
-            Toasts.Add(item);
+            else
+            {
+                Toasts.Add(item);
+            }
         });
         _ = AutoDismissAsync(item);
     }
 
     public void Dismiss(ToastItem item)
     {
-        PostToUi(() => Toasts.Remove(item));
+        _dispatchToUi(() =>
+        {
+            if (Toasts.Remove(item))
+            {
+                // A visible slot just opened up — promote the
+                // head of the pending queue (if any). Done in
+                // the same dispatch so the visible state
+                // transitions atomically: "dismiss old + show
+                // new" is one Add/Remove pair, not two.
+                PromoteQueued();
+            }
+        });
+    }
+
+    // Pulls the next pending item into the visible window, if any.
+    // Called from inside a UI-thread dispatch, so it's safe to
+    // mutate Toasts directly.
+    private void PromoteQueued()
+    {
+        while (Toasts.Count < MaxVisible && _pending.Count > 0)
+        {
+            Toasts.Add(_pending.Dequeue());
+        }
     }
 
     private async Task AutoDismissAsync(ToastItem item)
