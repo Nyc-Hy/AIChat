@@ -11,6 +11,8 @@ using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
+using AIChat.Application.Verification;
+using AIChat.Application.Artifacts;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using Avalonia.Threading;
@@ -49,6 +51,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     private readonly Action<string> _setStatusMessage;
     private readonly Func<AppSettings> _getSettings;
     private readonly Func<bool> _getNoWriteMode;
+    private readonly Func<Action, Task> _dispatchToUiAsync;
     // True while a connection test (⌘T / "测试当前模型") is in
     // flight. Surfaced here so CanSendTask can disable the send
     // button — otherwise the user could start a second agent run
@@ -70,6 +73,8 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     private readonly IChatCompletionService _chatService;
     private readonly AgentToolRegistry _toolRegistry;
     private readonly ConversationListViewModel _conversationList;
+    private readonly ProjectVerificationExecutor _verificationExecutor = new();
+    private readonly InputArtifactFileStore _artifactFileStore;
 
     // CTS for the currently running agent task. New SendTaskCommand
     // runs replace it; StopTaskCommand cancels it. The token is
@@ -94,29 +99,38 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // RetryLastTask so a failed/cancelled run can be re-sent
     // without retyping.
     private string _lastUserPrompt = "";
+    private string _lastRunId = "";
+    private string _pendingContinuationRunId = "";
+    private string _pendingRetriedRunId = "";
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SendTaskCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RunVerificationCommand))]
     [NotifyPropertyChangedFor(nameof(CanRetry))]
+    [NotifyPropertyChangedFor(nameof(CanRunVerification))]
     private bool isRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanRetry))]
     private string lastAssistantStatus = "";
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RunVerificationCommand))]
+    [NotifyPropertyChangedFor(nameof(CanRunVerification))]
+    private bool isVerifying;
+
     public bool CanRetry =>
         !string.IsNullOrEmpty(_lastUserPrompt)
         && !IsRunning
-        && (LastAssistantStatus is "失败" or "已停止");
+        && (LastAssistantStatus is "失败" or "已停止" or "预算暂停");
+
+    public bool CanRunVerification =>
+        !IsRunning && !IsVerifying &&
+        !string.IsNullOrWhiteSpace(_sidebar.CurrentProject?.TryGetPrimaryPath()) &&
+        _sidebar.CurrentProject.VerificationCommands.Count > 0;
 
     [ObservableProperty]
     private string draftPrompt = "";
-
-    // Approximate context window. 64K covers GPT-4 / Claude /
-    // DeepSeek with a single number so the input-area progress bar
-    // reads consistently. Will become per-model once the provider
-    // API reports the real cap.
-    private const int ApproximateContextWindow = 64_000;
 
     // Estimated input tokens for the current prompt against the
     // current project (context router output + prompt + system/tool
@@ -129,10 +143,15 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ContextBudgetPercent))]
     [NotifyPropertyChangedFor(nameof(ContextBudgetWidthInMini))]
+    [NotifyPropertyChangedFor(nameof(ContextBudgetDetails))]
     private int inputTokens;
 
     public int ContextBudgetPercent =>
-        (int)Math.Clamp(InputTokens * 100.0 / ApproximateContextWindow, 0, 100);
+        (int)Math.Clamp(InputTokens * 100.0 / Math.Max(1, _getSettings().ModelContextLimit), 0, 100);
+
+    public string ContextBudgetDetails =>
+        $"上下文估算：约 {InputTokens:N0} / {Math.Max(1, _getSettings().ModelContextLimit):N0} tokens ({ContextBudgetPercent}%)\n" +
+        "这是本地路由估算，不是提供方计费 usage。";
 
     // Width in DIPs for the inline context meter in the status
     // bar. The mini bar is 80px wide so the percent→width factor
@@ -180,7 +199,9 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         Action<string> setStatusMessage,
         Func<AppSettings> getSettings,
         Func<bool> getNoWriteMode,
-        Func<bool> getIsProviderTesting)
+        Func<bool> getIsProviderTesting,
+        Func<Action, Task>? dispatchToUiAsync = null,
+        InputArtifactFileStore? artifactFileStore = null)
     {
         _chatService = chatService;
         _toolRegistry = toolRegistry;
@@ -194,6 +215,9 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         _getSettings = getSettings;
         _getNoWriteMode = getNoWriteMode;
         _getIsProviderTesting = getIsProviderTesting;
+        _artifactFileStore = artifactFileStore ?? new InputArtifactFileStore();
+        _dispatchToUiAsync = dispatchToUiAsync ?? (async action =>
+            await Dispatcher.UIThread.InvokeAsync(action));
 
         // Construct the agent runner last so the runner's
         // "host" reference is the fully-initialised AgentHost.
@@ -218,11 +242,15 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     {
         _ = RecomputeContextInputTokensAsync(DraftPrompt);
         _setStatusMessage(args.StatusMessage);
+        OnPropertyChanged(nameof(CanRunVerification));
+        RunVerificationCommand.NotifyCanExecuteChanged();
     }
 
     private void OnProjectAdded(object? sender, ProjectAddedEventArgs args)
     {
         _ = RecomputeContextInputTokensAsync(DraftPrompt);
+        OnPropertyChanged(nameof(CanRunVerification));
+        RunVerificationCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnDraftPromptChanged(string value)
@@ -301,7 +329,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             // rather than a silent skip. The cleaned prompt (with
             // the @tokens stripped) plus a context block listing
             // the attached file contents is what the agent sees.
-            var projectRoot = _sidebar.CurrentProject?.Path;
+            var projectRoot = _sidebar.CurrentProject?.TryGetPrimaryPath();
             var parsed = PromptAttachmentParser.Parse(prompt, projectRoot);
             foreach (var attachment in parsed.Attachments)
             {
@@ -368,7 +396,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
                 return;
             }
 
-            if (_sidebar.CurrentProject is null || string.IsNullOrWhiteSpace(_sidebar.CurrentProject.Path))
+            if (_sidebar.CurrentProject is null || string.IsNullOrWhiteSpace(_sidebar.CurrentProject.TryGetPrimaryPath()))
             {
                 _activityFeed.Add("需要项目", "发送前请先选择或初始化项目。", "已阻止");
                 _setStatusMessage("当前没有可运行的项目。");
@@ -403,7 +431,16 @@ public sealed partial class AgentHostViewModel : ViewModelBase
 
             try
             {
-                await _agentRunner.RunAsync(prompt, effectiveSettings, _runCts.Token);
+                var continuedFromRunId = _pendingContinuationRunId;
+                var retriedFromRunId = _pendingRetriedRunId;
+                _pendingContinuationRunId = "";
+                _pendingRetriedRunId = "";
+                await _agentRunner.RunAsync(
+                    prompt,
+                    effectiveSettings,
+                    continuedFromRunId,
+                    retriedFromRunId,
+                    _runCts.Token);
             }
             catch (OperationCanceledException)
             {
@@ -460,12 +497,58 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         }
 
         DraftPrompt = _lastUserPrompt;
+        _pendingRetriedRunId = _lastRunId;
         // Re-enter the send command. SendTaskCommand reads
         // DraftPrompt, so we don't pass the prompt in directly.
         if (SendTaskCommand.CanExecute(null))
         {
             SendTaskCommand.Execute(null);
         }
+    }
+
+    public void RecordLastRun(AgentRun run)
+    {
+        _lastRunId = run.Id;
+    }
+
+    public void PrepareContinuation(AgentRun run)
+    {
+        ClearPreparedRunLink();
+        _pendingContinuationRunId = run.Id;
+        _lastRunId = run.Id;
+        _lastUserPrompt = run.Goal;
+        DraftPrompt = "";
+        _setStatusMessage("已载入历史运行。输入新的要求后发送，将沿用该运行的对话上下文。");
+    }
+
+    public void RetryRun(AgentRun run)
+    {
+        ClearPreparedRunLink();
+        _pendingRetriedRunId = run.Id;
+        _lastRunId = run.Id;
+        _lastUserPrompt = run.Goal;
+        DraftPrompt = run.Goal;
+        _setStatusMessage("正在重试所选运行...");
+        if (SendTaskCommand.CanExecute(null))
+        {
+            SendTaskCommand.Execute(null);
+        }
+    }
+
+    public void ClearPreparedRunLink()
+    {
+        _pendingContinuationRunId = "";
+        _pendingRetriedRunId = "";
+    }
+
+    public async Task ReportConversationPersistenceFailureAsync()
+    {
+        const string message = "运行结果仍保留在当前界面，但未能写入对话历史。请刷新后重试。";
+        await _dispatchToUiAsync(() =>
+        {
+            _activityFeed.Add("对话保存失败", message, "警告");
+            _toast.Show(message, ToastLevel.Warning);
+        });
     }
 
     // Send is gated by both the agent-run state (IsRunning) and the
@@ -476,8 +559,50 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // clear. TestStarted/TestCompleted flip the host's
     // IsProviderTesting through the Func<bool> bridge so the
     // underlying state stays on the host (where the events arrive).
-    private bool CanSendTask() => !IsRunning && !_getIsProviderTesting();
+    private bool CanSendTask() => !IsRunning && !IsVerifying && !_getIsProviderTesting();
     private bool CanStopTask() => IsRunning;
+
+    [RelayCommand(CanExecute = nameof(CanRunVerification))]
+    private async Task RunVerificationAsync()
+    {
+        var project = _sidebar.CurrentProject;
+        if (project is null || string.IsNullOrWhiteSpace(project.TryGetPrimaryPath()))
+        {
+            return;
+        }
+
+        IsVerifying = true;
+        SendTaskCommand.NotifyCanExecuteChanged();
+        _setStatusMessage($"正在运行 {project.VerificationCommands.Count} 项验证...");
+        try
+        {
+            var results = await _verificationExecutor.RunAsync(project.TryGetPrimaryPath(), project.VerificationCommands);
+            foreach (var result in results)
+            {
+                var detail = string.IsNullOrWhiteSpace(result.Summary)
+                    ? result.Output
+                    : $"{result.Command}\n{result.Summary}";
+                _activityFeed.Add($"验证：{result.Name}", detail, result.IsSuccess ? "通过" : "失败");
+            }
+
+            var passed = results.Count(result => result.IsSuccess);
+            _setStatusMessage($"验证完成：{passed}/{results.Count} 通过。");
+            if (passed != results.Count)
+            {
+                _toast.Show("部分验证失败，请查看运行记录。", ToastLevel.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            _setStatusMessage("验证执行失败。");
+            _toast.Show(ex.Message, ToastLevel.Error);
+        }
+        finally
+        {
+            IsVerifying = false;
+            SendTaskCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     // The slash-command handler currently needs the host VM
     // (it reads /status-related fields off it). Until the slash
@@ -519,7 +644,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // — the on-disk files have been copied to the project's
     // managed location, and the temporary files are removed when
     // the PendingAttachmentViewModel is disposed.
-    private async Task PromotePendingAttachmentsAsync(ProjectWorkspace project)
+    private async Task PromotePendingAttachmentsAsync(WorkspaceProject project)
     {
         if (PendingAttachments.Count == 0)
         {
@@ -527,7 +652,6 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         }
 
         var artifactService = new AIChat.Application.Artifacts.InputArtifactService();
-        var fileStore = new AIChat.Application.Artifacts.InputArtifactFileStore();
         var snapshots = PendingAttachments.Attachments.ToList();
 
         foreach (var attachment in snapshots)
@@ -550,7 +674,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
                     },
                 };
                 var artifact = artifactService.Create(request);
-                await fileStore.StoreBytesAsync(artifact, bytes, ".png");
+                await _artifactFileStore.StoreBytesAsync(artifact, bytes, ".png");
                 project.InputArtifacts.Add(artifact);
             }
             catch (Exception ex)
@@ -565,21 +689,21 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             }
         }
 
-        // Persist the updated project (with the new artifacts) so
+        // Persist the updated workspace (with the new artifacts) so
         // the change survives an app restart. Mirror the pattern
         // AgentRunnerViewModel uses after a run lands memory
-        // updates.
-        var projects = (await _repository.LoadProjectsAsync()).ToList();
-        var index = projects.FindIndex(p => p.Id == project.Id);
+        // updates. v1: 只写 workspaces,InputArtifacts 是 workspace 字段。
+        var workspaces = (await _repository.LoadWorkspacesAsync()).ToList();
+        var index = workspaces.FindIndex(p => p.Id == project.Id);
         if (index >= 0)
         {
-            projects[index] = project;
+            workspaces[index] = project;
         }
         else
         {
-            projects.Add(project);
+            workspaces.Add(project);
         }
-        await _repository.SaveProjectsAsync(projects);
+        await _repository.SaveWorkspacesAsync(workspaces);
 
         // Drop the UI rows (Dispose deletes the temp files; the
         // managed copies in the artifact store are now the source
@@ -642,7 +766,16 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         }
         else
         {
-            SubAgentRuns.Add(new SubAgentRunViewModel(run));
+            var card = new SubAgentRunViewModel(run);
+            // 2026-08-03: wire the per-row stop button to this
+            // host's CancelSubAgent. The relay-command indirection
+            // keeps the row's view-model free of the
+            // SubAgentScheduler dependency; the host owns the
+            // lifecycle and the row only knows its own id.
+            card.StopCommand = new RelayCommand<string?>(
+                id => { if (!string.IsNullOrEmpty(id)) CancelSubAgent(id); },
+                id => id == run.Id);
+            SubAgentRuns.Add(card);
         }
         // HasSubAgentRuns is the IsVisible binding for the
         // sub-section. Collection mutations don't fire
@@ -660,6 +793,43 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         // fires its own re-raise.
         OnPropertyChanged(nameof(HasSubAgentRuns));
     }
+
+    // 2026-08-03: cancel an in-flight sub-agent. The user clicks
+    // the per-row '停止' button; this walks up through the
+    // scheduler (which holds the per-run CTS), and the next
+    // event-loop turn re-renders the row with status = Cancelled.
+    // The sub-agent finishes within one or two agent events
+    // (the cancel propagates through AgentRunner to the LLM
+    // stream, which then emits a terminal Cancelled event).
+    public void CancelSubAgent(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return;
+        }
+        try
+        {
+            _subAgentScheduler?.CancelAsync(runId);
+        }
+        catch
+        {
+            // Cancellation is best-effort; the user can re-click
+            // if the run is still running.
+        }
+    }
+
+    // 2026-08-03: set by the host after construction so
+    // CancelSubAgent has a target. Direct DI of the scheduler
+    // into the view-model is fine, but the host's
+    // CompositionRoot already has the instance and a setter
+    // is the smallest change. ServiceRegistration wires this
+    // up at AppHost.Build() time.
+    public AIChat.Application.Agents.SubAgents.SubAgentScheduler? SubAgentScheduler
+    {
+        get => _subAgentScheduler;
+        set => _subAgentScheduler = value;
+    }
+    private AIChat.Application.Agents.SubAgents.SubAgentScheduler? _subAgentScheduler;
 
     // Re-runs the context router for the current project + goal
     // and updates InputTokens. The only consumer is the
@@ -712,14 +882,14 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         try
         {
             var project = _sidebar.CurrentProject;
-            if (project is null || string.IsNullOrWhiteSpace(project.Path) || !Directory.Exists(project.Path))
+            if (project is null || string.IsNullOrWhiteSpace(project.TryGetPrimaryPath()) || !Directory.Exists(project.TryGetPrimaryPath()))
             {
                 InputTokens = 0;
                 return;
             }
 
             var resolvedGoal = string.IsNullOrWhiteSpace(goal) ? "项目概览" : goal.Trim();
-            var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.Path, maxFiles: 500), token);
+            var fileIndex = await Task.Run(() => new ProjectFileIndexBuilder().Build(project.TryGetPrimaryPath(), maxFiles: 500), token);
             var contextPack = await Task.Run(() => new ContextRouter().Route(new ContextRouterRequest
             {
                 Goal = resolvedGoal,

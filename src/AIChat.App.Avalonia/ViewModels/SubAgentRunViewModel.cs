@@ -1,5 +1,7 @@
 using AIChat.Domain.Chat;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.ViewModels;
 
@@ -27,6 +29,8 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSkipped))]
     [NotifyPropertyChangedFor(nameof(IsBudgetExceeded))]
     [NotifyPropertyChangedFor(nameof(IsCancelled))]
+    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(CanStop))]
     private string status;
 
     [ObservableProperty]
@@ -44,6 +48,19 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
     public bool IsSkipped => Status.Equals("Skipped", StringComparison.OrdinalIgnoreCase);
     public bool IsBudgetExceeded => Status.Equals("BudgetExceeded", StringComparison.OrdinalIgnoreCase);
     public bool IsCancelled => Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase);
+
+    // Per-row status color, matching the Codex-style "colored dot
+    // per state" visual. We use a small fixed palette of
+    // green / red / amber / grey so the panel stays readable
+    // without the per-run list having to know about theme tokens.
+    // Re-raised on Status change via [NotifyPropertyChangedFor].
+    public IBrush StatusBrush => IsCompleted
+        ? new SolidColorBrush(Color.Parse("#5cd6a8"))
+        : IsFailed
+            ? new SolidColorBrush(Color.Parse("#ff6b6b"))
+            : IsRunning
+                ? new SolidColorBrush(Color.Parse("#f5a623"))
+                : new SolidColorBrush(Color.Parse("#9aa0a6"));
 
     public SubAgentRunViewModel(AgentSubAgentRun run)
     {
@@ -69,7 +86,23 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
         // previous explicit re-raises were a workaround for the
         // missing attribute — keep this comment as the breadcrumb
         // if anyone ever needs to revisit the propagation rules.
+        // Re-raise CanStop because the host may have wired
+        // StopCommand after this row was created, and the
+        // IsRunning transition would otherwise leave the
+        // button permanently hidden.
+        OnPropertyChanged(nameof(CanStop));
     }
+
+    // 2026-08-03: per-row 'stop' button. The XAML binds
+    // Command="{Binding StopCommand}" with the button's
+    // IsVisible tied to IsRunning so the affordance only
+    // appears for in-flight runs. The command delegates to
+    // the host (AgentHostViewModel) which holds the
+    // SubAgentScheduler instance; the per-row VM does not
+    // need a direct reference to the scheduler.
+    public IRelayCommand? StopCommand { get; set; }
+
+    public bool CanStop => IsRunning && StopCommand?.CanExecute(Id) == true;
 
     // Match the naming AgentHarness uses for the explorer template.
     // Other templates are skipped by the current coordinator, but the

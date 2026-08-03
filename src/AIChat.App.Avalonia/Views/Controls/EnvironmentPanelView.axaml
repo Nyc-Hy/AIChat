@@ -240,7 +240,7 @@
                           Margin="0,4,0,0">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:SubAgentRunViewModel">
-                  <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Margin="0,2">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,2">
                     <TextBlock Grid.Column="0"
                                Text="{Binding TemplateDisplay}"
                                Classes="muted"
@@ -277,6 +277,22 @@
                                  FontFamily="{StaticResource FontMono}"
                                  VerticalAlignment="Center"/>
                     </StackPanel>
+                    <!--
+                      2026-08-03: per-row stop button. IsVisible is
+                      bound to CanStop (which combines IsRunning
+                      with the wired-up command), so the button
+                      only renders for in-flight runs. The
+                      command is wired by AgentHostViewModel.
+                    -->
+                    <Button Grid.Column="3"
+                            Classes="chrome-button"
+                            Padding="4,1"
+                            IsVisible="{Binding CanStop}"
+                            Command="{Binding StopCommand}"
+                            CommandParameter="{Binding Id}"
+                            ToolTip.Tip="停止该子智能体 (会取消正在进行的工具调用)">
+                      <TextBlock Text="停止" FontSize="10"/>
+                    </Button>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
