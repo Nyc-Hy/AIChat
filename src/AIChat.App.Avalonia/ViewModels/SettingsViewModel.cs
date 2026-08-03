@@ -103,6 +103,30 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private int maxAutoFixRounds;
 
+    [ObservableProperty]
+    private ThemePreference themePreference = ThemePreference.System;
+
+    partial void OnThemePreferenceChanged(ThemePreference value)
+    {
+        if (_settings.ThemePreference == value)
+        {
+            return;
+        }
+        _settings.ThemePreference = value;
+        SaveFireAndForget();
+    }
+
+    // Display list for the theme ComboBox. Static so the
+    // ItemsControl doesn't churn. The Codex parity item is
+    // just "系统 / 浅色 / 深色" — anything fancier (custom
+    // accent colors) lands in a follow-up slice.
+    public IReadOnlyList<ThemeOption> ThemeOptions { get; } =
+    [
+        new(ThemePreference.System, "跟随系统"),
+        new(ThemePreference.Light, "浅色"),
+        new(ThemePreference.Dark, "深色"),
+    ];
+
     partial void OnMaxAutoFixRoundsChanged(int value)
     {
         if (_settings.MaxAutoFixRounds == value)
@@ -110,6 +134,56 @@ public sealed partial class SettingsViewModel : ViewModelBase
             return;
         }
         _settings.MaxAutoFixRounds = value;
+        SaveFireAndForget();
+    }
+
+    // ---- Sprint 0.5: Codex-aligned 2-toggle permission model ----
+    //
+    // DefaultAccess and FullAccessEnabled compose into 4 effective
+    // states (both off / default on only / both on / default on +
+    // full off). MainWindowViewModel mirrors DefaultAccess onto
+    // NoWriteMode so the existing ⌘⇧R shortcut still drives the
+    // toggle. Writing _settings.DefaultAccess here triggers
+    // OnDefaultAccessChanged in MainWindowViewModel which cascades
+    // the badge text + NoWriteMode back; we don't write NoWriteMode
+    // ourselves to avoid the partial-method echo.
+
+    [ObservableProperty]
+    private bool defaultAccess = true;
+
+    partial void OnDefaultAccessChanged(bool value)
+    {
+        if (_settings.DefaultAccess == value)
+        {
+            return;
+        }
+        _settings.DefaultAccess = value;
+        SaveFireAndForget();
+    }
+
+    [ObservableProperty]
+    private bool fullAccessEnabled;
+
+    partial void OnFullAccessEnabledChanged(bool value)
+    {
+        if (_settings.FullAccessEnabled == value)
+        {
+            return;
+        }
+        _settings.FullAccessEnabled = value;
+        SaveFireAndForget();
+    }
+
+    [ObservableProperty]
+    private bool environmentPanelOpen = true;
+
+    partial void OnEnvironmentPanelOpenChanged(bool value)
+    {
+        if (_settings.EnvironmentPanelOpen == value)
+        {
+            return;
+        }
+        _settings.EnvironmentPanelOpen = value;
         SaveFireAndForget();
     }
 
@@ -163,6 +237,116 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _toolRegistry = toolRegistry;
     }
 
+    // ---- Wave 10: 4-category navigation + search ----
+
+    // The left rail binds to this. Static so the ItemsControl
+    // doesn't churn; the user picks one and CurrentCategory
+    // flips to the corresponding value.
+    public IReadOnlyList<SettingsCategoryOption> Categories { get; } =
+    [
+        new(SettingsCategory.Personal, "个人", "生成参数 / 主题 / 执行模式"),
+        new(SettingsCategory.Integrations, "集成", "模型提供方 / 插件"),
+        new(SettingsCategory.Coding, "编码", "安全策略 / 工具权限 / 修复轮数"),
+        new(SettingsCategory.Archived, "已归档", "已归档的会话(暂未实现)"),
+    ];
+
+    [RelayCommand]
+    private void ShowCategory(string? category)
+    {
+        if (Enum.TryParse<SettingsCategory>(category, out var parsed))
+        {
+            CurrentCategory = parsed;
+        }
+    }
+
+    // Search box at the top of the modal. When non-empty,
+    // the XAML shows every section across all categories
+    // that matches the search text — so the user can
+    // "find the Temperature setting" without first picking
+    // the right category. The debounce is intentionally
+    // trivial: Avalonia's TextBox fires PropertyChanged
+    // on every keystroke, and the filter is a single
+    // pass over < 20 strings. 500ms SLA from plan §7
+    // Wave 10 is trivially met.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPersonalSectionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsIntegrationsSectionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsCodingSectionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsArchivedSectionVisible))]
+    private string searchText = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsPersonalSectionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsIntegrationsSectionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsCodingSectionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsArchivedSectionVisible))]
+    private SettingsCategory currentCategory = SettingsCategory.Personal;
+
+    // Section visibility properties — one per category.
+    // The XAML binds IsVisible to these instead of method
+    // calls (Avalonia's method-binding is too fragile to
+    // route through the Settings property on the host VM).
+    // Search override: any non-whitespace needle that
+    // matches the section's keyword set shows the section
+    // regardless of which category is selected.
+    private static readonly string[] PersonalKeywords =
+    [
+        "生成参数", "执行模式", "主题", "外观",
+        "Temperature", "MaxOutputTokens", "Retry",
+        "standard", "fast", "deep",
+        "标准", "快速", "深度",
+        "system", "light", "dark",
+        "系统", "浅色", "深色"
+    ];
+    private static readonly string[] IntegrationsKeywords =
+    [
+        "模型", "提供方", "插件",
+        "provider", "api", "key", "base", "url",
+        "plugin", "plugin.json",
+        "可用"
+    ];
+    private static readonly string[] CodingKeywords =
+    [
+        "安全", "只读", "工具", "权限",
+        "自动修复", "自动验证",
+        "no-write", "no write", "auto-verify", "auto-fix",
+        "tool", "permission", "preset",
+        "只读自动", "全部确认", "恢复默认"
+    ];
+    private static readonly string[] ArchivedKeywords =
+    [
+        "归档", "archive", "已归档"
+    ];
+
+    public bool IsPersonalSectionVisible =>
+        IsSectionVisible(SettingsCategory.Personal, PersonalKeywords);
+
+    public bool IsIntegrationsSectionVisible =>
+        IsSectionVisible(SettingsCategory.Integrations, IntegrationsKeywords);
+
+    public bool IsCodingSectionVisible =>
+        IsSectionVisible(SettingsCategory.Coding, CodingKeywords);
+
+    public bool IsArchivedSectionVisible =>
+        IsSectionVisible(SettingsCategory.Archived, ArchivedKeywords);
+
+    private bool IsSectionVisible(SettingsCategory sectionCategory, IReadOnlyList<string> keywords)
+    {
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            var needle = SearchText.Trim();
+            foreach (var term in keywords)
+            {
+                if (term.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return sectionCategory == CurrentCategory;
+    }
+
     // Refresh is called by the host's RefreshAsync after settings
     // load + normalization. Seeds all mirrors from the just-loaded
     // AppSettings and rebuilds the per-tool rows. Each mirror
@@ -177,6 +361,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
         UseTokenizerEstimation = _settings.UseTokenizerEstimation;
         MaxAutoFixRounds = _settings.MaxAutoFixRounds;
         AgentExecutionMode = _settings.AgentExecutionMode;
+        ThemePreference = _settings.ThemePreference;
+        // Sprint 0.5: pull the 2-toggle permission model + the
+        // Environment panel visibility from the just-loaded settings
+        // so the modal's UI matches the user's last state when they
+        // re-open the settings sheet.
+        DefaultAccess = _settings.DefaultAccess;
+        FullAccessEnabled = _settings.FullAccessEnabled;
+        EnvironmentPanelOpen = _settings.EnvironmentPanelOpen;
 
         Tools.Clear();
         foreach (var (tool, metadata) in _toolRegistry.AllWithMetadata())
@@ -232,13 +424,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void ApplyDefaultPreset()
     {
-        // Removing the ToolPermissionModes entry is the
-        // "absence" signal that the per-row getter falls back to
-        // DefaultPermissionMode. Re-rendering the rows after
-        // the clear requires no extra work — the next
-        // PropertyChanged refresh will re-read the cleared map
-        // and show the default.
+        // Reset both halves of the tool policy. EnabledToolIds is the
+        // availability boundary, while an absent permission entry falls back
+        // to the registry default.
         _settings.ToolPermissionModes.Clear();
+        _settings.EnabledToolIds = _toolRegistry.All.Select(tool => tool.Id).ToList();
         SaveFireAndForget();
         Refresh();
     }
@@ -265,14 +455,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
         if (row.SelectedMode == ToolPermissionMode.Disabled)
         {
-            // Disabled is the absence semantic. Drop the
-            // ToolPermissionModes entry (the absence is the
-            // signal; a stored Disabled value would just be
-            // redundant) and remove the tool from EnabledToolIds
-            // so the system prompt's tool list doesn't include
-            // it. Re-enabling (picking any other mode) re-adds
-            // the id to EnabledToolIds in the else branch.
-            _settings.ToolPermissionModes.Remove(row.Id);
+            // Preserve Disabled explicitly so an empty EnabledToolIds list can
+            // mean "the user disabled everything" instead of "fresh settings".
+            _settings.ToolPermissionModes[row.Id] = ToolPermissionMode.Disabled;
             _settings.EnabledToolIds.RemoveAll(id =>
                 string.Equals(id, row.Id, StringComparison.OrdinalIgnoreCase));
         }
@@ -302,3 +487,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
             .ContinueWith(task => _ = task.Exception, TaskScheduler.Default);
     }
 }
+
+// Display label for the theme ComboBox. Same shape as
+// AgentExecutionModeOption / ToolModeOption — a small
+// record so the XAML can bind to a user-facing string
+// instead of the raw enum value.
+public sealed record ThemeOption(ThemePreference Mode, string Label);
