@@ -57,6 +57,19 @@ public static class ServiceRegistration
         services.AddSingleton<IScheduledTaskRegistry, ScheduledTaskRegistry>();
         services.AddSingleton<ISiteRegistry, SiteRegistry>();
 
+        // 1.0.1: the cron engine. Application-layer
+        // ScheduledTaskRunner does the cadence math +
+        // tick scan; the App-layer executor routes a
+        // due task through AgentHost.SendTaskAsync.
+        // SchedulerHostedService drives the runner on
+        // a 30s PeriodicTimer (lifetime tied to the
+        // desktop window — when the user closes the
+        // app, the tick stops; when they reopen, it
+        // resumes from the same registry state).
+        services.AddSingleton<IScheduledTaskExecutor, AgentHostScheduledTaskExecutor>();
+        services.AddSingleton<ScheduledTaskRunner>();
+        services.AddSingleton<SchedulerHostedService>();
+
         // Wave 7 follow-up (plan §13 P0 risk "整个子进程树"):
         // BackgroundProcessSupervisor. Owns the persistence +
         // process-tree kill path; the Environment panel

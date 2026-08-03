@@ -39,6 +39,19 @@ public partial class App : global::Avalonia.Application
             _host = AppHost.Build();
             var mainWindow = _host.GetRequiredService<MainWindow>();
             desktop.MainWindow = mainWindow;
+            // 1.0.1: start the cron engine. The
+            // hosted service runs a PeriodicTimer
+            // (30s tick) that drives ScheduledTaskRunner
+            // — every tick scans the registry for due
+            // tasks and fires them through the
+            // IScheduledTaskExecutor (which routes
+            // through AgentHost.SendTaskAsync). The
+            // service is a singleton; we own the
+            // start/stop lifecycle here so the tick
+            // is gone before the DI container is
+            // disposed on shutdown.
+            var scheduler = _host.GetRequiredService<SchedulerHostedService>();
+            scheduler.Start();
             desktop.Exit += (_, _) =>
             {
                 // 2026-08-03: stop background processes (Sites previews
@@ -50,6 +63,15 @@ public partial class App : global::Avalonia.Application
                 // macOS / Linux parent death.
                 if (_host is not null)
                 {
+                    try
+                    {
+                        scheduler.DisposeAsync().AsTask()
+                            .GetAwaiter().GetResult();
+                    }
+                    catch
+                    {
+                        // Shutdown path: never let cleanup throw.
+                    }
                     try
                     {
                         var supervisor = _host.GetService<IBackgroundProcessSupervisor>();

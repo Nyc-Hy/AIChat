@@ -132,8 +132,8 @@
                         <Button Classes="chrome-button" Padding="6,2"
                                 Command="{Binding $parent[ItemsControl].((vm:ScheduledViewModel)DataContext).RunNowCommand}"
                                 CommandParameter="{Binding}"
-                                ToolTip.Tip="记录运行 (Wave 9 first slice — 真实 prompt 执行待 follow-up)">
-                          <TextBlock Text="记录运行" FontSize="11"/>
+                                ToolTip.Tip="立即运行（将 prompt 推入 agent 队列,完成后写入历史）">
+                          <TextBlock Text="立即运行" FontSize="11"/>
                         </Button>
                         <Button Classes="chrome-button" Padding="6,2"
                                 Command="{Binding $parent[ItemsControl].((vm:ScheduledViewModel)DataContext).RemoveCommand}"
