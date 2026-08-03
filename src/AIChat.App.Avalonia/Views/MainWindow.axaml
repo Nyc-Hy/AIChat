@@ -505,6 +505,22 @@
                                 <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
                                 <StackPanel Spacing="2">
                                     <ItemsControl ItemsSource="{Binding RecentItems}">
+                                        <!--
+                                          Virtualize the "最近" / conversation
+                                          history list. A heavy daily-driver user
+                                          can have 200+ sessions accumulated; the
+                                          default StackPanel instantiates every
+                                          row's Button (with its own template +
+                                          hover state) and the sidebar starts
+                                          to jank when the user scrolls back
+                                          through deep history. VirtualizingStackPanel
+                                          only realises the visible window.
+                                        -->
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:RecentItemViewModel">
                                                 <Button Classes="sidebar-row"
@@ -748,6 +764,12 @@
                                                   ScrollToEnd APIs used by
                                                   MainWindow.xaml.cs work the same way
                                                   under the virtualizing panel.
+
+                                                  Avalonia 12's VirtualizingStackPanel
+                                                  recycles containers by default; there
+                                                  is no ItemsControl.VirtualizationMode
+                                                  setter to toggle (removed when the
+                                                  IDataTemplate virtualisation work landed).
                                                 -->
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
@@ -907,6 +929,20 @@
                                                    VerticalAlignment="Center"/>
                                     </Grid>
                                     <ItemsControl ItemsSource="{Binding AgentHost.PlanItems}">
+                                        <!--
+                                          Virtualize the plan item list. Long
+                                          agent runs can produce 50+ plan
+                                          items, and the panel is open for
+                                          the whole duration of the run.
+                                          Without virtualization the agent
+                                          text additions + plan clears cause
+                                          a visible stutter on every step.
+                                        -->
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate x:DataType="vm:PlanItemViewModel">
                                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,2">
@@ -942,6 +978,22 @@
                                         <Border Classes="section-divider" Margin="0,6,0,2"/>
                                         <TextBlock Text="子 Agent" Classes="section-title"/>
                                         <ItemsControl ItemsSource="{Binding AgentHost.SubAgentRuns}">
+                                            <!--
+                                              Virtualize the sub-agent run list.
+                                              Parallel explorer dispatches can
+                                              fan out 20+ rows in a single run;
+                                              each row carries a duration timer
+                                              that ticks once a second, so non-
+                                              virtualized rows re-templated on
+                                              every tick. With virtualization
+                                              only the visible windows pay the
+                                              re-templating cost.
+                                            -->
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <VirtualizingStackPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:SubAgentRunViewModel">
                                                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2">
