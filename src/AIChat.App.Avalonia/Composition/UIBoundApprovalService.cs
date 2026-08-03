@@ -23,4 +23,7 @@ public sealed class UIBoundApprovalService : IApprovalService
 
     public Task<ToolApprovalDecision> RequestApprovalAsync(ToolApprovalRequest request, CancellationToken cancellationToken)
         => _viewModel.PresentRequestAsync(request, cancellationToken);
+
+    public void RejectPendingIfAny(string reason)
+        => _viewModel.RejectPendingIfAny(reason);
 }

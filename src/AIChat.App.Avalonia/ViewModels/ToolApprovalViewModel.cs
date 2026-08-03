@@ -172,6 +172,30 @@ public sealed partial class ToolApprovalViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanResolve))]
     private void Reject() => Resolve(ToolApprovalDecision.Reject("已在界面中拒绝。"));
 
+    // 1.0.1: forced-reject the current pending
+    // approval, called by the IApprovalService when
+    // the cron engine's unattended-timeout fires.
+    // No-op when no approval is pending so a stray
+    // timeout from a non-background run can't
+    // accidentally reject a user-initiated approval
+    // that's in flight. The reason lands in the
+    // run-history message so the user sees
+    // "auto-rejected (无人值守 timeout)" when they
+    // come back.
+    public void RejectPendingIfAny(string reason)
+    {
+        TaskCompletionSource<ToolApprovalDecision>? completion;
+        lock (_gate)
+        {
+            completion = _pending;
+        }
+        if (completion is null)
+        {
+            return;
+        }
+        Resolve(ToolApprovalDecision.Reject(reason));
+    }
+
     private bool CanResolve() => HasPendingApproval;
 
     private void Resolve(ToolApprovalDecision decision)

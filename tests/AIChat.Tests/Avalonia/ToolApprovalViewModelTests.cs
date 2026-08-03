@@ -153,6 +153,83 @@ public class ToolApprovalViewModelTests
         Assert.Equal("只读模式已开启。", decision.Reason);
     }
 
+    // ---- 1.0.1: cron-engine unattended-approval-timeout ----
+
+    [Fact]
+    public void RejectPendingIfAny_NoPending_IsNoOp()
+    {
+        var vm = new ToolApprovalViewModel();
+
+        // Should not throw, should not flip
+        // HasPendingApproval, should not fire
+        // RequestResolved (there's nothing to
+        // resolve).
+        var resolvedFired = false;
+        vm.RequestResolved += (_, _) => resolvedFired = true;
+
+        vm.RejectPendingIfAny("无人值守 timeout");
+
+        Assert.False(vm.HasPendingApproval);
+        Assert.False(resolvedFired);
+    }
+
+    [Fact]
+    public async Task RejectPendingIfAny_Pending_RejectsWithSuppliedReason()
+    {
+        var vm = new ToolApprovalViewModel();
+        var request = NewRequest("write_file");
+
+        // Kick off the presentation. The VM is
+        // synchronous in the headless test host
+        // (no Avalonia dispatcher), so by the time
+        // PresentRequestAsync returns the surface
+        // is already populated and HasPendingApproval
+        // is true.
+        var presented = vm.PresentRequestAsync(request, CancellationToken.None);
+
+        Assert.True(vm.HasPendingApproval);
+
+        // Now reject from the unattended-timeout path.
+        vm.RejectPendingIfAny("auto-rejected (无人值守 timeout)");
+
+        // HasPendingApproval flips off, the original
+        // awaiter resolves with a Reject decision
+        // whose reason matches the timeout message.
+        Assert.False(vm.HasPendingApproval);
+        var decision = await presented;
+        Assert.False(decision.IsApproved);
+        Assert.Contains("无人值守", decision.Reason ?? "",
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RejectPendingIfAny_AfterUserRejects_DoesNotDoubleResolve()
+    {
+        // Defensive contract: if the user beats the
+        // timeout to the punch and clicks Reject
+        // themselves, the pending request is already
+        // resolved. The cron engine's later
+        // RejectPendingIfAny call is a no-op (the VM
+        // has nothing pending). The original
+        // awaiter's decision still reflects the
+        // user's click, not the timeout.
+        var vm = new ToolApprovalViewModel();
+        var request = NewRequest("write_file");
+        var presented = vm.PresentRequestAsync(request, CancellationToken.None);
+
+        // User rejects first.
+        vm.RejectCommand.Execute(null);
+        var userDecision = await presented;
+        Assert.False(userDecision.IsApproved);
+
+        // Cron-engine timeout fires after the user
+        // already resolved. No-op; the previous
+        // decision stays the user's.
+        vm.RejectPendingIfAny("auto-rejected (无人值守 timeout)");
+
+        Assert.False(vm.HasPendingApproval);
+    }
+
     private static ToolApprovalRequest NewRequest(string toolName)
     {
         return new ToolApprovalRequest
