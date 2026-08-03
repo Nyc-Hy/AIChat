@@ -201,25 +201,18 @@ public sealed class SourceRowViewModel
     public string DisplayName { get; }
     public string? Detail { get; }
 
-    // 1.0.1: full backend Source reference + per-row
-    // insert hook. The "引用" button binds to
-    // InsertReferenceCommand, which simply invokes
-    // OnInsertRequested — the parent EnvironmentPanelViewModel
-    // wires that hook to its own InsertReferenceRequested
-    // event in RecountSources, and MainWindow.xaml.cs
-    // subscribes to the event to read the composer's
-    // live CaretIndex at click time. The previous
-    // "InsertReferenceCommand" closed over the source
-    // and a DraftPrompt-mutating lambda, but the
-    // command runs in the VM layer with no UI
-    // affordance — the button always landed at
-    // DraftPrompt.Length, which is exactly the
-    // "reference shows up at the end" bug this
-    // slice fixes.
+    // 1.0.1: full backend Source reference so the
+    // EnvironmentPanelView XAML Click handler can
+    // raise the panel's InsertReferenceRequested
+    // event with the row's Source payload. The
+    // previous design had InsertReferenceCommand
+    // + OnInsertRequested as a fallback bridge
+    // (in case the XAML's Click wiring was lost),
+    // but the path is fully wired now and the
+    // fallback would only get exercised if
+    // EnvironmentPanelView.axaml.cs was deleted
+    // — dead code, removed.
     public AIChat.Domain.Sources.Source? Source { get; set; }
-    public Action<AIChat.Domain.Sources.Source>? OnInsertRequested { get; set; }
-
-    public IRelayCommand? InsertReferenceCommand { get; set; }
 
     public SourceRowViewModel(
         string id,
@@ -718,46 +711,18 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
                 displayName: source.DisplayName,
                 detail: FormatSourceDetail(source))
             {
-                // 1.0.1: hand the full Source reference
-                // to the row so the XAML Click handler
-                // can call
-                // AgentHost.InsertSourceReferenceAtCaret
-                // directly with the live TextBox
-                // CaretIndex. The handler is in
-                // MainWindow.xaml.cs (bubble-routed
-                // from EnvironmentPanelView's per-row
-                // button) so it can see the composer
-                // control — the per-row command
-                // binding was decoupled from the
-                // composer, which is exactly why it
-                // always fell back to the end of the
-                // prompt.
-                Source = source,
-                // Relay via the panel's
-                // InsertReferenceRequested event so
-                // MainWindow.xaml.cs can read the
+                // 1.0.1: hand the full Source
+                // reference to the row so the XAML
+                // Click handler in
+                // EnvironmentPanelView.axaml.cs can
+                // cast Tag → row.Source and raise
+                // the panel's
+                // InsertReferenceRequested event.
+                // MainWindow.xaml.cs subscribes to
+                // that event to read the live
                 // composer CaretIndex at click time.
-                // The event is the bridge between
-                // the side panel and the composer
-                // — both live in MainWindow.axaml
-                // but the per-row command binding
-                // is bound to the row's
-                // DataContext (the panel VM), not
-                // the composer's.
-                OnInsertRequested = s => InsertReferenceRequested?.Invoke(s),
+                Source = source,
             };
-            // Wire the command *after* the object
-            // initialiser closes — the lambda body
-            // can't reference `row` from inside the
-            // `{ ... }` block (the variable is
-            // being defined there). The closure
-            // captures `source` (the loop var, in
-            // scope at this point) and the row
-            // reaches its hook via the
-            // OnInsertRequested property we just
-            // set above.
-            row.InsertReferenceCommand = new RelayCommand(() =>
-                row.OnInsertRequested?.Invoke(source));
             Sources.Add(row);
         }
     }
