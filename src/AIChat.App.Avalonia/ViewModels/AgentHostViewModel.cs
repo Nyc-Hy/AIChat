@@ -834,7 +834,25 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // attachment path: a single bad reference doesn't
     // kill the send; we record a system bubble so the
     // user notices without the run being blocked.
-    private async Task PromoteSourceReferencesAsync(
+    // 1.0.1: internal so headless tests can drive
+    // the @-reference → InputArtifact pipeline
+    // directly without firing the full agent loop.
+    // Visibility wired via
+    // [InternalsVisibleTo("AIChat.Tests")] on
+    // AIChat.App.Avalonia.csproj (Wave 11 review
+    // fix). The send path calls this from
+    // SendTaskAsync; tests call it with a synthetic
+    // prompt and project to lock down the four
+    // observable contracts:
+    //   - no references → no-op
+    //   - 1 reference → 1 InputArtifact on the
+    //     project, persisted to the repository
+    //   - 2 references → 2 InputArtifacts, both
+    //     persisted
+    //   - per-reference failure isolation (a bad
+    //     artifact doesn't kill the rest of the
+    //     send)
+    internal async Task PromoteSourceReferencesAsync(
         string prompt,
         WorkspaceProject project)
     {
