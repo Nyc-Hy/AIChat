@@ -118,4 +118,28 @@ public partial class EnvironmentPanelView : UserControl
             }
         }
     }
+
+    // 1.0.1: per-row "引用" click handler. Forwards
+    // the row's Source to the panel VM's
+    // InsertReferenceRequested event so MainWindow.xaml.cs
+    // can read the live composer CaretIndex at click
+    // time (the per-row command binding can't see the
+    // composer because the row's DataContext is the
+    // panel VM, not the MainWindow VM that owns the
+    // composer TextBox). Pending-attachment rows
+    // don't have a Source — the button's IsVisible
+    // binding hides them, so this branch only
+    // fires for real Source rows.
+    private void SourceInsert_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: SourceRowViewModel row }
+            || row.Source is null)
+        {
+            return;
+        }
+        if (DataContext is EnvironmentPanelViewModel vm)
+        {
+            vm.RaiseInsertReferenceRequested(row.Source);
+        }
+    }
 }

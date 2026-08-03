@@ -201,15 +201,25 @@ public sealed class SourceRowViewModel
     public string DisplayName { get; }
     public string? Detail { get; }
 
-    // Per-row "insert @-reference" command. The
-    // per-row button binds to this; the parent
-    // EnvironmentPanelViewModel wires the actual
-    // DraftPrompt append so this VM stays decoupled
-    // from AgentHost. Null when the row is a
-    // pending attachment (no Source.Id to
-    // reference — the paste path sends the image
-    // as a normal artifact, not an @-reference).
-    public System.Windows.Input.ICommand? InsertReferenceCommand { get; set; }
+    // 1.0.1: full backend Source reference + per-row
+    // insert hook. The "引用" button binds to
+    // InsertReferenceCommand, which simply invokes
+    // OnInsertRequested — the parent EnvironmentPanelViewModel
+    // wires that hook to its own InsertReferenceRequested
+    // event in RecountSources, and MainWindow.xaml.cs
+    // subscribes to the event to read the composer's
+    // live CaretIndex at click time. The previous
+    // "InsertReferenceCommand" closed over the source
+    // and a DraftPrompt-mutating lambda, but the
+    // command runs in the VM layer with no UI
+    // affordance — the button always landed at
+    // DraftPrompt.Length, which is exactly the
+    // "reference shows up at the end" bug this
+    // slice fixes.
+    public AIChat.Domain.Sources.Source? Source { get; set; }
+    public Action<AIChat.Domain.Sources.Source>? OnInsertRequested { get; set; }
+
+    public IRelayCommand? InsertReferenceCommand { get; set; }
 
     public SourceRowViewModel(
         string id,
@@ -334,6 +344,33 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     // a real source behind it. The "查看全部" button below the
     // list is the only placeholder that ships in this slice.
     public ObservableCollection<SourceRowViewModel> Sources { get; } = [];
+
+    // 1.0.1: raised by the per-row "引用" button on a
+    // Source row. The handler is MainWindow.xaml.cs,
+    // which reads PromptInput.CaretIndex at click
+    // time and forwards the Source to
+    // AgentHostViewModel.InsertSourceReferenceAtCaret.
+    // The event is the bridge between the side panel
+    // and the composer — both live in MainWindow.axaml
+    // but the per-row command binding on a Source row
+    // can't see the composer because commands run in
+    // the row's DataContext (the panel VM), not the
+    // MainWindowViewModel that owns the composer
+    // TextBox.
+    public event Action<AIChat.Domain.Sources.Source>? InsertReferenceRequested;
+
+    // 1.0.1: public raise helper so the XAML
+    // click handler (EnvironmentPanelView.axaml.cs)
+    // can fire InsertReferenceRequested without
+    // taking a direct dependency on the
+    // EnvironmentPanelViewModel-internalised
+    // RelayCommand path. The button binds the
+    // Click event and the row's Tag, so the
+    // code-behind is the natural bridge.
+    public void RaiseInsertReferenceRequested(AIChat.Domain.Sources.Source source)
+    {
+        InsertReferenceRequested?.Invoke(source);
+    }
 
     [ObservableProperty]
     private string lastRefreshDisplay = "尚未刷新";
@@ -679,42 +716,60 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
                 id: source.Id,
                 kind: source.Kind,
                 displayName: source.DisplayName,
-                detail: FormatSourceDetail(source));
-            // Per-row "insert @-reference" button
-            // appends the source's id-prefixed
-            // reference to the composer prompt. The
-            // path through AgentHost keeps this VM
-            // decoupled from the agent loop (it just
-            // mutates DraftPrompt — the agent's
-            // SendTaskCommand reads DraftPrompt
-            // again, runs the @-parser, and attaches
-            // the resolved Source body as an
-            // InputArtifact).
+                detail: FormatSourceDetail(source))
+            {
+                // 1.0.1: hand the full Source reference
+                // to the row so the XAML Click handler
+                // can call
+                // AgentHost.InsertSourceReferenceAtCaret
+                // directly with the live TextBox
+                // CaretIndex. The handler is in
+                // MainWindow.xaml.cs (bubble-routed
+                // from EnvironmentPanelView's per-row
+                // button) so it can see the composer
+                // control — the per-row command
+                // binding was decoupled from the
+                // composer, which is exactly why it
+                // always fell back to the end of the
+                // prompt.
+                Source = source,
+                // Relay via the panel's
+                // InsertReferenceRequested event so
+                // MainWindow.xaml.cs can read the
+                // composer CaretIndex at click time.
+                // The event is the bridge between
+                // the side panel and the composer
+                // — both live in MainWindow.axaml
+                // but the per-row command binding
+                // is bound to the row's
+                // DataContext (the panel VM), not
+                // the composer's.
+                OnInsertRequested = s => InsertReferenceRequested?.Invoke(s),
+            };
+            // Wire the command *after* the object
+            // initialiser closes — the lambda body
+            // can't reference `row` from inside the
+            // `{ ... }` block (the variable is
+            // being defined there). The closure
+            // captures `source` (the loop var, in
+            // scope at this point) and the row
+            // reaches its hook via the
+            // OnInsertRequested property we just
+            // set above.
             row.InsertReferenceCommand = new RelayCommand(() =>
-                _agentHost.DraftPrompt = InsertReference(_agentHost.DraftPrompt, source));
+                row.OnInsertRequested?.Invoke(source));
             Sources.Add(row);
         }
     }
 
-    // Inserts a unique @-reference into the prompt
-    // (dedupes against the user's existing prompt so
-    // clicking the button 3 times doesn't insert
-    // 3 copies). The reference text is owned by
-    // SourceReferenceParser.FormatReference so a
-    // future syntax change only touches one place.
-    private static string InsertReference(string currentPrompt, AIChat.Domain.Sources.Source source)
-    {
-        var reference = AIChat.Application.Sources.SourceReferenceParser.FormatReference(source);
-        if (currentPrompt.Contains(reference, StringComparison.Ordinal))
-        {
-            return currentPrompt;
-        }
-        // Leading space when the prompt is non-empty
-        // so the inserted reference doesn't fuse
-        // onto the previous word.
-        var prefix = string.IsNullOrWhiteSpace(currentPrompt) ? "" : " ";
-        return currentPrompt + prefix + reference;
-    }
+    // 1.0.1: the previous "InsertReference" static helper
+    // is gone — the click path is now
+    //   XAML Click → MainWindow.xaml.cs SourceInsert_OnClick
+    //   → AgentHostViewModel.InsertSourceReferenceAtCaret
+    // because the helper couldn't see the TextBox's live
+    // CaretIndex from the VM layer (command bindings run
+    // outside the visual tree). All the dedup / spacing
+    // logic moved into InsertSourceReferenceAtCaret.
 
     private static string FormatSourceDetail(AIChat.Domain.Sources.Source source)
     {

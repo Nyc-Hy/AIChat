@@ -22,6 +22,14 @@ internal partial class MainWindow : Window
     private readonly ISettingsHolder _settingsHolder;
     private readonly ISourceRegistry _sourceRegistry;
     private readonly IWebPageFetcher _webPageFetcher;
+    // 1.0.1: kept around after the constructor so click
+    // handlers (SourceInsert_OnClick) can route through
+    // AgentHostViewModel. The DataContext holds the same
+    // reference but casting on every click is fragile —
+    // if a future refactor moves the source row's
+    // DataContext to something other than
+    // MainWindowViewModel, the cast would silently throw.
+    private readonly MainWindowViewModel _viewModel;
     // Set to true once ApplyPersistedBounds has run so the closing
     // handler knows the live Position / Size are the user-adjusted
     // values rather than the values we just restored from disk.
@@ -49,6 +57,7 @@ internal partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = viewModel;
+        _viewModel = viewModel;
         _picker = picker;
         _clipboard = clipboard;
         _theme = theme;
@@ -363,6 +372,40 @@ internal partial class MainWindow : Window
             {
                 CommandPalette.FocusSearchInput();
             }
+        };
+
+        // 1.0.1: bridge from the side panel's per-row
+        // "引用" click to the composer. The panel's
+        // EnvironmentPanelViewModel raises
+        // InsertReferenceRequested; the row's command
+        // binding can't see the composer because the
+        // row's DataContext is the panel VM, not the
+        // MainWindow VM that owns the composer TextBox.
+        // We handle the click here so we can read
+        // PromptInput.CaretIndex synchronously at
+        // click time (Avalonia raises the click event
+        // after the caret has already moved, so the
+        // index is the one the user sees).
+        viewModel.EnvironmentPanel.InsertReferenceRequested += source =>
+        {
+            var caret = PromptInput.CaretIndex;
+            _viewModel.AgentHost.InsertSourceReferenceAtCaret(source, caret);
+            // Move the caret just past the inserted
+            // reference so the user can keep typing
+            // without first clicking back into the
+            // box. Skip when the reference landed at
+            // the end (no point — caret was already
+            // there) and when the prompt is empty
+            // (the splice put the reference at 0,
+            // caret = length now too, but the
+            // auto-scroll behaviour is friendlier
+            // when we leave the caret on the
+            // reference text).
+            var insertedLength = AIChat.Application.Sources.SourceReferenceParser
+                .FormatReference(source).Length + 1; // +1 for the trailing space
+            PromptInput.CaretIndex = Math.Min(
+                caret + insertedLength,
+                PromptInput.Text?.Length ?? 0);
         };
     }
 

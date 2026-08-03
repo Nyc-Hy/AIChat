@@ -361,9 +361,10 @@
                     <Button Grid.Column="2"
                             Classes="chrome-button"
                             Padding="6,1"
-                            IsVisible="{Binding InsertReferenceCommand, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
-                            Command="{Binding InsertReferenceCommand}"
-                            ToolTip.Tip="插入 @-引用到 composer">
+                            IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                            Click="SourceInsert_OnClick"
+                            Tag="{Binding}"
+                            ToolTip.Tip="在光标位置插入 @-引用到 composer">
                       <TextBlock Text="引用" FontSize="10"/>
                     </Button>
                   </Grid>

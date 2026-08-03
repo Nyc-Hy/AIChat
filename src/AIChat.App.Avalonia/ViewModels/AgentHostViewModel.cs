@@ -262,6 +262,63 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         _ = RecomputeContextInputTokensAsync(value);
     }
 
+    // 1.0.1: insert a Source's @-reference at the given
+    // caret index in DraftPrompt. The previous behaviour
+    // (insert via EnvironmentPanel's per-row "引用"
+    // button) always *appended* to the end of the
+    // prompt — fine for a one-line draft, but a daily-
+    // driver user mid-paragraph who jumps to the side
+    // panel to grab a source reference, clicks 引用,
+    // and watches the text land at the very end of the
+    // prompt (not where the caret was) had to manually
+    // cut and paste it back. This method takes the
+    // caretIndex from the XAML (the TextBox's live
+    // CaretIndex at click time) and splices the
+    // reference in place.
+    //
+    // Dedupes against the existing prompt (matching the
+    // previous append behaviour): clicking the button
+    // twice in a row with the caret parked at the same
+    // spot is a no-op the second time, so an over-eager
+    // click doesn't land two copies of the same
+    // reference text. Caret clamps to the current
+    // DraftPrompt length so a stale caret from a longer
+    // draft can't throw — we just land at the end.
+    public void InsertSourceReferenceAtCaret(
+        AIChat.Domain.Sources.Source source,
+        int caretIndex)
+    {
+        if (source is null)
+        {
+            return;
+        }
+        var reference = AIChat.Application.Sources.SourceReferenceParser.FormatReference(source);
+        var current = DraftPrompt ?? "";
+        if (current.Contains(reference, StringComparison.Ordinal))
+        {
+            return;
+        }
+        // Caret may be stale if the user deleted text
+        // after a previous click; clamp so we don't
+        // ArgumentOutOfRange the splice.
+        var safeCaret = Math.Clamp(caretIndex, 0, current.Length);
+        var before = current[..safeCaret];
+        var after = current[safeCaret..];
+        // Insert a leading space when the splice
+        // boundary has a non-whitespace char on the
+        // left (so we don't fuse "@web:abc" onto the
+        // previous word like "hello@web:abc") and a
+        // trailing space when the right side starts
+        // with a non-whitespace char (so the
+        // reference doesn't fuse onto the next word
+        // either).
+        var needsLeading = before.Length > 0 && !char.IsWhiteSpace(before[^1]);
+        var needsTrailing = after.Length > 0 && !char.IsWhiteSpace(after[0]);
+        var leading = needsLeading ? " " : "";
+        var trailing = needsTrailing ? " " : "";
+        DraftPrompt = before + leading + reference + trailing + after;
+    }
+
     public void RecomputeOnNoWriteModeChanged()
     {
         // Called by the host's OnNoWriteModeChanged partial. The

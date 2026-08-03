@@ -95,6 +95,150 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.Equal("", host.DraftPrompt);
     }
 
+    // ---- 1.0.1: insert @-reference at composer caret ----
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_EmptyPrompt_LandsAtStart()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+
+        host.InsertSourceReferenceAtCaret(source, 0);
+
+        Assert.Equal("@web:abc", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_AtStart_AppendsTrailingSpace()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+        host.DraftPrompt = "hello";
+
+        host.InsertSourceReferenceAtCaret(source, 0);
+
+        // Caret sits at offset 0 — no char to the
+        // left to fuse onto, so the method emits
+        // just the trailing separator (the
+        // reference and the next word would
+        // otherwise glue together as
+        // "@web:abchello"). No leading space
+        // because there's no left neighbour.
+        Assert.Equal("@web:abc hello", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_AtMid_SplicesAtCaret()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+        host.DraftPrompt = "prefix suffix";
+
+        // Caret at offset 6 sits between "prefix"
+        // and the space; the splice should land the
+        // reference between the two words with a
+        // leading space (the previous char is "x",
+        // not whitespace) and a trailing space (the
+        // next char is "s" of "suffix", not
+        // whitespace). The space inside the
+        // original prompt is preserved on the
+        // right-hand side.
+        host.InsertSourceReferenceAtCaret(source, 6);
+
+        Assert.Equal("prefix @web:abc suffix", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_AtEnd_AppendsWithLeadingSpace()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+        host.DraftPrompt = "hello";
+
+        host.InsertSourceReferenceAtCaret(source, host.DraftPrompt.Length);
+
+        // Leading space because the previous char
+        // is non-whitespace; no trailing space
+        // because nothing follows.
+        Assert.Equal("hello @web:abc", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_StaleCaret_ClampsToEnd()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+        host.DraftPrompt = "hi";
+
+        // Caret 999 is stale (the user deleted text
+        // after a previous click landed at a
+        // higher offset). The method clamps so
+        // the splice doesn't throw.
+        host.InsertSourceReferenceAtCaret(source, 999);
+
+        Assert.Equal("hi @web:abc", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_Duplicate_IsNoOp()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+        host.DraftPrompt = "see @web:abc for details";
+
+        // Clicking the "引用" button twice with
+        // the caret parked at the same spot
+        // shouldn't add a second copy.
+        host.InsertSourceReferenceAtCaret(source, host.DraftPrompt.Length);
+
+        Assert.Equal("see @web:abc for details", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_DifferentSource_AppendsNormally()
+    {
+        var (host, _, _, _) = CreateHost();
+        var web = NewSource("web", id: "a");
+        var clip = NewSource("clipboard", id: "b");
+        host.DraftPrompt = "see @web:a for context";
+
+        host.InsertSourceReferenceAtCaret(clip, host.DraftPrompt.Length);
+
+        // Dedup is per-source — a different
+        // Source.Id with a different Kind is a
+        // fresh reference.
+        Assert.Equal("see @web:a for context @clipboard:b", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void InsertSourceReferenceAtCaret_AtWordBoundary_OmitsExtraSpaces()
+    {
+        var (host, _, _, _) = CreateHost();
+        var source = NewSource("web");
+        // Caret lands right after the space —
+        // both sides are whitespace, so the
+        // method shouldn't add *another* pair of
+        // spaces.
+        host.DraftPrompt = "hello world";
+
+        host.InsertSourceReferenceAtCaret(source, 6);
+
+        Assert.Equal("hello @web:abc world", host.DraftPrompt);
+    }
+
+    private static AIChat.Domain.Sources.Source NewSource(
+        string kind,
+        string id = "abc")
+    {
+        return new AIChat.Domain.Sources.Source
+        {
+            Id = id,
+            Kind = kind,
+            DisplayName = "Test source",
+            Content = "test body",
+        };
+    }
+
     private (AgentHostViewModel Host, ProjectSidebarViewModel Sidebar, ActivityFeedViewModel Activity, ToastService Toast)
         CreateHost()
     {
