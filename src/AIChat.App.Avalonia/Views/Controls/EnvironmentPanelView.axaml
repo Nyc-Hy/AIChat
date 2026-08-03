@@ -350,6 +350,23 @@
                         <TextBlock Text="{Binding Detail}"
                                    Classes="muted" FontSize="10"
                                    FontFamily="{StaticResource FontMono}"/>
+                        <!--
+                          1.0.1: the @-reference text the
+                          user would type to cite this
+                          Source by hand. The display
+                          name + URL/capture-time line
+                          is what the user reads; this
+                          line is the "machine name"
+                          the parser and the agent
+                          loop see. Hidden for pending
+                          attachment rows (no real
+                          Source.Id to reference).
+                        -->
+                        <TextBlock Text="{Binding Reference}"
+                                   IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                                   FontSize="10"
+                                   FontFamily="{StaticResource FontMono}"
+                                   Foreground="{DynamicResource MutedBrush}"/>
                       </StackPanel>
                       <!--
                         Per-row "insert @-reference" button. Hidden

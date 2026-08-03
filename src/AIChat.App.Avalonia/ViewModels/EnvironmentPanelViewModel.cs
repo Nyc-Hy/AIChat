@@ -214,6 +214,28 @@ public sealed partial class SourceRowViewModel : ObservableObject
     // — dead code, removed.
     public AIChat.Domain.Sources.Source? Source { get; set; }
 
+    // 1.0.1: the @-reference text a daily-driver
+    // user would type to cite this Source in a
+    // prompt by hand (the "引用" button writes it
+    // for them, but a user who knows what they
+    // want may prefer to type "@web:abc" rather
+    // than reach for the sidebar). The Sources
+    // list used to show only the display name
+    // + URL/capture-time — the id was hidden
+    // behind the panel, so a user who wanted to
+    // type the reference had to open the
+    // settings.json file (or guess). Now it
+    // shows the @-reference text right under the
+    // filename in muted mono so the user can
+    // read it at a glance and copy it. Empty for
+    // pending attachment rows (no Source.Id to
+    // reference — the pending row's id is an
+    // internal "pending:<filename>" placeholder
+    // and not a valid @-reference).
+    public string Reference => Source is null
+        ? ""
+        : AIChat.Application.Sources.SourceReferenceParser.FormatReference(Source);
+
     // 1.0.1: inline-expand state for the per-row
     // detail panel. The Sources list's per-row
     // chevron button toggles this so the user can

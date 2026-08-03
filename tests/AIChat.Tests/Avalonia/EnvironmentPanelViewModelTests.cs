@@ -839,6 +839,49 @@ public sealed class EnvironmentPanelViewModelTests
         Assert.Null(row.DetailContent);
     }
 
+    [Fact]
+    public void SourceRow_Reference_FormatsKindAndId()
+    {
+        // The Sources list shows the
+        // @-reference text the user would
+        // type to cite this Source by hand
+        // (the "引用" button writes it for
+        // them, but a user who knows what
+        // they want may prefer to type
+        // "@web:abc" rather than reach for
+        // the sidebar). Goes through the
+        // same FormatReference helper the
+        // send path uses, so a future
+        // syntax change only touches one
+        // place.
+        var source = new AIChat.Domain.Sources.Source
+        {
+            Id = "abc",
+            Kind = "web",
+            DisplayName = "A",
+            Content = "body",
+        };
+        var row = new SourceRowViewModel("abc", "web", "A") { Source = source };
+        Assert.Equal("@web:abc", row.Reference);
+    }
+
+    [Fact]
+    public void SourceRow_Reference_EmptyForPendingAttachment()
+    {
+        // The @-reference text only makes
+        // sense for a real persisted Source
+        // (the parser matches "@<kind>:<id>"
+        // against the registry). Pending
+        // attachment rows have an internal
+        // placeholder id ("pending:filename")
+        // that is not a valid @-reference,
+        // so Reference returns empty and
+        // the XAML's IsVisible binding
+        // collapses the line.
+        var row = SourceRowViewModel.ForPendingAttachment("clip.png");
+        Assert.Equal("", row.Reference);
+    }
+
     private static (EnvironmentPanelViewModel Vm, AgentHostViewModel Host, ProjectSidebarViewModel Sidebar,
         Mock<IWorkspaceChangeService> Workspace, SourceRegistry Registry)
         CreateViewModelWithSourceRegistry()
