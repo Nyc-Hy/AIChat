@@ -64,8 +64,7 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 | ⌘T | 测试当前模型（连接性测试） |
 | ⌘G | `/git` — 当前分支 + 变更列表（bubble） |
 | ⌘⇧G | 打开 git status / diff viewer modal |
-| ⌘/ | 显示 /help |
-| ⌘? | 打开键盘快捷键 cheat sheet（也=titlebar ? 按钮） |
+| ⌘/ | 打开键盘快捷键 cheat sheet（也=titlebar ? 按钮） |
 | F5 | 刷新状态（重读本地项目 + 对话） |
 | ⌘V | 粘贴图片 → pending attachment（⌘↵ 一起送） |
 | Esc | 关闭命令面板 / 设置 / memory / git modal（按优先级） |
@@ -85,7 +84,7 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 - **设置 (⌘,)** — provider / model / API key / no-write / auto-verify
 - **Memory editor (⌘⇧M)** — 当前项目 memory 增删，按 category 分组
 - **Git status / diff (⌘⇧G)** — 左文件列表 / 右 diff viewer，可复制
-- **Keyboard shortcuts (⌘?)** — 18+ 个快捷键 cheat sheet，按类别分组（任务 / 项目 / 命令 / 模式 / 工具审批 / Slash）
+- **Keyboard shortcuts (⌘/)** — 18+ 个快捷键 cheat sheet，按类别分组（任务 / 项目 / 命令 / 模式 / 工具审批 / Slash）
 - **Tool approval** — 写入工具被 agent 触发时弹窗，三选一：拒绝 / 允许一次 / 本会话内允许
 
 ### Sub-agent
@@ -125,7 +124,67 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 - `d3a0600` — tool approval modal 缺位，写入工具一上来就 hang
 - `847a598` — async void event handler 没 try/catch，任意 throw 整个窗口崩
 
-## Front-end MVP pass（codex/desktop-rebuild, 2026-08）
+## 12-wave Codex Desktop parity 速查（2026-08-02）
+
+详见 `docs/CODEX_DESKTOP_PARITY_PLAN.md`（单一权威 plan）+ `docs/SHIP_REPORT_2026-08-02.md`（12 wave ship 报告）+ `docs/PARITY_TRACKING.md`（Feature → Journey → Evidence → Test 版本化追踪表，r0.9）。
+
+### 关键服务 + 文件路径
+
+- **Plugin 注册中心** — `AIChat.Application.Plugins.PluginRegistry` 实现 `IPluginRegistry`；扫描 `AppRuntimeProfile.PluginsDirectory`；启用状态持久化到 `.state.json` sidecar
+- **Scheduled 注册中心** — `AIChat.Application.Scheduled.ScheduledTaskRegistry` 实现 `IScheduledTaskRegistry`；持久化到 `AppRuntimeProfile.ScheduledTasksFile` + `ScheduledTaskRunsFile`
+- **Sites 注册中心** — `AIChat.Application.Sites.SiteRegistry` 实现 `ISiteRegistry`；持久化到 `AppRuntimeProfile.SitesFile` + `SiteDeploymentsFile`
+- **JSON 共享 helper** — `AIChat.Application.Persistence.JsonFileStore`（原子写 + 损坏 JSON 恢复）
+- **Domain 模型** — `AIChat.Domain.Scheduled.ScheduledTask` / `AIChat.Domain.Sites.Site` / `AIChat.Domain.Chat.ChatSession`（polymorphic Standalone/Project）
+
+### 5 first-level nav 模态（plan §7 Wave 8-10）
+
+所有模态走同一模式：`IsXxxOpen: bool` 字段 + `OpenXxxCommand` (带 `CanOpenModal` 守卫) + `CloseXxxCommand` + 模态 UserControl + VM 构造时 `ReloadAsync().FireAndForget()` 启动后台 reload + `[ObservableProperty]` + `Changed` 事件 marshal 回 UI 线程。
+
+| 入口 | 模态 VM | 模态 View | Wave |
+|---|---|---|---|
+| 拉取请求 (暂 disabled) | — | — | W6 follow-up |
+| 站点 | `SitesViewModel` | `SitesView.axaml` | W9 first slice |
+| 已安排 | `ScheduledViewModel` | `ScheduledView.axaml` | W9 first slice |
+| 插件 | `PluginsViewModel` | `PluginsView.axaml` | W8 first slice |
+| 设置 (⌘,) | `SettingsViewModel` (4 大分类) | `SettingsView.axaml` (2-column 布局) | W10 first slice |
+
+### Modal escape 链模式
+
+`MainWindow.axaml.cs` 注册全局 Escape KeyBinding，按优先级关 modal（先 Approval → CommandPalette → Settings → MemoryEditor → GitStatus → RunHistory → Plugins → Scheduled → Sites）。Wave 8-10 各加 1 个新模态 → 这条链又长了。建议 follow-up：抽 `ModalStack` helper 替代手写 9 段 `else if`。
+
+### 测试基线 + 验证命令
+
+- 798/798 tests pass (session 起点 712 → 终点 798, +86 from Wave 7-11 + Wave 11 review fix)
+- 关键 DI lock: `AppHostTests.Build_ResolvesTopLevelService` (36 个 InlineData)
+- 关键子系统:
+  - `dotnet test --filter "FullyQualifiedName~Migration"` (19 tests)
+  - `dotnet test --filter "FullyQualifiedName~PluginRegistryTests"` (8 tests)
+  - `dotnet test --filter "FullyQualifiedName~ScheduledTaskRegistryTests|FullyQualifiedName~SiteRegistryTests"` (13 tests)
+  - `dotnet test --filter "FullyQualifiedName~SettingsViewModelCategoryTests"` (11 tests)
+  - `dotnet test --filter "FullyQualifiedName~ModalListViewModelTests"` (8 tests — VM → registry command routing)
+  - `dotnet test --filter "FullyQualifiedName~MainWindowModalGuardTests"` (2 tests — CloseAllModals + 模态 guard)
+- 干净隔离启动: `AICHAT_ISOLATED_DATA_ROOT=$(mktemp -d) dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj --no-build -v:quiet`
+
+### Wave 11 review fix pass
+
+完成 ship 后做的 5 个修复:
+1. **Scheduled "立即运行" UI 诚实** — 按钮 label "运行" → "记录运行" + tooltip 明确 "Wave 9 first slice — 真实 prompt 执行待 follow-up"
+2. **DI lock 补 `InputArtifactFileStore`** — AppHostTests 35 → 36 tests
+3. **`[InternalsVisibleTo("AIChat.Tests")]`** — 给 test assembly 访问 internal 类型的入口;MainWindow 锁不住(需 Avalonia window 平台)撤回,留给其他 internal type
+4. **Modal escape chain 抽 helper** — `MainWindow.axaml.cs` 9 段 `else if` → `(bool, Action)[]` 优先级数组;`MainWindowViewModel.CloseAllModals()` 单一来源,`OnApprovalPresented` 复用
+5. **AGENTS.md 加 "12-wave parity 速查" 段** — 关键 Service/VM/View 路径 + 5 nav 模态表 + 已知 placeholder + 3 个被 user 删除的 test file 警告
+
+### 已知 placeholder（按 plan §7 / §5.4 严格遵守）
+
+- **Background Processes section 隐藏** (`EnvironmentPanelViewModel.ShowBackgroundProcesses=false`) — plan §7.7 要求 supervisor 未建前不得展示入口
+- **Sites 云部署按钮 `IsEnabled=False`** — plan §5.4 要求无 Hosting Provider 时隐藏
+- **Scheduled "立即运行" 记录 Running 状态** — 真实 prompt 执行待 Wave 9 follow-up + cron 引擎
+- **Sub-agent 停止/取消** — 需 `AgentHarness.CancelSubAgentAsync` registry
+- **Settings 全页 Route** — 当前是 modal，Codex 是全页
+
+### 3 个被 user 删除的 test file
+
+`FilePreviewViewModelTests` / `FileTreeViewModelTests` / `FileTreeBuilderTests` 3 个测试文件**及对应源**（`FilePreviewView` / `FileTreeView` / `FileTreeBuilder`）被 user 主动删除。**任何恢复前先 grep `已删的子系统名` 确认没人读**。
 
 `c0d0bf8` 起 9 个 commit，目标是消除 daily driver 残留的"卡 / 迷"瞬间。详细分类：
 
@@ -147,7 +206,7 @@ dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 
 ### 5. Help button + KeyboardShortcutsView modal
 
-titlebar `?` 按钮 + ⌘? 全局快捷键，调出 18+ 快捷键 cheat sheet（任务 / 项目·导航 / 命令·信息 / 模式·设置 / 工具审批 / Slash 命令 6 个 section）。XAML hard-code（不是 VM-bound，因为是 documentation 不是 state），`Esc` 或点击 scrim 关闭。`App.axaml` 加 `TextBlock.kbd-display` 样式（FontMono + TextBrush），和 `kbd-pill` 视觉一致但走 TextBlock 路径。新加 `xmlns:behaviors` 别名（`AIChat.App.Avalonia.Behaviors`）。
+titlebar `?` 按钮 + ⌘/ 全局快捷键，调出 18+ 快捷键 cheat sheet（任务 / 项目·导航 / 命令·信息 / 模式·设置 / 工具审批 / Slash 命令 6 个 section）。XAML hard-code（不是 VM-bound，因为是 documentation 不是 state），`Esc` 或点击 scrim 关闭。`App.axaml` 加 `TextBlock.kbd-display` 样式（FontMono + TextBrush），和 `kbd-pill` 视觉一致但走 TextBlock 路径。新加 `xmlns:behaviors` 别名（`AIChat.App.Avalonia.Behaviors`）。
 
 ### 6. AI bubble 错误/停止视觉
 
@@ -165,6 +224,37 @@ titlebar `?` 按钮 + ⌘? 全局快捷键，调出 18+ 快捷键 cheat sheet（
 
 `/help` 走的是 `Resources/HelpText.md`（`EmbeddedResource`），不是 AvaloniaResource——`AssetLoader` 在 headless test host 不 init。
 
+## API key 访问（2026-08-03 user feedback）
+
+**Daily driver 痛点**：用户每次启动都撞 macOS Keychain 弹"允许访问"对话框，2 次（主 key + provider key 同份但存 2 个 purpose）。原因：settings.json 顶层 + `configuredProviders[]` 列表各存一份 keychain ref，Load 时 RestoreAfterLoad 触发 2 次 Unprotect。
+
+**两层方案**（`/Users/lanxin/Documents/Code/AIChat/docs/SHIP_REPORT_2026-08-02.md` 后补这一段）：
+
+1. **macOS Keychain Access UI 一劳永逸**：打开 `Keychain Access.app` → 搜 `AIChat` → 两个条目都 `Get Info` → `Access Control` → 选 "Allow all applications to access this item"。之后再不弹窗。访问 2 次不变，但 0 弹窗。
+2. **Env var override（推荐，2026-08-03 ship）**：`AICHAT_API_KEY` 环境变量 → `JsonAppRepository.LoadSettingsAsync` 短路整个 RestoreAfterLoad，**0 次** keychain access，0 弹窗。Settings.json 里 `protectedApiKey` 字段保留原 keychain ref，**不**写回（`unset` 即可切回 keychain 模式，不丢 secret）。
+
+**Env var 设计**（`src/AIChat.Storage.Json/EnvironmentSecretOverride.cs`）：
+- `AICHAT_API_KEY` — main key + 默认 provider key
+- `AICHAT_PROVIDER_<NAME>_API_KEY` — 特定 provider（`<NAME>` = `ConfiguredLlmProvider.Name` upper + 非字母数字 → `_`，如 `Mini Max-Pro` → `AICHAT_PROVIDER_MINI_MAX_PRO_API_KEY`）
+- 优先级：provider-specific > main env var > keychain
+
+**关键实现细节**：
+- `LoadSettingsAsync` 短路：`IsActive` → 跳过 `RestoreAfterLoad` + legacy migration + cache 填
+- `SaveSettingsAsync(persistSecretChanges=false)` 默认走 cache 命中 → **不**调 `Protect` 写回 keychain
+- `_secretCache.Clear()` 强制下次 save 走 cache-miss（仍走"不 persist"分支，因为 `PrepareForSave` cache 命中时不调 `secretProtector.Protect`）
+- Env var 是 source of truth；用户 `unset` 后**不重启**也能恢复（Load 重新走 RestoreAfterLoad）
+
+**Test 覆盖**（`tests/AIChat.Tests/Storage/EnvironmentSecretOverrideTests.cs`，8 个 Fact）：
+- main env override 覆盖 keychain 值
+- 没设 env 时回退到 keychain
+- provider-specific env 优先于 main
+- 0 次 Unprotect 验证（mock protector tracking）
+- Save 不改 settings.json 的 protectedApiKey 字段
+- 边界：provider name 含特殊字符（`-` / 空格）→ 正确 normalize 成 `_`
+
+**Provider prune 升级 BaseUrl 修复**（2026-08-03 ship）：
+0.5 升级用户的 settings.json 里 BaseUrl 指向已删 provider（`api.anthropic.com` / `api.deepseek.com` / `token-plan-cn.xiaomimimo.com` / `api.xiaomimimo.com`）→ 1.0 静默发送消息到错误端点 → 401/404。`ProviderSettingsService.Normalize` 加 `LegacyProviderHosts` 名单，命中即重写为 `provider.DefaultBaseUrl`。`NormalizeConfiguredProvider` 同样处理。Self-hosted proxy（如 `proxy.example.com`）不受影响。Test 4 个 InlineData 覆盖 4 个 legacy host + 1 个 custom host 保留 + 1 个 configuredProviders 列表路径。
+
 ## 产品定位（2026-07-30 用户原话）
 
 **AIChat 是 daily driver,要完全替代 ClaudeCode。** 这不是 demo,不是实验场,不是玩票。
@@ -174,6 +264,12 @@ titlebar `?` 按钮 + ⌘? 全局快捷键，调出 18+ 快捷键 cheat sheet（
 - **功能完整度对标 ClaudeCode**:agent loop、工具执行、代码编辑、流式响应、上下文管理、tool approval,这些不是 nice-to-have,是产品本身
 - **美学对标 Linear / Notion**:私人工具感、企业级克制,不要 SaaS / AI-startup 调性
 - 任何"加新东西"的决定都要先回答:背后有真功能吗?没有就删掉,UI 没功能就是噪音
+
+## Coding Agent 文件访问模型（2026-08-01）
+
+- 不提供常驻文件树或内置文件预览；那是 IDE 的浏览模型，会挤占任务、计划、工具执行、审批和验证空间。
+- Agent 仍使用 `ProjectFileIndexBuilder` 和上下文路由读取项目；用户显式附加文件走 `@file`，查看修改结果走 Git diff。
+- 除非能提供完整且明显优于 `@file` / 搜索 / diff 的真实工作流，否则不要重新引入文件树。
 
 ## 代码 pitfall 类（2026-07-31 清理 wave 总结）
 
@@ -322,4 +418,3 @@ public bool HasProject => _sidebar.Projects.Count > 0
 - **Planned-but-unwired 子系统**：`Application/Audit/*`、`Application/Diagnostics/*`、`Application/Agents/Benchmark/*`、`WorkspaceChangeService.RestoreFileAsync` / `CommitAsync`、`AgentRun.QualityScore` / `StrategySuggestion` / `AcceptanceNote` 等十几个字段——按"风险高于收益"判断，没动。**任何删除 / 重构之前先 grep `已删的子系统名` 确认没人读**。
 - **Dark mode 视觉验证**：需要 GUI 跑起来看，agent 没访问。
 - **TextBox 高度 cosmetic**：低优先级。
-
