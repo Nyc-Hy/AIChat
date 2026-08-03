@@ -48,4 +48,19 @@ public sealed class AvaloniaClipboardService : IClipboardService
         // TryGetBitmapAsync handles that internally.
         return await clipboard.TryGetBitmapAsync();
     }
+
+    public async Task<string?> TryGetTextAsync()
+    {
+        var clipboard = TopLevel?.Clipboard;
+        if (clipboard is null)
+        {
+            return null;
+        }
+        // ClipboardExtensions.TryGetTextAsync handles the
+        // IAsyncDataTransfer disposable. Returns null when
+        // the clipboard holds a non-text payload (image,
+        // file list, custom format, etc.) — the caller
+        // falls through to its no-text path.
+        return await clipboard.TryGetTextAsync();
+    }
 }

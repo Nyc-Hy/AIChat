@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows.Input;
 using AIChat.Application.BackgroundProcesses;
+using AIChat.Application.Sources;
 using AIChat.Application.Workspace;
 using AIChat.App.Avalonia.Composition;
 using AIChat.Domain.BackgroundProcesses;
@@ -219,6 +220,7 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     private readonly AgentHostViewModel _agentHost;
     private readonly ProjectSidebarViewModel _sidebar;
     private readonly IClipboardService _clipboard;
+    private readonly ISourceRegistry _sourceRegistry;
 
     [ObservableProperty]
     private string branchName = "(未选择项目)";
@@ -378,13 +380,21 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
         IBackgroundProcessSupervisor processSupervisor,
         AgentHostViewModel agentHost,
         ProjectSidebarViewModel sidebar,
-        IClipboardService clipboard)
+        IClipboardService clipboard,
+        ISourceRegistry sourceRegistry)
     {
         _workspace = workspace;
         _processSupervisor = processSupervisor;
         _agentHost = agentHost;
         _sidebar = sidebar;
         _clipboard = clipboard;
+        _sourceRegistry = sourceRegistry;
+        _sourceRegistry.Changed += (_, _) => RefreshSources();
+        // Eager ReloadAsync — the first Sources section
+        // paint should already have the persisted
+        // captures, not "(loading…)".
+        _ = _sourceRegistry.ReloadAsync().ContinueWith(_ => RefreshSources(),
+            TaskScheduler.Default);
         // ObservableCollection mutations don't fire PropertyChanged on
         // derived bools; wire CollectionChanged once here so the
         // IsVisible binding on the XAML section collapses cleanly when
@@ -598,8 +608,23 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
 
     private void RecountSources()
     {
+        // Two source kinds land here:
+        //   1. Pending image attachments (the
+        //      composer's ⌘V + drag-drop strip) — these
+        //      travel with the NEXT message, not
+        //      persisted across restarts.
+        //   2. The Source registry (clipboard
+        //      snapshots, future web/connector
+        //      imports) — persisted, available to
+        //      the user across sessions.
+        // The Sources list shows the registry's
+        // contents; the count line includes both so
+        // the user sees the "ready to send" image
+        // attachments and the persisted captures in
+        // one number.
         var attachments = _agentHost.PendingAttachments.Attachments;
-        SourceCount = attachments.Count;
+        var persisted = _sourceRegistry.Sources;
+        SourceCount = attachments.Count + persisted.Count;
         SourceSummary = SourceCount == 0
             ? "暂无"
             : $"{SourceCount} 个待发送";
@@ -618,7 +643,29 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
                 displayName: attachment.FileName,
                 detail: "剪贴板图像（待发送）"));
         }
+        // The Wave 7 first-slice: persisted Sources
+        // (clipboard snapshots) land below the
+        // pending-image list. "clipboard" kind drives
+        // the same icon-glyph path; the row carries
+        // the captured-at display so the user can see
+        // at a glance when the snapshot was taken.
+        // Order: newest first — same as the registry's
+        // append-on-add order, reversed.
+        foreach (var source in persisted.AsEnumerable().Reverse())
+        {
+            Sources.Add(new SourceRowViewModel(
+                kind: source.Kind,
+                displayName: source.DisplayName,
+                detail: $"剪贴板快照 · {source.CapturedAt.LocalDateTime:MM-dd HH:mm}"));
+        }
     }
+
+    // Pulled out of RecountSources so the
+    // SourceRegistry.Changed subscription can re-mirror
+    // when the user adds a new snapshot from anywhere
+    // (the +/Add menu, the standalone "剪贴板快照"
+    // button, a follow-up "auto-snapshot on ⌘C" path).
+    private void RefreshSources() => RecountSources();
 
     // Re-mirror the supervisor's process snapshot into the panel.
     // The supervisor is the source of truth — every Changed event

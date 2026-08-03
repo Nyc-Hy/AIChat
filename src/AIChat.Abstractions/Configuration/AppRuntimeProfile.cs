@@ -68,6 +68,12 @@ public static class AppRuntimeProfile
     public static string SitesFile => Path.Combine(DataDirectory, "sites.json");
     public static string SiteDeploymentsFile => Path.Combine(DataDirectory, "site-deployments.json");
 
+    // Wave 7 (parity plan §7 Wave 7): user-captured data
+    // sources. sources.json holds the list (clipboard
+    // snapshots, web fetches, connector imports). Small
+    // file, rewritten atomically on every mutation.
+    public static string SourcesFile => Path.Combine(DataDirectory, "sources.json");
+
     // Wave 7 follow-up: BackgroundProcessSupervisor
     // persists the running process list to this file
     // on every state change. Restart-recovery walks

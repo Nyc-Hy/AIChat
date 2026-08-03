@@ -7,6 +7,7 @@ using AIChat.Application.Llm.Routing;
 using AIChat.Application.Plugins;
 using AIChat.Application.Scheduled;
 using AIChat.Application.Sites;
+using AIChat.Application.Sources;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Application.Artifacts;
@@ -56,6 +57,15 @@ public static class ServiceRegistration
         // user opens it.
         services.AddSingleton<IScheduledTaskRegistry, ScheduledTaskRegistry>();
         services.AddSingleton<ISiteRegistry, SiteRegistry>();
+
+        // 1.0.1: Wave 7 (parity plan §7 Wave 7) first
+        // slice — Sources registry. The clipboard-text
+        // snapshot capture flow lives in MainWindow
+        // code-behind (AddClipboardSource_OnClick).
+        // Eager ReloadAsync runs in the background so
+        // the Environment panel's Sources section has
+        // data the first time the user opens it.
+        services.AddSingleton<ISourceRegistry, SourceRegistry>();
 
         // 1.0.1: the cron engine. Application-layer
         // ScheduledTaskRunner does the cadence math +

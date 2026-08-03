@@ -13,6 +13,11 @@ public sealed class MockClipboardService : IClipboardService
     public string? LastSetText { get; private set; }
     public int SetTextCallCount { get; private set; }
 
+    // The Wave 7 source-capture path reads this on
+    // "剪贴板快照" clicks. Tests set it to the text
+    // they want the capture flow to see.
+    public string? QueuedClipboardText { get; set; }
+
     public bool IsAvailable => true;
 
     public Task SetTextAsync(string text)
@@ -20,6 +25,11 @@ public sealed class MockClipboardService : IClipboardService
         LastSetText = text;
         SetTextCallCount++;
         return Task.CompletedTask;
+    }
+
+    public Task<string?> TryGetTextAsync()
+    {
+        return Task.FromResult(QueuedClipboardText);
     }
 
     public Task<Bitmap?> TryGetBitmapAsync()

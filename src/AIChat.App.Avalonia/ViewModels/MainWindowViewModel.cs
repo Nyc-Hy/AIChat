@@ -9,6 +9,7 @@ using AIChat.Application.Context;
 using AIChat.Application.Llm.Routing;
 using AIChat.Application.Projects;
 using AIChat.Application.Prompting;
+using AIChat.Application.Sources;
 using AIChat.Application.Tools;
 using AIChat.Application.Workspace;
 using AIChat.Application.Artifacts;
@@ -802,7 +803,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         SitesViewModel sitesViewModel,
         AIChat.Application.Workspace.IWorkspaceChangeService workspace,
         InputArtifactFileStore artifactFileStore,
-        AIChat.Application.BackgroundProcesses.IBackgroundProcessSupervisor processSupervisor)
+        AIChat.Application.BackgroundProcesses.IBackgroundProcessSupervisor processSupervisor,
+        ISourceRegistry sourceRegistry)
     {
         _repository = repository;
         _toolRegistry = toolRegistry;
@@ -894,7 +896,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // Processes section is real (Wave 7 follow-up, plan §13 P0
         // risk "整个子进程树").
         _environmentPanel = new EnvironmentPanelViewModel(
-            _workspace, processSupervisor, _agentHost, _sidebar, _clipboard);
+            _workspace, processSupervisor, _agentHost, _sidebar, _clipboard, sourceRegistry);
         _environmentPanel.AttachTo();
 
         // Sidebar.SelectedProjectName → HasProject / Greeting /

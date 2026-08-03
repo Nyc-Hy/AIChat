@@ -587,7 +587,7 @@ public sealed class EnvironmentPanelViewModelTests
         var supervisor = new BackgroundProcessSupervisor(
             Path.Combine(supervisorRoot, "processes.json"));
         var vm = new EnvironmentPanelViewModel(
-            workspace.Object, supervisor, host, sidebar, new MockClipboardService());
+            workspace.Object, supervisor, host, sidebar, new MockClipboardService(), new InMemorySourceRegistry());
         return (vm, host, sidebar, workspace, supervisor);
     }
 
@@ -636,7 +636,7 @@ public sealed class EnvironmentPanelViewModelTests
         var supervisor = new BackgroundProcessSupervisor(
             Path.Combine(supervisorRoot, "processes.json"));
         var vm = new EnvironmentPanelViewModel(
-            workspace.Object, supervisor, host, sidebar, new MockClipboardService());
+            workspace.Object, supervisor, host, sidebar, new MockClipboardService(), new InMemorySourceRegistry());
         return (vm, host, sidebar, workspace);
     }
 

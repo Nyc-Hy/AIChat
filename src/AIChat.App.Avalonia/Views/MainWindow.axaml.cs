@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using AIChat.Abstractions.Configuration;
 using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
+using AIChat.Application.Sources;
 using CommunityToolkit.Mvvm.Input;
 
 namespace AIChat.App.Avalonia.Views;
@@ -19,6 +20,7 @@ internal partial class MainWindow : Window
     private readonly IThemeService _theme;
     private readonly IToastService _toast;
     private readonly ISettingsHolder _settingsHolder;
+    private readonly ISourceRegistry _sourceRegistry;
     // Set to true once ApplyPersistedBounds has run so the closing
     // handler knows the live Position / Size are the user-adjusted
     // values rather than the values we just restored from disk.
@@ -40,7 +42,8 @@ internal partial class MainWindow : Window
         AvaloniaClipboardService clipboard,
         IThemeService theme,
         IToastService toast,
-        ISettingsHolder settingsHolder)
+        ISettingsHolder settingsHolder,
+        ISourceRegistry sourceRegistry)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -49,6 +52,7 @@ internal partial class MainWindow : Window
         _theme = theme;
         _toast = toast;
         _settingsHolder = settingsHolder;
+        _sourceRegistry = sourceRegistry;
         // The picker and clipboard service both need the window as its
         // TopLevel so the dialog / clipboard can attach to the right
         // window. We set it here rather than in App.axaml.cs because the
@@ -771,9 +775,42 @@ internal partial class MainWindow : Window
         _toast?.Show("@file 引用 — Wave 6 接入完整 picker", ToastLevel.Info);
     }
 
-    private void AddClipboardSource_OnClick(object? sender, RoutedEventArgs e)
+    private async void AddClipboardSource_OnClick(object? sender, RoutedEventArgs e)
     {
-        _toast?.Show("剪贴板快照 — Wave 7 接入", ToastLevel.Info);
+        // Wave 7 (parity plan §7 Wave 7) first slice: the
+        // "+" / "剪贴板快照" menu item now reads the
+        // platform clipboard, persists the text as a
+        // Source, and surfaces it in the Environment
+        // panel's Sources section. Empty / non-text
+        // clipboards surface a user-visible error so the
+        // user knows the click took effect (and why
+        // nothing was saved).
+        if (!_clipboard.IsAvailable)
+        {
+            _toast?.Show("无法访问剪贴板（无 TopLevel 或测试环境）", ToastLevel.Warning);
+            return;
+        }
+        var text = await _clipboard.TryGetTextAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            _toast?.Show("剪贴板为空或不是文本。", ToastLevel.Warning);
+            return;
+        }
+        var firstLine = text.Split('\n', 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? text;
+        var display = firstLine.Length > 60 ? firstLine[..60] + "…" : firstLine;
+        var source = new AIChat.Domain.Sources.Source
+        {
+            Kind = "clipboard",
+            DisplayName = display,
+            Content = text,
+            CapturedAt = DateTimeOffset.UtcNow,
+            Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["length"] = text.Length.ToString(),
+            },
+        };
+        await _sourceRegistry.AddAsync(source);
+        _toast?.Show($"已捕获 {text.Length} 字符到数据源。", ToastLevel.Success);
     }
 
     private void AddWebSearchSource_OnClick(object? sender, RoutedEventArgs e)
