@@ -263,6 +263,7 @@
                           Margin="0,4,0,0">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:SubAgentRunViewModel">
+                  <StackPanel Spacing="2">
                   <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,2">
                     <TextBlock Grid.Column="0"
                                Text="{Binding TemplateDisplay}"
@@ -271,6 +272,28 @@
                                FontFamily="{StaticResource FontMono}"
                                VerticalAlignment="Center"
                                MinWidth="50"/>
+                    <!--
+                      1.0.1: the Task
+                      column is now
+                      the click target
+                      for inline expand
+                      (PointerPressed
+                      so the whole
+                      header strip
+                      registers, like
+                      the Sources row
+                      header). The
+                      ToolTip on hover
+                      was a touchpad
+                      trap — daily
+                      drivers rarely
+                      hover long enough
+                      to see the full
+                      summary text. The
+                      click lands the
+                      expand panel
+                      below the row.
+                    -->
                     <TextBlock Grid.Column="1"
                                Text="{Binding Task}"
                                FontSize="11"
@@ -278,7 +301,8 @@
                                TextTrimming="CharacterEllipsis"
                                MaxLines="1"
                                VerticalAlignment="Center"
-                               ToolTip.Tip="{Binding Summary}"/>
+                               ToolTip.Tip="{Binding Summary}"
+                               PointerPressed="SubAgentRowHeader_OnPointerPressed"/>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                       <Ellipse Width="6" Height="6"
                                Fill="{Binding StatusBrush}"
@@ -317,6 +341,48 @@
                       <TextBlock Text="停止" FontSize="10"/>
                     </Button>
                   </Grid>
+                  <!--
+                    1.0.1: per-row inline
+                    expand panel for
+                    the Summary text.
+                    The panel is gated
+                    on HasSummary (not
+                    just IsExpanded) so
+                    a row with no
+                    summary doesn't
+                    render an empty
+                    bordered block —
+                    same fix as the
+                    Plan detail panel
+                    (commit aeedf40).
+                    MaxHeight caps the
+                    inline panel so a
+                    10-line summary
+                    doesn't push every
+                    other sub-agent
+                    row off-screen.
+                    Multi-line
+                    SelectableTextBlock
+                    so the user can
+                    ⌘C any chunk of
+                    the summary
+                    directly.
+                  -->
+                  <Border IsVisible="{Binding ShouldShowSummary}"
+                          Background="{DynamicResource CodeBgBrush}"
+                          BorderBrush="{DynamicResource LineSoftBrush}"
+                          BorderThickness="1"
+                          CornerRadius="{StaticResource RadiusSm}"
+                          Padding="6,4"
+                          Margin="0,0,0,4">
+                    <SelectableTextBlock Text="{Binding Summary}"
+                                         FontSize="10"
+                                         FontFamily="{StaticResource FontMono}"
+                                         TextWrapping="Wrap"
+                                         MaxHeight="160"
+                                         Foreground="{DynamicResource Text2Brush}"/>
+                  </Border>
+                  </StackPanel>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>

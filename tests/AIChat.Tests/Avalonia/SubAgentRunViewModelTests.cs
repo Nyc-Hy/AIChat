@@ -306,4 +306,102 @@ public class SubAgentRunViewModelTests
         // stable part of the format.
         Assert.StartsWith("1m", vm.DurationDisplay);
     }
+
+    // ---- 1.0.1: per-row inline expand for the Summary text ----
+
+    [Fact]
+    public void IsExpanded_DefaultsFalse_ToggleFlips()
+    {
+        // Each row starts collapsed
+        // (the row's task description
+        // is usually enough to know
+        // what the sub-agent did).
+        // Toggle flips state, like
+        // every other inline-expand
+        // surface in the app (Plan /
+        // Sources).
+        var run = NewRun("explorer", "find foo", summary: "ok");
+        var vm = new SubAgentRunViewModel(run);
+        Assert.False(vm.IsExpanded);
+
+        vm.ToggleExpand();
+        Assert.True(vm.IsExpanded);
+
+        vm.ToggleExpand();
+        Assert.False(vm.IsExpanded);
+    }
+
+    [Fact]
+    public void HasSummary_TrueForNonEmptySummary()
+    {
+        // The expand panel only
+        // renders for rows that have
+        // something to show. Empty
+        // / whitespace summaries
+        // don't count — the
+        // "expand this empty box"
+        // UX is the kind of paper
+        // cut daily drivers notice.
+        var withSummary = NewRun("explorer", "x", summary: "did the thing");
+        var emptySummary = NewRun("explorer", "x", summary: "");
+        var whitespaceSummary = NewRun("explorer", "x", summary: "   ");
+
+        Assert.True(new SubAgentRunViewModel(withSummary).HasSummary);
+        Assert.False(new SubAgentRunViewModel(emptySummary).HasSummary);
+        Assert.False(new SubAgentRunViewModel(whitespaceSummary).HasSummary);
+    }
+
+    [Fact]
+    public void ShouldShowSummary_RequiresBothIsExpandedAndHasSummary()
+    {
+        // The XAML binds the expand
+        // panel's IsVisible to
+        // ShouldShowSummary, not just
+        // IsExpanded. A row with no
+        // summary but IsExpanded=true
+        // would otherwise render an
+        // empty bordered block (same
+        // fix as the Plan detail
+        // panel — commit aeedf40).
+        var runWithSummary = NewRun("explorer", "x", summary: "found 3 files");
+        var runEmptySummary = NewRun("explorer", "x", summary: "");
+
+        var expanded = new SubAgentRunViewModel(runWithSummary);
+        expanded.IsExpanded = true;
+        Assert.True(expanded.ShouldShowSummary);
+
+        var collapsed = new SubAgentRunViewModel(runWithSummary);
+        Assert.False(collapsed.ShouldShowSummary);
+
+        var expandedButEmpty = new SubAgentRunViewModel(runEmptySummary);
+        expandedButEmpty.IsExpanded = true;
+        Assert.False(expandedButEmpty.ShouldShowSummary);
+    }
+
+    [Fact]
+    public void ShouldShowSummary_FlipsWhenSummaryArrivesMidSession()
+    {
+        // The harness can deliver a
+        // Summary after the row is
+        // already expanded (a long
+        // sub-agent that finishes
+        // while the user has the
+        // row open). ShouldShowSummary
+        // must re-raise on Summary
+        // change so the panel
+        // transitions from "expanded
+        // but empty" to "expanded
+        // with content" without a
+        // round-trip of stale UI.
+        var run = NewRun("explorer", "long", summary: "");
+        var vm = new SubAgentRunViewModel(run);
+        vm.IsExpanded = true;
+        Assert.False(vm.ShouldShowSummary);
+
+        run.Summary = "finally finished";
+        vm.Update(run);
+
+        Assert.True(vm.HasSummary);
+        Assert.True(vm.ShouldShowSummary);
+    }
 }

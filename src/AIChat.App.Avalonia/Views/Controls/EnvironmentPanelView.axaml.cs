@@ -274,4 +274,47 @@ public partial class EnvironmentPanelView : UserControl
         row.IsExpanded = !row.IsExpanded;
         e.Handled = true;
     }
+
+    // 1.0.1: per-row header click
+    // toggles the sub-agent row's
+    // inline expand panel showing
+    // the full Summary text.
+    // Same pattern as the Sources
+    // row handler above — the Task
+    // column is the natural click
+    // target (the user reads the
+    // one-line task, wonders what
+    // the sub-agent actually
+    // produced, and clicks to see
+    // the rest). PointerPressed
+    // (not Click) because the
+    // XAML wraps the header in a
+    // TextBlock; Click is a
+    // Button-only event. e.Handled
+    // stops the bubbling press
+    // from double-firing through
+    // the parent ItemsControl.
+    private void SubAgentRowHeader_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not TextBlock { DataContext: SubAgentRunViewModel row })
+        {
+            return;
+        }
+        // No-op for runs with no
+        // summary — the expand panel
+        // would be empty otherwise
+        // (ShouldShowSummary stays
+        // false). The click is still
+        // absorbed so a stray tap on
+        // an empty-summary row
+        // doesn't bubble up and hit
+        // something else.
+        if (!row.HasSummary)
+        {
+            e.Handled = true;
+            return;
+        }
+        row.ToggleExpand();
+        e.Handled = true;
+    }
 }

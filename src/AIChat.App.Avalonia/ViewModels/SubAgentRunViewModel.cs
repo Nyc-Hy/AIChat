@@ -40,6 +40,7 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
     private string durationDisplay;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSummary))]
     private string? summary;
 
     public bool IsRunning => Status.Equals("Running", StringComparison.OrdinalIgnoreCase);
@@ -123,6 +124,71 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
     {
         DurationDisplay = FormatElapsed(StartedAt, DateTimeOffset.Now);
     }
+
+    // 1.0.1: per-row inline expand
+    // for the Summary text. The
+    // summary is the only way to see
+    // what the sub-agent actually
+    // produced (a one-line task
+    // description rarely does
+    // justice to a 30+ second
+    // explorer dispatch), and the
+    // previous shape only exposed
+    // it via ToolTip on hover —
+    // which on a touchpad-scroll
+    // daily-driver session rarely
+    // fires. Click the row to
+    // expand a multi-line summary
+    // block below the metadata
+    // line. Each row holds its own
+    // state so two runs can be
+    // expanded for comparison.
+    // [ObservableProperty] re-raises
+    // IsExpanded directly; the
+    // HasSummary derived bool drives
+    // the visibility of the expand
+    // panel itself (a run with no
+    // summary would render an empty
+    // bordered block if we only
+    // gated on IsExpanded).
+    [ObservableProperty]
+    private bool isExpanded;
+
+    public bool HasSummary => !string.IsNullOrWhiteSpace(Summary);
+
+    // 1.0.1: combined gate for the
+    // expand panel's IsVisible. The
+    // XAML can't AND two bools
+    // declaratively, so this is the
+    // single source of truth:
+    // expanded AND has a summary to
+    // show. A run with no summary
+    // would render an empty
+    // bordered block if we only
+    // gated on IsExpanded (same fix
+    // as the Plan detail panel —
+    // commit aeedf40). Re-raised in
+    // OnSummaryChanged because
+    // [NotifyPropertyChangedFor]
+    // only covers direct field
+    // dependencies, and a Summary
+    // write can flip HasSummary
+    // mid-session.
+    public bool ShouldShowSummary => IsExpanded && HasSummary;
+
+    // Called from Update when the
+    // harness delivers the final
+    // summary for a run that
+    // already had a placeholder.
+    // HasSummary re-raise happens
+    // automatically via
+    // [NotifyPropertyChangedFor] on
+    // Summary above.
+    public void ToggleExpand() => IsExpanded = !IsExpanded;
+    partial void OnSummaryChanged(string? value) =>
+        OnPropertyChanged(nameof(ShouldShowSummary));
+    partial void OnIsExpandedChanged(bool value) =>
+        OnPropertyChanged(nameof(ShouldShowSummary));
 
     // Match the naming AgentHarness uses for the explorer template.
     // Other templates are skipped by the current coordinator, but the
