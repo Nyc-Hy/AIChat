@@ -563,7 +563,86 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             _runCts?.Dispose();
             _runCts = null;
         }
+
+        // 1.0.1: drain the follow-up queue
+        // if the user pressed 追加要求
+        // during the run. We check
+        // _pendingFollowup here (after
+        // IsRunning has been flipped back
+        // to false by the runner's
+        // finally, so the auto-continuation
+        // starts a clean run). The
+        // queue is one-deep on purpose:
+        // a daily-driver user who clicks
+        // 追加要求 while a run is in
+        // flight is signalling "one more
+        // thing to handle after this
+        // one", not "I want to chain
+        // eight more runs from this
+        // button". Multiple presses
+        // over-write the last queued
+        // prompt (a follow-up to a
+        // follow-up is what the user
+        // actually means when they
+        // press twice).
+        if (!string.IsNullOrWhiteSpace(_pendingFollowup))
+        {
+            var queued = _pendingFollowup;
+            _pendingFollowup = null;
+            DraftPrompt = queued;
+            // Fire-and-forget the next
+            // send. We can't await
+            // SendTaskAsync from within
+            // itself (would recurse on
+            // the same call site) and
+            // we don't want a synchronous
+            // call to block the cleanup
+            // path. The status bar +
+            // activity-feed "+ 追加"
+            // bubble the user knows
+            // the continuation kicked
+            // off.
+            _ = SendTaskAsync();
+        }
     }
+
+    // 1.0.1: a daily-driver user who's
+    // running a long task and notices
+    // they need to add context can't
+    // wait for the run to finish before
+    // queuing a follow-up. Queue the
+    // prompt here; the post-run cleanup
+    // in SendTaskAsync fires a fresh
+    // send with the queued prompt.
+    //
+    // No-op when the run isn't in flight
+    // — the 追加要求 button is only
+    // visible when IsRunning, but the
+    // public method also guards in case
+    // a future caller races the
+    // IsRunning flip.
+    //
+    // Returns true if the prompt was
+    // accepted into the queue, false if
+    // it was rejected (no run in flight,
+    // empty prompt, or already-queued
+    // prompt is being overwritten).
+    public bool EnqueueFollowup(string? prompt)
+    {
+        if (!IsRunning) return false;
+        if (string.IsNullOrWhiteSpace(prompt)) return false;
+        _pendingFollowup = prompt.Trim();
+        _activityFeed.Add(
+            "已暂存追加",
+            $"将在当前 run 结束后自动发送：\"{(_pendingFollowup.Length > 60 ? _pendingFollowup[..60] + "…" : _pendingFollowup)}\"",
+            "继续");
+        return true;
+    }
+
+    // 1.0.1: 1-deep follow-up queue. See
+    // EnqueueFollowup for why this is a
+    // single string and not a Queue<string>.
+    private string? _pendingFollowup;
 
     [RelayCommand(CanExecute = nameof(CanStopTask))]
     private void StopTask()

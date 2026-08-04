@@ -1147,20 +1147,57 @@ internal partial class MainWindow : Window
         }
     }
 
-    // Wave 4 (plan §4): "追加要求" button. The button is currently
-    // disabled — the actual queue / merge into the running agent's
-    // step loop is a follow-up slice (the real design has to coordinate
-    // with the agent's cancellation token + tool execution state).
-    // For now the click surface is wired so the user can see the
-    // parity shape land; the click handler is a no-op so the
-    // disabled state stays correct.
+    // 1.0.1: "追加要求" button. Queue the
+    // composer's current text as a
+    // follow-up; the post-run cleanup
+    // in AgentHostViewModel.SendTaskAsync
+    // fires a fresh send with the
+    // queued prompt so the user
+    // effectively "appends" a turn
+    // without waiting for the current
+    // run to finish before typing.
+    //
+    // The implementation is queue +
+    // auto-continue, not "in-flight
+    // inject into AgentHarness" — the
+    // latter is a real agent-loop
+    // redesign (plan §4 calls this out
+    // as a follow-up slice that has to
+    // coordinate with the cancellation
+    // token + tool execution state).
+    // Queue + auto-continue gets the
+    // daily-driver user the affordance
+    // ("I can add a follow-up while a
+    // long run is in flight") without
+    // the harness redesign.
+    //
+    // The button is now bound to
+    // AgentHost.IsRunning for both
+    // IsVisible and IsEnabled so it
+    // shows up + lights up only when
+    // there's a run to append to.
     private void AppendFollowup_OnClick(object? sender, RoutedEventArgs e)
     {
-        // No-op for now — the button is disabled. We don't even
-        // show a toast because the user shouldn't be able to click.
-        // This handler is here so the XAML click binding has a target;
-        // the Wave 4 follow-up will replace it with the real queue
-        // wiring (see plan §4 "发送、停止、追加要求、重试").
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        var queued = viewModel.AgentHost.EnqueueFollowup(
+            viewModel.AgentHost.DraftPrompt);
+        if (queued)
+        {
+            // Clear the composer so the
+            // user can start drafting
+            // the next thing in the
+            // meantime. The queued
+            // prompt is preserved on
+            // AgentHost._pendingFollowup
+            // and the post-run SendTaskAsync
+            // path will re-set
+            // DraftPrompt to it before
+            // firing the next send.
+            viewModel.AgentHost.DraftPrompt = "";
+        }
     }
 
     private void ConversationButton_OnClick(object? sender, RoutedEventArgs e)

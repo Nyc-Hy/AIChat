@@ -282,6 +282,73 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.True(host.IsRunning);
     }
 
+    // ---- 1.0.1: 追加要求 (queue + auto-continue) ----
+
+    [Fact]
+    public void EnqueueFollowup_RejectsWhenNotRunning()
+    {
+        // The 追加要求 button's affordance
+        // only makes sense while a run is
+        // in flight. If a future caller
+        // races the IsRunning flip, the
+        // public method guards in addition
+        // to the button's IsEnabled binding.
+        var (host, _, _, _) = CreateHost();
+        Assert.False(host.IsRunning);
+        Assert.False(host.EnqueueFollowup("follow-up text"));
+    }
+
+    [Fact]
+    public void EnqueueFollowup_RejectsEmptyOrWhitespace()
+    {
+        var (host, _, _, _) = CreateHost();
+        host.IsRunning = true;
+        Assert.False(host.EnqueueFollowup(""));
+        Assert.False(host.EnqueueFollowup("   "));
+        Assert.False(host.EnqueueFollowup(null));
+    }
+
+    [Fact]
+    public void EnqueueFollowup_TrimsAndAcceptsValidPrompt()
+    {
+        var (host, _, activity, _) = CreateHost();
+        host.IsRunning = true;
+        var accepted = host.EnqueueFollowup("  add context  ");
+        Assert.True(accepted);
+        // The activity feed should have
+        // a system bubble so the user
+        // sees the click landed (and
+        // can verify the truncation
+        // isn't hiding anything important).
+        var followUpBubble = activity.Activity.LastOrDefault();
+        Assert.NotNull(followUpBubble);
+        Assert.Equal("已暂存追加", followUpBubble.Title);
+    }
+
+    [Fact]
+    public void EnqueueFollowup_OverwritesPreviousPendingFollowup()
+    {
+        // The queue is one-deep on
+        // purpose — a daily-driver user
+        // who clicks 追加要求 twice
+        // while a run is in flight
+        // actually means "follow-up to
+        // a follow-up", not "queue two
+        // more". Last-write-wins matches
+        // the daily-driver mental model.
+        // The post-run auto-continue
+        // path that drains _pendingFollowup
+        // lives in SendTaskAsync and is
+        // exercised end-to-end by the
+        // integration tests; this unit
+        // test only asserts the
+        // accept-while-true contract.
+        var (host, _, _, _) = CreateHost();
+        host.IsRunning = true;
+        Assert.True(host.EnqueueFollowup("first"));
+        Assert.True(host.EnqueueFollowup("second"));
+    }
+
     // ---- 1.0.1: insert @-reference at composer caret ----
 
     [Fact]

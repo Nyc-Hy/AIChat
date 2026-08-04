@@ -1379,8 +1379,8 @@
                                                     Classes="chrome-button"
                                                     Click="AppendFollowup_OnClick"
                                                     IsVisible="{Binding AgentHost.IsRunning}"
-                                                    IsEnabled="False"
-                                                    ToolTip.Tip="追加要求 — 推到当前 run 的下一轮 (Wave 4 follow-up 接入)">
+                                                    IsEnabled="{Binding AgentHost.IsRunning}"
+                                                    ToolTip.Tip="追加要求 — 把 composer 内容暂存到队列，run 结束后自动续跑">
                                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                                     <Path Data="M5 12 H12 M9 9 L12 12 L9 15 M19 5 V8 M16 8 L19 5 L22 8 M19 12 V19"
                                                           Stroke="{Binding $parent[Button].Foreground}"
