@@ -1535,6 +1535,32 @@
                       the user doesn't need a green/red flash for a
                       routine "任务已停止" message — the icon would
                       be overkill for Linear/Notion feel).
+
+                      1.0.1: click anywhere on the
+                      toast border to dismiss
+                      immediately. The Border
+                      has a Cursor=Hand so the
+                      user knows it's
+                      interactive, and a
+                      CursorHovered / pressed
+                      state is wired through the
+                      .toast-row style so the
+                      press reads as a click.
+                      Cursor=Hand is the
+                      cross-platform
+                      "this-thing-is-clickable"
+                      signal (no separate close
+                      × button — the entire row
+                      is the affordance). The
+                      handler routes back
+                      through ToastItem.Dismiss
+                      which the service wired up
+                      at Show time, so a user
+                      click and the 3s
+                      auto-dismiss timer race to
+                      the same idempotent
+                      Remove() / PromoteQueued()
+                      path.
                     -->
                     <Border Background="{DynamicResource SurfaceBrush}"
                             BorderBrush="{DynamicResource LineBrush}"
@@ -1546,7 +1572,10 @@
                             BoxShadow="{DynamicResource ElevationToastShadow}"
                             Classes.toast-success="{Binding IsSuccess}"
                             Classes.toast-warning="{Binding IsWarning}"
-                            Classes.toast-error="{Binding IsError}">
+                            Classes.toast-error="{Binding IsError}"
+                            Classes.toast-row="True"
+                            Cursor="Hand"
+                            PointerPressed="ToastItem_OnPointerPressed">
                         <TextBlock Text="{Binding Message}" Classes="body" TextWrapping="Wrap"/>
                     </Border>
                 </DataTemplate>

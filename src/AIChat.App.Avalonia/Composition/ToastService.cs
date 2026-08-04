@@ -44,7 +44,28 @@ public sealed class ToastService : IToastService
 
     public void Show(string message, ToastLevel level = ToastLevel.Info)
     {
-        var item = new ToastItem { Message = message, Level = level };
+        // 1.0.1: wire the click-to-dismiss
+        // callback so the XAML can close a
+        // toast immediately when the user
+        // clicks it. Without this, important
+        // warning / error toasts sometimes
+        // auto-dismissed before the user
+        // could read the full message (the
+        // 3s timer fires whether the user's
+        // eyes are on it or not). The
+        // callback is the same Dismiss call
+        // the auto-dismiss timer uses, so a
+        // user click and the timer race to
+        // the same Remove() / PromoteQueued()
+        // path — Toasts.Remove returns false
+        // if the item is already gone, which
+        // is the right idempotent behaviour.
+        var item = new ToastItem
+        {
+            Message = message,
+            Level = level,
+            OnDismiss = Dismiss
+        };
         _dispatchToUi(() =>
         {
             if (Toasts.Count >= MaxVisible)

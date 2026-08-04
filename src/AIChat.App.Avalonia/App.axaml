@@ -602,6 +602,38 @@
             <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
             <Setter Property="BorderThickness" Value="3,1,1,1" />
         </Style>
+        <!--
+          1.0.1: clickable-toast affordance.
+          The Border is the entire row's
+          click target (no separate ×
+          button — a daily-driver user
+          reading an error toast wants the
+          whole row to feel clickable, not
+          to hunt for a tiny close icon).
+          Subtle background darken on
+          PointerOver + a thin pressed
+          state so the click reads as a
+          click. The dismissed-on-click
+          semantics are wired in
+          MainWindow.axaml.cs
+          ToastItem_OnPointerPressed —
+          the Border's Cursor=Hand is the
+          "this-thing-is-clickable"
+          signal.
+        -->
+        <Style Selector="Border.toast-row">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.toast-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}"/>
+        </Style>
+        <Style Selector="Border.toast-row:pressed">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/>
+        </Style>
         <Style Selector="Border.git-status-badge.modified">
             <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />

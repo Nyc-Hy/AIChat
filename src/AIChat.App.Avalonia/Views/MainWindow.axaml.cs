@@ -1314,6 +1314,32 @@ internal partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // 1.0.1: click-anywhere on a toast border
+    // dismisses the toast immediately. The
+    // ToastItem's OnDismiss callback is the
+    // service's own Dismiss (wired up at Show
+    // time), so a user click and the 3s
+    // auto-dismiss timer race to the same
+    // Remove() / PromoteQueued() path —
+    // whichever lands first wins, the second
+    // is a no-op. The PointerPressed (not
+    // Click) choice matches the inline-expand
+    // pattern; the Border doesn't carry a
+    // Click event by default and the XAML
+    // already routes the entire border as
+    // the click target. e.Handled so the
+    // bubbling press doesn't double-fire
+    // through the parent ItemsControl.
+    private void ToastItem_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Border { DataContext: Composition.ToastItem item })
+        {
+            return;
+        }
+        item.Dismiss();
+        e.Handled = true;
+    }
+
     private void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
     {
         SafeRun(async () =>

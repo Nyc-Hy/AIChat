@@ -30,6 +30,24 @@ public sealed class ToastItem
     public string Message { get; init; } = "";
     public ToastLevel Level { get; init; } = ToastLevel.Info;
 
+    // 1.0.1: dismiss callback the XAML click
+    // handler can fire when the user wants to
+    // close a toast immediately instead of
+    // waiting for the 3s auto-dismiss. Wired
+    // up by ToastService.Show (so the
+    // service owns the back-edge to the
+    // FIFO queue — the XAML just hands the
+    // click back to the item, the item hands
+    // the dismiss to the service, the
+    // service promotes the next queued
+    // toast). Null when the item is
+    // constructed outside the service
+    // (test double, etc.) — calling Dismiss
+    // on a null-callback item is a no-op.
+    public Action<ToastItem>? OnDismiss { get; init; }
+
+    public void Dismiss() => OnDismiss?.Invoke(this);
+
     // Per-level flags the XAML uses to colour the toast by severity.
     // One IsX per ToastLevel value; the XAML's Border picks up the
     // matching .toast-<level> class and the App.axaml style draws a
