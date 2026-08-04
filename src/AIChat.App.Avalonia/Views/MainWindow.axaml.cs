@@ -474,7 +474,55 @@ internal partial class MainWindow : Window
 
     private void Search_OnClick(object? sender, RoutedEventArgs e)
     {
-        _toast.Show("搜索 — Wave 3 接入", ToastLevel.Info);
+        // 1.0.1: the previous shape was a
+        // placeholder toast (\"搜索 — Wave 3
+        // 接入\"). The actual history-search
+        // path is the /search slash command
+        // (shipped in e6f1ca7) — the daily-
+        // driver user pressing ⌘F (or
+        // clicking this button) wants to
+        // find an old conversation by
+        // keyword, and the slash command
+        // already does the full-text
+        // search across all sessions.
+        //
+        // Pre-fill the composer with
+        // \"/search \" (note the trailing
+        // space) and move the caret to the
+        // end so the user types their query
+        // directly. The slash-command
+        // handler reads the rest of the
+        // prompt as the search term on
+        // SendTask / ⌘↵. We use the
+        // existing /search contract
+        // rather than building a separate
+        // search dialog so the user gets
+        // the same match-excerpt feedback
+        // the slash command path produces
+        // (system bubble with the matching
+        // conversation title + first hit
+        // line).
+        //
+        // If the composer already has
+        // content (the user was mid-
+        // prompt and pressed ⌘F by
+        // accident), we still replace
+        // with the pre-fill — the
+        // browser-search convention is
+        // \"search overrides whatever you
+        // were typing\", and the user can
+        // ⌘Z to recover their draft if
+        // they meant to keep typing.
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.AgentHost.DraftPrompt = "/search ";
+        }
+        FocusPromptInput();
+        // Move the caret past the
+        // pre-filled \"/search \" so the
+        // user's keyword lands where the
+        // eye expects.
+        PromptInput.CaretIndex = PromptInput.Text?.Length ?? 0;
     }
 
     private void Notifications_OnClick(object? sender, RoutedEventArgs e)
