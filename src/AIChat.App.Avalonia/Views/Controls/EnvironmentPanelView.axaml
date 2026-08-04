@@ -409,12 +409,25 @@
                           loop see. Hidden for pending
                           attachment rows (no real
                           Source.Id to reference).
+                          SelectableTextBlock so the user
+                          can ⌘C the @<kind>:<id> text
+                          directly (e.g. to paste into
+                          a future prompt by hand) —
+                          before this change the user
+                          had to either click 引用 to
+                          insert it into the composer
+                          or right-click → select all →
+                          copy the mono string. The
+                          first forces a side-effect on
+                          the composer; the second is
+                          3 steps for a daily-driver
+                          affordance that should be 1.
                         -->
-                        <TextBlock Text="{Binding Reference}"
-                                   IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
-                                   FontSize="10"
-                                   FontFamily="{StaticResource FontMono}"
-                                   Foreground="{DynamicResource MutedBrush}"/>
+                        <SelectableTextBlock Text="{Binding Reference}"
+                                             IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                                             FontSize="10"
+                                             FontFamily="{StaticResource FontMono}"
+                                             Foreground="{DynamicResource MutedBrush}"/>
                       </StackPanel>
                       <!--
                         Per-row "insert @-reference" button. Hidden
