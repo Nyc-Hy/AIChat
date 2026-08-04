@@ -594,10 +594,10 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         // follow-up is what the user
         // actually means when they
         // press twice).
-        if (!string.IsNullOrWhiteSpace(_pendingFollowup))
+        if (!string.IsNullOrWhiteSpace(PendingFollowup))
         {
-            var queued = _pendingFollowup;
-            _pendingFollowup = null;
+            var queued = PendingFollowup;
+            PendingFollowup = null;
             DraftPrompt = queued;
             // Fire-and-forget the next
             // send. We can't await
@@ -640,10 +640,10 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     {
         if (!IsRunning) return false;
         if (string.IsNullOrWhiteSpace(prompt)) return false;
-        _pendingFollowup = prompt.Trim();
+        PendingFollowup = prompt.Trim();
         _activityFeed.Add(
             "已暂存追加",
-            $"将在当前 run 结束后自动发送：\"{(_pendingFollowup.Length > 60 ? _pendingFollowup[..60] + "…" : _pendingFollowup)}\"",
+            $"将在当前 run 结束后自动发送：\"{(PendingFollowup.Length > 60 ? PendingFollowup[..60] + "…" : PendingFollowup)}\"",
             "继续");
         return true;
     }
@@ -679,7 +679,7 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // path so the label flips back to
     // "追加要求" the moment the next
     // run starts.
-    public bool HasPendingFollowup => !string.IsNullOrWhiteSpace(_pendingFollowup);
+    public bool HasPendingFollowup => !string.IsNullOrWhiteSpace(PendingFollowup);
 
     // 1.0.1: detect an in-progress
     // @-reference at the caret. Pure

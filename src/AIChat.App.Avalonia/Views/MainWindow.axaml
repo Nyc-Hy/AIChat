@@ -1707,10 +1707,10 @@
                                                       I miss the
                                                       button?".
                                                     -->
-                                                    <TextBlock FontFamily="{StaticResource FontSans}" FontSize="11" VerticalAlignment="Center">
-                                                        <Run Text="追加要求"/>
-                                                        <Run Text=" (已暂存)" IsVisible="{Binding AgentHost.HasPendingFollowup}"/>
-                                                    </TextBlock>
+                                                    <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                                                        <TextBlock Text="追加要求" FontFamily="{StaticResource FontSans}" FontSize="11"/>
+                                                        <TextBlock Text=" (已暂存)" FontFamily="{StaticResource FontSans}" FontSize="11" IsVisible="{Binding AgentHost.HasPendingFollowup}"/>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Button>
                                         </Grid>
