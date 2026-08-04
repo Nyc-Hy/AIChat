@@ -152,7 +152,7 @@
                                   bell icon is decorative. Both have a ToolTip explaining
                                   the future shortcut so the user knows what's coming.
                                 -->
-                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,6" ColumnSpacing="2">
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6" ColumnSpacing="2">
                                     <Button Grid.Column="0"
                                             Classes="sidebar-brand"
                                             Click="ModeSwitcher_OnClick"
@@ -182,17 +182,29 @@
                                               HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                                     </Button>
-                                    <Button Grid.Column="2"
-                                            Classes="sidebar-icon-button"
-                                            Click="Notifications_OnClick"
-                                            ToolTip.Tip="通知 (Wave 7 接入 — Subagent / Background Process 事件)">
-                                        <Path Data="M12 4 a6 6 0 0 1 6 6 v3 l2 3 H4 l2 -3 v-3 a6 6 0 0 1 6 -6 M10 19 a2 2 0 0 0 4 0"
-                                              Stroke="{Binding $parent[Button].Foreground}"
-                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                                              Width="14" Height="14" Stretch="Uniform"
-                                              HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"/>
-                                    </Button>
+                                    <!--
+                                      1.0.1: removed the "通知"
+                                      bell button. The plan §7
+                                      Wave 7 reference ("Subagent
+                                      / Background Process
+                                      events") was overtaken by
+                                      the Environment panel's
+                                      SubAgentRuns + Background
+                                      sections (Wave 7 first
+                                      slice, then Wave 7.1
+                                      BackgroundProcessSupervisor
+                                      follow-up) which surface
+                                      the same data live. A
+                                      standalone bell with a
+                                      "Wave 7 接入" tooltip
+                                      promised a feature that
+                                      never materialised and
+                                      ended up wired to a stub
+                                      toast. The user gets the
+                                      same data from the
+                                      Environment panel and
+                                      Toast service already.
+                                    -->
                                 </Grid>
 
                                 <Border Classes="section-divider" Margin="0,2,0,4"/>

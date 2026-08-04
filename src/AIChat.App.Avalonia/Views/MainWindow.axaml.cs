@@ -541,11 +541,6 @@ internal partial class MainWindow : Window
         PromptInput.CaretIndex = PromptInput.Text?.Length ?? 0;
     }
 
-    private void Notifications_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _toast.Show("通知 — Wave 7 接入", ToastLevel.Info);
-    }
-
     private void Minimize_OnClick(object? sender, RoutedEventArgs e)
     {
         WindowState = WindowState.Minimized;
