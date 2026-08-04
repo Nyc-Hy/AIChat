@@ -493,6 +493,217 @@ public sealed class AgentHostViewModelTests : IDisposable
         };
     }
 
+    // TrySuggestAtCompletion is the keyboard half of the
+    // @-reference flow: Tab inside a partial
+    // @<kind>:<partial> splices the first matching
+    // Source from the registry. It's a pure static
+    // function so the tests cover the four ways the
+    // user can land in a no-match state (empty text,
+    // email-style "@" embedded in a word, kind
+    // mismatch, out-of-range caret) plus the two
+    // happy paths (kind alone, kind + partial id).
+    [Fact]
+    public void TrySuggestAtCompletion_EmptyText_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web") };
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("", 0, sources));
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion(null!, 0, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_CaretAtStart_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web") };
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("hello world", 0, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_CaretOutOfRange_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web") };
+        // Past end — TextBox rarely lands here but the
+        // helper has to be defensive.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("see @web", 99, sources));
+        // Negative — degenerate guard.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("see @web", -1, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_NoAtSign_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web") };
+        // Caret is in a word, no @ anywhere — the
+        // "user is typing in the middle of a sentence"
+        // case.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("hello world", 5, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_EmailCase_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web") };
+        // "user@host" — the @ is preceded by 'r' (a
+        // word char), so the helper must reject.
+        // Otherwise Tab would silently splice
+        // "@web:abc" after an email address.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("user@host", 9, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_AtAcrossWhitespace_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web") };
+        // "see @web" with caret in "world" — the @
+        // exists but the caret's word doesn't
+        // contain it, so no completion.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("see @web abc", 14, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_KindAlone_ReturnsFirstSourceOfKind()
+    {
+        var web1 = NewSource("web", "abc");
+        var web2 = NewSource("web", "def");
+        var clip = NewSource("clipboard", "xyz");
+        var sources = new[] { web1, web2, clip };
+        // "@web" with no id — first source of that
+        // kind wins (registry ordering is
+        // insertion-order, the user can keep
+        // typing to narrow).
+        var match = AgentHostViewModel.TrySuggestAtCompletion("see @web", 8, sources);
+        Assert.Same(web1, match);
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_KindWithPartialId_ReturnsFirstPrefixMatch()
+    {
+        var web1 = NewSource("web", "abc");
+        var web2 = NewSource("web", "abd");
+        var web3 = NewSource("web", "xyz");
+        var sources = new[] { web1, web2, web3 };
+        // "@web:ab" — both abc and abd match the
+        // "ab" prefix, but abc comes first.
+        var match = AgentHostViewModel.TrySuggestAtCompletion("see @web:ab", 11, sources);
+        Assert.Same(web1, match);
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_KindMismatch_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web", "abc") };
+        // "@clip" with no clipboard sources — the
+        // user typed the wrong kind, completion
+        // stays null so Tab is a no-op (better than
+        // silently completing the wrong kind).
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("see @clip", 9, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_IdNoPrefixMatch_ReturnsNull()
+    {
+        var sources = new[] { NewSource("web", "abc") };
+        // "@web:zzz" — no source has an id starting
+        // with zzz, the user is on a stale id.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("see @web:zzz", 12, sources));
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_CaretInMiddleOfWord_StillMatches()
+    {
+        var sources = new[] { NewSource("web", "abc") };
+        // "see @web:ab extra" with caret at 11
+        // (the position right after the 'b' of
+        // "ab", before the space) — the helper
+        // has to walk backwards from caret and
+        // stop at the first non-word
+        // character, not from end-of-string.
+        // text[4..11] is "@web:ab", a valid
+        // partial that matches the "abc" id.
+        var match = AgentHostViewModel.TrySuggestAtCompletion("see @web:ab extra", 11, sources);
+        Assert.Same(sources[0], match);
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_CaseInsensitiveKind()
+    {
+        var sources = new[] { NewSource("web", "abc") };
+        // "@WEB" — kind match is
+        // case-insensitive (the parser that
+        // consumes the spliced text is also
+        // case-insensitive on kind).
+        var match = AgentHostViewModel.TrySuggestAtCompletion("see @WEB", 8, sources);
+        Assert.Same(sources[0], match);
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_CaseInsensitiveIdPrefix()
+    {
+        var sources = new[] { NewSource("web", "abc") };
+        // "@web:ABC" — id prefix match is
+        // case-insensitive. Same rationale as
+        // the kind test.
+        var match = AgentHostViewModel.TrySuggestAtCompletion("see @web:ABC", 11, sources);
+        Assert.Same(sources[0], match);
+    }
+
+    [Fact]
+    public void TrySuggestAtCompletion_EmptySources_ReturnsNull()
+    {
+        // "@web" but the registry is empty —
+        // there is nothing to match.
+        Assert.Null(AgentHostViewModel.TrySuggestAtCompletion("see @web", 8, []));
+    }
+
+    [Fact]
+    public async Task SourcesForAutocomplete_ExposesRegistryContents()
+    {
+        // The XAML key handler reaches
+        // SourcesForAutocomplete to call
+        // TrySuggestAtCompletion, so the
+        // property must be a live view of the
+        // registry (not a snapshot at ctor
+        // time).
+        var repository = new InMemoryAppRepository();
+        var registry = new InMemorySourceRegistry();
+        await registry.AddAsync(NewSource("web", "abc"));
+        await registry.AddAsync(NewSource("clipboard", "xyz"));
+        var host = CreateHostWithRegistry(repository, registry);
+        var sources = host.Host.SourcesForAutocomplete;
+        Assert.Equal(2, sources.Count);
+        Assert.Contains(sources, s => s.Id == "abc" && s.Kind == "web");
+        Assert.Contains(sources, s => s.Id == "xyz" && s.Kind == "clipboard");
+    }
+
+    private (AgentHostViewModel Host, ProjectSidebarViewModel Sidebar, ActivityFeedViewModel Activity, ToastService Toast)
+        CreateHostWithRegistry(InMemoryAppRepository repository, InMemorySourceRegistry registry)
+    {
+        var settingsHolder = new SettingsHolder();
+        settingsHolder.Replace(new AppSettings());
+        var sidebar = new ProjectSidebarViewModel(repository, settingsHolder);
+        var activity = new ActivityFeedViewModel();
+        var toast = new ToastService(action => action());
+        var host = new AgentHostViewModel(
+            Mock.Of<IChatCompletionService>(),
+            AgentToolRegistry.CreateForTests([]),
+            Mock.Of<IApprovalService>(),
+            repository,
+            sidebar,
+            new ConversationListViewModel(repository),
+            activity,
+            toast,
+            registry,
+            _ => { },
+            () => settingsHolder.Current,
+            () => false,
+            () => false,
+            action =>
+            {
+                action();
+                return Task.CompletedTask;
+            });
+        return (host, sidebar, activity, toast);
+    }
+
     private (AgentHostViewModel Host, ProjectSidebarViewModel Sidebar, ActivityFeedViewModel Activity, ToastService Toast)
         CreateHost()
     {

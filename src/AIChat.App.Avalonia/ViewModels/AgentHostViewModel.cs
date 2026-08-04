@@ -16,6 +16,7 @@ using AIChat.Application.Verification;
 using AIChat.Application.Artifacts;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
+using AIChat.Domain.Sources;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -291,6 +292,14 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // reference text. Caret clamps to the current
     // DraftPrompt length so a stale caret from a longer
     // draft can't throw — we just land at the end.
+    // Surface the live source registry so the XAML key
+    // handler can run the autocomplete lookup without
+    // reaching into private fields. Read-only view — the
+    // registry itself is mutated by
+    // EnvironmentPanelViewModel.
+    public IReadOnlyList<AIChat.Domain.Sources.Source> SourcesForAutocomplete =>
+        _sourceRegistry.Sources;
+
     public void InsertSourceReferenceAtCaret(
         AIChat.Domain.Sources.Source source,
         int caretIndex)
@@ -643,6 +652,117 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // EnqueueFollowup for why this is a
     // single string and not a Queue<string>.
     private string? _pendingFollowup;
+
+    // 1.0.1: detect an in-progress
+    // @-reference at the caret. Pure
+    // function — the XAML key handler
+    // calls it on Tab / Enter to look
+    // up the first matching Source for
+    // auto-completion. The result is a
+    // Source (when matched) or null
+    // (when there's no @<kind>:<partial>
+    // at the caret, or the partial
+    // doesn't match any registry
+    // entry). The @<kind>:<partial>
+    // grammar is the same one
+    // SourceReferenceParser.Parse uses
+    // for the send path, so what
+    // completes here is exactly what
+    // gets sent.
+    //
+    // Pure function on (text,
+    // caretIndex, registry) so unit
+    // tests don't need a live
+    // Avalonia TextBox.
+    public static Source? TrySuggestAtCompletion(
+        string text,
+        int caretIndex,
+        IReadOnlyList<Source> sources)
+    {
+        if (string.IsNullOrEmpty(text) || caretIndex <= 0 || caretIndex > text.Length)
+        {
+            return null;
+        }
+        // Walk backwards from the
+        // caret to find the most recent
+        // '@' that isn't preceded by a
+        // word character (so the email
+        // "user@host" case doesn't
+        // trigger on a real email).
+        var atIndex = -1;
+        for (var i = caretIndex - 1; i >= 0; i--)
+        {
+            if (text[i] == '@')
+            {
+                // Reject if the
+                // character
+                // before @ is a
+                // word char (the
+                // email case).
+                if (i > 0 && char.IsLetterOrDigit(text[i - 1]))
+                {
+                    return null;
+                }
+                atIndex = i;
+                break;
+            }
+            // A space or newline
+            // breaks the @-run
+            // — we only consider
+            // the contiguous
+            // word the caret is
+            // inside.
+            if (char.IsWhiteSpace(text[i]))
+            {
+                return null;
+            }
+        }
+        if (atIndex < 0)
+        {
+            return null;
+        }
+        // Extract the @-run from
+        // atIndex to caretIndex.
+        // Expected shape:
+        //   @                  → empty
+        //   @web               → kind
+        //   @web:              → kind
+        //   @web:abc           → kind+partial
+        //   @WEB:abc (upper)   → kind
+        //   @web:abc123        → longer partial
+        var fragment = text[atIndex..caretIndex];
+        if (!System.Text.RegularExpressions.Regex.IsMatch(
+            fragment, @"^@([A-Za-z]+)(?::([A-Za-z0-9]*))?$"))
+        {
+            return null;
+        }
+        // Match the kind +
+        // optional partial-id
+        // against the registry.
+        // Case-insensitive kind +
+        // case-insensitive id prefix
+        // (matches the parser).
+        var match = System.Text.RegularExpressions.Regex.Match(
+            fragment, @"^@(?<kind>[A-Za-z]+)(?::(?<id>[A-Za-z0-9]*))?$");
+        var kind = match.Groups["kind"].Value;
+        var partial = match.Groups["id"].Value;
+        foreach (var source in sources)
+        {
+            if (!string.Equals(source.Kind, kind, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            if (partial.Length == 0)
+            {
+                return source;
+            }
+            if (source.Id.StartsWith(partial, StringComparison.OrdinalIgnoreCase))
+            {
+                return source;
+            }
+        }
+        return null;
+    }
 
     [RelayCommand(CanExecute = nameof(CanStopTask))]
     private void StopTask()

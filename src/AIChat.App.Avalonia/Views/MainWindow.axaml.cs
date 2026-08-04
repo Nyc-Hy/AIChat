@@ -1477,6 +1477,100 @@ internal partial class MainWindow : Window
                 }
             }
 
+            // 1.0.1: @-reference auto-complete.
+            // Tab inside a partial @<kind>:<id>
+            // splices the first matching Source
+            // from the registry. Plain Tab
+            // (no modifiers) — the user is
+            // still in the text-input
+            // affordance, ⌘⇧ already routes
+            // to the ⌘⇧T cycle theme, ⇥ is
+            // the natural "fill in the
+            // obvious next token" gesture.
+            // The XAML's AcceptsReturn=True
+            // means Tab would otherwise do
+            // nothing in the textbox (the
+            // default focus-traversal is
+            // disabled when AcceptsReturn
+            // is on), so this is a clean
+            // "no default behavior to
+            // override" hook.
+            if (e.Key == Key.Tab &&
+                DataContext is MainWindowViewModel tabVm)
+            {
+                var text = tabVm.AgentHost.DraftPrompt ?? "";
+                var caret = PromptInput.CaretIndex;
+                var sources = tabVm.AgentHost.SourcesForAutocomplete;
+                var match = AIChat.App.Avalonia.ViewModels.AgentHostViewModel
+                    .TrySuggestAtCompletion(text, caret, sources);
+                if (match is not null)
+                {
+                    var reference = AIChat.Application.Sources.SourceReferenceParser
+                        .FormatReference(match);
+                    // Splice the full
+                    // "@kind:id" into
+                    // the prompt at
+                    // the caret,
+                    // replacing the
+                    // partial text
+                    // the user just
+                    // typed. Same
+                    // dedupe / spacing
+                    // rules as the
+                    // sidebar "引用"
+                    // button's
+                    // InsertSourceReferenceAtCaret
+                    // (the "find /
+                    // replace" math
+                    // is identical —
+                    // both paths
+                    // share the
+                    // same caret-aware
+                    // splice
+                    // semantics so a
+                    // user who mixes
+                    // keyboard
+                    // completion and
+                    // sidebar
+                    // clicking gets
+                    // the same
+                    // spacing
+                    // behaviour).
+                    var atIndex = text.LastIndexOf('@', Math.Min(caret, text.Length) - 1);
+                    if (atIndex >= 0)
+                    {
+                        var before = text[..atIndex];
+                        var after = text[caret..];
+                        var needsLeading = before.Length > 0 && !char.IsWhiteSpace(before[^1]);
+                        var needsTrailing = after.Length > 0 && !char.IsWhiteSpace(after[0]);
+                        var leading = needsLeading ? " " : "";
+                        var trailing = needsTrailing ? " " : "";
+                        var spliced = before + leading + reference + trailing + after;
+                        tabVm.AgentHost.DraftPrompt = spliced;
+                        // Move the
+                        // caret past
+                        // the
+                        // reference
+                        // (and the
+                        // trailing
+                        // space) so
+                        // the user
+                        // can keep
+                        // typing
+                        // without
+                        // first
+                        // clicking
+                        // back into
+                        // the box.
+                        PromptInput.CaretIndex = Math.Min(
+                            before.Length + leading.Length + reference.Length + trailing.Length,
+                            spliced.Length);
+                        e.Handled = true;
+                        return;
+                    }
+                }
+            }
+
             if (e.Key != Key.Enter)
             {
                 return;
