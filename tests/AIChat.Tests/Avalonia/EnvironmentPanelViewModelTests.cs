@@ -904,6 +904,50 @@ public sealed class EnvironmentPanelViewModelTests
         Assert.True(fired);
     }
 
+    // 1.0.1: SourceSummary previously read
+    // "X 个待发送" for any non-empty
+    // population, including persisted
+    // Sources (clipboard snapshots, web
+    // fetches) that are already saved
+    // and NOT waiting to be sent. A
+    // user with 3 persisted sources + 0
+    // pending attachments used to read
+    // "3 个待发送" and wonder why
+    // nothing was in the composer.
+    // The label now reports each
+    // population separately so the
+    // number matches the user's mental
+    // model.
+    [Fact]
+    public async Task SourceSummary_PersistedOnly_ReportsSavedNotPending()
+    {
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Id = "s1",
+            Kind = "web",
+            DisplayName = "Article",
+            Content = "body",
+        });
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Id = "s2",
+            Kind = "clipboard",
+            DisplayName = "Snapshot",
+            Content = "body",
+        });
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Id = "s3",
+            Kind = "web",
+            DisplayName = "Another",
+            Content = "body",
+        });
+
+        Assert.Equal(3, vm.SourceCount);
+        Assert.Equal("3 个已保存", vm.SourceSummary);
+    }
+
     private static (EnvironmentPanelViewModel Vm, AgentHostViewModel Host, ProjectSidebarViewModel Sidebar,
         Mock<IWorkspaceChangeService> Workspace, SourceRegistry Registry)
         CreateViewModelWithSourceRegistry()

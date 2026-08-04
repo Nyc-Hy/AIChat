@@ -783,9 +783,38 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
         var attachments = _agentHost.PendingAttachments.Attachments;
         var persisted = _sourceRegistry.Sources;
         SourceCount = attachments.Count + persisted.Count;
-        SourceSummary = SourceCount == 0
-            ? "暂无"
-            : $"{SourceCount} 个待发送";
+        // 1.0.1: the previous "X 个待发送"
+        // label conflated the two
+        // populations — the pending
+        // image attachments really are
+        // waiting to be sent, but the
+        // persisted Sources (clipboard
+        // snapshots, web fetches) are
+        // already saved. A user with 3
+        // persisted Sources + 0 pending
+        // attachments used to read
+        // "3 个待发送" and wonder why
+        // nothing was in the composer.
+        // The label now reports each
+        // population separately so the
+        // number matches the user's
+        // mental model.
+        if (SourceCount == 0)
+        {
+            SourceSummary = "暂无";
+        }
+        else if (attachments.Count == 0)
+        {
+            SourceSummary = $"{persisted.Count} 个已保存";
+        }
+        else if (persisted.Count == 0)
+        {
+            SourceSummary = $"{attachments.Count} 个待发送";
+        }
+        else
+        {
+            SourceSummary = $"{attachments.Count} 个待发送 / {persisted.Count} 个已保存";
+        }
         // Mirror the real pending attachments into the per-source
         // list so the right rail reflects the same state as the
         // attachment strip above the composer. Each row gets a
