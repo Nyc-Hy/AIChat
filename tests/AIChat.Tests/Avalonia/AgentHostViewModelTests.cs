@@ -179,6 +179,109 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.False(host.SendTaskCommand.CanExecute(null));
     }
 
+    // ---- 1.0.1: ClearRunState wipes plan + sub-agent + status
+    //              surface when the user switches conversations ----
+
+    [Fact]
+    public void ClearRunState_EmptiesPlanItemsAndSubAgentRuns()
+    {
+        // The previous shape only cleared
+        // the activity feed on conversation
+        // switch — the plan panel (bound
+        // to AgentHost.PlanItems) and the
+        // sub-agent section (bound to
+        // SubAgentRuns) kept their last
+        // values, so the user saw the
+        // previous conversation's plan
+        // steps still rendered above the
+        // freshly-loaded activity feed.
+        var (host, _, _, _) = CreateHost();
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p1",
+                    Title = "read foo.cs",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.InProgress
+                }
+            }
+        });
+        host.UpsertSubAgentRun(new AIChat.Domain.Chat.AgentSubAgentRun
+        {
+            Id = "s1",
+            TemplateId = "explore",
+            Task = "x",
+            Status = "running"
+        });
+        Assert.NotEmpty(host.PlanItems);
+        Assert.NotEmpty(host.SubAgentRuns);
+
+        host.ClearRunState();
+
+        Assert.Empty(host.PlanItems);
+        Assert.Empty(host.SubAgentRuns);
+    }
+
+    [Fact]
+    public void ClearRunState_ResetsLastAssistantStatusAndInputTokens()
+    {
+        // The status bar's "已完成" / "失败"
+        // pill and the context-budget
+        // estimate both read from the host
+        // (not from the per-conversation
+        // activity feed). Without this
+        // reset, switching to a fresh
+        // conversation shows the previous
+        // conversation's "失败" pill and
+        // a stale token count.
+        var (host, _, _, _) = CreateHost();
+        host.LastAssistantStatus = "失败";
+        host.InputTokens = 12_345;
+
+        host.ClearRunState();
+
+        Assert.Equal("", host.LastAssistantStatus);
+        Assert.Equal(0, host.InputTokens);
+    }
+
+    [Fact]
+    public void ClearRunState_PreservesIsRunning()
+    {
+        // A run that's actually in flight
+        // when the user clicks another
+        // conversation (e.g. they kicked
+        // off a long task and walked away
+        // from the app, came back, and
+        // switched conversations to
+        // compare with an older one) must
+        // stay running. Forcing
+        // IsRunning=false would race the
+        // actual run continuation and
+        // leave the new conversation's
+        // composer in a stuck "can't
+        // send" state.
+        var (host, _, _, _) = CreateHost();
+        host.IsRunning = true;
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p1",
+                    Title = "still running",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.InProgress
+                }
+            }
+        });
+
+        host.ClearRunState();
+
+        Assert.True(host.IsRunning);
+    }
+
     // ---- 1.0.1: insert @-reference at composer caret ----
 
     [Fact]

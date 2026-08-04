@@ -1001,6 +1001,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     private void OnConversationSelected(object? sender, ConversationSelectedEventArgs args)
     {
         _agentHost.ClearPreparedRunLink();
+        // 1.0.1: drop the previous
+        // conversation's in-flight run
+        // state (plan steps / sub-agent
+        // rows / status pill) so the
+        // user switching to a different
+        // conversation doesn't see the
+        // old plan leaking above the
+        // freshly-loaded activity feed.
+        // IsRunning is intentionally
+        // preserved — see the comment on
+        // ClearRunState.
+        _agentHost.ClearRunState();
         ActivityFeed.LoadConversation(args.Conversation);
         // Persist the selection so the next launch can restore the
         // same conversation. AppSettings.LastActiveConversationId

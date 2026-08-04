@@ -1064,6 +1064,61 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasSubAgentRuns));
     }
 
+    // 1.0.1: clear every in-flight run-state
+    // surface when the user switches to a
+    // different conversation. The previous
+    // shape only cleared ActivityFeed on
+    // conversation switch — PlanItems /
+    // SubAgentRuns / LastAssistantStatus
+    // / InputTokens / IsRunning stayed at
+    // their last-true values, so a daily-
+    // driver user who finished a run in
+    // conversation A, then clicked
+    // conversation B, saw conversation A's
+    // plan steps + sub-agent rows still
+    // rendered above the (correctly
+    // swapped) activity feed. The plan
+    // panel is bound to AgentHost.PlanItems
+    // (not the per-conversation activity
+    // feed), so the previous
+    // conversation's plan leaked across.
+    //
+    // IsRunning is the one field this
+    // method does NOT clear: if a run is
+    // genuinely in flight (the user
+    // started a long task and clicked a
+    // different conversation while the
+    // agent was still running), the host
+    // stays running. StopTaskCommand is
+    // what ends a run. Forcing
+    // IsRunning=false here would race
+    // the actual run continuation and
+    // leave the next conversation's
+    // composer in a stuck "can't send"
+    // state.
+    public void ClearRunState()
+    {
+        PlanItems.Clear();
+        ClearSubAgentRuns();
+        // Reset the per-conversation status
+        // fields the status bar / retry
+        // button bind to. ContextInputTokens
+        // recomputes on the next Recompute
+        // (triggered by the next draft-prompt
+        // change or sidebar project switch).
+        LastAssistantStatus = "";
+        InputTokens = 0;
+        // Re-raise the derived bools the XAML
+        // panels bind to so the plan / sub-
+        // agent sections collapse back to
+        // hidden, and the status bar's
+        // "已完成" / "失败" pill clears.
+        OnPropertyChanged(nameof(HasPlan));
+        OnPropertyChanged(nameof(PlanCompletedCount));
+        OnPropertyChanged(nameof(PlanProgressText));
+        OnPropertyChanged(nameof(CanRetry));
+    }
+
     // 2026-08-03: cancel an in-flight sub-agent. The user clicks
     // the per-row '停止' button; this walks up through the
     // scheduler (which holds the per-run CTS), and the next
