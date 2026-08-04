@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using AIChat.App.Avalonia.ViewModels;
 using AIChat.Application.Scheduled;
 using AIChat.Domain.Scheduled;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AIChat.App.Avalonia.Composition;
 
@@ -45,18 +46,43 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
     // schedule even on a busy CI box.
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
-    private readonly AgentHostViewModel _agentHost;
+    private readonly IServiceProvider _services;
     private readonly ISettingsHolder _settings;
     private readonly IApprovalService _approval;
     private readonly Func<DateTimeOffset> _now;
 
+    // 1.0.1 follow-up: take IServiceProvider instead of
+    // AgentHostViewModel directly. AgentHostViewModel is
+    // constructed inline inside MainWindowViewModel (it
+    // depends on host-owned callbacks like setStatusMessage
+    // and the bridge delegates), so it isn't a standalone
+    // DI service. Resolving it through the provider — after
+    // the main window has finished construction — would
+    // either need a parallel registration (with the
+    // MainWindowViewModel's delegates wired in) or a
+    // circular reference back to the MainWindowViewModel
+    // itself. The MainWindowViewModel IS registered, and
+    // it owns the AgentHostViewModel as a property, so
+    // resolving that one and reading .AgentHost gives us
+    // the same instance without a new DI graph.
+    //
+    // The IServiceProvider is captured at executor
+    // construction time, not at dispatch time — the
+    // scheduler starts the tick loop well after the main
+    // window has been constructed, so the lazy resolve
+    // inside ExecuteAsync always finds the host. If the
+    // user opens the app and the host somehow never
+    // finishes initialising, every scheduled tick will
+    // report "host not initialised" via the standard
+    // exception → toast path; the scheduler itself
+    // stays alive.
     public AgentHostScheduledTaskExecutor(
-        AgentHostViewModel agentHost,
+        IServiceProvider services,
         ISettingsHolder settings,
         IApprovalService approval,
         Func<DateTimeOffset>? now = null)
     {
-        _agentHost = agentHost ?? throw new ArgumentNullException(nameof(agentHost));
+        _services = services ?? throw new ArgumentNullException(nameof(services));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _approval = approval ?? throw new ArgumentNullException(nameof(approval));
         _now = now ?? (() => DateTimeOffset.UtcNow);
@@ -74,12 +100,30 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
         var startedAt = _now();
         wasAutoRejected = false;
 
+        // Resolve the host lazily
+        // — see the ctor comment
+        // for why we don't
+        // inject it directly.
+        // MainWindowViewModel is
+        // a singleton registered
+        // at composition time;
+        // GetRequiredService here
+        // finds the same
+        // instance the rest of
+        // the app uses, and
+        // .AgentHost is the live
+        // VM that owns
+        // SendTask / IsRunning /
+        // LastAssistantStatus.
+        var mainWindow = _services.GetRequiredService<MainWindowViewModel>();
+        var agentHost = mainWindow.AgentHost;
+
         // Already running — defer to next tick. We
         // record the run as Cancelled so the user
         // sees the scheduler tried and was
         // preempted; the next pass (30s later by
         // default) re-fires.
-        if (_agentHost.IsRunning)
+        if (agentHost.IsRunning)
         {
             return new ScheduledTaskRun
             {
@@ -96,9 +140,9 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
         // composer and fire SendTask. SendTask reads
         // DraftPrompt, runs the agent, and clears
         // DraftPrompt on its way out.
-        _agentHost.DraftPrompt = task.Prompt;
+        agentHost.DraftPrompt = task.Prompt;
 
-        _ = _agentHost.SendTaskCommand.ExecuteAsync(null);
+        _ = agentHost.SendTaskCommand.ExecuteAsync(null);
 
         // Poll IsRunning / status until the run lands
         // OR the cancellation token fires. Inside
@@ -115,11 +159,11 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
         // an error) with a clear Failed + reason
         // for the run history.
         var countdownArmed = false;
-        while (_agentHost.IsRunning && !cancellationToken.IsCancellationRequested)
+        while (agentHost.IsRunning && !cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(PollInterval, cancellationToken).ConfigureAwait(false);
 
-            if (string.Equals(_agentHost.LastAssistantStatus, "需要审批", StringComparison.Ordinal))
+            if (string.Equals(agentHost.LastAssistantStatus, "需要审批", StringComparison.Ordinal))
             {
                 if (!countdownArmed)
                 {
@@ -169,7 +213,7 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
             };
         }
 
-        var status = MapAgentStatus(_agentHost.LastAssistantStatus);
+        var status = MapAgentStatus(agentHost.LastAssistantStatus);
         return new ScheduledTaskRun
         {
             ScheduledTaskId = task.Id,
@@ -178,7 +222,7 @@ public sealed class AgentHostScheduledTaskExecutor : IScheduledTaskExecutor
             Status = status,
             Output = "",
             ErrorMessage = status == ScheduledRunStatus.Failed
-                ? _agentHost.LastAssistantStatus
+                ? agentHost.LastAssistantStatus
                 : null,
         };
     }
