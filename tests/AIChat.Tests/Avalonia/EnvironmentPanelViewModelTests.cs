@@ -777,6 +777,144 @@ public sealed class EnvironmentPanelViewModelTests
         Assert.Single(vm.Sources);
     }
 
+    // ---- 1.0.1: Sources section "清空" affordance ----
+
+    [Fact]
+    public void HasPersistedSources_FlipsOnPersistedCountChange()
+    {
+        // The "清空" button on the Sources
+        // section header binds to
+        // HasPersistedSources so the button
+        // hides when there are no persisted
+        // sources to clear (only pending
+        // attachments → nothing on the
+        // right rail to bulk-clear).
+        // PersistedSourceCount must re-raise
+        // HasPersistedSources on every
+        // write so the XAML re-renders
+        // without one round-trip of stale
+        // visibility.
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        vm.AttachTo();
+
+        Assert.False(vm.HasPersistedSources);
+        Assert.Equal(0, vm.PersistedSourceCount);
+    }
+
+    [Fact]
+    public async Task HasPersistedSources_FlipsTrueAfterAdd_FalseAfterClear()
+    {
+        // Add 2 sources → HasPersistedSources
+        // is true. ClearSourcesAsync drains
+        // them → HasPersistedSources is
+        // false again. The button visibility
+        // tracks the count without a manual
+        // RaisePropertyChanged on the
+        // derived bool.
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "clipboard",
+            DisplayName = "First",
+            Content = "body 1",
+        });
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "web",
+            DisplayName = "Second",
+            Content = "body 2",
+        });
+        vm.AttachTo();
+        Assert.True(vm.HasPersistedSources);
+        Assert.Equal(2, vm.PersistedSourceCount);
+
+        await vm.ClearSourcesAsync();
+
+        Assert.False(vm.HasPersistedSources);
+        Assert.Equal(0, vm.PersistedSourceCount);
+        Assert.Empty(vm.Sources);
+        Assert.Empty(registry.Sources);
+    }
+
+    [Fact]
+    public async Task ClearSourcesAsync_EmptyRegistry_IsNoOp()
+    {
+        // The button is hidden when there
+        // are no persisted sources, but a
+        // future caller (or a test) might
+        // hit this path. The method must
+        // be a no-op — no exceptions, no
+        // Changed event loop.
+        var (vm, _, _, _, registry) = CreateViewModelWithSourceRegistry();
+        vm.AttachTo();
+
+        await vm.ClearSourcesAsync();
+
+        Assert.Empty(vm.Sources);
+        Assert.Empty(registry.Sources);
+        Assert.Equal(0, vm.PersistedSourceCount);
+    }
+
+    [Fact]
+    public async Task ClearSourcesAsync_DoesNotTouchPendingAttachments()
+    {
+        // The Sources section is shared
+        // between pending image
+        // attachments and persisted
+        // Sources (visual reuse — see
+        // ForPendingAttachment on
+        // SourceRowViewModel). Clearing
+        // the persisted Sources must
+        // leave the pending attachments
+        // alone: those are owned by
+        // PendingAttachmentsViewModel
+        // and the user removes them
+        // from the composer strip, not
+        // the right rail. The test
+        // confirms the per-row rows for
+        // attachments survive while the
+        // persisted rows go away.
+        var (vm, host, _, _, registry) = CreateViewModelWithSourceRegistry();
+        await registry.AddAsync(new AIChat.Domain.Sources.Source
+        {
+            Kind = "clipboard",
+            DisplayName = "SavedSnapshot",
+            Content = "captured body",
+        });
+        // Build a real text file on disk so
+        // PendingAttachmentViewModel.SafeGetFileLength
+        // doesn't blow up. The thumbnail is
+        // optional (null = no image preview),
+        // which keeps the test off Avalonia's
+        // image pipeline.
+        var attachmentPath = Path.Combine(
+            Path.GetTempPath(),
+            "aichat-clear-sources-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllTextAsync(attachmentPath, "fake image bytes");
+        var pendingVm = new PendingAttachmentViewModel(
+            filePath: attachmentPath,
+            fileName: "image.png",
+            displayName: "image.png",
+            mimeType: "image/png",
+            thumbnail: null);
+        host.PendingAttachments.Attachments.Add(pendingVm);
+        vm.AttachTo();
+        Assert.Equal(2, vm.Sources.Count);
+        Assert.Equal(1, vm.PersistedSourceCount);
+        Assert.True(vm.HasPersistedSources);
+
+        await vm.ClearSourcesAsync();
+
+        Assert.Single(vm.Sources);
+        Assert.Equal("image.png", vm.Sources[0].DisplayName);
+        Assert.Null(vm.Sources[0].Source);
+        Assert.Equal(0, vm.PersistedSourceCount);
+        Assert.Empty(registry.Sources);
+        // Pending attachment is preserved.
+        Assert.Single(host.PendingAttachments.Attachments);
+        try { File.Delete(attachmentPath); } catch { /* best-effort */ }
+    }
+
     // ---- 1.0.1: per-row inline expand ----
 
     [Fact]

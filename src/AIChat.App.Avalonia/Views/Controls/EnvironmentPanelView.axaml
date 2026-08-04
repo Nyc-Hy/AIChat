@@ -345,13 +345,61 @@
                daily-driver paper cut.
             -->
           <StackPanel Spacing="4">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Grid.Column="0" Text="来源" Classes="section-title"/>
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+              <TextBlock Grid.Column="0" Text="来源" Classes="section-title" VerticalAlignment="Center"/>
               <TextBlock Grid.Column="1"
                          Classes="muted"
                          FontSize="11"
                          VerticalAlignment="Center"
                          Text="{Binding SourceSummary}"/>
+              <!--
+                1.0.1: "清空" button.
+                Visible only when
+                HasPersistedSources —
+                pending attachments
+                can't be cleared
+                from the right rail
+                (they're owned by
+                the composer strip).
+                A daily driver
+                who's accumulated
+                20+ clipboard
+                snapshots or web
+                fetches over a
+                session needs a
+                1-click reset;
+                the per-row ×
+                button works for
+                1 or 2 entries but
+                is a paper cut at
+                10+. No
+                confirmation: the
+                registry's
+                persistence is
+                "soft" (the next
+                ⌘V snapshot re-uses
+                the slot, and the
+                actual content is
+                gone anyway), so
+                a confirmation
+                dialog is just
+                friction. Tooltip
+                explains the
+                scope so a
+                misclick on the
+                "引用" / "×"
+                column header
+                can't be
+                confused.
+              -->
+              <Button Grid.Column="2"
+                      Classes="chrome-button"
+                      Padding="6,1"
+                      IsVisible="{Binding HasPersistedSources}"
+                      Click="ClearSources_OnClick"
+                      ToolTip.Tip="清空所有已保存的来源 (不影响待发送的附件)">
+                <TextBlock Text="清空" FontSize="10"/>
+              </Button>
             </Grid>
             <!--
               1.0.1: empty-state hint. The previous

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows.Input;
 using AIChat.Application.BackgroundProcesses;
 using AIChat.Application.Sources;
@@ -366,6 +367,34 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
 
     [ObservableProperty]
     private int sourceCount;
+
+    // 1.0.1: number of persisted Sources
+    // (clipboard snapshots, web fetches).
+    // Tracked separately from SourceCount
+    // (which is attachments + persisted)
+    // so the "清空" affordance on the
+    // Sources section header can hide
+    // when there are only pending
+    // attachments — the user can't
+    // "clear" an attachment from the
+    // rail, only from the composer
+    // strip. Re-raised via
+    // OnPersistedSourceCountChanged
+    // because [ObservableProperty]
+    // doesn't auto-notify derived
+    // bools.
+    [ObservableProperty]
+    private int persistedSourceCount;
+
+    // 1.0.1: derived bool that gates
+    // the Sources section's "清空"
+    // button. True only when there
+    // are persisted Sources to
+    // clear — pending attachments
+    // don't count.
+    public bool HasPersistedSources => PersistedSourceCount > 0;
+    partial void OnPersistedSourceCountChanged(int value) =>
+        OnPropertyChanged(nameof(HasPersistedSources));
 
     [ObservableProperty]
     private string sourceSummary = "暂无";
@@ -878,6 +907,17 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
         var attachments = _agentHost.PendingAttachments.Attachments;
         var persisted = _sourceRegistry.Sources;
         SourceCount = attachments.Count + persisted.Count;
+        // 1.0.1: track the persisted-only
+        // count separately so the
+        // Sources section's "清空"
+        // button can hide when there
+        // are only pending attachments.
+        // Pending attachments are owned
+        // by the composer strip, not
+        // the registry, so the user
+        // can't bulk-clear them from
+        // here anyway.
+        PersistedSourceCount = persisted.Count;
         // 1.0.1: the previous "X 个待发送"
         // label conflated the two
         // populations — the pending
@@ -1141,5 +1181,40 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(sourceId)) return;
         await _sourceRegistry.RemoveAsync(sourceId);
+    }
+
+    // 1.0.1: drop every persisted Source
+    // from the registry. Wired to the
+    // "清空" button on the Sources section
+    // header. The registry's Changed event
+    // re-mirrors Sources + PersistedSourceCount
+    // + SourceSummary + HasPersistedSources
+    // automatically — we just walk the
+    // current ids in a snapshot and call
+    // RemoveAsync on each. No-op when
+    // there are no persisted sources
+    // (the button is hidden in that
+    // case, but the guard is defensive
+    // for any future caller). Pending
+    // attachments are intentionally NOT
+    // touched — those are owned by the
+    // composer's PendingAttachmentsViewModel
+    // and the user removes them via the
+    // composer strip, not the right rail.
+    public async Task ClearSourcesAsync()
+    {
+        if (PersistedSourceCount == 0) return;
+        // Snapshot the ids first — RemoveAsync
+        // mutates the registry, so iterating
+        // _sourceRegistry.Sources directly would
+        // race the registry's own internal
+        // removal. The ids are the stable
+        // identifier (registry assigns them
+        // on AddAsync and never reuses).
+        var ids = _sourceRegistry.Sources.Select(s => s.Id).ToList();
+        foreach (var id in ids)
+        {
+            await _sourceRegistry.RemoveAsync(id);
+        }
     }
 }

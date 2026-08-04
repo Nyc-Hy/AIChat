@@ -224,6 +224,34 @@ public partial class EnvironmentPanelView : UserControl
         }
     }
 
+    // 1.0.1: Sources section header
+    // "清空" button. Walks every
+    // persisted source id in the VM
+    // and calls RemoveAsync on each.
+    // The registry's Changed event
+    // re-mirrors the empty state back
+    // into the panel automatically.
+    // Same try/catch shape as the
+    // per-row × handler — async void
+    // must not crash the panel.
+    private async void ClearSources_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not EnvironmentPanelViewModel vm)
+        {
+            return;
+        }
+        try
+        {
+            await vm.ClearSourcesAsync();
+        }
+        catch
+        {
+            // Registry swallows its own
+            // errors; this is the
+            // belt-and-braces fallback.
+        }
+    }
+
     // 1.0.1: per-row header click toggles the
     // row's inline expand panel. The display
     // name is the natural click target — the
