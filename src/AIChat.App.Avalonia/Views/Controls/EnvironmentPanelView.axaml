@@ -163,26 +163,36 @@
               </Button>
             </StackPanel>
             <!--
-              Wave 5 (plan §5): Worktree 2-level fold under 本地.
-              Clicking the row opens a worktree picker (placeholder
-              toast for now; the real picker + creation flow lands in
-              Wave 6 alongside branch / restore). The chevron rotates
-              on expand to match Codex's visual hint.
+              1.0.1: Worktree row is read-only
+              for now (Worktree creation /
+              switch is P1 deferred per
+              plan §4 / SHIP_REPORT §4).
+              The previous shape had a
+              chevron that visually
+              implied "click to expand"
+              but the row was a static
+              Grid with no Click handler
+              — a daily-driver trap (the
+              user mouses over, sees a
+              chevron, clicks, nothing
+              happens). The chevron is
+              replaced with a small
+              "(P1 deferred)" label so
+              the affordance honestly
+              signals "not yet" instead
+              of pretending a menu is
+              about to open.
             -->
-            <Grid ColumnDefinitions="Auto,*,Auto"
+            <Grid ColumnDefinitions="Auto,*"
                   IsVisible="{Binding !IsProjectRequired}"
                   Margin="8,6,0,2">
               <TextBlock Grid.Column="0" Text="Worktree"
                          Classes="muted" FontSize="12" VerticalAlignment="Center"/>
-              <TextBlock Grid.Column="1" Text="(默认)"
+              <TextBlock Grid.Column="1" Text="默认 (P1 deferred)"
                          Classes="muted" FontSize="11"
                          FontFamily="{StaticResource FontMono}"
                          HorizontalAlignment="Right"
                          VerticalAlignment="Center"/>
-              <TextBlock Grid.Column="2" Text="⌄"
-                         FontFamily="{StaticResource FontMono}" FontSize="10"
-                         Foreground="{DynamicResource MutedBrush}"
-                         Margin="6,0,0,0" VerticalAlignment="Center"/>
             </Grid>
             <Grid ColumnDefinitions="Auto,*"
                   IsVisible="{Binding !IsProjectRequired}"
