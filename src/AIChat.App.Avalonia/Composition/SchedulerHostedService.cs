@@ -17,7 +17,17 @@ namespace AIChat.App.Avalonia.Composition;
 // sub-minute precision; the on-tick evaluation walks the
 // task list anyway. A smaller interval (say 5s) would
 // burn CPU for no user-visible difference.
-public sealed class SchedulerHostedService : IAsyncDisposable
+// Implements BOTH IDisposable and IAsyncDisposable. The
+// dual interface is deliberate: ServiceProvider.Dispose()
+// walks its IDisposable singletons at teardown and throws
+// if any of them is IAsyncDisposable-only ("'X' type only
+// implements IAsyncDisposable. Use DisposeAsync to dispose
+// the container.") — which is what crashed the app on
+// window-close during 2026-08-04 user testing. The sync
+// Dispose() is a thin shim that blocks on the async one;
+// the async path stays the authoritative one for the
+// shutdown handler in App.axaml.cs.
+public sealed class SchedulerHostedService : IDisposable, IAsyncDisposable
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(30);
 
@@ -103,5 +113,36 @@ public sealed class SchedulerHostedService : IAsyncDisposable
             }
         }
         _cts.Dispose();
+    }
+
+    // 2026-08-04: sync Dispose() shim. ServiceProvider.Dispose()
+    // walks IDisposable singletons synchronously and throws on
+    // IAsyncDisposable-only services — which is the bug that
+    // crashed the app on window-close (the user closed the
+    // main window, Avalonia triggered Exit, App.axaml.cs called
+    // _host?.Dispose(), ServiceProvider hit SchedulerHostedService,
+    // threw "type only implements IAsyncDisposable"). Blocking
+    // on the async path is safe here because:
+    //  1. DisposeAsync's body is short (cancel CTS, await a
+    //     Task that respects the token, dispose CTS) — no
+    //     real I/O, no chance of a long block.
+    //  2. Dispose is only called during app shutdown, which
+    //     is already on a non-UI thread (the Avalonia
+    //     shutdown handler runs on the dispatcher; blocking
+    //     is OK because the UI is going away).
+    //  3. The async shutdown path in App.axaml.cs still
+    //     calls DisposeAsync() first (line 68) — the sync
+    //     path here is just a safety net for callers that
+    //     only see the IDisposable surface.
+    public void Dispose()
+    {
+        try
+        {
+            DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Shutdown path: never let cleanup throw.
+        }
     }
 }

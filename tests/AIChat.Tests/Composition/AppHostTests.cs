@@ -148,6 +148,7 @@ public class AppHostTests
     [InlineData(typeof(AIChat.Application.BackgroundProcesses.IBackgroundProcessSupervisor))]
     [InlineData(typeof(AIChat.Application.Scheduled.IScheduledTaskExecutor))]
     [InlineData(typeof(AIChat.Application.Scheduled.ScheduledTaskRunner))]
+    [InlineData(typeof(SchedulerHostedService))]
     public void Build_ResolvesTopLevelService(Type serviceType, bool expectMultiple = false)
     {
         using var host = AppHost.Build();
