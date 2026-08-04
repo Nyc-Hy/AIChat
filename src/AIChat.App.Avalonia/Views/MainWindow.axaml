@@ -311,7 +311,8 @@
                                     </StackPanel>
                                 </Button>
 
-                                <Button Classes="sidebar-row" Command="{Binding OpenRunHistoryCommand}" HorizontalAlignment="Stretch">
+                                <Button Classes="sidebar-row" Command="{Binding OpenRunHistoryCommand}" HorizontalAlignment="Stretch"
+                                        ToolTip.Tip="查看运行记录 (⌘H)">
                                     <StackPanel Orientation="Horizontal" Spacing="10">
                                         <Path Data="M4 6 H20 M4 12 H20 M4 18 H14"
                                               Stroke="{Binding $parent[Button].Foreground}"

@@ -71,17 +71,19 @@
             <!-- 项目 / 导航 -->
             <StackPanel Spacing="6">
               <TextBlock Text="项目 / 导航" Classes="section-title"/>
-              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="添加项目" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ O" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="新建对话" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ N" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="搜索历史对话" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ F" Classes="kbd-display" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="切换环境面板" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ ⇧ E" Classes="kbd-display" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="4" Grid.Column="0" Text="清空当前对话" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="4" Grid.Column="1" Text="⌘ ⇧ K" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="查看运行记录" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ H" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="切换环境面板" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="⌘ ⇧ E" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="清空当前对话" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="⌘ ⇧ K" Classes="kbd-display" VerticalAlignment="Center"/>
               </Grid>
             </StackPanel>
 

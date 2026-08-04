@@ -124,6 +124,24 @@ internal partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // 1.0.1: ⌘H opens the RunHistory modal.
+            // The H key was free (⌘R = retry last,
+            // ⌘⇧R = no-write) and ⌘H is the macOS
+            // convention for "History" (Safari /
+            // Chrome). The user with 50+ runs
+            // across a week of daily driving reaches
+            // for the history view often — the
+            // ⌘⇧G git status modal has a key, the
+            // ⌘⇧M memory modal has a key, but
+            // RunHistory only had the Run button
+            // in the right rail and the titlebar
+            // path was 3 clicks deep. ⌘H is the
+            // one-key entry point.
+            Gesture = new KeyGesture(Key.H, KeyModifiers.Meta),
+            Command = viewModel.OpenRunHistoryCommand
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘T runs a connection test against the current model.
             // Same shape as the palette's "测试当前模型" entry
             // (which was also claiming the shortcut without backing).
