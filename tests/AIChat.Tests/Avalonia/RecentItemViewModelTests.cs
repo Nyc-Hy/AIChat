@@ -16,10 +16,11 @@ namespace AIChat.Tests.Avalonia;
 public class RecentItemViewModelTests
 {
     [Fact]
-    public void Ctor_StoresTitleAndConversationId()
+    public void Ctor_StoresTitleAndConversationIdAndUpdatedAtDisplay()
     {
-        var item = new RecentItemViewModel("hello", "abc123");
+        var item = new RecentItemViewModel("hello", "abc123", "8月4日 14:30");
         Assert.Equal("hello", item.Title);
         Assert.Equal("abc123", item.ConversationId);
+        Assert.Equal("8月4日 14:30", item.UpdatedAtDisplay);
     }
 }

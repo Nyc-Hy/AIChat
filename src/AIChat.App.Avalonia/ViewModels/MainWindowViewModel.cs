@@ -39,10 +39,22 @@ namespace AIChat.App.Avalonia.ViewModels;
 // hook into). Title stays as the display
 // label so the XAML doesn't need a
 // ConversationCard-shaped template.
-public sealed class RecentItemViewModel(string title, string conversationId)
+public sealed class RecentItemViewModel(string title, string conversationId, string updatedAtDisplay)
 {
     public string Title { get; } = title;
     public string ConversationId { get; } = conversationId;
+    // 1.0.1: the "最近" sidebar section's
+    // XAML now binds a muted sub-text to
+    // this so the user can tell two
+    // conversations with the same title
+    // apart, and so a stale "8月1日"
+    // entry doesn't masquerade as
+    // fresh alongside a "今天" entry.
+    // Format matches the conversation
+    // card row in the "对话" section
+    // (M月d日 HH:mm, toLocalTime) so
+    // the two surfaces read the same.
+    public string UpdatedAtDisplay { get; } = updatedAtDisplay;
 }
 
 public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHost
@@ -321,19 +333,32 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     private void RecomputeRecentItems()
     {
         RecentItems.Clear();
-        // The \"最近\" list is rendered as a
-        // simple title-only row (no inline
-        // rename, no selected style, no
-        // context flyout) so we don't need
-        // a full ConversationCardViewModel
-        // for each entry — just Title + Id
-        // + the time-of-update string the
-        // XAML shows as the muted sub-text.
+        // The "最近" list is rendered as a
+        // simple row (no inline rename, no
+        // selected style, no context
+        // flyout) so we don't need a full
+        // ConversationCardViewModel for
+        // each entry — just Title + Id +
+        // UpdatedAtDisplay. The XAML shows
+        // UpdatedAtDisplay as the muted
+        // sub-text so the user can tell
+        // two same-titled conversations
+        // apart, and so a stale "8月1日"
+        // entry doesn't masquerade as
+        // fresh alongside a "今天" entry.
         foreach (var card in _conversationList.Conversations.Take(8))
         {
+            // The card's Detail field is the
+            // already-formatted UpdatedAt
+            // string (the conversation list
+            // section renders it as a muted
+            // sub-text on the same row) —
+            // re-use it here so the two
+            // surfaces read the same.
             RecentItems.Add(new RecentItemViewModel(
                 title: card.Title,
-                conversationId: card.Id));
+                conversationId: card.Id,
+                updatedAtDisplay: card.Detail));
         }
     }
 

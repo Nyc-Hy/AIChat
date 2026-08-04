@@ -568,13 +568,44 @@
                                                         HorizontalContentAlignment="Stretch"
                                                         Click="RecentItem_OnClick"
                                                         Tag="{Binding}">
-                                                    <TextBlock Text="{Binding Title}"
-                                                               FontFamily="{StaticResource FontSans}"
-                                                               FontSize="12"
-                                                               Foreground="{DynamicResource Text2Brush}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxLines="1"
-                                                               VerticalAlignment="Center"/>
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Title}"
+                                                                   FontFamily="{StaticResource FontSans}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxLines="1"
+                                                                   VerticalAlignment="Center"/>
+                                                        <!--
+                                                          1.0.1: muted
+                                                          sub-text
+                                                          showing
+                                                          UpdatedAtDisplay
+                                                          (M月d日
+                                                          HH:mm) so
+                                                          two
+                                                          same-titled
+                                                          conversations
+                                                          are
+                                                          distinguishable
+                                                          and a stale
+                                                          "8月1日"
+                                                          entry
+                                                          doesn't
+                                                          masquerade
+                                                          as fresh
+                                                          alongside
+                                                          a "今天"
+                                                          entry.
+                                                        -->
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding UpdatedAtDisplay}"
+                                                                   Classes="muted"
+                                                                   FontSize="10"
+                                                                   FontFamily="{StaticResource FontMono}"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
                                                 </Button>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
