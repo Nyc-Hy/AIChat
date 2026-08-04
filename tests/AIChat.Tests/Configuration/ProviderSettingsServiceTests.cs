@@ -32,14 +32,14 @@ public sealed class ProviderSettingsServiceTests
         Assert.Equal("MiniMax-M3", settings.Model);
     }
 
-    // 2026-08-04: catalog surface lock. Three shipping
+    // 2026-08-04: catalog surface lock. Four shipping
     // models, each with a distinct context limit and
     // capability shape (M3 / M3-highspeed = 1M + vision,
-    // M2.7 = 200K + no vision for Coding Plan users).
-    // A future change that adds / removes a model — or
-    // bumps the context limit on the flagship — breaks
-    // here rather than as a silent 200K-clip of a 1M-capable
-    // model in production.
+    // M2.7 / M2.7-highspeed = 200K + no vision for Coding
+    // Plan users). A future change that adds / removes a
+    // model — or bumps the context limit on the flagship —
+    // breaks here rather than as a silent 200K-clip of a
+    // 1M-capable model in production.
     [Fact]
     public void Catalog_ListsM3AndM3HighspeedAndM27()
     {
@@ -48,6 +48,63 @@ public sealed class ProviderSettingsServiceTests
         Assert.Contains("MiniMax-M3", ids);
         Assert.Contains("MiniMax-M3-highspeed", ids);
         Assert.Contains("MiniMax-M2.7", ids);
+        Assert.Contains("MiniMax-M2.7-highspeed", ids);
+    }
+
+    // 2026-08-04: M3 ships a thinking-mode switch
+    // (`enabled` / `adaptive` / `disabled`) — the knob
+    // the daily driver wants when they say "思考模式
+    // 的开关". This test pins the parameter shape so a
+    // future refactor that drops / renames it shows up
+    // here (vs. silently shipping a Settings modal that
+    // doesn't expose the switch).
+    [Fact]
+    public void Catalog_M3ExposesThinkingModeSwitch()
+    {
+        var m3 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M3");
+
+        var thinking = Assert.Single(m3.Parameters, p => p.Id == "minimax.thinking");
+        var values = thinking.Options.Select(o => o.Value).ToArray();
+
+        // The empty-string "" option is the "默认 (adaptive)"
+        // catalog row — emits nothing on the wire, lets the
+        // platform pick its default. The other three are
+        // the explicit user-overridable values per the M3
+        // README.
+        Assert.Contains("", values);
+        Assert.Contains("enabled", values);
+        Assert.Contains("adaptive", values);
+        Assert.Contains("disabled", values);
+    }
+
+    // 2026-08-04: M2.7 is on the M2.x line and predates
+    // the M3 thinking-mode switch. M2.7 still produces
+    // reasoning_content (via reasoning_split) when the
+    // model chooses to reason, but the user has no
+    // on/off toggle — the M3 thinking switch must not
+    // leak into the M2.7 dropdown.
+    [Fact]
+    public void Catalog_M27DoesNotExposeThinkingModeSwitch()
+    {
+        var m27 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M2.7");
+
+        Assert.DoesNotContain(m27.Parameters, p => p.Id == "minimax.thinking");
+    }
+
+    // 2026-08-04: structured JSON output (response_format)
+    // is wired as a per-model dropdown for M3. M2.7
+    // inherits the same knob — both model lines support
+    // the OpenAI-compatible response_format contract.
+    [Fact]
+    public void Catalog_M3ExposesJsonMode()
+    {
+        var m3 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M3");
+
+        var json = Assert.Single(m3.Parameters, p => p.Id == "response_format");
+        var values = json.Options.Select(o => o.Value).ToArray();
+
+        Assert.Contains("", values);
+        Assert.Contains("json_object", values);
     }
 
     [Fact]

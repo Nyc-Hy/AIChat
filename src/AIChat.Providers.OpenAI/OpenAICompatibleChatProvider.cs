@@ -301,6 +301,31 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
             switch (parameter.Key)
             {
+                // 2026-08-04: M3 native thinking-mode switch
+                // (the knob the daily driver actually wants
+                // when they say "思考模式的开关" — see
+                // ChatProviderCatalog.MiniMaxM3Parameters).
+                // Per the M3 README the values are
+                // `enabled` / `adaptive` / `disabled`. The
+                // M3 OpenAI-compatible path accepts them as a
+                // top-level string field (not the Anthropic
+                // {"type":"enabled"} object form). Catalog
+                // dropdowns are the only source of these
+                // values, so we don't need to parse defensively
+                // here — a freeform text entry would round-trip
+                // the literal user input, which is the desired
+                // behavior for a power user typing a custom
+                // M3.x / M4 value into the Settings modal.
+                // Empty / whitespace falls through the early
+                // `continue` above so we never send an empty
+                // `thinking: ""` that would override the
+                // platform default. M2.7 is unaffected — it
+                // doesn't list this parameter in
+                // MiniMaxM27Parameters, so the dropdown never
+                // surfaces it for M2.x.
+                case "minimax.thinking":
+                    payload["thinking"] = parameter.Value;
+                    break;
                 // 2026-08-02: DeepSeek-specific parameter shaping
                 // (`deepseek.thinking` / `deepseek.reasoning_effort`
                 // / `deepseek.response_format`) is gone — the
@@ -340,6 +365,28 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
                 // dropdown even though only M3 reads the value.
                 case "parallel_tool_calls" when bool.TryParse(parameter.Value, out var parallelToolCalls):
                     payload["parallel_tool_calls"] = parallelToolCalls;
+                    break;
+                // 2026-08-04: structured JSON output
+                // (response_format). Standard
+                // OpenAI-compatible shape: when the user picks
+                // "json_object" from the Settings dropdown, we
+                // inject {"type": "json_object"} into the
+                // payload and the M3 model is forced to emit
+                // valid JSON. The only value we accept is
+                // "json_object" — anything else (the empty
+                // default OR a freeform value) is treated as
+                // "leave the platform default in place" and
+                // nothing is sent. The OpenAI API itself
+                // validates that the prompt contains the word
+                // "json" in some form; if the user picks this
+                // without adjusting their prompt, the API
+                // returns 400 and the existing error pipeline
+                // surfaces the message verbatim.
+                case "response_format" when string.Equals(parameter.Value, "json_object", StringComparison.OrdinalIgnoreCase):
+                    payload["response_format"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "json_object"
+                    };
                     break;
             }
         }

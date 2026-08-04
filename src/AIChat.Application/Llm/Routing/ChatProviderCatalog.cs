@@ -65,6 +65,36 @@ public static class ChatProviderCatalog
     [
         new()
         {
+            // 2026-08-04: MiniMax M3 native thinking-mode switch
+            // (per the official M3 README: "M3 supports three
+            // reasoning modes through the thinking parameter:
+            // enabled — always reasons, adaptive — M3 decides,
+            // disabled — never reasons"). This is the knob the
+            // daily driver actually wants when they say "思考模式
+            // 的开关" — flipping the model's behavior between
+            //  always-think / sometimes-think / never-think on a
+            // per-call basis. M3-only — M2.7 / M2.x predates the
+            // switch and always reasons when the prompt warrants
+            // it (no user-facing toggle). Sent as a top-level
+            // string field; M3's OpenAI-compatible path accepts
+            // the simple form. Default "默认" leaves the
+            // platform's recommended behavior in place (adaptive
+            // for the M3 base model, per the README's "adaptive"
+            // description matching M3's marketed behavior).
+            Id = "minimax.thinking",
+            DisplayName = "思考模式",
+            Description = "M3 思考模式 — enabled: 总思考 / adaptive: M3 自适应 / disabled: 关闭（最低延迟）。",
+            DefaultValue = "",
+            Options =
+            [
+                new LlmParameterOption { Value = "", DisplayName = "默认 (adaptive)" },
+                new LlmParameterOption { Value = "enabled", DisplayName = "总是思考" },
+                new LlmParameterOption { Value = "adaptive", DisplayName = "自适应" },
+                new LlmParameterOption { Value = "disabled", DisplayName = "关闭思考" }
+            ]
+        },
+        new()
+        {
             // 2026-08-04: MiniMax OpenAI-compatible extension. When
             // true, the API returns reasoning_content as a sibling
             // of content in the chat completion response (and the
@@ -131,6 +161,30 @@ public static class ChatProviderCatalog
                 new LlmParameterOption { Value = "", DisplayName = "默认 (true)" },
                 new LlmParameterOption { Value = "true", DisplayName = "开启" },
                 new LlmParameterOption { Value = "false", DisplayName = "关闭" }
+            ]
+        },
+        new()
+        {
+            // 2026-08-04: structured JSON output. Standard
+            // OpenAI-compatible response_format — M3 honors it
+            // for users who want machine-parseable output (e.g.
+            // a daily driver piping an agent's response into a
+            // downstream tool). When selected, the provider
+            // injects {"type": "json_object"} into the request
+            // payload and the model is forced to emit valid
+            // JSON. Empty default leaves the platform's text
+            // mode in place. Note: the prompt must contain the
+            // word "json" in some form for the API to honor
+            // this (OpenAI's own validation rule, which the
+            // M3 OpenAI-compatible surface inherits).
+            Id = "response_format",
+            DisplayName = "JSON 模式",
+            Description = "强制模型输出合法 JSON。Prompt 中需要包含「json」字样才会生效。",
+            DefaultValue = "",
+            Options =
+            [
+                new LlmParameterOption { Value = "", DisplayName = "默认 (文本)" },
+                new LlmParameterOption { Value = "json_object", DisplayName = "JSON 对象" }
             ]
         }
     ];
@@ -249,6 +303,33 @@ public static class ChatProviderCatalog
                 DisplayName = "MiniMax-M2.7 (Coding Plan)",
                 ContextLimit = 200_000,
                 CapabilityLabel = "200K · thinking · tools · Coding Plan 覆盖",
+                Capabilities = MiniMaxM27Capabilities,
+                Parameters = MiniMaxM27Parameters
+            },
+            // 2026-08-04: M2.7-highspeed is the high-speed
+            // tier of the M2.7 line — same context (200K),
+            // same capability set (text-only, tools, thinking
+            // via reasoning_content), but routed to a faster
+            // inference tier. Per MiniMax's own Claude Code
+            // setup docs (cSDN/博客园), the model id is
+            // `MiniMax-M2.7-highspeed` (literal, the
+            // highspeed suffix sticks to M2.7 the same way
+            // it sticks to M3 — not a separate
+            // M2.7-highspeed lineage). Sharing
+            // MiniMaxM27Parameters is fine: same knob set
+            // (reasoning_split + top_p, no parallel_tool_calls
+            // since M2.x doesn't batch). The Coding Plan
+            // token-budget page lists M2.7-highspeed in
+            // dedicated RPM slots (e.g. 750 calls per 5 hours
+            // on the Plus tier), so a daily driver who hits
+            // the M2.7 RPM limit can still fall back without
+            // upgrading to M3 / Token Plan.
+            new LlmModelInfo
+            {
+                Id = "MiniMax-M2.7-highspeed",
+                DisplayName = "MiniMax-M2.7 (highspeed)",
+                ContextLimit = 200_000,
+                CapabilityLabel = "200K · thinking · tools · Coding Plan 覆盖 · 优先调度",
                 Capabilities = MiniMaxM27Capabilities,
                 Parameters = MiniMaxM27Parameters
             }
