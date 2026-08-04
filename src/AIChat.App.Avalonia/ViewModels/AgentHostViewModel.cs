@@ -127,6 +127,20 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         && !IsRunning
         && (LastAssistantStatus is "失败" or "已停止" or "预算暂停");
 
+    // 1.0.1: "regenerate" — same gate as
+    // CanRetry minus the terminal-status
+    // check, so the button is enabled
+    // for successful runs too (the
+    // "I want a different response"
+    // flow). The AI bubble's
+    // 重新生成 button binds to this
+    // so the affordance surfaces for
+    // every completed / failed /
+    // stopped run.
+    public bool CanRegenerate =>
+        !string.IsNullOrEmpty(_lastUserPrompt)
+        && !IsRunning;
+
     public bool CanRunVerification =>
         !IsRunning && !IsVerifying &&
         !string.IsNullOrWhiteSpace(_sidebar.CurrentProject?.TryGetPrimaryPath()) &&
@@ -814,6 +828,51 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         {
             SendTaskCommand.Execute(null);
         }
+    }
+
+    // 1.0.1: re-send the last user prompt
+    // without the CanRetry gate. Where
+    // RetryLastTask is the "I had a
+    // failed run, try again" flow,
+    // RegenerateLastResponse is the
+    // "the last response wasn't bad,
+    // I just want a different one"
+    // flow. The two are different
+    // daily-driver motions: retry
+    // expects the same context to
+    // keep failing; regenerate
+    // expects a fresh take. The new
+    // method appends a new AI
+    // bubble (it doesn't replace the
+    // old one — the conversation
+    // history is the user's record
+    // of what the model produced, not
+    // a mutable draft).
+    //
+    // Returns true if a fresh send
+    // was kicked off, false if there
+    // was no prior prompt to re-send
+    // (so the slash handler / AI
+    // bubble button can report
+    // "nothing to regenerate" rather
+    // than silently no-op).
+    public bool RegenerateLastResponse()
+    {
+        if (string.IsNullOrEmpty(_lastUserPrompt))
+        {
+            return false;
+        }
+        if (IsRunning)
+        {
+            return false;
+        }
+        DraftPrompt = _lastUserPrompt;
+        if (SendTaskCommand.CanExecute(null))
+        {
+            SendTaskCommand.Execute(null);
+            return true;
+        }
+        return false;
     }
 
     public void RecordLastRun(AgentRun run)

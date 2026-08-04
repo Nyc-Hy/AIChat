@@ -679,6 +679,150 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.False(host.HasPendingFollowup);
     }
 
+    // ---- 1.0.1: per-AI-bubble 重新生成 button ----
+
+    [Fact]
+    public void CanRegenerate_FalseInitially_NoPriorRun()
+    {
+        // Fresh host with no prior send.
+        // The XAML 重新生成 button binds
+        // to CanRegenerate so the
+        // affordance is dim for first-
+        // run users who haven't sent
+        // anything yet.
+        var (host, _, _, _) = CreateHost();
+
+        Assert.False(host.CanRegenerate);
+    }
+
+    [Fact]
+    public void CanRegenerate_TrueAfterPriorRun()
+    {
+        // Simulate a completed prior run
+        // by calling PrepareContinuation,
+        // which is the public method
+        // AgentRunner / RunHistory use to
+        // restore _lastUserPrompt without
+        // driving the full send flow.
+        // The new 重新生成 button should
+        // become enabled so the user can
+        // "give me a different take".
+        var (host, _, _, _) = CreateHost();
+        host.PrepareContinuation(new AIChat.Domain.Chat.AgentRun
+        {
+            Id = "run-1",
+            Goal = "summarise the last 5 commits",
+            Status = AIChat.Domain.Chat.AgentRunStatus.Completed,
+        });
+
+        Assert.True(host.CanRegenerate);
+    }
+
+    [Fact]
+    public void CanRegenerate_FalseWhileRunning()
+    {
+        // Even with a prior prompt on
+        // record, the button is dim
+        // while another run is in
+        // flight — regenerating mid-
+        // run would race the existing
+        // agent loop and could leak
+        // two concurrent token streams
+        // into the same conversation.
+        var (host, _, _, _) = CreateHost();
+        host.PrepareContinuation(new AIChat.Domain.Chat.AgentRun
+        {
+            Id = "run-1",
+            Goal = "original",
+            Status = AIChat.Domain.Chat.AgentRunStatus.Completed,
+        });
+        Assert.True(host.CanRegenerate);
+
+        host.IsRunning = true;
+
+        Assert.False(host.CanRegenerate);
+    }
+
+    [Fact]
+    public void RegenerateLastResponse_NoPriorPrompt_ReturnsFalse()
+    {
+        // First-run user clicked the
+        // button on an empty state.
+        // The handler toasts a warning
+        // and the method returns false
+        // so the caller knows the
+        // send was not kicked off.
+        var (host, _, _, _) = CreateHost();
+
+        var fired = host.RegenerateLastResponse();
+
+        Assert.False(fired);
+        // Composer stays empty — no
+        // accidental text got dumped
+        // into the draft from an
+        // empty last-prompt.
+        Assert.Equal("", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void RegenerateLastResponse_WithPriorPrompt_PopulatesDraftAndReturnsTrue()
+    {
+        // The happy path. After a
+        // completed run, clicking
+        // 重新生成 re-fills the
+        // composer with the same
+        // prompt and kicks off a
+        // fresh send. The DraftPrompt
+        // is observable so the user
+        // sees the text land before
+        // the run actually starts —
+        // important for the "I just
+        // want to see what it
+        // re-sent" muscle memory
+        // of an experienced daily
+        // driver.
+        var (host, _, _, _) = CreateHost();
+        host.PrepareContinuation(new AIChat.Domain.Chat.AgentRun
+        {
+            Id = "run-1",
+            Goal = "explain this stack trace",
+            Status = AIChat.Domain.Chat.AgentRunStatus.Completed,
+        });
+
+        var fired = host.RegenerateLastResponse();
+
+        Assert.True(fired);
+        Assert.Equal("explain this stack trace", host.DraftPrompt);
+    }
+
+    [Fact]
+    public void RegenerateLastResponse_WhileRunning_ReturnsFalse()
+    {
+        // Defensive double-check.
+        // The XAML IsEnabled binding
+        // should already dim the
+        // button, but a stale UI
+        // state during a fast
+        // status flip could fire
+        // the handler with the
+        // command still enabled.
+        // The method refuses to
+        // queue a second run on
+        // top of an in-flight one.
+        var (host, _, _, _) = CreateHost();
+        host.PrepareContinuation(new AIChat.Domain.Chat.AgentRun
+        {
+            Id = "run-1",
+            Goal = "goal",
+            Status = AIChat.Domain.Chat.AgentRunStatus.Completed,
+        });
+        host.IsRunning = true;
+
+        var fired = host.RegenerateLastResponse();
+
+        Assert.False(fired);
+    }
+
     // ---- 1.0.1: insert @-reference at composer caret ----
 
     [Fact]

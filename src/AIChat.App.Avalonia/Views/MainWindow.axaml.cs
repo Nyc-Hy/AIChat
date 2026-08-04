@@ -696,6 +696,51 @@ internal partial class MainWindow : Window
         }
     }
 
+    // 1.0.1: per-AI-bubble 重新生成
+    // button. Re-sends the same user
+    // prompt that produced this
+    // bubble (or, more precisely, the
+    // most recent user prompt — the
+    // bubble's own context is not
+    // available on the click path,
+    // and the common case is "the
+    // last AI response, give me
+    // another one"). The new AI
+    // bubble lands below the
+    // existing one in the activity
+    // feed so the user can compare
+    // takes; the original stays as
+    // a record of what the model
+    // produced. The CanRegenerate
+    // gate on AgentHost keeps the
+    // button from firing during an
+    // in-flight run; this handler
+    // is a defensive double-check
+    // (e.g. a stale enabled state
+    // when the run state changed
+    // between the XAML bind and
+    // the click).
+    private void AiBubbleRegenerate_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        var fired = viewModel.AgentHost.RegenerateLastResponse();
+        if (!fired)
+        {
+            // Empty last prompt (first-run user
+            // clicked the button on a "what is
+            // this?" state) or already running.
+            // The XAML's IsEnabled should have
+            // hidden the button in both cases;
+            // the toast is a belt-and-braces
+            // fallback so the user never sees a
+            // silent no-op.
+            _toast.Show("没有可重新生成的 prompt。", ToastLevel.Warning);
+        }
+    }
+
     // "↓ N 条新消息" pill click: jump to the bottom, clear the
     // unseen counter, and flip the "at bottom" flag eagerly so the
     // very next streaming bubble (which can arrive before

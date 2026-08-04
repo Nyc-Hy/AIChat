@@ -937,9 +937,52 @@
                                                                     <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 </Border>
                                                                 <StackPanel Grid.Column="1" Spacing="4">
-                                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                                                                         <TextBlock Grid.Column="0" Text="{Binding Title}" Foreground="{DynamicResource Text2Brush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11" VerticalAlignment="Center"/>
+                                                                        <!--
+                                                                          1.0.1: per-AI-bubble 重新生成
+                                                                          button. Re-sends the same
+                                                                          user prompt and appends
+                                                                          a new AI bubble below
+                                                                          (the old one stays as
+                                                                          history — the user can
+                                                                          compare takes).
+                                                                          Different from the
+                                                                          composer-level ⌘R retry:
+                                                                          that one only fires for
+                                                                          failed / stopped /
+                                                                          budget-paused runs
+                                                                          (CanRetry gate), this
+                                                                          one always works as
+                                                                          long as a prior prompt
+                                                                          exists. The CanRegenerate
+                                                                          gate on AgentHost
+                                                                          (non-empty last prompt,
+                                                                          not currently running) is
+                                                                          what disables the
+                                                                          button for the in-flight
+                                                                          thinking state. The
+                                                                          daily-driver flow this
+                                                                          targets: "the model
+                                                                          gave a workable answer
+                                                                          but I'd like a different
+                                                                          take" — without this
+                                                                          button the user has to
+                                                                          scroll to the composer,
+                                                                          re-type or re-paste the
+                                                                          prompt, and lose any
+                                                                          inline images.
+                                                                        -->
+                                                                        <Button Grid.Column="2"
+                                                                                Classes="chrome-button"
+                                                                                Padding="6,1"
+                                                                                IsVisible="{Binding IsAssistantBubble}"
+                                                                                IsEnabled="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AgentHost.CanRegenerate}"
+                                                                                Click="AiBubbleRegenerate_OnClick"
+                                                                                ToolTip.Tip="用相同 prompt 重新生成 (会追加一条新 AI 消息)">
+                                                                            <TextBlock Text="重新生成" FontSize="10"/>
+                                                                        </Button>
                                                                         <!--
                                                                           1.0.1: per-AI-bubble 复制
                                                                           button. Hidden while the
@@ -963,7 +1006,7 @@
                                                                           does not need to read
                                                                           the row's DataContext.
                                                                         -->
-                                                                        <Button Grid.Column="2"
+                                                                        <Button Grid.Column="3"
                                                                                 Classes="chrome-button"
                                                                                 Padding="6,1"
                                                                                 IsVisible="{Binding CanCopyAssistantBubble}"
