@@ -327,10 +327,32 @@
                          VerticalAlignment="Center"
                          Text="{Binding SourceSummary}"/>
             </Grid>
-            <TextBlock Text="(暂无来源 — 粘贴图像后会显示在这里)"
-                       Classes="muted"
+            <!--
+              1.0.1: empty-state hint. The previous
+              shape only mentioned the paste
+              path, which made the section look
+              narrow to a daily-driver user who
+              has a clipboard snapshot OR a web
+              fetch OR a paste-image they were
+              about to do. The new copy walks
+              through the three add-paths the
+              "+" menu actually exposes
+              (clipboard snapshot, web fetch,
+              paste image), so the user who
+              hits an empty Sources section
+              sees "here's how you populate it"
+              rather than "you can only paste
+              images". The 「+」 char on the
+              leading 提示 is the visual cue
+              for the menu — same glyph the
+              titlebar "+" uses.
+            -->
+            <TextBlock Classes="muted"
                        FontSize="12"
-                       IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}">
+              <Run Text="(暂无来源 — 点 「+」: 粘贴图像 / 剪贴板快照 / 网页搜索)"/>
+            </TextBlock>
             <ItemsControl ItemsSource="{Binding Sources}"
                           IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
               <ItemsControl.ItemTemplate>
