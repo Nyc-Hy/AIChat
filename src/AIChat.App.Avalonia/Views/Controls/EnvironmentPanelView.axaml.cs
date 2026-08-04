@@ -98,11 +98,6 @@ public partial class EnvironmentPanelView : UserControl
         }
     }
 
-    private void ViewAllSources_OnClick(object? sender, RoutedEventArgs e)
-    {
-        // Same as above — Wave 7 opens the full sources modal.
-    }
-
     // Wave 5 (plan §5): the chevron button next to "变更" opens the
     // Diff view. Wave 6 owns the full file-list / line-level diff /
     // 1.0.1: was a no-op stub

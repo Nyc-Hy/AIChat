@@ -733,16 +733,28 @@ internal partial class MainWindow : Window
         _toast?.Show("语音输入 — Wave 4.5 接入", ToastLevel.Info);
     }
 
-    // Codex parity: status bar "+" button. Opens a small popup with
-    // "新建项目 / 新建对话 / 新建计划" shortcuts. The popup itself
-    // lands in Wave 6; for now we trigger the existing new-project
-    // / new-conversation commands sequentially and let the user
-    // click again if they meant a different one. (Codex actually
-    // shows a single dropdown, but a click-through to a picker is
-    // a fine starting point.)
+    // 1.0.1: status bar "+" button
+    // was a stub toast pointing at
+    // "用 ⌘O 加项目 / ⌘N 新对话".
+    // The right place for an
+    // aggregated "new X" picker is
+    // the Command palette (⌘K) —
+    // the palette already lists
+    // new-conversation /
+    // new-project / open settings /
+    // open sites / open scheduled
+    // / open plugins as fuzzy
+    // matches, so the click opens
+    // the palette and the user
+    // picks the action. No stub
+    // toast, no separate picker
+    // surface to maintain.
     private void StatusBarAdd_OnClick(object? sender, RoutedEventArgs e)
     {
-        _toast?.Show("新建入口 — 用 ⌘O 加项目 / ⌘N 新对话", ToastLevel.Info);
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.OpenCommandPaletteCommand.Execute(null);
+        }
     }
 
     // 1.0.1: clicking a "最近" entry jumps to

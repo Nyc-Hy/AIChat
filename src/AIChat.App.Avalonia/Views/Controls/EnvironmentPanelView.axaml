@@ -488,17 +488,28 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <Button Classes="env-row" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                    Click="ViewAllSources_OnClick"
-                    ToolTip.Tip="查看全部来源（Wave 7 后续接入历史记录）">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <Path Data="M5 12 H19 M5 6 H19 M5 18 H15"
-                      Stroke="{Binding $parent[Button].Foreground}"
-                      StrokeThickness="1.4" StrokeLineCap="Round"
-                      Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
-                <TextBlock Text="查看全部" FontSize="12" Foreground="{DynamicResource Text2Brush}" VerticalAlignment="Center"/>
-              </StackPanel>
-            </Button>
+            <!--
+              1.0.1: removed the "查看全部"
+              stub button. The Sources
+              section above already
+              renders every persisted
+              source (in the panel's
+              own ScrollViewer); a
+              "view all" affordance
+              that no-ops to a stub
+              toast was misleading
+              the user into thinking
+              there was a more
+              complete view behind
+              the button. If a real
+              "sources modal with
+              search + sort" ever
+              lands (P1 deferred
+              per SHIP_REPORT §4),
+              re-introduce a button
+              bound to the modal
+              command at that time.
+            -->
           </StackPanel>
 
           <Border Classes="section-divider"/>
