@@ -990,7 +990,33 @@
                                     Classes="panel"
                                     IsVisible="{Binding AgentHost.HasPlan}"
                                     Padding="{StaticResource Padding3}">
-                                <StackPanel Spacing="4">
+                                <!--
+                                  1.0.1: cap the plan
+                                  panel at 240 DIPs
+                                  with vertical scroll.
+                                  Without the cap, a
+                                  10+ item plan pushes
+                                  the composer (and
+                                  the plan itself) off
+                                  the bottom of the
+                                  window — a daily-
+                                  driver paper cut on
+                                  long refactor /
+                                  migration runs. 240
+                                  DIPs is the same
+                                  height the Sources
+                                  panel uses for its
+                                  per-row detail —
+                                  long enough for ~4
+                                  expanded rows, short
+                                  enough to keep the
+                                  composer on screen
+                                  during long runs.
+                                -->
+                                <ScrollViewer MaxHeight="240"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="4">
                                     <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                                         <TextBlock Grid.Column="0" Text="计划" Classes="section-title"/>
                                         <!--
@@ -1199,6 +1225,7 @@
                                         </ItemsControl>
                                     </StackPanel>
                                 </StackPanel>
+                                </ScrollViewer>
                             </Border>
 
                             <Grid Grid.Row="3" ColumnDefinitions="5*,40*,5*">
