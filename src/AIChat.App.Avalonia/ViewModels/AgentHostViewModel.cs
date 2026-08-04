@@ -651,7 +651,35 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // 1.0.1: 1-deep follow-up queue. See
     // EnqueueFollowup for why this is a
     // single string and not a Queue<string>.
+    // Promoted to [ObservableProperty] so
+    // HasPendingFollowup re-raises on
+    // every write — the 追加要求 button
+    // label binds to HasPendingFollowup
+    // and the visual must flip the
+    // moment the queue is filled or
+    // drained, not lag behind.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPendingFollowup))]
     private string? _pendingFollowup;
+
+    // 1.0.1: visible state of the
+    // 1-deep follow-up queue. The
+    // 追加要求 button's label flips
+    // between "追加要求" (no queue) and
+    // "已暂存" (queue occupied) so the
+    // user can tell whether their
+    // follow-up has been recorded. A
+    // daily-driver user who clicks
+    // 追加要求 during a long run may
+    // wonder "did the click land?" —
+    // the label flip is the affirmative
+    // answer, no need to scroll up to
+    // the system bubble to confirm.
+    // Drained in the post-run cleanup
+    // path so the label flips back to
+    // "追加要求" the moment the next
+    // run starts.
+    public bool HasPendingFollowup => !string.IsNullOrWhiteSpace(_pendingFollowup);
 
     // 1.0.1: detect an in-progress
     // @-reference at the caret. Pure

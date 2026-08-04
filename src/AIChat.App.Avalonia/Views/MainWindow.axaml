@@ -1675,7 +1675,42 @@
                                                           StrokeThickness="1.5" StrokeLineCap="Round"
                                                           Width="14" Height="14" Stretch="Uniform"
                                                           VerticalAlignment="Center"/>
-                                                    <TextBlock Text="追加要求" FontFamily="{StaticResource FontSans}" FontSize="11" VerticalAlignment="Center"/>
+                                                    <!--
+                                                      1.0.1: button label
+                                                      flips between
+                                                      "追加要求" (queue
+                                                      empty) and
+                                                      "已暂存" (queue
+                                                      occupied) so
+                                                      the user has
+                                                      immediate
+                                                      visual feedback
+                                                      that the click
+                                                      landed. Without
+                                                      the swap, the
+                                                      user would have
+                                                      to scroll up to
+                                                      the activity
+                                                      feed's
+                                                      "已暂存追加"
+                                                      system bubble
+                                                      to confirm the
+                                                      click took
+                                                      effect — a
+                                                      daily-driver
+                                                      muscle-memory
+                                                      trap on a 30s+
+                                                      run where the
+                                                      user wonders
+                                                      "is my followup
+                                                      queued or did
+                                                      I miss the
+                                                      button?".
+                                                    -->
+                                                    <TextBlock FontFamily="{StaticResource FontSans}" FontSize="11" VerticalAlignment="Center">
+                                                        <Run Text="追加要求"/>
+                                                        <Run Text=" (已暂存)" IsVisible="{Binding AgentHost.HasPendingFollowup}"/>
+                                                    </TextBlock>
                                                 </StackPanel>
                                             </Button>
                                         </Grid>

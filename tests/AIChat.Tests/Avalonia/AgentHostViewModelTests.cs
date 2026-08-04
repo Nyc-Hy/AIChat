@@ -628,6 +628,57 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.True(host.EnqueueFollowup("second"));
     }
 
+    [Fact]
+    public void HasPendingFollowup_FalseInitially_TrueAfterEnqueue()
+    {
+        // 1.0.1: the 追加要求 button
+        // label flips to "已暂存"
+        // when the queue is occupied.
+        // The flag is the XAML's
+        // single source of truth.
+        var (host, _, _, _) = CreateHost();
+        Assert.False(host.HasPendingFollowup);
+        host.IsRunning = true;
+        host.EnqueueFollowup("follow-up");
+        Assert.True(host.HasPendingFollowup);
+    }
+
+    [Fact]
+    public void HasPendingFollowup_FlipsFalse_WhenPendingCleared()
+    {
+        // 1.0.1: the post-run auto-continue
+        // path drains _pendingFollowup,
+        // which must flip HasPendingFollowup
+        // back to false. Pin the read-side
+        // behaviour by simulating the
+        // drain (the test calls the same
+        // SendTaskAsync path, but here we
+        // drive it via the public surface:
+        // mark NotRunning, set the field
+        // back to null, observe).
+        var (host, _, _, _) = CreateHost();
+        host.IsRunning = true;
+        host.EnqueueFollowup("follow-up");
+        Assert.True(host.HasPendingFollowup);
+        // Re-raise the path the runner
+        // would take on drain: the
+        // agent-host's IsRunning flips
+        // back to false inside the
+        // runner's finally, then the
+        // host's post-cleanup clears
+        // the queue. We can't drive the
+        // full SendTaskAsync without a
+        // live chat service, so the
+        // closest unit-level signal is:
+        // clear the field via the same
+        // observable path the host uses
+        // (set to null through the
+        // auto-generated public
+        // PendingFollowup setter).
+        host.PendingFollowup = null;
+        Assert.False(host.HasPendingFollowup);
+    }
+
     // ---- 1.0.1: insert @-reference at composer caret ----
 
     [Fact]
