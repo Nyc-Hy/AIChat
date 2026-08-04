@@ -35,7 +35,20 @@ internal sealed class UrlInputDialog : Window
         Height = 180;
         CanResize = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brush.Parse("#FFFFFF");
+        // 1.0.1: drop the hard-coded white
+        // background. The default Window
+        // background follows the active
+        // theme (SurfaceBrush at the app
+        // level — light gray in light mode,
+        // deep slate in dark mode), so the
+        // dialog was previously a white
+        // rectangle floating over a dark
+        // page in ⌘⇧T dark mode. The same
+        // default carries the text / muted
+        // text colors (TextBrush +
+        // MutedBrush below) so the dialog
+        // stays readable in both modes
+        // without a per-mode code path.
 
         _textBox = new TextBox
         {
@@ -85,6 +98,23 @@ internal sealed class UrlInputDialog : Window
             Children = { cancelButton, okButton },
         };
 
+        // Theme-aware text colors. The two
+        // hard-coded brush literals below
+        // were the only light-mode references
+        // left in the project; replaced with
+        // the same DynamicResource brushes
+        // the XAML dialogs use so a ⌘⇧T
+        // dark-mode user doesn't read black
+        // text on a dark slate background.
+        // Avalonia.Application is fully
+        // qualified so the C# compiler
+        // doesn't try to resolve
+        // 'Application' against the
+        // AIChat.Application namespace this
+        // file's project is in.
+        var textBrush = (IBrush?)global::Avalonia.Application.Current?.Resources["TextBrush"] ?? Brushes.Black;
+        var mutedBrush = (IBrush?)global::Avalonia.Application.Current?.Resources["MutedBrush"] ?? Brushes.Gray;
+
         var stack = new StackPanel
         {
             Margin = new Thickness(20),
@@ -95,14 +125,14 @@ internal sealed class UrlInputDialog : Window
                 {
                     Text = "输入要抓取的网页 URL（http / https）",
                     FontSize = 13,
-                    Foreground = Brush.Parse("#3a4256"),
+                    Foreground = textBrush,
                 },
                 _textBox,
                 new TextBlock
                 {
                     Text = "网页内容会作为数据源保存,Agent 在后续对话中可引用。",
                     FontSize = 11,
-                    Foreground = Brush.Parse("#6b6b75"),
+                    Foreground = mutedBrush,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 buttons,
