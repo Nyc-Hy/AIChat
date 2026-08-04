@@ -670,36 +670,24 @@ internal partial class MainWindow : Window
         }
     }
 
-    // Codex parity: trailing edit icon. Wave 6 will wire this to the
-    // inline rename popover; for now it just opens the same context
-    // flyout as the `...` button so the user gets a feedback signal
-    // that the click landed (Codex also has this fallback).
-    private void ProjectEdit_OnClick(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: string projectId })
-        {
-            return;
-        }
-        // Same UX as ProjectMenu_OnClick for now; future slices
-        // The button picks the project
-        // (SelectProjectFromUiAsync) —
-        // rename / delete controls live
-        // on the project card's right-
-        // click context flyout, not on
-        // the main click path. The
-        // previous "编辑项目 — Wave 6
-        // 接入" stub toast was a
-        // misdirection (the user thought
-        // nothing happened because the
-        // toast fired AFTER the real
-        // selection, looking like a
-        // delayed side-effect).
-        SafeRun(() =>
-        {
-            if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
-            return viewModel.SelectProjectFromUiAsync(projectId);
-        });
-    }
+    // 1.0.1: ProjectEdit_OnClick removed.
+    // The XAML edit (pencil) icon was a
+    // stub pointing at "Wave 6 will wire
+    // this to the inline rename popover".
+    // Wave 6 actually shipped the Git
+    // status modal — not project
+    // rename, which is still future
+    // work. The pencil icon was a
+    // no-op daily-driver trap: a user
+    // mousing over the icon saw a
+    // familiar "edit this row" affordance
+    // and clicked, got the project
+    // selected, and wondered why no
+    // rename popover appeared. Both the
+    // XAML icon and this handler are
+    // removed; the ··· button + right-
+    // click context flyout give the user
+    // the same delete-only menu.
 
     // 1.0.1: the previous
     // AddAttachment_OnClick was a stub
