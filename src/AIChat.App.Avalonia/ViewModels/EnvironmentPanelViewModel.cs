@@ -487,6 +487,13 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     // across re-attaches without leaking events.
     private ObservableCollection<SubAgentRunViewModel>? _attachedSubAgentRuns;
     private ObservableCollection<PendingAttachmentViewModel>? _attachedAttachments;
+    // 1.0.1: 1Hz timer to live-update
+    // running sub-agent DurationDisplay
+    // values. See constructor for
+    // lifecycle. The VM lives for the
+    // app's lifetime so we don't need
+    // to dispose the timer.
+    private readonly DispatcherTimer _subAgentDurationTimer;
     // PropertyChanged hook on AgentHost. The panel needs to surface the
     // "is a task running / what was it" state in its 进度 section, but
     // AgentHost is a peer ViewModelBase — pulling it through a Func
@@ -533,6 +540,60 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
         // lock-step so the XAML's empty-state hint flips without a
         // manual OnPropertyChanged.
         BackgroundProcesses.CollectionChanged += (_, _) => HasBackgroundProcesses = BackgroundProcesses.Count > 0;
+        // 1.0.1: 1Hz timer to live-update
+        // the per-row DurationDisplay for
+        // running sub-agents. Without
+        // this, a 30-second running
+        // sub-agent just says "运行中…"
+        // the whole time — the user
+        // can't tell if it's making
+        // progress or stuck. The tick
+        // walks SubAgentRuns (cheap —
+        // usually 0-10 rows) and forces
+        // a DurationDisplay refresh on
+        // rows whose status is still
+        // "Running". Completed/failed
+        // rows are skipped — their
+        // duration is final.
+        _subAgentDurationTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _subAgentDurationTimer.Tick += (_, _) => TickSubAgentDurations();
+        _subAgentDurationTimer.Start();
+    }
+
+    // 1.0.1: per-tick refresh of running
+    // sub-agent rows' DurationDisplay.
+    // DispatcherTimer.Tick fires on the
+    // UI thread, so the assignments are
+    // safe to make directly without
+    // dispatcher.Post.
+    private void TickSubAgentDurations()
+    {
+        foreach (var row in SubAgentRuns)
+        {
+            if (row.IsRunning)
+            {
+                // Re-format with the
+                // current DateTimeOffset.Now
+                // (since the row's
+                // StartedAt is fixed, the
+                // only thing that changed
+                // is the wall clock).
+                // FormatDuration returns
+                // "运行中…" for null
+                // CompletedAt — we want
+                // the actual elapsed
+                // time string here, so
+                // we set CompletedAt to
+                // null (it already is)
+                // and call the helper
+                // directly via a public
+                // re-format.
+                row.RefreshRunningDuration();
+            }
+        }
     }
 
     // Called by the host after construction. The host owns the lifetime of

@@ -104,6 +104,26 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
 
     public bool CanStop => IsRunning && StopCommand?.CanExecute(Id) == true;
 
+    // 1.0.1: live-updates the per-row
+    // DurationDisplay for a still-
+    // running sub-agent. Called from
+    // EnvironmentPanelViewModel's 1Hz
+    // timer. We re-format using the
+    // current DateTimeOffset.Now as
+    // the "end" time, so the row
+    // shows "12s" → "13s" → "14s"
+    // → "30s" → "1m 0s" live, instead
+    // of the static "运行中…" string
+    // FormatDuration would return.
+    // The Status column already shows
+    // "Running", so the elapsed-time
+    // string is what the user actually
+    // wants in the duration slot.
+    public void RefreshRunningDuration()
+    {
+        DurationDisplay = FormatElapsed(StartedAt, DateTimeOffset.Now);
+    }
+
     // Match the naming AgentHarness uses for the explorer template.
     // Other templates are skipped by the current coordinator, but the
     // display is future-proof so a new template just gets a sensible
@@ -122,7 +142,25 @@ public sealed partial class SubAgentRunViewModel : ObservableObject
         {
             return "运行中…";
         }
-        var span = completedAt.Value - startedAt;
+        return FormatElapsed(startedAt, completedAt.Value);
+    }
+
+    // Format the elapsed span between
+    // startedAt and endAt as a
+    // human-readable "<1s" / "Ns" /
+    // "Nm Ns" string. Shared by the
+    // completed-row path
+    // (FormatDuration above) and the
+    // live-tick path
+    // (RefreshRunningDuration above)
+    // so the two surfaces stay in
+    // lockstep — the running row's
+    // "12s" matches the moment the
+    // row flips to Completed and the
+    // timer stops.
+    private static string FormatElapsed(DateTimeOffset startedAt, DateTimeOffset endAt)
+    {
+        var span = endAt - startedAt;
         if (span.TotalSeconds < 1)
         {
             return "<1s";

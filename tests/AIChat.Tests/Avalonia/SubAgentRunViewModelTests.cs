@@ -206,4 +206,104 @@ public class SubAgentRunViewModelTests
             StartedAt = startedAt ?? DateTimeOffset.UtcNow,
         };
     }
+
+    // 1.0.1: DurationDisplay is normally
+    // only set on Update() (when the
+    // harness emits status=running /
+    // completed). For a long-running
+    // sub-agent (30+ seconds) the user
+    // would otherwise stare at
+    // "运行中…" the whole time with
+    // no progress signal.
+    // EnvironmentPanelViewModel runs a
+    // 1Hz DispatcherTimer that calls
+    // RefreshRunningDuration on every
+    // running row; these tests pin the
+    // formatter so the running and
+    // completed paths stay in lockstep.
+    [Fact]
+    public void RefreshRunningDuration_ReplacesStaticRunningWithElapsed()
+    {
+        // Pick a StartedAt in the past
+        // so the elapsed time is a real
+        // "12s"-class number, not
+        // "<1s" (which the formatter
+        // would also report for a row
+        // that was just started this
+        // tick).
+        var startedAt = DateTimeOffset.Now.AddSeconds(-12);
+        var run = NewRun("explorer", "find foo", startedAt: startedAt);
+        var vm = new SubAgentRunViewModel(run);
+        // Default Ctor paths through
+        // FormatDuration with null
+        // completedAt → "运行中…".
+        Assert.Equal("运行中…", vm.DurationDisplay);
+
+        vm.RefreshRunningDuration();
+
+        // After refresh, the row shows
+        // a real elapsed-time string
+        // (12s ± 1 tick). The exact
+        // number drifts per tick so
+        // match the format rather than
+        // the literal value.
+        Assert.NotEqual("运行中…", vm.DurationDisplay);
+        Assert.EndsWith("s", vm.DurationDisplay);
+    }
+
+    [Fact]
+    public void FormatDuration_CompletedRow_StaysFinal()
+    {
+        // The completed-row path goes
+        // through FormatDuration, not
+        // RefreshRunningDuration, so
+        // it's untouched by the 1Hz
+        // timer. The formatter returns
+        // the same shape
+        // RefreshRunningDuration would
+        // for a stopped clock, which
+        // means a row that's been
+        // running for "1m 5s" and then
+        // completes will read "1m 5s"
+        // both before and after the
+        // status flip — no jarring
+        // change in the duration slot.
+        var startedAt = DateTimeOffset.UtcNow.AddMinutes(-1).AddSeconds(-5);
+        var completedAt = startedAt.AddSeconds(65);
+        var run = new AgentSubAgentRun
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ParentRunId = "parent",
+            TemplateId = "explorer",
+            Task = "find bar",
+            Status = "Completed",
+            StartedAt = startedAt,
+            CompletedAt = completedAt,
+        };
+        var vm = new SubAgentRunViewModel(run);
+        Assert.Equal("1m 5s", vm.DurationDisplay);
+
+        // A subsequent
+        // RefreshRunningDuration call
+        // on a Completed row would
+        // also produce a sensible
+        // string (the formatter
+        // doesn't care about Status —
+        // only about StartedAt). The
+        // 1Hz timer in the panel
+        // already filters non-running
+        // rows out, so this case
+        // shouldn't happen in
+        // practice, but the formatter
+        // is robust to it.
+        vm.RefreshRunningDuration();
+        // The exact text drifts
+        // because the live-tick path
+        // uses Now instead of
+        // CompletedAt, so a 1-second
+        // drift is expected. The
+        // "1m" minute marker is the
+        // stable part of the format.
+        Assert.StartsWith("1m", vm.DurationDisplay);
+    }
 }
