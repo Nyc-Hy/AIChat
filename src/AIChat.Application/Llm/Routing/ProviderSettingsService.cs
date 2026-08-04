@@ -388,7 +388,21 @@ public static class ProviderSettingsService
             "api.anthropic.com",
             "api.deepseek.com",
             "token-plan-cn.xiaomimimo.com",
-            "api.xiaomimimo.com"
+            "api.xiaomimimo.com",
+            // 2026-08-04: api.minimax.io is the host that the
+            // pre-1.0.0 catalog defaulted to. The live MiniMax
+            // surface for M3 / M3-highspeed / M2.7 is now
+            // api.minimax.chat; .io is a redirect / older
+            // gateway that returns HTTP 401 ("invalid api key
+            // (2049)") for keys minted on the current platform.
+            // Auto-rewrite old .io entries to the catalog
+            // default (.chat) so the next message goes to a
+            // host that actually accepts the user's key. True
+            // self-hosted users on a custom .io host are
+            // unaffected because the comparison is on the host
+            // segment, not the full URL — a "proxy.io" or
+            // "minimax-proxy.example.io" stays put.
+            "api.minimax.io"
         };
 
     private static bool IsLegacyProviderHost(string? value)

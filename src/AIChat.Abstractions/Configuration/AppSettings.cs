@@ -13,7 +13,7 @@ public sealed class AppSettings
     public string ProviderId { get; set; } = "minimax";
     public string ProtocolId { get; set; } = "openai";
     public string ProviderName { get; set; } = "MiniMax";
-    public string BaseUrl { get; set; } = "https://api.minimax.io/v1";
+    public string BaseUrl { get; set; } = "https://api.minimax.chat/v1";
     [JsonIgnore]
     public string ApiKey { get; set; } = "";
     public string ProtectedApiKey { get; set; } = "";

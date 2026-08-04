@@ -32,6 +32,95 @@ public sealed class ProviderSettingsServiceTests
         Assert.Equal("MiniMax-M3", settings.Model);
     }
 
+    // 2026-08-04: catalog surface lock. Three shipping
+    // models, each with a distinct context limit and
+    // capability shape (M3 / M3-highspeed = 1M + vision,
+    // M2.7 = 200K + no vision for Coding Plan users).
+    // A future change that adds / removes a model — or
+    // bumps the context limit on the flagship — breaks
+    // here rather than as a silent 200K-clip of a 1M-capable
+    // model in production.
+    [Fact]
+    public void Catalog_ListsM3AndM3HighspeedAndM27()
+    {
+        var ids = ChatProviderCatalog.MiniMax.Models.Select(m => m.Id).ToArray();
+
+        Assert.Contains("MiniMax-M3", ids);
+        Assert.Contains("MiniMax-M3-highspeed", ids);
+        Assert.Contains("MiniMax-M2.7", ids);
+    }
+
+    [Fact]
+    public void Catalog_M3ContextLimitIsOneMillion()
+    {
+        // The 2026-08-04 catalog change set the flagship
+        // default context to 1_048_576. The previous
+        // 200_000 default was a 1.0-era leak from the
+        // M2 line and was the root cause of the "status
+        // bar says 0% / 5% while the agent was actually
+        // near the limit" complaint. Pin the new value
+        // so a future revert breaks the build, not the
+        // user's context ring.
+        Assert.Equal(1_048_576, ChatProviderCatalog.MiniMax.DefaultContextLimit);
+
+        var m3 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M3");
+        Assert.Equal(1_048_576, m3.ContextLimit);
+        Assert.True(m3.Capabilities.SupportsVision,
+            "M3 is native multimodal — SupportsVision must stay on for the image-paste pipeline to work");
+    }
+
+    [Fact]
+    public void Catalog_M27ContextLimitIsTwoHundredK_AndNoVision()
+    {
+        // M2.7 is the Coding-Plan-covered fallback. 200K
+        // context (not 1M — the M2.x line never crossed
+        // the million-token threshold) and text-only
+        // (no multimodal — M2.7 predates native vision).
+        // A future flags-upgrade has to be a deliberate
+        // change, not a silent feature promotion.
+        var m27 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M2.7");
+        Assert.Equal(200_000, m27.ContextLimit);
+        Assert.False(m27.Capabilities.SupportsVision);
+    }
+
+    [Fact]
+    public void Catalog_DefaultBaseUrlIsMinimaxChat()
+    {
+        // The pre-1.0.0 catalog defaulted to api.minimax.io,
+        // which the live platform now returns 401 against
+        // (curl probe — invalid api key (2049)). The new
+        // default is api.minimax.chat, which is the host
+        // the current M3 / M2.7 keys are minted on. Old
+        // settings files carrying .io are auto-rewritten
+        // by ProviderSettingsService.Normalize via the
+        // LegacyProviderHosts list.
+        Assert.Equal("https://api.minimax.chat/v1", ChatProviderCatalog.MiniMax.DefaultBaseUrl);
+    }
+
+    [Fact]
+    public void Normalize_RewritesLegacyIoBaseUrlToChat()
+    {
+        // A user with a 0.5 settings file whose BaseUrl
+        // was written before the platform moved to .chat
+        // would otherwise hit HTTP 401 on every send. The
+        // Normalize path detects the legacy host and
+        // rewrites it to the catalog default — same
+        // behavior as the pre-1.0 anthropic / deepseek /
+        // xiaomimimo migration.
+        var settings = new AppSettings
+        {
+            ProviderId = "minimax",
+            ApiKey = "key",
+            Model = "MiniMax-M3",
+            BaseUrl = "https://api.minimax.io/v1",
+            ConfiguredProviders = []
+        };
+
+        ProviderSettingsService.Normalize(settings, defaultTemperature: 0.3);
+
+        Assert.Equal("https://api.minimax.chat/v1", settings.BaseUrl);
+    }
+
     [Fact]
     public void Normalize_DeduplicatesConfiguredProvidersAndKeepsActiveDuplicate()
     {

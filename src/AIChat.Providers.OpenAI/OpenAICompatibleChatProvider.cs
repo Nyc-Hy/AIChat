@@ -313,6 +313,34 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
                 case "minimax.reasoning_split" when bool.TryParse(parameter.Value, out var reasoningSplit):
                     payload["reasoning_split"] = reasoningSplit;
                     break;
+                // 2026-08-04: top_p (nucleus sampling). MiniMax
+                // honors the same parameter on the
+                // /chat/completions surface as OpenAI. The UI
+                // exposes it as a per-model dropdown (see
+                // ChatProviderCatalog.MiniMaxM3Parameters) with
+                // preset values 0.1 / 0.5 / 0.9 / 0.95 / 1.0;
+                // any empty / non-numeric value falls through
+                // and is ignored (the API default applies).
+                // Mapped through double.TryParse with
+                // InvariantCulture so a locale-formatted "0,5"
+                // (German / French) doesn't sneak in — the
+                // catalog emits a fixed "." decimal point.
+                case "top_p" when double.TryParse(parameter.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var topP):
+                    payload["top_p"] = topP;
+                    break;
+                // 2026-08-04: parallel_tool_calls. M3 supports
+                // firing multiple tool calls in a single turn
+                // (e.g. read 3 files in parallel) — disabling
+                // it here forces single-flight and is the
+                // escape hatch when a daily driver hits a
+                // per-request parallel-call rate limit. Sent
+                // as a boolean; the API ignores it on models
+                // that don't honor it (M2.7), so the same
+                // Settings file is safe across the model
+                // dropdown even though only M3 reads the value.
+                case "parallel_tool_calls" when bool.TryParse(parameter.Value, out var parallelToolCalls):
+                    payload["parallel_tool_calls"] = parallelToolCalls;
+                    break;
             }
         }
     }
