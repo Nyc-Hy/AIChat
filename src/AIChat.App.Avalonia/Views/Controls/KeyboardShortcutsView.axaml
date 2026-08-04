@@ -71,13 +71,17 @@
             <!-- 项目 / 导航 -->
             <StackPanel Spacing="6">
               <TextBlock Text="项目 / 导航" Classes="section-title"/>
-              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="添加项目" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="⌘ O" Classes="kbd-display" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="新建对话" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="1" Text="⌘ N" Classes="kbd-display" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="2" Grid.Column="0" Text="清空当前对话" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ ⇧ K" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="搜索历史对话" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="⌘ F" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="切换环境面板" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="⌘ ⇧ E" Classes="kbd-display" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="清空当前对话" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="⌘ ⇧ K" Classes="kbd-display" VerticalAlignment="Center"/>
               </Grid>
             </StackPanel>
 
@@ -133,21 +137,25 @@
             <!-- Slash 命令 -->
             <StackPanel Spacing="6">
               <TextBlock Text="Slash 命令 (在输入框里输 /)" Classes="section-title"/>
-              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="/clear · /new" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="清空当前对话" Classes="muted" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="/status" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="1" Text="项目 / 模型 / Context 状态" Classes="muted" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="/memory" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="2" Grid.Column="1" Text="当前项目的 memory 列表" Classes="muted" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="3" Grid.Column="0" Text="/git" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="3" Grid.Column="1" Text="git 状态简版" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="/git · /git-status" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="git 状态简版 / 完整 viewer" Classes="muted" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="/copy" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="4" Grid.Column="1" Text="复制最后 AI 回复" Classes="muted" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="5" Grid.Column="0" Text="/help" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="5" Grid.Column="1" Text="命令帮助" Classes="muted" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="6" Grid.Column="0" Text="@&lt;path&gt;" Classes="body" VerticalAlignment="Center"/>
-                <TextBlock Grid.Row="6" Grid.Column="1" Text="附加文件到下条消息" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="0" Text="/search &lt;关键词&gt;" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="5" Grid.Column="1" Text="跨所有对话全文搜索" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="6" Grid.Column="0" Text="/help" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="6" Grid.Column="1" Text="命令帮助" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="7" Grid.Column="0" Text="@&lt;path&gt;" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="7" Grid.Column="1" Text="附加文件到下条消息" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="8" Grid.Column="0" Text="@&lt;kind&gt;:&lt;id&gt; + Tab" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="8" Grid.Column="1" Text="补全 Sources 面板里的 source" Classes="muted" VerticalAlignment="Center"/>
               </Grid>
             </StackPanel>
 
