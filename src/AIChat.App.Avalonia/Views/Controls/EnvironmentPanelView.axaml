@@ -336,10 +336,13 @@
                Future source kinds (web search / connector / plugin)
                will plug in through the same ItemsControl binding
                by adding rows to the VM's Sources collection with a
-               different Kind value. The "+" button is hidden
-               because no real "add source from the right rail"
-               action exists yet; the user adds images via the
-               composer's "+" → "粘贴图片" menu.
+               different Kind value. 1.0.1: this section does NOT
+               show its own "+" button — the add-source surface is
+               the composer's "+" menu (粘贴图片 / 剪贴板快照 /
+               网页搜索 / @file 引用), which writes through the
+               same ISourceRegistry the panel mirrors. Two
+               add-paths for the same registry would be a
+               daily-driver paper cut.
             -->
           <StackPanel Spacing="4">
             <Grid ColumnDefinitions="*,Auto">
