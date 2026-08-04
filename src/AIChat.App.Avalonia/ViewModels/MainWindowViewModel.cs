@@ -784,6 +784,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         ActivityFeed.Clear();
         StatusMessage = "新对话。";
         _toast.Show("新对话已创建 — 不绑定项目,直接开始。", ToastLevel.Info);
+        // 5. highlight the new card so the
+        // user immediately sees which row
+        // was created. The project-scoped
+        // conversation list does this
+        // automatically (SetSelectedConversation
+        // walks the collection); the
+        // Standalone list was wired with a
+        // .selected class binding but
+        // never had any code that
+        // toggled IsSelected, so the
+        // user had no visual confirmation
+        // the click had registered.
+        SetSelectedStandaloneCard(session.Id);
     }
 
     private ConversationCardViewModel MakeStandaloneCard(Standalone session)
@@ -854,6 +867,47 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _agentHost.ClearPreparedRunLink();
         ActivityFeed.LoadConversation(session);
         StatusMessage = $"已打开 Standalone 对话：{session.Title}";
+        // 1.0.1: mirror the
+        // project-scoped list's
+        // SetSelectedConversation —
+        // the .selected class on
+        // the Standalone row was
+        // bound but never had a
+        // code path that flipped
+        // IsSelected, so the user
+        // clicked a Standalone
+        // card, saw the activity
+        // feed load, but the row
+        // stayed unhighlighted.
+        // Same pattern the
+        // 8749763 / 0ff4ed3 ships
+        // normalised across the
+        // two card surfaces.
+        SetSelectedStandaloneCard(sessionId);
+    }
+
+    // 1.0.1: shared helper for
+    // flipping IsSelected across
+    // the Standalone list. Mirrors
+    // ConversationListViewModel.
+    // SetSelectedConversation so a
+    // user clicking a Standalone
+    // card (or ⌘N creating a new
+    // one) gets the same
+    // accent-tinted row the
+    // project-scoped list gives
+    // them. The toggle is
+    // idempotent — selecting the
+    // already-selected card is a
+    // no-op, so callers don't
+    // need a "did anything
+    // change" guard.
+    private void SetSelectedStandaloneCard(string? sessionId)
+    {
+        foreach (var card in StandaloneConversations)
+        {
+            card.IsSelected = card.Id == sessionId;
+        }
     }
 
     [RelayCommand]

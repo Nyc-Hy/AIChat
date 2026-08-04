@@ -643,6 +643,7 @@
                                                 <Button Classes="sidebar-row"
                                                         Tag="{Binding Id}"
                                                         Click="StandaloneConversation_OnClick"
+                                                        Classes.selected="{Binding IsSelected}"
                                                         HorizontalAlignment="Stretch"
                                                         HorizontalContentAlignment="Stretch">
                                                     <!--
