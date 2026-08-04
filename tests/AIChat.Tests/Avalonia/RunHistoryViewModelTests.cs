@@ -4,6 +4,7 @@ using AIChat.App.Avalonia.ViewModels;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
 using AIChat.Tests.TestDoubles;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AIChat.Tests.Avalonia;
 
@@ -168,5 +169,55 @@ public sealed class RunHistoryViewModelTests : IDisposable
         Assert.NotNull(continuedItem);
         Assert.Equal("r1", continuedItem!.Run.Id);
         Assert.Null(retriedItem);
+    }
+
+    // 1.0.1: MainWindowViewModel.
+    // CopyRunGoalToComposer drops the
+    // historical Goal into the
+    // composer's DraftPrompt, closes
+    // the RunHistory modal, and
+    // raises FocusComposerRequested
+    // so MainWindow.xaml.cs puts
+    // the caret in the prompt
+    // input. The 3 lines after the
+    // agent host set are the same
+    // pattern NewStandaloneConversationAsync
+    // uses (close source modal +
+    // raise focus event).
+    [Fact]
+    public void CopyRunGoalToComposer_SetsDraftPromptAndClosesModalAndRaisesFocus()
+    {
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+        viewModel.IsRunHistoryOpen = true;
+
+        var focusCount = 0;
+        viewModel.FocusComposerRequested += (_, _) => focusCount++;
+
+        viewModel.CopyRunGoalToComposer("  refactor auth middleware  ");
+
+        Assert.Equal("  refactor auth middleware  ", viewModel.AgentHost.DraftPrompt);
+        Assert.False(viewModel.IsRunHistoryOpen);
+        Assert.Equal(1, focusCount);
+    }
+
+    [Fact]
+    public void CopyRunGoalToComposer_NullOrWhitespace_IsNoOp()
+    {
+        // Defensive: the XAML's Tag binding
+        // is a string, but a refactor that
+        // swapped to a nullable source
+        // would land null here. The
+        // method must not crash the
+        // RunHistory view's click handler.
+        using var host = AppHost.Build();
+        var viewModel = host.GetRequiredService<MainWindowViewModel>();
+        viewModel.IsRunHistoryOpen = true;
+
+        viewModel.CopyRunGoalToComposer(null);
+        viewModel.CopyRunGoalToComposer("");
+        viewModel.CopyRunGoalToComposer("   ");
+
+        Assert.True(viewModel.IsRunHistoryOpen);
     }
 }

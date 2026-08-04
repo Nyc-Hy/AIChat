@@ -172,6 +172,59 @@
                                                              FontWeight="SemiBold"
                                                              TextWrapping="Wrap"/>
                                         <TextBlock Text="{Binding RunHistory.SelectedRun.LineageDisplay}" Classes="muted"/>
+                                        <!--
+                                          1.0.1: "→ composer" affordance on
+                                          Goal. The SelectableTextBlock
+                                          lets the user ⌘C the goal
+                                          text, but the daily-driver
+                                          flow "this prompt worked,
+                                          let me paste it into the
+                                          composer and tweak it"
+                                          needs the text in the
+                                          composer, not the clipboard.
+                                          The button calls a small
+                                          host-side helper that drops
+                                          the goal into DraftPrompt
+                                          + focuses the composer +
+                                          closes the modal. Same
+                                          shape as the user-bubble
+                                          "edit" affordance in
+                                          MainWindow.axaml.cs
+                                          (EditUserBubble_OnClick) —
+                                          one click to re-use a
+                                          previous prompt. The
+                                          "继续" button below
+                                          already does the
+                                          "continue the
+                                          conversation, type new
+                                          followup" flow; this
+                                          button is the
+                                          "start fresh with the
+                                          same goal" flow.
+                                          The handler lives on
+                                          the code-behind (the
+                                          modal needs a focus
+                                          call on the composer
+                                          after closing itself,
+                                          which only the host
+                                          window can do).
+                                        -->
+                                        <Button Classes="chrome-button"
+                                                Padding="6,1"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,2,0,0"
+                                                Click="CopyGoalToComposer_OnClick"
+                                                Tag="{Binding RunHistory.SelectedRun.Goal}"
+                                                ToolTip.Tip="把目标 prompt 复制到 composer,改完再发">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Path Data="M9 3 H17 a2 2 0 0 1 2 2 V15 M5 9 H13 a2 2 0 0 1 2 2 V19 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 V11 a2 2 0 0 1 2 -2 z M5 9 V7 a2 2 0 0 1 2 -2 H13"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="12" Height="12" Stretch="Uniform"
+                                                      VerticalAlignment="Center"/>
+                                                <TextBlock Text="→ composer" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                     </StackPanel>
 
                                     <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="8">

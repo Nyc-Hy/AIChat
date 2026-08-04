@@ -1413,6 +1413,40 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _agentHost.PrepareContinuation(item.Run);
     }
 
+    // 1.0.1: "→ composer" affordance on the
+    // RunHistory 详情 Goal. The user is
+    // looking at a finished run, decides
+    // "this goal is good but I want to
+    // tweak it before re-sending" — the
+    // daily-driver flow that ⌘C + manual
+    // paste into the composer (3 steps)
+    // is one click. Sibling of the
+    // user-bubble Edit affordance in
+    // MainWindow.axaml.cs, just sourced
+    // from a historical run instead of
+    // the current conversation.
+    //
+    // The 4 lines after the DraftPrompt
+    // set are the same pattern
+    // NewStandaloneConversationAsync
+    // uses: close the source modal
+    // (RunHistory), raise
+    // FocusComposerRequested so the
+    // user lands on the composer, the
+    // same hook as ⌘N. The user
+    // lands with the cursor in the
+    // goal text, ready to edit.
+    public void CopyRunGoalToComposer(string? goal)
+    {
+        if (string.IsNullOrWhiteSpace(goal))
+        {
+            return;
+        }
+        IsRunHistoryOpen = false;
+        _agentHost.DraftPrompt = goal;
+        FocusComposerRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     [RelayCommand]
     private async Task RefreshAsync()
     {
