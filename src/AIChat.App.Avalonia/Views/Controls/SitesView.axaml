@@ -121,7 +121,7 @@
                         <Button Classes="chrome-button" Padding="6,2"
                                 Command="{Binding $parent[ItemsControl].((vm:SitesViewModel)DataContext).PreviewCommand}"
                                 CommandParameter="{Binding}"
-                                ToolTip.Tip="启动本地预览 (Wave 9 后续接入真实进程)">
+                                ToolTip.Tip="启动本地预览 (python3 -m http.server — supervisor 真实进程)">
                           <TextBlock Text="预览" FontSize="11"/>
                         </Button>
                         <Button Classes="chrome-button" Padding="6,2"
