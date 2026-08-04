@@ -629,7 +629,7 @@
             <TextBlock Text="进度" Classes="section-title"/>
             <TextBlock Text="{Binding LastRunSummary}"
                        FontSize="12"
-                       Foreground="{DynamicResource Text2Brush}"
+                       Foreground="{Binding LastRunSummaryBrush}"
                        FontFamily="{StaticResource FontSans}"
                        TextTrimming="CharacterEllipsis"
                        MaxLines="2"

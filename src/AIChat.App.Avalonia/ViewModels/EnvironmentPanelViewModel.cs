@@ -455,6 +455,21 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     [ObservableProperty]
     private string lastRunSummary = "";
 
+    // 1.0.1: per-state text color for
+    // LastRunSummary. The previous
+    // shape was a single
+    // Text2Brush — a user glancing
+    // at the 进度 section couldn't
+    // tell "上次运行: 失败" from
+    // "上次运行: 完成" without
+    // reading the text. Mirrors the
+    // SubAgent / RunHistory palette
+    // so the same shade of red means
+    // the same thing across all 3
+    // surfaces.
+    [ObservableProperty]
+    private IBrush lastRunSummaryBrush = Brush.Parse("#9aa0a6");
+
     [ObservableProperty]
     private bool isTaskRunning;
 
@@ -479,6 +494,7 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
             LastRunSummary = string.IsNullOrWhiteSpace(CurrentTaskTitle)
                 ? "正在运行…"
                 : $"正在跑：{CurrentTaskTitle}";
+            LastRunSummaryBrush = Brush.Parse("#f5a623"); // amber — matches the in-flight / cancelled palette
         }
     }
 
@@ -709,6 +725,24 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
             LastRunSummary = string.IsNullOrEmpty(status)
                 ? ""
                 : $"上次运行：{status}";
+            // 1.0.1: pick the text color
+            // based on the last status.
+            // Mirrors the SubAgent /
+            // RunHistory palette so
+            // a glance at the 进度
+            // section tells the user
+            // "the last run failed" the
+            // same way the run history
+            // list does. Empty status
+            // → default muted gray.
+            LastRunSummaryBrush = status switch
+            {
+                "完成" => Brush.Parse("#5cd6a8"),
+                "失败" => Brush.Parse("#ff6b6b"),
+                "已停止" => Brush.Parse("#f5a623"),
+                "预算暂停" => Brush.Parse("#9aa0a6"),
+                _ => Brush.Parse("#9aa0a6"),
+            };
         }
     }
 

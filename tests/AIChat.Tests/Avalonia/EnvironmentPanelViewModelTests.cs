@@ -904,6 +904,27 @@ public sealed class EnvironmentPanelViewModelTests
         Assert.True(fired);
     }
 
+    // 1.0.1: LastRunSummaryBrush follows
+    // the SubAgent / RunHistory
+    // palette. Running → amber,
+    // Completed → green, Failed →
+    // red, Cancelled → amber,
+    // BudgetExceeded / unset → grey.
+    // The previous shape was a
+    // single Text2Brush — a user
+    // glancing at the 进度 section
+    // couldn't tell "上次运行: 失败"
+    // from "上次运行: 完成"
+    // without reading the text.
+    [Fact]
+    public void LastRunSummaryBrush_StartsDefault()
+    {
+        var (vm, _, _, _, _) = CreateViewModelWithSourceRegistry();
+        // Default state (no run, no
+        // status) → grey.
+        Assert.NotNull(vm.LastRunSummaryBrush);
+    }
+
     // 1.0.1: SourceSummary previously read
     // "X 个待发送" for any non-empty
     // population, including persisted
