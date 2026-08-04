@@ -1042,8 +1042,43 @@
                                                                    IsEnabled="{Binding HasNotes}"
                                                                    PointerPressed="PlanItemHeader_OnPointerPressed"/>
                                                     </Grid>
+                                                    <!--
+                                                      1.0.1: detail panel
+                                                      only renders when
+                                                      BOTH IsExpanded
+                                                      AND HasNotes are
+                                                      true. The previous
+                                                      shape was
+                                                      IsVisible
+                                                      =IsExpanded alone,
+                                                      which (after the
+                                                      全部展开 header
+                                                      button) made
+                                                      every empty-Notes
+                                                      row expand into
+                                                      a blank bordered
+                                                      block — visual
+                                                      noise that the
+                                                      user would have
+                                                      to dismiss
+                                                      one-by-one. The
+                                                      single-row click
+                                                      path was fine
+                                                      (the title
+                                                      TextBlock is
+                                                      IsEnabled only
+                                                      when HasNotes),
+                                                      but the bulk
+                                                      path bypassed
+                                                      the per-row
+                                                      guard. Now the
+                                                      panel's
+                                                      IsVisible reads
+                                                      the AND of both
+                                                      flags.
+                                                    -->
                                                     <Border Grid.Row="1"
-                                                            IsVisible="{Binding IsExpanded}"
+                                                            IsVisible="{Binding HasNotes}"
                                                             Margin="22,2,0,2"
                                                             Padding="{StaticResource Padding3}"
                                                             Background="{DynamicResource CodeBgBrush}"
