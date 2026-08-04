@@ -153,24 +153,27 @@
                                   the future shortcut so the user knows what's coming.
                                 -->
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6" ColumnSpacing="2">
-                                    <Button Grid.Column="0"
-                                            Classes="sidebar-brand"
-                                            Click="ModeSwitcher_OnClick"
-                                            ToolTip.Tip="当前模式: 默认">
-                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <TextBlock Text="AIChat"
-                                                       FontFamily="{StaticResource FontSans}"
-                                                       FontWeight="SemiBold"
-                                                       FontSize="14"
-                                                       Foreground="{DynamicResource TextBrush}"
-                                                       VerticalAlignment="Center"/>
-                                            <Path Data="M5 9 L12 16 L19 9"
-                                                  Stroke="{Binding $parent[Button].Foreground}"
-                                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
-                                                  Width="12" Height="12" Stretch="Uniform"
-                                                  VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Button>
+                                    <!--
+                                      1.0.1: brand row used to be a
+                                      Button (Click="ModeSwitcher_OnClick"
+                                      + chevron) firing a stub toast
+                                      "模式切换 — 默认模式（Wave 2
+                                      接入）". The actual mode
+                                      surface is the permission
+                                      badge below the composer
+                                      (CyclePermissionStateCommand)
+                                      plus ⌘⇧R (no-write) /
+                                      ⌘⇧V (auto-verify). A brand
+                                      button with a chevron
+                                      promised a mode menu the
+                                      app doesn't have. Now a
+                                      static label — same
+                                      visual, no dead affordance.
+                                    -->
+                                    <TextBlock Grid.Column="0"
+                                               Text="AIChat"
+                                               Classes="brand-title"
+                                               VerticalAlignment="Center"/>
                                     <Button Grid.Column="1"
                                             Classes="sidebar-icon-button"
                                             Click="Search_OnClick"

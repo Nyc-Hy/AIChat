@@ -493,19 +493,16 @@ internal partial class MainWindow : Window
         BeginMoveDrag(e);
     }
 
-    // Sprint 0.5+: sidebar top navigation layer. All three buttons are
-    // present-but-disabled by design — they match the Codex visual surface
-    // so the user sees the parity shape, but the actions land in their
-    // respective waves:
-    //   - ModeSwitcher  → Wave 2 (multi-mode support)
-    //   - Search        → Wave 3 (history / settings search)
-    //   - Notifications → Wave 7 (subagent / background process events)
-    // For now they show a toast on click so the user knows the icon is
-    // alive and labelled with the wave that delivers it.
-    private void ModeSwitcher_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _toast.Show("模式切换 — 默认模式（Wave 2 接入）", ToastLevel.Info);
-    }
+    // Sprint 0.5+ sidebar top navigation layer.
+    // The brand label used to be a button
+    // ("ModeSwitcher") firing a stub toast
+    // about Wave 2 multi-mode support. The
+    // actual mode surface is the permission
+    // badge below the composer + ⌘⇧R (no-write)
+    // / ⌘⇧V (auto-verify), so the brand
+    // button had no action to wire. The
+    // XAML row is now a static TextBlock;
+    // the handler is removed.
 
     private void Search_OnClick(object? sender, RoutedEventArgs e)
     {
