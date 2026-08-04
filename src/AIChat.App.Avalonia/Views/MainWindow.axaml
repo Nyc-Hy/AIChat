@@ -645,22 +645,54 @@
                                                         Click="StandaloneConversation_OnClick"
                                                         HorizontalAlignment="Stretch"
                                                         HorizontalContentAlignment="Stretch">
-                                                    <Panel HorizontalAlignment="Stretch">
-                                                        <TextBlock Text="{Binding Title}"
-                                                                   FontFamily="{StaticResource FontSans}"
-                                                                   FontSize="13"
-                                                                   Foreground="{DynamicResource Text2Brush}"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   MaxLines="1"
+                                                    <!--
+                                                      1.0.1: Standalone row
+                                                      mirrors the
+                                                      project-scoped
+                                                      conversation
+                                                      card's
+                                                      title + muted
+                                                      timestamp
+                                                      layout. The
+                                                      Standalone
+                                                      section
+                                                      historically
+                                                      showed title
+                                                      only, which
+                                                      left same-titled
+                                                      "查资料"
+                                                      conversations
+                                                      indistinguishable
+                                                      in a 6-row
+                                                      list. Now the
+                                                      two card
+                                                      surfaces read
+                                                      the same.
+                                                    -->
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                        <Panel Grid.Column="0" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       FontFamily="{StaticResource FontSans}"
+                                                                       FontSize="13"
+                                                                       Foreground="{DynamicResource Text2Brush}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       MaxLines="1"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBox Text="{Binding Title, Mode=TwoWay}"
+                                                                     FontFamily="{StaticResource FontSans}"
+                                                                     FontSize="13"
+                                                                     IsVisible="False"
+                                                                     KeyDown="StandaloneRename_OnKeyDown"
+                                                                     LostFocus="StandaloneRename_OnLostFocus"
+                                                                     Padding="4,2"/>
+                                                        </Panel>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Detail}"
+                                                                   Classes="muted"
+                                                                   FontSize="10"
+                                                                   FontFamily="{StaticResource FontMono}"
                                                                    VerticalAlignment="Center"/>
-                                                        <TextBox Text="{Binding Title, Mode=TwoWay}"
-                                                                 FontFamily="{StaticResource FontSans}"
-                                                                 FontSize="13"
-                                                                 IsVisible="False"
-                                                                 KeyDown="StandaloneRename_OnKeyDown"
-                                                                 LostFocus="StandaloneRename_OnLostFocus"
-                                                                 Padding="4,2"/>
-                                                    </Panel>
+                                                    </Grid>
                                                 </Button>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -689,23 +721,63 @@
                                                   over when IsRenaming flips. The TextBox is the same
                                                   parent slot, so the row's height stays stable.
                                                 -->
-                                                <Panel HorizontalAlignment="Stretch">
-                                                    <TextBlock Text="{Binding Title}"
-                                                               FontFamily="{StaticResource FontSans}"
-                                                               FontSize="13"
-                                                               Foreground="{DynamicResource Text2Brush}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               MaxLines="1"
+                                                <!--
+                                                  1.0.1: timestamp
+                                                  sub-text on the
+                                                  conversation
+                                                  card row. The
+                                                  Detail field
+                                                  was already
+                                                  populated by
+                                                  ConversationListViewModel.
+                                                  Refresh
+                                                  ("M月d日 HH:mm")
+                                                  but never bound
+                                                  — a daily-driver
+                                                  user with 5
+                                                  same-titled
+                                                  conversations
+                                                  could not tell
+                                                  them apart, and
+                                                  a stale "8月1日"
+                                                  entry masqueraded
+                                                  as fresh next to
+                                                  a "今天" entry.
+                                                  Matches the 最近
+                                                  section's two-
+                                                  column layout
+                                                  (title + muted
+                                                  monospace time)
+                                                  so the two
+                                                  surfaces read
+                                                  the same.
+                                                -->
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                    <Panel Grid.Column="0" HorizontalAlignment="Stretch">
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   FontFamily="{StaticResource FontSans}"
+                                                                   FontSize="13"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxLines="1"
+                                                                   IsVisible="{Binding !IsRenaming}"/>
+                                                        <TextBox Text="{Binding EditingTitle, Mode=TwoWay}"
+                                                                 FontFamily="{StaticResource FontSans}"
+                                                                 FontSize="13"
+                                                                 IsVisible="{Binding IsRenaming}"
+                                                                 behaviors:FocusOnLoadBehavior.IsEnabled="True"
+                                                                 KeyDown="ConversationRename_OnKeyDown"
+                                                                 LostFocus="ConversationRename_OnLostFocus"
+                                                                 Padding="4,2"/>
+                                                    </Panel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Detail}"
+                                                               Classes="muted"
+                                                               FontSize="10"
+                                                               FontFamily="{StaticResource FontMono}"
+                                                               VerticalAlignment="Center"
                                                                IsVisible="{Binding !IsRenaming}"/>
-                                                    <TextBox Text="{Binding EditingTitle, Mode=TwoWay}"
-                                                             FontFamily="{StaticResource FontSans}"
-                                                             FontSize="13"
-                                                             IsVisible="{Binding IsRenaming}"
-                                                             behaviors:FocusOnLoadBehavior.IsEnabled="True"
-                                                             KeyDown="ConversationRename_OnKeyDown"
-                                                             LostFocus="ConversationRename_OnLostFocus"
-                                                             Padding="4,2"/>
-                                                </Panel>
+                                                </Grid>
                                                 <Button.ContextFlyout>
                                                     <MenuFlyout>
                                                         <MenuItem Header="重命名"
