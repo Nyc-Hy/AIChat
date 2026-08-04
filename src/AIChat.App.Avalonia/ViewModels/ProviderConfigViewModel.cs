@@ -52,11 +52,66 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
     [ObservableProperty]
     private bool lastTestHasResult;
 
+    // 2026-08-04: the actionable "what to do next" hint
+    // for the most recent failed test. Surfaced in
+    // SettingsView under the test result row so a
+    // 401 / 404 / 429 doesn't just say "API Key 无效
+    // 或缺失" with no next step — the user sees e.g.
+    // "如果是 Coding Plan (sk-cp-…) 订阅，可能不覆盖
+    // 当前模型——在 Settings 里换到 M2.7 试试".
+    // Empty when the test succeeded or the error
+    // had no actionable fix (5xx — the right answer
+    // is "wait and retry" which the title alone
+    // carries).
+    [ObservableProperty]
+    private string lastTestRemediationHint = "";
+
+    // 2026-08-04: when the failure is "key valid but
+    // wrong model for your tier" (the Coding Plan
+    // + M3 case), the SettingsView shows a 1-click
+    // "切到 M2.7 试试" button so the user doesn't
+    // have to scroll to the model dropdown
+    // themselves. Null when there's no
+    // tier-compatibility hint to surface.
+    [ObservableProperty]
+    private string? lastTestSuggestedModelId = "";
+
     [ObservableProperty]
     private bool isTestInFlight;
 
     [ObservableProperty]
     private string lastSaveWarning = "";
+
+    // 2026-08-04: 1-click "切到 M2.7 试试" affordance
+    // wired to the failure-row button. The user
+    // hits "测试连接", gets 401, sees the hint
+    // pointing at M2.7, and clicks once to land
+    // there without scrolling to the model
+    // dropdown. The command takes the suggested
+    // model id from LastTestSuggestedModelId and
+    // applies it to the configured provider +
+    // sets the model textbox so the change is
+    // visible. Key + baseUrl are preserved —
+    // we're not editing the connection, just
+    // the model.
+    [RelayCommand]
+    private void ApplySuggestedModel(string? modelId)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return;
+        }
+        ProviderModel = modelId;
+        // The next /save would commit it; we don't
+        // auto-save because the user may want to
+        // review the swap (or back out via the
+        // existing dropdown) before persisting.
+        // Marking LastTestRemediationHint null
+        // hides the failure block so the next
+        // test starts clean.
+        LastTestRemediationHint = "";
+        LastTestSuggestedModelId = "";
+    }
 
     public ObservableCollection<ProviderTemplateViewModel> ProviderTemplates { get; } = [];
     public ObservableCollection<ProviderCardViewModel> AdvancedProviders { get; } = [];
@@ -182,6 +237,29 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
             LastTestMessage = result.Message;
             LastTestIsSuccess = result.IsSuccess;
             LastTestHasResult = true;
+            // 2026-08-04: surface the actionable
+            // remediation hint and the
+            // tier-compat "switch to M2.7" shortcut.
+            // The hint is filled in by
+            // ProviderErrorClassifier from the
+            // error kind; the suggested model is
+            // inferred from the configured model +
+            // error kind (auth + M3 → M2.7; model
+            // not found → leave null; transient →
+            // null). Both surface in SettingsView
+            // below the test result row.
+            if (result.IsSuccess || result.ErrorInfo is null)
+            {
+                LastTestRemediationHint = "";
+                LastTestSuggestedModelId = "";
+            }
+            else
+            {
+                LastTestRemediationHint = result.ErrorInfo.RemediationHint;
+                LastTestSuggestedModelId = InferSuggestedFallbackModel(
+                    configured.SelectedModelId,
+                    result.ErrorInfo.Kind);
+            }
             TestCompleted?.Invoke(this, new ProviderTestCompletedEventArgs
             {
                 IsSuccess = result.IsSuccess,
@@ -276,5 +354,49 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
                                 string.Equals(active.TemplateId, SelectedProviderTemplate.Id, StringComparison.OrdinalIgnoreCase);
         ProviderBaseUrl = useActiveProvider ? active!.BaseUrl : SelectedProviderTemplate.DefaultBaseUrl;
         ProviderModel = useActiveProvider ? active!.SelectedModelId : SelectedProviderTemplate.DefaultModel;
+    }
+
+    // 2026-08-04: pick a fallback model to suggest in
+    // the test-failure UI when the configured model
+    // is the cause of the error. The dominant case
+    // is "key works for M2.7 but not M3" (Coding
+    // Plan tier coverage) — a 1-click "切到 M2.7 试试"
+    // button on the failure row is the difference
+    // between a daily driver reading a 401 in 10
+    // seconds and figuring it out in 10 minutes.
+    // For transient / network / config errors, the
+    // hint is "wait / check network / fix settings" —
+    // no model swap helps, so the suggestion is null.
+    //
+    // `internal` so the ProviderConfigViewModelTests
+    // test class can pin the routing logic without
+    // booting a test surface to drive the public
+    // method. The test class reaches the helper
+    // through a thin shim (InferSuggestedFallbackModelForTest)
+    // so the public surface stays clean.
+    internal static string? InferSuggestedFallbackModel(string currentModelId, ProviderErrorKind errorKind)
+    {
+        // 401 / 403 / 404 → the model the user picked
+        // is the wrong fit for their key. The "go down
+        // a tier" rule: if the user is on the
+        // flagship and we have a lower-tier that the
+        // older Coding Plan covered, suggest the
+        // lower-tier (M2.7). If the user is already
+        // on M2.7, there's no lower tier to fall
+        // back to — return null and let the
+        // remediation hint carry the user to the
+        // platform's billing dashboard.
+        if (errorKind is not (ProviderErrorKind.Authentication
+                            or ProviderErrorKind.PermissionDenied
+                            or ProviderErrorKind.ModelNotFound))
+        {
+            return null;
+        }
+        if (string.Equals(currentModelId, "MiniMax-M3", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(currentModelId, "MiniMax-M3-highspeed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MiniMax-M2.7";
+        }
+        return null;
     }
 }

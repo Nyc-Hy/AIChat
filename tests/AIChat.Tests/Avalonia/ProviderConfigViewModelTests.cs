@@ -25,6 +25,44 @@ public class ProviderConfigViewModelTests
         Assert.NotNull(vm.SelectedProviderTemplate);
     }
 
+    // 2026-08-04: the 1-click "切到 M2.7 试试" affordance
+    // on the test-failure row. Pure static helper —
+    // the input is (currentModelId, errorKind) and
+    // the output is either a fallback model id from
+    // the catalog (M3 → M2.7 for auth/model-not-found
+    // errors) or null (transient / network / config
+    // errors where a model swap doesn't help). The
+    // "internal" visibility mirrors the class's
+    // existing helper pattern.
+    [Theory]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Authentication, "MiniMax-M2.7")]
+    [InlineData("MiniMax-M3-highspeed", ProviderErrorKind.Authentication, "MiniMax-M2.7")]
+    [InlineData("MiniMax-M3", ProviderErrorKind.ModelNotFound, "MiniMax-M2.7")]
+    [InlineData("MiniMax-M3", ProviderErrorKind.PermissionDenied, "MiniMax-M2.7")]
+    [InlineData("MiniMax-M2.7", ProviderErrorKind.Authentication, null)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.RateLimited, null)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Timeout, null)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Server, null)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Network, null)]
+    public void InferSuggestedFallbackModel_PicksLowerTierForTierErrors(
+        string currentModelId, ProviderErrorKind kind, string? expected)
+    {
+        // The method is `internal` on
+        // ProviderConfigViewModel — AIChat.Tests
+        // has InternalsVisibleTo so the test can
+        // call it directly. The test pins the
+        // routing logic so a future regression
+        // (e.g. dropping the M2.7 fallback on
+        // M3 auth errors, or suggesting M2.7 on
+        // a 5xx transient) breaks the build
+        // rather than as a daily-driver "the
+        // suggestion is wrong" support ticket.
+        var actual = ProviderConfigViewModel.InferSuggestedFallbackModel(
+            currentModelId, kind);
+
+        Assert.Equal(expected, actual);
+    }
+
     [Fact]
     public async Task SaveProvider_WithoutSelectedTemplate_RaisesSavedWithError()
     {

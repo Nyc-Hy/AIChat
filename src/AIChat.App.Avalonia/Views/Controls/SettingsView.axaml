@@ -176,6 +176,68 @@
                              Text="{Binding ProviderBaseUrl}"
                              PlaceholderText="Base URL"/>
                   </Grid>
+
+                  <!--
+                    2026-08-04: inline "测试连接" button +
+                    result row. The previous shape had
+                    the test wired to ⌘T but no UI
+                    affordance — a daily driver who
+                    typed the wrong key had to either
+                    remember the shortcut or send a
+                    real message and read the failure
+                    bubble. The button here makes the
+                    test discoverable; the result row
+                    below surfaces both the raw error
+                    AND the actionable "what to do
+                    next" hint that ProviderErrorClassifier
+                    fills in. The hint covers the
+                    2026-08 trap cases (Coding Plan
+                    key + M3 → 401 with "switch to
+                    M2.7" hint; old .io baseUrl → 401
+                    with "switch to .chat" hint).
+                  -->
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                    <TextBlock Grid.Column="0" Text="测试当前 key + baseUrl 连通性（⌘T）"
+                               Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Classes="chrome-button"
+                            Command="{Binding TestProviderCommand}"
+                            IsEnabled="{Binding !IsTestInFlight}">
+                      <TextBlock Text="测试连接" FontSize="11"/>
+                    </Button>
+                  </Grid>
+
+                  <Border IsVisible="{Binding LastTestHasResult}"
+                          Background="{DynamicResource CodeBgBrush}"
+                          BorderBrush="{DynamicResource LineSoftBrush}"
+                          BorderThickness="1"
+                          CornerRadius="{StaticResource RadiusSm}"
+                          Padding="8,6"
+                          Margin="0,6,0,0">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="{Binding LastTestMessage}"
+                                 FontSize="11"
+                                 TextWrapping="Wrap"
+                                 Foreground="{DynamicResource Text2Brush}"/>
+                      <TextBlock Text="{Binding LastTestRemediationHint}"
+                                 Classes="muted"
+                                 FontSize="10"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding LastTestRemediationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                      <StackPanel Orientation="Horizontal" Spacing="6"
+                                  IsVisible="{Binding LastTestSuggestedModelId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Button Classes="secondary"
+                                Command="{Binding ApplySuggestedModelCommand}"
+                                CommandParameter="{Binding LastTestSuggestedModelId}"
+                                ToolTip.Tip="在 Settings 把模型下拉切到这个值。Key + baseUrl 保持不变。">
+                          <TextBlock FontSize="10">
+                            <Run Text="切到 "/>
+                            <Run Text="{Binding LastTestSuggestedModelId}"/>
+                            <Run Text=" 试试"/>
+                          </TextBlock>
+                        </Button>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
                 </StackPanel>
               </StackPanel>
 
