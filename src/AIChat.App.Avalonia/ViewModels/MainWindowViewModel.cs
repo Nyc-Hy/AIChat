@@ -657,7 +657,41 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _agentHost.ClearPreparedRunLink();
         ActivityFeed.Clear();
         StatusMessage = "新对话。";
+        // 1.0.1: the user's intent on ⌘N
+        // or "新对话" is "I want to type
+        // something now" — the
+        // Click-after-Click-to-focus
+        // dance adds friction. Raise
+        // FocusComposerRequested so
+        // MainWindow.xaml.cs can put
+        // the caret in PromptInput. The
+        // same hook fires on the
+        // ConversationSelected event
+        // path when the "new" placeholder
+        // card is the selection (a user
+        // who re-clicks the same "new"
+        // card mid-session gets the
+        // same focus affordance).
+        FocusComposerRequested?.Invoke(this, EventArgs.Empty);
     }
+
+    // 1.0.1: the host raises this when the
+    // composer's input should be the
+    // user's next focus. MainWindow.xaml.cs
+    // subscribes in its constructor and
+    // calls FocusPromptInput (which also
+    // SelectAll so the user can start
+    // typing immediately, the same
+    // browser-address-bar convention ⌘L
+    // already uses). Kept as an event
+    // rather than a method on the VM so
+    // the VM doesn't take a direct
+    // dependency on the Avalonia
+    // visual tree (FocusPromptInput
+    // needs PromptInput, which is a
+    // XAML element only the code-behind
+    // can reach).
+    public event EventHandler? FocusComposerRequested;
 
     [RelayCommand]
     private async Task NewStandaloneConversationAsync()
@@ -1014,6 +1048,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // ClearRunState.
         _agentHost.ClearRunState();
         ActivityFeed.LoadConversation(args.Conversation);
+        // 1.0.1: when the user re-clicks
+        // the "new" placeholder card
+        // (or lands on it after a refresh
+        // with no sessions), the
+        // conversation is null — the
+        // same "I'm about to type"
+        // intent as ⌘N. Fire the focus
+        // event so the user lands in
+        // the composer without an extra
+        // click. We don't fire on
+        // non-null conversation selects
+        // (the user is reading old
+        // context, not starting a new
+        // task — auto-focus would steal
+        // the keyboard and surprise
+        // them).
+        if (args.Conversation is null)
+        {
+            FocusComposerRequested?.Invoke(this, EventArgs.Empty);
+        }
         // Persist the selection so the next launch can restore the
         // same conversation. AppSettings.LastActiveConversationId
         // has been a real schema field since the AppSettings file

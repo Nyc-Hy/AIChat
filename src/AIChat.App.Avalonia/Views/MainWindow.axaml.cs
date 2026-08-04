@@ -407,6 +407,34 @@ internal partial class MainWindow : Window
                 caret + insertedLength,
                 PromptInput.Text?.Length ?? 0);
         };
+
+        // 1.0.1: ⌘N / "新对话" button /
+        // "new" placeholder select all
+        // land the caret in the composer.
+        // The VM raises the event (it
+        // can't reach PromptInput
+        // directly — that's a XAML
+        // element only the code-behind
+        // owns); we route through the
+        // existing FocusPromptInput
+        // helper so the SelectAll
+        // behaviour matches ⌘L (the
+        // browser-address-bar
+        // convention). Posted to the
+        // dispatcher because the
+        // XAML-visible state isn't
+        // ready in the same call stack
+        // as the event raise — the
+        // activity-feed clear / load
+        // happens just above, and
+        // focusing the input before
+        // the new layout pass would
+        // land the caret on a stale
+        // text-buffer.
+        viewModel.FocusComposerRequested += (_, _) =>
+            Dispatcher.UIThread.Post(
+                () => FocusPromptInput(),
+                DispatcherPriority.Background);
     }
 
     private void TitleBar_OnPointerPressed(object? sender, PointerPressedEventArgs e)
