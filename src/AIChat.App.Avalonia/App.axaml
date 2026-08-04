@@ -557,13 +557,32 @@
 
         <!-- Model chip: small flat rectangle with a status dot + name.
              Sprint 0.5: padding tightened (6,4) so the chip doesn't crowd
-             the permission badge + 验证 button in the 3-column layout. -->
+             the permission badge + 验证 button in the 3-column layout.
+             1.0.1: the chip is also a Button — clicking it routes to
+             Settings (the same place the user lands on ⌘,) so the most
+             natural "change the model" target is one click away instead
+             of "open ⌘, → find provider → switch model → close". The
+             Button variant uses the same SurfaceSunken background as
+             the Border variant so the visual is stable, plus a subtle
+             hover background swap so the click target is discoverable. -->
         <Style Selector="Border.model-chip">
             <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
             <Setter Property="Padding" Value="6,4" />
+        </Style>
+        <Style Selector="Button.model-chip">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.model-chip:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
         </Style>
 
         <Style Selector="Border.section-divider">

@@ -1480,8 +1480,20 @@
                                                         VerticalAlignment="Center"
                                                         HorizontalAlignment="Right">
                                                 <!-- Model chip (Codex parity: compact, with
-                                                     provider dot + model name). -->
-                                                <Border Classes="model-chip" MaxWidth="200">
+                                                     provider dot + model name). 1.0.1: the
+                                                     chip is now a Button, not a Border, so
+                                                     clicking it opens Settings — the
+                                                     power user reaches for ⌘, anyway and
+                                                     the chip is the most natural target
+                                                     when the model is wrong (e.g. a Sonnet
+                                                     cost spike that wants a Haiku switch
+                                                     for the next few prompts). The ToolTip
+                                                     says "点此切换模型" so the new
+                                                     affordance is discoverable. -->
+                                                <Button Classes="model-chip"
+                                                        MaxWidth="200"
+                                                        Command="{Binding OpenSettingsCommand}"
+                                                        ToolTip.Tip="点此切换模型 (⌘,)">
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                         <Ellipse Width="6" Height="6" Fill="{DynamicResource AccentBrush}"/>
                                                         <TextBlock Text="{Binding AppStatus.StatusBarModel}"
@@ -1492,7 +1504,7 @@
                                                                    MaxWidth="180"
                                                                    FontFamily="{StaticResource FontSans}"/>
                                                     </StackPanel>
-                                                </Border>
+                                                </Button>
                                                 <!-- Permission badge (kept from Sprint 0.5; it
                                                      is the 2-toggle Codex-aligned state and the
                                                      existing settings work). -->
