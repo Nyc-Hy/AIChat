@@ -398,6 +398,28 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     // TextBox.
     public event Action<AIChat.Domain.Sources.Source>? InsertReferenceRequested;
 
+    // 1.0.1: the "提交或推送" button in the
+    // 本地 section of the panel was a stub
+    // pointing at "Wave 6 实现". Wave 6
+    // actually shipped the full Git status
+    // modal (with stage / commit / restore
+    // / push affordances) — but the button
+    // is in this panel, not the modal. The
+    // cleanest way to surface the modal
+    // from here is the same event pattern
+    // InsertReferenceRequested uses:
+    // EnvironmentPanelView's code-behind
+    // raises the event, MainWindow
+    // subscribes and calls its
+    // OpenGitStatusCommand. The user
+    // gets a single click from
+    // Environment panel → Git modal →
+    // commit. The push / PR work itself
+    // is still future work (no GitHub
+    // OAuth yet), but the entry point no
+    // longer lies.
+    public event Action? OpenGitStatusRequested;
+
     // 1.0.1: public raise helper so the XAML
     // click handler (EnvironmentPanelView.axaml.cs)
     // can fire InsertReferenceRequested without
@@ -409,6 +431,11 @@ public sealed partial class EnvironmentPanelViewModel : ViewModelBase
     public void RaiseInsertReferenceRequested(AIChat.Domain.Sources.Source source)
     {
         InsertReferenceRequested?.Invoke(source);
+    }
+
+    public void RaiseOpenGitStatusRequested()
+    {
+        OpenGitStatusRequested?.Invoke();
     }
 
     [ObservableProperty]

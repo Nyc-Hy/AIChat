@@ -424,6 +424,25 @@ internal partial class MainWindow : Window
                 PromptInput.Text?.Length ?? 0);
         };
 
+        // 1.0.1: 提交或推送 button in the
+        // Environment panel's 本地 section
+        // opens the Git status modal (which
+        // has the real commit UI). Same
+        // event-bus pattern as
+        // InsertReferenceRequested above —
+        // the panel raises, MainWindow
+        // subscribes and routes into the
+        // own OpenGitStatusCommand. The
+        // command itself is gated on
+        // CanOpenModal + HasSelectedProject
+        // so a click without a project
+        // lands a "请先选择一个项目" status
+        // message instead of a dead click.
+        viewModel.EnvironmentPanel.OpenGitStatusRequested += () =>
+        {
+            _viewModel.OpenGitStatusCommand.Execute(null);
+        };
+
         // 1.0.1: ⌘N / "新对话" button /
         // "new" placeholder select all
         // land the caret in the composer.

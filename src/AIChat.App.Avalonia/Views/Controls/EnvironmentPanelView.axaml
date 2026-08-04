@@ -138,14 +138,22 @@
                         Margin="0,4,0,0">
               <Button Classes="chrome-button"
                       Click="CommitOrPush_OnClick"
-                      IsEnabled="False"
-                      ToolTip.Tip="提交或推送（Wave 6 实现）">
+                      ToolTip.Tip="打开 Git 状态 — 提交/暂存/恢复 (⌘⇧G)">
                 <TextBlock Text="提交或推送" FontSize="11"/>
               </Button>
+              <!--
+                1.0.1: 拉取请求 stays disabled
+                — needs GitHub OAuth (P1
+                deferred, plan §4 / SHIP_REPORT
+                §4). The button is visible
+                only to show the parity
+                surface; the tooltip explains
+                the gate.
+              -->
               <Button Classes="chrome-button"
                       Click="CreatePr_OnClick"
                       IsEnabled="False"
-                      ToolTip.Tip="创建拉取请求（Wave 6 实现）">
+                      ToolTip.Tip="创建拉取请求（需要 GitHub OAuth — P1 deferred）">
                 <TextBlock Text="创建拉取请求" FontSize="11"/>
               </Button>
             </StackPanel>

@@ -882,6 +882,28 @@ public sealed class EnvironmentPanelViewModelTests
         Assert.Equal("", row.Reference);
     }
 
+    // 1.0.1: the Environment panel's
+    // 提交或推送 button raises
+    // OpenGitStatusRequested so MainWindow
+    // can open the Git status modal (which
+    // has the real commit UI). The event
+    // round-trip is the same pattern
+    // InsertReferenceRequested uses; this
+    // test pins the new path so a future
+    // refactor can't silently drop the
+    // event subscription.
+    [Fact]
+    public void RaiseOpenGitStatusRequested_FiresEvent()
+    {
+        var (vm, _, _, _, _) = CreateViewModelWithSourceRegistry();
+        var fired = false;
+        vm.OpenGitStatusRequested += () => fired = true;
+
+        vm.RaiseOpenGitStatusRequested();
+
+        Assert.True(fired);
+    }
+
     private static (EnvironmentPanelViewModel Vm, AgentHostViewModel Host, ProjectSidebarViewModel Sidebar,
         Mock<IWorkspaceChangeService> Workspace, SourceRegistry Registry)
         CreateViewModelWithSourceRegistry()

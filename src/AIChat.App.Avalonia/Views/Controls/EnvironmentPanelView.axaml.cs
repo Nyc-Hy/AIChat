@@ -35,7 +35,27 @@ public partial class EnvironmentPanelView : UserControl
 
     private void CommitOrPush_OnClick(object? sender, RoutedEventArgs e)
     {
-        // Disabled by design in Sprint 0.5. Lands in Wave 6.
+        // 1.0.1: the previous shape was a
+        // disabled-by-design stub ("Lands in
+        // Wave 6"). Wave 6 actually shipped
+        // the Git status modal — but the
+        // button lives in this panel, not
+        // the modal. Open the modal via the
+        // same event-bus pattern
+        // InsertReferenceRequested uses
+        // (EnvironmentPanelViewModel.Raise*
+        // → MainWindow subscribes → calls
+        // OpenGitStatusCommand). The user
+        // gets a single click from the
+        // Environment panel into the full
+        // commit UI. Push / PR work itself
+        // is still future (no GitHub OAuth),
+        // so the second button stays
+        // disabled — see CreatePr_OnClick.
+        if (DataContext is EnvironmentPanelViewModel vm)
+        {
+            vm.RaiseOpenGitStatusRequested();
+        }
     }
 
     private void CreatePr_OnClick(object? sender, RoutedEventArgs e)
