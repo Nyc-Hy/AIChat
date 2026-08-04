@@ -334,13 +334,17 @@
                                         <DataTemplate x:DataType="vm:ProjectCardViewModel">
                                             <!--
                                               Project card (Codex parity): row + trailing
-                                              `...` (3-dot menu) + edit icon, both on the
-                                              right. The two trailing icons only render when
-                                              the row is selected — Codex fades them in
-                                              so the steady-state list is quiet. The dot
-                                              menu re-uses the existing ContextFlyout; the
-                                              edit icon is wired in a later slice (Wave 6
-                                              inline project rename).
+                                              `...` (3-dot menu) on the right. The icon
+                                              only renders when the row is selected —
+                                              Codex fades it in so the steady-state list
+                                              is quiet. 1.0.1: the duplicate edit
+                                              (pencil) icon that was here was a no-op
+                                              stub pointing at "Wave 6 inline project
+                                              rename" — Wave 6 actually shipped Git
+                                              status / commit / restore, not project
+                                              rename. The icon was removed; project
+                                              management lives in the ··· menu + right-
+                                              click context flyout.
                                             -->
                                             <StackPanel>
                                             <Button Classes="sidebar-row"
