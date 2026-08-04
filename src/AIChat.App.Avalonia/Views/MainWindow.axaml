@@ -139,18 +139,26 @@
 
                                 <!--
                                   Sidebar 顶 navigation layer (Sprint 0.5+, plan §4 first-level
-                                  nav). Layout matches Codex: a brand / mode label on the
-                                  left, search + notifications icons on the right.
+                                  nav). Layout matches Codex: a brand label on the
+                                  left, search icon on the right.
 
-                                  The "AIChat ▽" mode switcher has only one mode right
-                                  now (default); the dropdown shows a disabled "切换模式"
-                                  menu item that we'll wire when multi-mode support lands
-                                  in Wave 2. For now it's visually present so the user
-                                  sees the parity surface.
+                                  1.0.1: the "AIChat ▽" mode
+                                  switcher is now a static
+                                  brand label — the actual
+                                  mode surface is the
+                                  permission badge below the
+                                  composer + ⌘⇧R (no-write)
+                                  / ⌘⇧V (auto-verify).
+                                  The bell button was also
+                                  removed (383342d); its
+                                  data lives in the
+                                  Environment panel.
 
-                                  The search icon ⌘F is not bound in this slice; the
-                                  bell icon is decorative. Both have a ToolTip explaining
-                                  the future shortcut so the user knows what's coming.
+                                  ⌘F is bound (a45645b) and
+                                  pre-fills the composer with
+                                  /search + caret to end so
+                                  the user can type their
+                                  query directly.
                                 -->
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6" ColumnSpacing="2">
                                     <!--
@@ -177,7 +185,7 @@
                                     <Button Grid.Column="1"
                                             Classes="sidebar-icon-button"
                                             Click="Search_OnClick"
-                                            ToolTip.Tip="搜索历史 / 命令 (⌘F) — 待 Wave 3 接入">
+                                            ToolTip.Tip="搜索历史对话 (⌘F)">
                                         <Path Data="M11 4 a7 7 0 1 0 4 12.5 L20 21 M16 11 a5 5 0 1 1 -10 0 a5 5 0 0 1 10 0"
                                               Stroke="{Binding $parent[Button].Foreground}"
                                               StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
