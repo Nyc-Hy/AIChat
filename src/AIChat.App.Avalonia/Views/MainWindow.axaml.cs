@@ -142,6 +142,36 @@ internal partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // 1.0.1: ⌘↵ in the RunHistory
+            // modal triggers "重试原任务"
+            // (RetrySelectedCommand). The
+            // user opened the modal to act
+            // on a specific run; the
+            // muscle-memory ⌘↵ shortcut is
+            // the same one the composer
+            // uses to send, so a user
+            // looking at a failed run and
+            // wanting to retry it doesn't
+            // have to mouse over to the
+            // bottom-right "重试原任务"
+            // button. The keybinding is
+            // gated on IsRunHistoryOpen so
+            // ⌘↵ in any other context
+            // (composer focus, settings
+            // modal focus) keeps its
+            // existing meaning.
+            Gesture = new KeyGesture(Key.Enter, KeyModifiers.Meta),
+            Command = new RelayCommand(() =>
+            {
+                if (viewModel.IsRunHistoryOpen &&
+                    viewModel.RunHistory.RetrySelectedCommand.CanExecute(null))
+                {
+                    viewModel.RunHistory.RetrySelectedCommand.Execute(null);
+                }
+            })
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             // ⌘T runs a connection test against the current model.
             // Same shape as the palette's "测试当前模型" entry
             // (which was also claiming the shortcut without backing).
