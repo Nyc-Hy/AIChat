@@ -138,6 +138,128 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.True(withNotes.HasNotes);
     }
 
+    // 1.0.1: UpdatePlan snapshots the user's
+    // expanded state across agent step updates
+    // (the runner emits a full plan on every
+    // step, so PlanItems is cleared + re-added
+    // each time). Without this, the user would
+    // have to re-click every plan row they were
+    // already reading every time the agent added
+    // a new step — a daily-driver paper cut.
+    [Fact]
+    public void UpdatePlan_PreservesIsExpandedForMatchingIds()
+    {
+        var (host, _, _, _) = CreateHost();
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "step-1",
+                    Title = "read foo.cs",
+                    Notes = "use Read tool on foo.cs",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.InProgress
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "step-2",
+                    Title = "edit foo.cs",
+                    Notes = "add error handling",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+        var step1 = host.PlanItems.First(item => item.Id == "step-1");
+        step1.IsExpanded = true;
+
+        // Agent now adds step 3. The runner
+        // emits a full plan snapshot, so
+        // UpdatePlan re-creates every row.
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "step-1",
+                    Title = "read foo.cs",
+                    Notes = "use Read tool on foo.cs",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.InProgress
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "step-2",
+                    Title = "edit foo.cs",
+                    Notes = "add error handling",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "step-3",
+                    Title = "run tests",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+
+        var refreshed1 = host.PlanItems.First(item => item.Id == "step-1");
+        var refreshed2 = host.PlanItems.First(item => item.Id == "step-2");
+        var newStep = host.PlanItems.First(item => item.Id == "step-3");
+        Assert.True(refreshed1.IsExpanded, "step-1 was expanded before the update — must stay expanded");
+        Assert.False(refreshed2.IsExpanded, "step-2 was collapsed — must stay collapsed");
+        Assert.False(newStep.IsExpanded, "step-3 is new — must start collapsed");
+    }
+
+    [Fact]
+    public void UpdatePlan_RowWithoutId_DoesNotPreserveExpandAcrossRebuild()
+    {
+        // Belt-and-suspenders: if a plan item
+        // somehow has no Id (legacy or
+        // malformed runner output), the
+        // expand state should not be
+        // carried over. We'd rather have a
+        // single transient collapse than a
+        // false-positive match that
+        // surprises the user.
+        var (host, _, _, _) = CreateHost();
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    // Id is auto-generated on the
+                    // domain side, so we can't
+                    // trivially make it null —
+                    // this test is more of a
+                    // "no-throw" guard for the
+                    // path that handles empty
+                    // Ids.
+                    Id = "",
+                    Title = "no id",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+        var row = host.PlanItems[0];
+        row.IsExpanded = true;
+
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "different-id",
+                    Title = "still no id row",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+        Assert.False(host.PlanItems[0].IsExpanded);
+    }
+
     // ---- 1.0.1: send button is dim when the composer is empty ----
 
     [Fact]

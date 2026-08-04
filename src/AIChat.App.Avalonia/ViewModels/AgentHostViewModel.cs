@@ -1176,6 +1176,19 @@ public sealed partial class AgentHostViewModel : ViewModelBase
     // order the agent wrote them.
     public void UpdatePlan(AgentPlan? plan)
     {
+        // Capture which rows the user had expanded before the
+        // rebuild. The runner emits a full plan on every step
+        // (a "snapshot replace" model), so PlanItems.Clear() is
+        // a normal occurrence — without the snapshot the user's
+        // "step 3 — read X" expansion would collapse the moment
+        // the agent adds a new step 4, and the daily-driver user
+        // would have to re-click to keep reading the notes.
+        // AgentPlanItem.Id is a stable GUID the runner
+        // preserves across updates, so the set round-trips.
+        var previouslyExpanded = PlanItems
+            .Where(item => item.IsExpanded && !string.IsNullOrEmpty(item.Id))
+            .Select(item => item.Id)
+            .ToHashSet(StringComparer.Ordinal);
         PlanItems.Clear();
         if (plan is null)
         {
@@ -1196,6 +1209,14 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         {
             PlanItems.Add(new PlanItemViewModel
             {
+                // Carry the domain id so the next rebuild
+                // can match this row back to a previous
+                // expansion. Without this, the
+                // previouslyExpanded set below would be
+                // empty after the first refresh and every
+                // later expand would collapse on the next
+                // step.
+                Id = item.Id,
                 Title = item.Title,
                 // 1.0.1: the runner / planner
                 // can attach tool names,
@@ -1208,7 +1229,12 @@ public sealed partial class AgentHostViewModel : ViewModelBase
                 // pretend there's more
                 // to see.
                 Notes = item.Notes,
-                Status = item.Status
+                Status = item.Status,
+                // Restore the user's previous expand
+                // state. New rows (the agent just added
+                // step 5) start collapsed; existing rows
+                // the user had open stay open.
+                IsExpanded = previouslyExpanded.Contains(item.Id)
             });
         }
         // HasPlan is the IsVisible for the whole plan panel —
