@@ -51,6 +51,7 @@ public class SlashCommandHandlerTests
         Assert.Contains("/memory", result.Body);
         Assert.Contains("/git", result.Body);
         Assert.Contains("/copy", result.Body);
+        Assert.Contains("/search", result.Body);
         Assert.Contains("/help", result.Body);
     }
 
