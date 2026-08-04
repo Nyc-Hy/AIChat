@@ -52,6 +52,26 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
     public bool IsAssistantBubble => Title == "AIChat";
     public bool IsSystemBubble => !IsUserBubble && !IsAssistantBubble;
 
+    // 1.0.1: the AI bubble's "复制" button. The
+    // button is hidden in three cases:
+    //   - not an AI bubble (the XAML uses IsAssistantBubble
+    //     to gate the whole AI template, but this property
+    //     is the per-bubble IsVisible that keeps the
+    //     button itself out of the way for in-flight /
+    //     empty / system messages)
+    //   - thinking (the 3-dot placeholder, no content yet)
+    //   - empty detail (defensive — would land an empty
+    //     string on the clipboard)
+    // The Status column already shows the timestamp
+    // ("12:34" / "完成" / "失败"), so a 复制 affordance
+    // next to it is the one extra control an AI bubble
+    // needs. Without it the user has to right-click the
+    // MarkdownTextBlock, select all, copy — three steps
+    // for a daily-driver action that should be one.
+    public bool CanCopyAssistantBubble => IsAssistantBubble
+        && !IsThinking
+        && !string.IsNullOrWhiteSpace(Detail);
+
     // Set by the agent runner when the first content delta lands for
     // this bubble, so the runner can REPLACE the "正在启动任务..."
     // placeholder rather than appending to it (which would render as
@@ -61,7 +81,17 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
     [ObservableProperty]
     private bool hasReceivedFirstContent;
 
-    partial void OnDetailChanged(string value) => OnPropertyChanged(nameof(IsThinking));
+    partial void OnDetailChanged(string value)
+    {
+        // Detail drives IsThinking (the 3-dot
+        // placeholder vs the rendered markdown) AND
+        // CanCopyAssistantBubble (the 复制 button
+        // gates on non-empty Detail). Re-raise both
+        // so the XAML doesn't show a stale state
+        // mid-stream.
+        OnPropertyChanged(nameof(IsThinking));
+        OnPropertyChanged(nameof(CanCopyAssistantBubble));
+    }
     partial void OnStatusChanged(string value)
     {
         // Status drives the in-flight spinner AND the terminal

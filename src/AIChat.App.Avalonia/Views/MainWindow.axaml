@@ -863,9 +863,41 @@
                                                                     <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 </Border>
                                                                 <StackPanel Grid.Column="1" Spacing="4">
-                                                                    <Grid ColumnDefinitions="*,Auto">
-                                                                        <TextBlock Text="{Binding Title}" Foreground="{DynamicResource Text2Brush}" FontWeight="SemiBold" FontSize="12"/>
-                                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11" Margin="10,0,0,0"/>
+                                                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                                                        <TextBlock Grid.Column="0" Text="{Binding Title}" Foreground="{DynamicResource Text2Brush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11" VerticalAlignment="Center"/>
+                                                                        <!--
+                                                                          1.0.1: per-AI-bubble 复制
+                                                                          button. Hidden while the
+                                                                          run is still streaming
+                                                                          (CanCopyAssistantBubble
+                                                                          flips false on
+                                                                          IsThinking) and for
+                                                                          empty / system bubbles.
+                                                                          The button is always
+                                                                          visible (not hover-only)
+                                                                          because daily drivers
+                                                                          scroll on touchpads where
+                                                                          hover affordances tend
+                                                                          to flicker or never
+                                                                          appear — an
+                                                                          always-on control is the
+                                                                          simplest way to guarantee
+                                                                          the affordance surfaces.
+                                                                          Tag carries the full
+                                                                          Detail so the handler
+                                                                          does not need to read
+                                                                          the row's DataContext.
+                                                                        -->
+                                                                        <Button Grid.Column="2"
+                                                                                Classes="chrome-button"
+                                                                                Padding="6,1"
+                                                                                IsVisible="{Binding CanCopyAssistantBubble}"
+                                                                                Click="AiBubbleCopy_OnClick"
+                                                                                Tag="{Binding Detail}"
+                                                                                ToolTip.Tip="复制 AI 消息全文到剪贴板">
+                                                                            <TextBlock Text="复制" FontSize="10"/>
+                                                                        </Button>
                                                                     </Grid>
                                                                     <Border Classes="bubble-ai" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}">
                                                                         <Panel>

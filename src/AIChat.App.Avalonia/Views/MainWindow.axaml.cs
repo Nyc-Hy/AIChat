@@ -599,6 +599,55 @@ internal partial class MainWindow : Window
         PromptInput.CaretIndex = text.Length;
     }
 
+    // 1.0.1: AI bubble 复制 button. The
+    // button's Tag carries the full Detail
+    // text (the markdown body) so the click
+    // handler can ship it to the clipboard
+    // without taking a dependency on the
+    // sender's DataContext. The handler
+    // awaits the host's
+    // CopyAssistantBubbleAsync (which
+    // delegates to IClipboardService) so
+    // the call is testable end-to-end
+    // through the VM rather than going
+    // through a code-behind path that
+    // would need a live Avalonia TopLevel.
+    // The success / no-op toast mirrors
+    // the /copy slash command's reporting
+    // so the two copy entry points read
+    // the same to the user.
+    private async void AiBubbleCopy_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string text } ||
+            DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+
+        try
+        {
+            var copied = await viewModel.CopyAssistantBubbleAsync(text);
+            if (copied > 0)
+            {
+                _toast.Show($"已复制 AI 消息 ({copied} 字符)。", ToastLevel.Success);
+            }
+            else
+            {
+                _toast.Show("复制失败 — 内容为空或剪贴板不可用。", ToastLevel.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            // async void event handler — must catch
+            // or the whole window crashes (the
+            // 847a598 lesson). The CrashReporter
+            // hook will already have logged the
+            // exception; we just want a user-visible
+            // message instead of a silent failure.
+            _toast.Show($"复制失败:{ex.Message}", ToastLevel.Error);
+        }
+    }
+
     // "↓ N 条新消息" pill click: jump to the bottom, clear the
     // unseen counter, and flip the "at bottom" flag eagerly so the
     // very next streaming bubble (which can arrive before

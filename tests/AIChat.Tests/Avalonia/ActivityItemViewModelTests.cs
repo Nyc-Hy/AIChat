@@ -118,4 +118,82 @@ public class ActivityItemViewModelTests
         Assert.Contains(nameof(ActivityItemViewModel.IsAssistantBubble), reRaised);
         Assert.Contains(nameof(ActivityItemViewModel.IsThinking), reRaised);
     }
+
+    [Fact]
+    public void CanCopyAssistantBubble_True_WhenAssistantHasContent()
+    {
+        // 1.0.1: a completed AI bubble with a
+        // non-empty Detail is the canonical
+        // "ready to copy" state. The button's
+        // IsVisible binding reads this flag.
+        var vm = new ActivityItemViewModel("AIChat", "Hello there...", "完成");
+        Assert.True(vm.CanCopyAssistantBubble);
+    }
+
+    [Fact]
+    public void CanCopyAssistantBubble_False_WhileThinking()
+    {
+        // The thinking state is the 3-dot
+        // placeholder, no real content yet —
+        // copying the empty string would land
+        // an empty clipboard and surprise the
+        // user. Hide the button.
+        var vm = new ActivityItemViewModel("AIChat", "", "运行中");
+        Assert.True(vm.IsThinking);
+        Assert.False(vm.CanCopyAssistantBubble);
+    }
+
+    [Fact]
+    public void CanCopyAssistantBubble_False_ForUserBubbles()
+    {
+        // The user bubble has its own Button that
+        // copies-to-composer-for-edit. The 复制
+        // affordance is only for AI bubbles.
+        var vm = new ActivityItemViewModel("你", "my prompt", "已发送");
+        Assert.False(vm.CanCopyAssistantBubble);
+    }
+
+    [Fact]
+    public void CanCopyAssistantBubble_False_ForSystemBubbles()
+    {
+        // System rows are centered / muted —
+        // they don't carry user-facing content
+        // the user would want to copy.
+        var vm = new ActivityItemViewModel("本次运行", "summary text", "完成");
+        Assert.False(vm.CanCopyAssistantBubble);
+    }
+
+    [Fact]
+    public void CanCopyAssistantBubble_FlipsTrue_WhenDetailLands()
+    {
+        // The streaming runner starts an AI bubble
+        // with empty Detail and Status="运行中"
+        // (IsThinking=true), then sets Detail as
+        // the first delta arrives. The 复制 button
+        // should flip visible the moment Detail
+        // becomes non-empty.
+        var vm = new ActivityItemViewModel("AIChat", "", "运行中");
+        Assert.False(vm.CanCopyAssistantBubble);
+        vm.Detail = "first chunk";
+        Assert.True(vm.CanCopyAssistantBubble);
+    }
+
+    [Fact]
+    public void DetailChange_ReRaisesCanCopyAssistantBubble()
+    {
+        // The XAML's IsVisible binding listens to
+        // PropertyChanged. Without a re-raise on
+        // Detail change, the 复制 button stays
+        // hidden the whole streaming run (Detail
+        // is the only field that flips true → it
+        // has to fire the notification).
+        var vm = new ActivityItemViewModel("AIChat", "", "运行中");
+        var reRaised = new System.Collections.Generic.HashSet<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not null) reRaised.Add(e.PropertyName);
+        };
+        vm.Detail = "hello";
+        Assert.Contains(nameof(ActivityItemViewModel.CanCopyAssistantBubble), reRaised);
+    }
 }

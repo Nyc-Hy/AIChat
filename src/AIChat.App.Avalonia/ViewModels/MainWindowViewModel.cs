@@ -173,6 +173,32 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     public Task CopyToClipboardAsync(string text) => _clipboard.SetTextAsync(text);
 
+    // 1.0.1: copy the full content of an AI
+    // bubble to the clipboard. Routed through
+    // the host (not ActivityItemViewModel
+    // directly) so the per-bubble VM doesn't
+    // need a clipboard service reference —
+    // matches the same pattern /copy and
+    // ExportConversationMenuItem use. Returns
+    // the number of characters actually copied
+    // (0 if the input was empty / clipboard
+    // unavailable) so the XAML click handler
+    // can decide what toast to show without
+    // re-reading state.
+    public async Task<int> CopyAssistantBubbleAsync(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 0;
+        }
+        if (!_clipboard.IsAvailable)
+        {
+            return 0;
+        }
+        await _clipboard.SetTextAsync(text);
+        return text.Length;
+    }
+
     // Git status helper used by the /git-status slash command. Renders
     // the current project's branch + a compact change list as a single
     // string the host can drop into the activity feed. The full
