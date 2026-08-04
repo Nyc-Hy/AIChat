@@ -219,6 +219,92 @@ public class SlashCommandHandlerTests
         Assert.DoesNotContain(new string('a', 100), result.Body);
     }
 
+    // 1.0.1: /copy writes the last AI bubble
+    // to the clipboard. Pin the body so
+    // accidental rewording of the success /
+    // "no AI bubble" / "empty" branches
+    // doesn't drift the daily-driver copy
+    // affordance. The MockClipboardService
+    // from TestDoubles is wired into the
+    // container (the AppHost factory
+    // registration overwrites a pre-Build
+    // registration, so we re-register
+    // after — same pattern as
+    // AiBubbleCopyTests).
+    [Fact]
+    public async Task Copy_WithNoAssistantBubble_ReportsEmpty()
+    {
+        var services = new ServiceCollection();
+        services.AddAIChatDesktop();
+        var clipboard = new AIChat.Tests.TestDoubles.MockClipboardService();
+        services.AddSingleton<AIChat.App.Avalonia.Composition.IClipboardService>(clipboard);
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        var viewModel = provider.GetRequiredService<MainWindowViewModel>();
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/copy", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("没有可复制", result!.Body);
+        Assert.Null(clipboard.LastSetText);
+    }
+
+    [Fact]
+    public async Task Copy_EmptyAssistantBubble_ReportsEmpty()
+    {
+        // The /copy path looks for the
+        // most recent IsAssistantBubble
+        // row in the activity feed. A
+        // bubble with empty Detail (the
+        // agent is still streaming) is
+        // matched, but the empty content
+        // short-circuits before the
+        // clipboard call. The body should
+        // say "最后一条 AI 消息还是空的"
+        // so the user understands why
+        // nothing landed on the clipboard.
+        var services = new ServiceCollection();
+        services.AddAIChatDesktop();
+        var clipboard = new AIChat.Tests.TestDoubles.MockClipboardService();
+        services.AddSingleton<AIChat.App.Avalonia.Composition.IClipboardService>(clipboard);
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        var viewModel = provider.GetRequiredService<MainWindowViewModel>();
+        viewModel.ActivityFeed.Add(new ActivityItemViewModel("AIChat", "", "运行中"));
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/copy", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("空的", result!.Body);
+        Assert.Null(clipboard.LastSetText);
+    }
+
+    [Fact]
+    public async Task Copy_NonEmptyAssistantBubble_WritesToClipboardAndReports()
+    {
+        // Happy path: agent replied with
+        // "Hello there", user types /copy.
+        // The clipboard receives the full
+        // content and the system bubble
+        // reports "N 字符: <preview>" so
+        // the user sees what got copied.
+        var services = new ServiceCollection();
+        services.AddAIChatDesktop();
+        var clipboard = new AIChat.Tests.TestDoubles.MockClipboardService();
+        services.AddSingleton<AIChat.App.Avalonia.Composition.IClipboardService>(clipboard);
+        using var provider = services.BuildServiceProvider(validateScopes: true);
+        var viewModel = provider.GetRequiredService<MainWindowViewModel>();
+        viewModel.ActivityFeed.Add(new ActivityItemViewModel("AIChat", "Hello there", "完成"));
+
+        var (handled, result) = await SlashCommandHandler.TryExecuteAsync("/copy", viewModel);
+
+        Assert.True(handled);
+        Assert.NotNull(result);
+        Assert.Contains("已复制", result!.Title);
+        Assert.Contains("11 字符", result.Body);
+        Assert.Equal("Hello there", clipboard.LastSetText);
+    }
+
     // 2026-08-03: per-test isolated data root. AppHost.Build
     // does not set AICHAT_ISOLATED_DATA_ROOT, so the test
     // would otherwise share the user's real settings.json
