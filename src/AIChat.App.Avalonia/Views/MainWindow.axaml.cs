@@ -246,6 +246,22 @@ internal partial class MainWindow : Window
         });
         KeyBindings.Add(new KeyBinding
         {
+            // 1.0.1: ⌘F pre-fills the composer with
+            // "/search " (the existing slash
+            // command does the actual full-text
+            // search across all sessions). The
+            // search button in the title bar was
+            // already wired to the same handler;
+            // this just adds the keyboard gesture
+            // every daily-driver user expects
+            // (browser / Slack / Linear convention)
+            // so they don't have to mouse over to
+            // the search button.
+            Gesture = new KeyGesture(Key.F, KeyModifiers.Meta),
+            Command = new RelayCommand(() => Search_OnClick(this, new RoutedEventArgs()))
+        });
+        KeyBindings.Add(new KeyBinding
+        {
             Gesture = new KeyGesture(Key.Escape),
             Command = new RelayCommand(() =>
             {
