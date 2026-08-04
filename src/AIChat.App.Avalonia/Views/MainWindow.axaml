@@ -121,12 +121,14 @@
                         1. Task types (5 fixed items, first one = new task)
                         2. 项目 section — bound to Sidebar.Projects
                         3. 最近 section — bound to ConversationList.Conversations
-                      Sprint 0.5: added 5 first-level nav icons (新对话 / 拉取请求 /
-                      站点 / 已安排 / 插件) at the top. 4 of the 5 are disabled in
-                      this slice — they show a "Wave X" tag and a toast when clicked,
-                      per plan §5.4 "no placeholder nav". The visual presence of 5
-                      icons is the parity surface; the capability behind the 4
-                      disabled ones lands in their respective waves.
+                      Sprint 0.5 + 12-wave parity: 5 first-level
+                      nav icons (新对话 / 拉取请求 / 站点 / 已安排 /
+                      插件) at the top. 1.0.1 status — 4 of 5 are
+                      live (新对话 / 站点 / 已安排 / 插件, all
+                      modal-backed). 拉取请求 stays disabled
+                      (needs GitHub OAuth, P1 deferred per
+                      SHIP_REPORT §4); the affordance is shown
+                      to surface the parity slot.
                     -->
                     <Border Grid.Column="0"
                             Classes="rail"
@@ -221,10 +223,11 @@
                                 <Border Classes="section-divider" Margin="0,2,0,4"/>
 
                                 <!-- Codex parity: 5 first-level nav items, each is text + icon
-                                     (matching Codex Desktop sidebar). Disabled items keep the
-                                     same disabled style; we just add a small label under the
-                                     icon so the user sees the parity surface ("拉取请求" /
-                                     "站点" / "已安排" / "插件" — currently Wave 6/8/9). -->
+                                     (matching Codex Desktop sidebar). 1.0.1 status: 4 of 5 are
+                                     live (新对话 / 站点 / 已安排 / 插件, all modal-backed via
+                                     Open*Command). 拉取请求 stays disabled — needs GitHub
+                                     OAuth, P1 deferred per plan §4 / SHIP_REPORT §4. The
+                                     affordance is shown to surface the parity slot. -->
                                 <StackPanel Spacing="2" Margin="0,0,0,6">
                                     <Button Classes="sidebar-nav-row"
                                             Classes.active="True"
@@ -243,7 +246,7 @@
                                             Classes.disabled="True"
                                             IsEnabled="False"
                                             Command="{Binding OpenPullRequestsCommand}"
-                                            ToolTip.Tip="拉取请求 — Wave 6 暂未开放">
+                                            ToolTip.Tip="拉取请求 — 需要 GitHub OAuth (P1 deferred)">
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Path Data="M6 4 v6 a4 4 0 0 0 4 4 h4 a4 4 0 0 1 4 4 v2 M16 4 a2 2 0 1 0 0 0.1"
                                                   Stroke="{Binding $parent[Button].Foreground}"
@@ -255,7 +258,7 @@
                                     </Button>
                                     <Button Classes="sidebar-nav-row"
                                             Command="{Binding OpenSitesCommand}"
-                                            ToolTip.Tip="站点 (Wave 9) — 浏览 / 添加本地站点">
+                                            ToolTip.Tip="站点 — 浏览 / 添加 / 预览本地站点">
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Path Data="M4 4 H20 V20 H4 Z M4 9 H20 M4 14 H20 M9 4 V20 M14 4 V20"
                                                   Stroke="{Binding $parent[Button].Foreground}"
@@ -267,7 +270,7 @@
                                     </Button>
                                     <Button Classes="sidebar-nav-row"
                                             Command="{Binding OpenScheduledCommand}"
-                                            ToolTip.Tip="已安排 (Wave 9) — 浏览 / 添加定时任务">
+                                            ToolTip.Tip="已安排 — 浏览 / 添加 / 暂停定时任务">
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Path Data="M12 7 V12 L15 14 M12 21 a9 9 0 1 0 0 -18 a9 9 0 0 0 0 18"
                                                   Stroke="{Binding $parent[Button].Foreground}"
@@ -279,7 +282,7 @@
                                     </Button>
                                     <Button Classes="sidebar-nav-row"
                                             Command="{Binding OpenPluginsCommand}"
-                                            ToolTip.Tip="插件 (Wave 8) — 浏览 / 刷新已安装插件">
+                                            ToolTip.Tip="插件 — 浏览 / 启用 / 刷新已安装插件">
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <Path Data="M9 4 H15 V8 H20 V14 H15 V20 H9 V14 H4 V8 H9 Z"
                                                   Stroke="{Binding $parent[Button].Foreground}"

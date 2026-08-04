@@ -12,11 +12,16 @@
       2. 本地 — current branch name
       3. 子智能体 — Active / Completed / Failed counts from AgentHost.SubAgentRuns
       4. 来源 — pending attachment count
+      5. Background processes (Wave 7.1 follow-up — the
+         BackgroundProcessSupervisor mirrors live, gated by
+         ShowBackgroundProcesses so the section stays out
+         when no supervisor is registered, e.g. a test
+         host with a fake)
 
-    "未实现" sections (Background Process / PR / Worktree / Diff 5 视图) are
-    intentionally NOT shown as buttons — the plan §5.4 rule "no placeholder
-    nav" applies. When those Waves land, add a new section with a real
-    command behind it.
+    "未实现" sections (PR / Worktree / Diff 5 视图) are
+    intentionally NOT shown as buttons — the plan §5.4 rule
+    "no placeholder nav" applies. When those Waves land,
+    add a new section with a real command behind it.
   -->
   <Border Classes="rail"
           BorderBrush="{DynamicResource LineSoftBrush}"
