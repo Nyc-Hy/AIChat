@@ -79,7 +79,7 @@
                              when the panel state changes (handled via a binding on a derived
                              bool). No global shortcut yet — user reaches it via this button
                              or via the panel's own header refresh. -->
-                        <Button Grid.Column="2" Classes="chrome-button" Command="{Binding ToggleEnvironmentPanelCommand}" ToolTip.Tip="切换环境信息面板">
+                        <Button Grid.Column="2" Classes="chrome-button" Command="{Binding ToggleEnvironmentPanelCommand}" ToolTip.Tip="切换环境信息面板 (⌘⇧E)">
                             <Path Data="M3 5 H21 M3 12 H21 M3 19 H15 M17 12 L3 5"
                                   Stroke="{Binding $parent[Button].Foreground}"
                                   StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
