@@ -1490,14 +1490,27 @@
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
                                    MaxWidth="320"/>
-                        <!-- Codex parity: trailing "+" on the right of the
-                             status bar. Opens a small popup with shortcuts
-                             to add a new project / conversation / plan. -->
+                        <!-- 1.0.1: trailing "+" on the
+                             right of the status bar.
+                             The previous shape was a
+                             stub toast 新建入口 - 用
+                             ⌘O 加项目 / ⌘N 新对话.
+                             Now opens the command
+                             palette (⌘K), which
+                             fuzzy-matches every
+                             "new X" action (new
+                             project / new
+                             conversation / open
+                             sites / open scheduled /
+                             open plugins / open
+                             settings) so the user
+                             doesn't need a separate
+                             picker surface. -->
                         <Button Grid.Column="3"
                                 Classes="chrome-button"
                                 Padding="6,1"
                                 Click="StatusBarAdd_OnClick"
-                                ToolTip.Tip="新建项目 / 对话 / 计划">
+                                ToolTip.Tip="新建 / 打开 — 命令面板 (⌘K)">
                             <TextBlock Text="+" FontSize="14" FontWeight="SemiBold" FontFamily="{StaticResource FontMono}"/>
                         </Button>
                     </Grid>
