@@ -188,11 +188,37 @@
                                     </StackPanel>
                                     <StackPanel Spacing="5">
                                         <TextBlock Text="文件变更" Classes="section-title"/>
-                                        <TextBlock Text="{Binding RunHistory.SelectedRun.FileChangesDisplay}"
-                                                   Classes="body"
-                                                   FontFamily="{StaticResource FontMono}"
-                                                   FontSize="12"
-                                                   TextWrapping="Wrap"/>
+                                        <!--
+                                          1.0.1: file paths
+                                          rendered as a
+                                          SelectableTextBlock
+                                          so the user can
+                                          ⌘C a path and
+                                          paste it into
+                                          ⌘T (test) /
+                                          ⌘P (open) /
+                                          terminal without
+                                          the right-click →
+                                          "select all" →
+                                          "copy" three-step.
+                                          A previous run's
+                                          12 touched files
+                                          were shown as a
+                                          plain TextBlock;
+                                          the user had to
+                                          mouse over the
+                                          blob, find the
+                                          path they wanted,
+                                          drag-select, copy.
+                                          Now the path is
+                                          a single click +
+                                          ⌘C away.
+                                        -->
+                                        <SelectableTextBlock Text="{Binding RunHistory.SelectedRun.FileChangesDisplay}"
+                                                             Classes="body"
+                                                             FontFamily="{StaticResource FontMono}"
+                                                             FontSize="12"
+                                                             TextWrapping="Wrap"/>
                                     </StackPanel>
                                 </StackPanel>
                             </ScrollViewer>
