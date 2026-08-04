@@ -65,7 +65,7 @@
                       Padding="4,1"
                       Click="OpenDiff_OnClick"
                       IsVisible="{Binding !IsProjectRequired}"
-                      ToolTip.Tip="查看变更 Diff (Wave 6 接入)">
+                      ToolTip.Tip="查看变更 Diff — 打开 Git 状态 viewer">
                 <Path Data="M9 6 L15 6 L15 12 M9 12 L15 12 M9 18 L15 18 M4 6 L4 18 M5 17 L3 18 L5 19"
                       Stroke="{Binding $parent[Button].Foreground}"
                       StrokeThickness="1.4" StrokeLineCap="Round"

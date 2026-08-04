@@ -371,7 +371,24 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
 
     [RelayCommand]
     private void OpenPullRequests()
-        => _toast.Show("拉取请求 — Wave 6 暂未开放", ToastLevel.Info);
+        // 1.0.1: previous shape was
+        // "拉取请求 — Wave 6 暂未开放"
+        // — Wave 6 shipped Git
+        // status / commit / restore,
+        // not GitHub OAuth. The
+        // actual blocker is the
+        // GitHub OAuth flow (P1
+        // deferred per
+        // SHIP_REPORT §4). Toast
+        // message swapped to the
+        // honest "needs GitHub
+        // OAuth" wording so a
+        // daily-driver user
+        // doesn't re-wonder why
+        // the button is disabled
+        // every time they mouse
+        // over the sidebar.
+        => _toast.Show("拉取请求 — 需要 GitHub OAuth (P1 deferred)", ToastLevel.Info);
 
     [RelayCommand]
     private void OpenSites()

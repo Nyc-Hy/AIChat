@@ -681,23 +681,48 @@ internal partial class MainWindow : Window
             return;
         }
         // Same UX as ProjectMenu_OnClick for now; future slices
-        // (Wave 6) replace the body with a popover showing the
-        // project path + rename / delete controls.
+        // The button picks the project
+        // (SelectProjectFromUiAsync) —
+        // rename / delete controls live
+        // on the project card's right-
+        // click context flyout, not on
+        // the main click path. The
+        // previous "编辑项目 — Wave 6
+        // 接入" stub toast was a
+        // misdirection (the user thought
+        // nothing happened because the
+        // toast fired AFTER the real
+        // selection, looking like a
+        // delayed side-effect).
         SafeRun(() =>
         {
             if (DataContext is not MainWindowViewModel viewModel) return Task.CompletedTask;
             return viewModel.SelectProjectFromUiAsync(projectId);
         });
-        _toast?.Show("编辑项目 — Wave 6 接入", ToastLevel.Info);
     }
 
-    // Codex parity: composer "+" (file picker). The ⌘V paste-into-prompt
-    // path already works; this button opens a system file picker (Wave
-    // 6+ lands the implementation, this click is the visible surface).
-    private void AddAttachment_OnClick(object? sender, RoutedEventArgs e)
-    {
-        _toast?.Show("附件选择器 — Wave 7 接入（用 ⌘V 粘贴图片）", ToastLevel.Info);
-    }
+    // 1.0.1: the previous
+    // AddAttachment_OnClick was a stub
+    // ("附件选择器 — Wave 7 接入（用
+    // ⌘V 粘贴图片）") that no XAML
+    // Click handler bound any more —
+    // the composer "+" menu now
+    // dispatches to the real
+    // AddFileAttachment_OnClick /
+    // AddImageAttachment_OnClick /
+    // AddClipboardSource_OnClick /
+    // AddWebSearchSource_OnClick /
+    // AddAtFile_OnClick /
+    // OpenPlugins_OnClick handlers,
+    // and ⌘V pastes an image into the
+    // PendingAttachments strip
+    // (1504). The stub is removed
+    // (not just unwired) so the
+    // project compiles without a
+    // dead method that future
+    // readers would have to
+    // reverse-engineer to know it's
+    // safe to delete.
 
     // Codex parity: composer mic (push-to-talk). The actual STT wiring
     // needs a model that supports audio input — Wave 4.5 picks the

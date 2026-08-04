@@ -22,9 +22,17 @@ public partial class EnvironmentPanelView : UserControl
         AvaloniaXamlLoader.Load(this);
     }
 
-    // The refresh button is the only currently-wired button. The commit
-    // and PR buttons are intentionally disabled — they show the user
-    // "this is the place" but the real action lands in Wave 6.
+    // Refresh button: re-reads the upstream
+    // state (git changes via
+    // WorkspaceChangeService, sub-agent
+    // runs from AgentHost, source
+    // registry, background processes).
+    // The other two buttons (提交或推送
+    // / 创建拉取请求) are wired — the
+    // first opens the Git status modal
+    // (b7ccaec), the second stays
+    // disabled pending GitHub OAuth
+    // (P1 deferred).
     private async void Refresh_OnClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is EnvironmentPanelViewModel vm)
@@ -97,13 +105,26 @@ public partial class EnvironmentPanelView : UserControl
 
     // Wave 5 (plan §5): the chevron button next to "变更" opens the
     // Diff view. Wave 6 owns the full file-list / line-level diff /
-    // stage / unstage / restore flow; for Wave 5 the click is a
-    // toast so the user can see the affordance land.
+    // 1.0.1: was a no-op stub
+    // ("Wave 6 will route the click
+    // through the parent MainWindow").
+    // Wave 6 actually shipped the full
+    // Git status modal — including the
+    // Diff viewer — so the click now
+    // routes through the same
+    // OpenGitStatusRequested event the
+    // 提交或推送 button uses. MainWindow
+    // subscribes and calls its
+    // OpenGitStatusCommand; the modal
+    // lands with the Diff tab already
+    // active (modal-level state, not
+    // panel-level).
     private void OpenDiff_OnClick(object? sender, RoutedEventArgs e)
     {
-        // No toast wired here — the Environment panel doesn't own a
-        // toast reference. Wave 6 will route the click through the
-        // parent MainWindow which has access to IToastService.
+        if (DataContext is EnvironmentPanelViewModel vm)
+        {
+            vm.RaiseOpenGitStatusRequested();
+        }
     }
 
     // Wave 7 follow-up (plan §13 P0 risk "整个子进程树"):
