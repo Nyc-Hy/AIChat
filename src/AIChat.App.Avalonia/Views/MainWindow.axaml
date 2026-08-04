@@ -960,9 +960,48 @@
                                     IsVisible="{Binding AgentHost.HasPlan}"
                                     Padding="{StaticResource Padding3}">
                                 <StackPanel Spacing="4">
-                                    <Grid ColumnDefinitions="*,Auto">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                                         <TextBlock Grid.Column="0" Text="计划" Classes="section-title"/>
-                                        <TextBlock Grid.Column="1"
+                                        <!--
+                                          1.0.1: 全部展开 /
+                                          全部折叠 buttons. The
+                                          agent emits a fresh
+                                          plan on every step
+                                          (snapshot-replace),
+                                          and a long plan (10+
+                                          items, common for
+                                          refactor / migration
+                                          runs) is painful to
+                                          expand one row at a
+                                          time. The two header
+                                          buttons flip every
+                                          row's IsExpanded in
+                                          one shot via
+                                          AgentHostViewModel
+                                          .ExpandAllPlanItems /
+                                          .CollapseAllPlanItems.
+                                          Hidden when there are
+                                          no notes — most plans
+                                          have at most a few
+                                          notes-bearing steps
+                                          and the buttons would
+                                          be visual noise.
+                                        -->
+                                        <Button Grid.Column="1"
+                                                Classes="chrome-button"
+                                                Padding="4,0"
+                                                Click="ExpandAllPlanItems_OnClick"
+                                                ToolTip.Tip="展开所有有 notes 的步骤">
+                                            <TextBlock Text="全部展开" FontSize="10" FontFamily="{StaticResource FontSans}"/>
+                                        </Button>
+                                        <Button Grid.Column="2"
+                                                Classes="chrome-button"
+                                                Padding="4,0"
+                                                Click="CollapseAllPlanItems_OnClick"
+                                                ToolTip.Tip="折叠所有步骤">
+                                            <TextBlock Text="全部折叠" FontSize="10" FontFamily="{StaticResource FontSans}"/>
+                                        </Button>
+                                        <TextBlock Grid.Column="3"
                                                    Text="{Binding AgentHost.PlanProgressText}"
                                                    Classes="muted"
                                                    FontSize="11"

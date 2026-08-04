@@ -1479,6 +1479,33 @@ internal partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // 1.0.1: 全部展开 / 全部折叠 header
+    // buttons on the Plan panel. Long
+    // plans (10+ items) are painful
+    // to expand one row at a time —
+    // these flip every row's
+    // IsExpanded in one shot via the
+    // matching AgentHostViewModel
+    // methods. The view-model methods
+    // set the property directly (no
+    // event raise needed; the XAML
+    // binding reacts per-row).
+    private void ExpandAllPlanItems_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.AgentHost.ExpandAllPlanItems();
+        }
+    }
+
+    private void CollapseAllPlanItems_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel)
+        {
+            viewModel.AgentHost.CollapseAllPlanItems();
+        }
+    }
+
     // 1.0.1: click-anywhere on a toast border
     // dismisses the toast immediately. The
     // ToastItem's OnDismiss callback is the

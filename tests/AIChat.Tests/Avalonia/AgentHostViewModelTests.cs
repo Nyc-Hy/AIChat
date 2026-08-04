@@ -404,6 +404,163 @@ public sealed class AgentHostViewModelTests : IDisposable
         Assert.True(host.IsRunning);
     }
 
+    // 1.0.1: 全部展开 / 全部折叠 header
+    // buttons on the Plan panel. The
+    // methods flip every row's
+    // IsExpanded in one shot — long
+    // plans (10+ items) are painful
+    // to expand one at a time when
+    // the user wants to read the
+    // whole plan up front.
+    [Fact]
+    public void ExpandAllPlanItems_FlipsEveryRowToExpanded()
+    {
+        var (host, _, _, _) = CreateHost();
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p1",
+                    Title = "read foo.cs",
+                    Notes = "use Read tool on foo.cs",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p2",
+                    Title = "edit foo.cs",
+                    Notes = "add error handling",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p3",
+                    Title = "run tests",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+        // Start with everything collapsed
+        // (the default for a fresh plan).
+        Assert.All(host.PlanItems, item => Assert.False(item.IsExpanded));
+
+        host.ExpandAllPlanItems();
+
+        Assert.All(host.PlanItems, item => Assert.True(item.IsExpanded));
+    }
+
+    [Fact]
+    public void CollapseAllPlanItems_FlipsEveryRowToCollapsed()
+    {
+        var (host, _, _, _) = CreateHost();
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p1",
+                    Title = "read foo.cs",
+                    Notes = "use Read tool",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p2",
+                    Title = "edit foo.cs",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+        // Manually expand both so we can
+        // verify the collapse path actually
+        // flips them back.
+        host.PlanItems[0].IsExpanded = true;
+        host.PlanItems[1].IsExpanded = true;
+
+        host.CollapseAllPlanItems();
+
+        Assert.All(host.PlanItems, item => Assert.False(item.IsExpanded));
+    }
+
+    [Fact]
+    public void ExpandCollapseAll_PlaysWithUpdatePlanPersistence()
+    {
+        // The two helpers must compose
+        // with the UpdatePlan expand-
+        // state-persistence logic (3a00cc0):
+        // expand all → agent adds step 4 →
+        // update should keep the original
+        // 3 rows expanded and the new row
+        // starts collapsed.
+        var (host, _, _, _) = CreateHost();
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p1",
+                    Title = "read foo.cs",
+                    Notes = "use Read tool",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p2",
+                    Title = "edit foo.cs",
+                    Notes = "add handling",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+        host.ExpandAllPlanItems();
+
+        // Agent adds step 3.
+        host.UpdatePlan(new AIChat.Domain.Chat.AgentPlan
+        {
+            Items =
+            {
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p1",
+                    Title = "read foo.cs",
+                    Notes = "use Read tool",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p2",
+                    Title = "edit foo.cs",
+                    Notes = "add handling",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                },
+                new AIChat.Domain.Chat.AgentPlanItem
+                {
+                    Id = "p3",
+                    Title = "run tests",
+                    Status = AIChat.Domain.Chat.AgentPlanItemStatus.Pending
+                }
+            }
+        });
+
+        var p1 = host.PlanItems.First(item => item.Id == "p1");
+        var p2 = host.PlanItems.First(item => item.Id == "p2");
+        var p3 = host.PlanItems.First(item => item.Id == "p3");
+        Assert.True(p1.IsExpanded, "was expanded before update — must stay expanded");
+        Assert.True(p2.IsExpanded, "was expanded before update — must stay expanded");
+        Assert.False(p3.IsExpanded, "new row starts collapsed");
+
+        // Collapse all should still flip
+        // the new row to collapsed (which
+        // is its default anyway) and the
+        // previously-expanded rows.
+        host.CollapseAllPlanItems();
+        Assert.All(host.PlanItems, item => Assert.False(item.IsExpanded));
+    }
+
     // ---- 1.0.1: 追加要求 (queue + auto-continue) ----
 
     [Fact]

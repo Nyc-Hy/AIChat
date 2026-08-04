@@ -1247,6 +1247,35 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         OnPropertyChanged(nameof(PlanProgressText));
     }
 
+    // 1.0.1: long plans (10+ items, the
+    // common case for refactor /
+    // migration runs) are painful to
+    // expand one row at a time when
+    // the user wants to read the
+    // whole plan up front. The two
+    // header buttons (全部展开 / 全部
+    // 折叠) call these to flip every
+    // row's IsExpanded in one shot.
+    // PlanItemViewModel.IsExpanded
+    // raises PropertyChanged so the
+    // XAML inline detail panel
+    // toggles immediately.
+    public void ExpandAllPlanItems()
+    {
+        foreach (var item in PlanItems)
+        {
+            item.IsExpanded = true;
+        }
+    }
+
+    public void CollapseAllPlanItems()
+    {
+        foreach (var item in PlanItems)
+        {
+            item.IsExpanded = false;
+        }
+    }
+
     public void UpsertSubAgentRun(AgentSubAgentRun run)
     {
         // Match by id so the same sub-agent row updates in place
