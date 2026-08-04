@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AIChat.Domain.Chat;
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -107,6 +108,16 @@ public sealed class RunHistoryItemViewModel
     public string ConversationTitle { get; }
     public string Goal => string.IsNullOrWhiteSpace(Run.Goal) ? "(未记录任务目标)" : Run.Goal;
     public string StatusDisplay => FormatStatus(Run.Status);
+    // 1.0.1: per-row status color, matching
+    // the Codex-style "colored dot per
+    // state" visual that the panel's
+    // sub-agent rows already use. A
+    // user skimming the run history
+    // list (often 20+ rows after a
+    // week of daily driving) can
+    // spot the 3 failures without
+    // reading the status text.
+    public IBrush StatusBrush => FormatStatusBrush(Run.Status);
     public string StartedAtDisplay => Run.StartedAt.ToLocalTime().ToString("M月d日 HH:mm");
     public string DurationDisplay => Run.CompletedAt is { } completed
         ? FormatDuration(completed - Run.StartedAt)
@@ -150,6 +161,24 @@ public sealed class RunHistoryItemViewModel
         AgentRunStatus.Cancelled => "已停止",
         AgentRunStatus.BudgetExceeded => "预算暂停",
         _ => "运行中"
+    };
+
+    // Match the same palette the
+    // SubAgentRunViewModel uses, so
+    // a "Completed" sub-agent row
+    // and a "Completed" run-history
+    // row read as the same shade of
+    // green. SolidColorBrush literals
+    // are fine here — the XAML is
+    // already using SolidColorBrush
+    // for the sub-agent dots.
+    private static IBrush FormatStatusBrush(AgentRunStatus status) => status switch
+    {
+        AgentRunStatus.Completed => new SolidColorBrush(Color.Parse("#5cd6a8")),
+        AgentRunStatus.Failed => new SolidColorBrush(Color.Parse("#ff6b6b")),
+        AgentRunStatus.Cancelled => new SolidColorBrush(Color.Parse("#f5a623")),
+        AgentRunStatus.BudgetExceeded => new SolidColorBrush(Color.Parse("#9aa0a6")),
+        _ => new SolidColorBrush(Color.Parse("#9aa0a6"))
     };
 
     private static string FormatDuration(TimeSpan duration)

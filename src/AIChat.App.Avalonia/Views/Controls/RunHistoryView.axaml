@@ -77,11 +77,47 @@
                                                            Classes="body"
                                                            FontWeight="SemiBold"
                                                            TextTrimming="CharacterEllipsis"
-                                                           MaxLines="1"/>
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding StatusDisplay}"
-                                                           Classes="muted"
-                                                           FontWeight="SemiBold"/>
+                                                           MaxLines="1"
+                                                           VerticalAlignment="Center"/>
+                                                <!--
+                                                  1.0.1: status
+                                                  pill — colored
+                                                  dot + text. The
+                                                  previous shape
+                                                  was text-only
+                                                  ("完成" /
+                                                  "失败" / "已停止")
+                                                  in muted gray,
+                                                  which was
+                                                  invisible
+                                                  when the user
+                                                  skimmed a
+                                                  long run
+                                                  history list
+                                                  (often 20+ rows
+                                                  after a week of
+                                                  daily driving).
+                                                  The dot is the
+                                                  same palette
+                                                  SubAgentRunViewModel
+                                                  uses, so
+                                                  "Completed" on
+                                                  the sub-agent
+                                                  row reads as
+                                                  the same shade
+                                                  of green.
+                                                -->
+                                                <StackPanel Grid.Column="1"
+                                                            Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            VerticalAlignment="Center">
+                                                    <Ellipse Width="8" Height="8"
+                                                             Fill="{Binding StatusBrush}"
+                                                             VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding StatusDisplay}"
+                                                               Classes="muted"
+                                                               FontWeight="SemiBold"/>
+                                                </StackPanel>
                                             </Grid>
                                             <TextBlock Grid.Row="1"
                                                        Text="{Binding Goal}"
