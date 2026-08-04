@@ -806,6 +806,152 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         return null;
     }
 
+    // 1.0.1: built-in slash
+    // commands surfaced as a
+    // static list for the Tab
+    // autocomplete path. The
+    // SlashCommandHandler switch
+    // is the runtime dispatcher
+    // — this list is the
+    // discoverability surface
+    // (typing "/co" + Tab should
+    // land on /copy). Keep the
+    // two in sync: the test
+    // SlashCommandTests_Help_ListsEveryBuiltInCommand
+    // pins /help to mention every
+    // command, and a future
+    // /autocomplete-style
+    // listing can read this same
+    // array.
+    public static IReadOnlyList<string> BuiltInSlashCommands { get; } = new[]
+    {
+        "/clear",
+        "/new",
+        "/help",
+        "/status",
+        "/memory",
+        "/git",
+        "/git-status",
+        "/copy",
+        "/search",
+    };
+
+    // 1.0.1: slash command Tab
+    // completion. Pure function
+    // on (text, caretIndex,
+    // BuiltInSlashCommands) so
+    // unit tests don't need a
+    // live Avalonia TextBox. The
+    // result is the first
+    // command that starts with
+    // the fragment the user has
+    // typed after a `/` at the
+    // caret (case-insensitive),
+    // or null when there's no
+    // `/<partial>` at the caret
+    // (or the partial doesn't
+    // match any built-in
+    // command). The grammar
+    // mirrors TrySuggestAtCompletion
+    // for the @-reference case
+    // — a `/` is only treated
+    // as a command-start if it
+    // sits at the start of a
+    // word (not preceded by a
+    // word character; the
+    // user-typed "foo/bar" path
+    // should not trigger).
+    public static string? TrySuggestSlashCompletion(
+        string text,
+        int caretIndex)
+    {
+        if (string.IsNullOrEmpty(text) || caretIndex <= 0 || caretIndex > text.Length)
+        {
+            return null;
+        }
+        // Walk backward from the
+        // caret to find the most
+        // recent `/` that isn't
+        // preceded by a word char
+        // (the path / URL case
+        // shouldn't trigger). We
+        // also require the `/` to
+        // be at the START of the
+        // prompt or immediately
+        // after whitespace, so
+        // "/copy" in the middle
+        // of a sentence doesn't
+        // get a Tab-completion
+        // suggestion. (Slash
+        // commands are whole-line
+        // affordances; the parser
+        // already special-cases
+        // them only when the
+        // prompt starts with `/`.)
+        var slashIndex = -1;
+        for (var i = caretIndex - 1; i >= 0; i--)
+        {
+            if (text[i] == '/')
+            {
+                if (i > 0 && !char.IsWhiteSpace(text[i - 1]))
+                {
+                    return null;
+                }
+                slashIndex = i;
+                break;
+            }
+            // A space or newline
+            // breaks the /-run —
+            // we only consider the
+            // contiguous word the
+            // caret is inside.
+            if (char.IsWhiteSpace(text[i]))
+            {
+                return null;
+            }
+        }
+        if (slashIndex < 0)
+        {
+            return null;
+        }
+        var fragment = text[slashIndex..caretIndex];
+        // The fragment includes the
+        // leading `/` so the
+        // StartsWith check below is
+        // comparing "/" + name-prefix
+        // against "/" + full-name.
+        // The exact-match test
+        // ("/copy" + Tab → null) falls
+        // out naturally: fragment
+        // length equals command
+        // length so the "longer than"
+        // guard skips it.
+        if (fragment.Length <= 1)
+        {
+            // Just "/" alone or
+            // empty — the user
+            // hasn't typed any
+            // command name yet.
+            // We could surface the
+            // full list here, but
+            // for now a Tab on
+            // bare "/" is a no-op
+            // (the user types the
+            // first letter and
+            // Tabs again).
+            return null;
+        }
+        foreach (var command in BuiltInSlashCommands)
+        {
+            if (command.Length > fragment.Length &&
+                command.StartsWith(fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                return command;
+            }
+        }
+        return null;
+    }
+
     [RelayCommand(CanExecute = nameof(CanStopTask))]
     private void StopTask()
     {

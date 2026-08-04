@@ -1236,4 +1236,209 @@ public sealed class AgentHostViewModelTests : IDisposable
         {
         }
     }
+
+    // ---- 1.0.1: slash command Tab completion ----
+
+    [Fact]
+    public void TrySuggestSlashCompletion_EmptyText_ReturnsNull()
+    {
+        // Defensive — same shape as
+        // TrySuggestAtCompletion's
+        // null/empty guard. A user
+        // can't type a Tab with
+        // nothing in the composer,
+        // but the static method
+        // also has to handle the
+        // edge case (test, future
+        // programmatic caller, etc.).
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("", 0));
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion(null!, 0));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_PartialMatch_ReturnsFirstCommand()
+    {
+        // Typing "/co" + Tab
+        // should land on "/copy".
+        // Case-insensitive: "/CO"
+        // works the same way. The
+        // first match in
+        // BuiltInSlashCommands
+        // wins (the list is
+        // hand-curated, no
+        // second-pass ranking
+        // needed).
+        Assert.Equal("/copy", AgentHostViewModel.TrySuggestSlashCompletion("/co", 3));
+        Assert.Equal("/copy", AgentHostViewModel.TrySuggestSlashCompletion("/CO", 3));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_ExactMatch_ReturnsNull()
+    {
+        // The autocomplete should
+        // not double up — typing
+        // "/copy" + Tab is a
+        // no-op so the user can
+        // press Tab to "confirm"
+        // the current text and
+        // move past it. Returning
+        // null lets the Tab key
+        // fall through to the
+        // default textbox
+        // behaviour.
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/copy", 5));
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/help", 5));
+        // Caret at the end of the
+        // string (length, not
+        // length-1) is the "user
+        // has finished typing"
+        // signal — fragment
+        // matches the full
+        // command so the
+        // StartsWith check skips
+        // it (length not strictly
+        // greater).
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/clear", 6));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_UnknownPrefix_ReturnsNull()
+    {
+        // Typing "/banana" + Tab
+        // should NOT silently
+        // suggest something — the
+        // user would think they
+        // have a valid command
+        // when they don't. A
+        // null result lets the
+        // Tab key fall through
+        // (the existing
+        // /Unknown-Command
+        // friendly error fires
+        // on send).
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/banana", 7));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_StartOfPrompt_AcceptsSlash()
+    {
+        // The simplest case: the
+        // prompt is exactly "/c"
+        // with the caret at the
+        // end. The leading `/`
+        // is at index 0 (no
+        // preceding char), so
+        // the "not preceded by
+        // word char" rule passes.
+        // "/c" is a prefix of
+        // both "/copy" and
+        // "/clear" — the first
+        // match in
+        // BuiltInSlashCommands
+        // wins, which is
+        // "/clear" (alphabetical
+        // ordering in the list).
+        // The exact-match case
+        // ("/clear" with caret=6,
+        // AFTER the last char)
+        // returns null — Tab on
+        // a complete command is
+        // a no-op so the user
+        // can press Tab to
+        // "confirm and move on".
+        Assert.Equal("/clear", AgentHostViewModel.TrySuggestSlashCompletion("/c", 2));
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/clear", 6));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_AfterWhitespace_AcceptsSlash()
+    {
+        // "/se" mid-prompt is
+        // still a valid slash
+        // command start. The
+        // "preceded by
+        // whitespace" rule
+        // accepts the leading
+        // `/` here.
+        Assert.Equal("/search", AgentHostViewModel.TrySuggestSlashCompletion("see /se", 7));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_MidWord_Rejects()
+    {
+        // "foo/bar" should not
+        // trigger — the user
+        // typed a literal slash
+        // in the middle of a
+        // word, not a command.
+        // The "preceded by
+        // word char" rule
+        // returns null.
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("foo/bar", 7));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_AcrossWhitespace_ReturnsNull()
+    {
+        // The user is typing in a
+        // different word. The
+        // helper walks backward
+        // from the caret and
+        // bails at the first
+        // whitespace, so the
+        // earlier `/help` doesn't
+        // count.
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/help abc", 10));
+    }
+
+    [Fact]
+    public void TrySuggestSlashCompletion_CaretBeforeSlash_ReturnsNull()
+    {
+        // Caret is BEFORE the
+        // `/` (the user is
+        // editing the start of
+        // the prompt, not
+        // completing a command
+        // they're typing). The
+        // backward walk from
+        // caret-1 doesn't see
+        // the `/` so it returns
+        // null.
+        Assert.Null(AgentHostViewModel.TrySuggestSlashCompletion("/copy", 0));
+    }
+
+    [Fact]
+    public void BuiltInSlashCommands_ListsEveryKnownCommand()
+    {
+        // The autocomplete
+        // list and the
+        // SlashCommandHandler
+        // switch are two
+        // surfaces that both
+        // need to know the
+        // same set of commands.
+        // If a new command is
+        // added, the handler's
+        // switch gets a new
+        // case AND this list
+        // gets a new entry. Pin
+        // the set so the next
+        // contributor can't
+        // add /retry to one
+        // and forget the
+        // other.
+        var expected = new[]
+        {
+            "/clear",
+            "/new",
+            "/help",
+            "/status",
+            "/memory",
+            "/git",
+            "/git-status",
+            "/copy",
+            "/search",
+        };
+        Assert.Equal(expected, AgentHostViewModel.BuiltInSlashCommands.ToArray());
+    }
 }

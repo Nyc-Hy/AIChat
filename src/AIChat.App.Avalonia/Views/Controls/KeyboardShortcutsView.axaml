@@ -139,7 +139,7 @@
             <!-- Slash 命令 -->
             <StackPanel Spacing="6">
               <TextBlock Text="Slash 命令 (在输入框里输 /)" Classes="section-title"/>
-              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+              <Grid ColumnDefinitions="220,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="/clear · /new" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="0" Grid.Column="1" Text="清空当前对话" Classes="muted" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="1" Grid.Column="0" Text="/status" Classes="body" VerticalAlignment="Center"/>
@@ -158,6 +158,8 @@
                 <TextBlock Grid.Row="7" Grid.Column="1" Text="附加文件到下条消息" Classes="muted" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="8" Grid.Column="0" Text="@&lt;kind&gt;:&lt;id&gt; + Tab" Classes="body" VerticalAlignment="Center"/>
                 <TextBlock Grid.Row="8" Grid.Column="1" Text="补全 Sources 面板里的 source" Classes="muted" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="9" Grid.Column="0" Text="/&lt;partial&gt; + Tab" Classes="body" VerticalAlignment="Center"/>
+                <TextBlock Grid.Row="9" Grid.Column="1" Text="补全 slash 命令 (例如 /co → /copy)" Classes="muted" VerticalAlignment="Center"/>
               </Grid>
             </StackPanel>
 

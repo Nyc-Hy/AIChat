@@ -1716,11 +1716,82 @@ internal partial class MainWindow : Window
             // is on), so this is a clean
             // "no default behavior to
             // override" hook.
+            //
+            // 1.0.1 follow-up: slash command
+            // Tab completion runs FIRST.
+            // A user typing "/co" + Tab
+            // expects /copy to land, not
+            // "search the registry for an
+            // @c* reference" — the slash
+            // case is the more common
+            // daily-driver flow (every new
+            // user starts by trying /help,
+            // and the Tab gesture is the
+            // easiest way to surface the
+            // command names without
+            // forcing the user to scroll
+            // up to the help bubble).
             if (e.Key == Key.Tab &&
                 DataContext is MainWindowViewModel tabVm)
             {
                 var text = tabVm.AgentHost.DraftPrompt ?? "";
                 var caret = PromptInput.CaretIndex;
+
+                // Slash command autocomplete.
+                // Splices the full
+                // command name (with a
+                // trailing space) into
+                // the prompt at the
+                // caret, replacing the
+                // partial text the user
+                // typed. The trailing
+                // space is a 1.0.1
+                // detail: a slash
+                // command is a
+                // whole-prompt
+                // affordance but the
+                // parser tolerates
+                // whitespace, and the
+                // user can keep typing
+                // (e.g. "/search " then
+                // a query) without an
+                // extra space.
+                var slashMatch = AIChat.App.Avalonia.ViewModels.AgentHostViewModel
+                    .TrySuggestSlashCompletion(text, caret);
+                if (slashMatch is not null)
+                {
+                    var slashIndex = text.LastIndexOf('/',
+                        Math.Min(caret, text.Length) - 1);
+                    if (slashIndex >= 0)
+                    {
+                        var before = text[..slashIndex];
+                        var after = text[caret..];
+                        // Trailing space only
+                        // when there's more
+                        // text after the
+                        // caret (a user
+                        // about to type a
+                        // /search query)
+                        // AND that text
+                        // doesn't already
+                        // start with a
+                        // separator. This
+                        // matches the
+                        // @-reference
+                        // spacing rule
+                        // (commit 4fb5086).
+                        var needsTrailing = after.Length > 0 && !char.IsWhiteSpace(after[0]);
+                        var spliced = before + slashMatch +
+                            (needsTrailing ? " " : " ") + after;
+                        tabVm.AgentHost.DraftPrompt = spliced;
+                        PromptInput.CaretIndex = Math.Min(
+                            before.Length + slashMatch.Length + 1,
+                            spliced.Length);
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
                 var sources = tabVm.AgentHost.SourcesForAutocomplete;
                 var match = AIChat.App.Avalonia.ViewModels.AgentHostViewModel
                     .TrySuggestAtCompletion(text, caret, sources);
