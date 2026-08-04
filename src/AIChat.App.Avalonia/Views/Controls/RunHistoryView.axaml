@@ -150,11 +150,27 @@
                             <ScrollViewer IsVisible="{Binding RunHistory.HasSelection}">
                                 <StackPanel Spacing="14">
                                     <StackPanel Spacing="5">
-                                        <TextBlock Text="{Binding RunHistory.SelectedRun.Goal}"
-                                                   Classes="body"
-                                                   FontSize="16"
-                                                   FontWeight="SemiBold"
-                                                   TextWrapping="Wrap"/>
+                                        <!--
+                                          1.0.1: Goal is now a
+                                          SelectableTextBlock so
+                                          the user can copy the
+                                          original prompt to
+                                          paste into a new run.
+                                          The previous TextBlock
+                                          forced the 3-step
+                                          right-click → select
+                                          all → copy for a
+                                          daily-driver action
+                                          ("this prompt worked
+                                          but on the wrong
+                                          branch — let me
+                                          retry on main").
+                                        -->
+                                        <SelectableTextBlock Text="{Binding RunHistory.SelectedRun.Goal}"
+                                                             Classes="body"
+                                                             FontSize="16"
+                                                             FontWeight="SemiBold"
+                                                             TextWrapping="Wrap"/>
                                         <TextBlock Text="{Binding RunHistory.SelectedRun.LineageDisplay}" Classes="muted"/>
                                     </StackPanel>
 
