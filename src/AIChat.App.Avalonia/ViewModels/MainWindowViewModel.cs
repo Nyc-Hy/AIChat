@@ -1504,7 +1504,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
             _settings.AgentMaxToolRounds = Math.Clamp(_settings.AgentMaxToolRounds, 1, 100);
             _settings.MaxAutoFixRounds = Math.Clamp(_settings.MaxAutoFixRounds, 0, 10);
             _settings.RetryMaxAttempts = Math.Clamp(_settings.RetryMaxAttempts, 0, 10);
-            _settings.MaxOutputTokens = Math.Clamp(_settings.MaxOutputTokens, 256, 32768);
+            // 2026-08-05: cap max output tokens at
+            // 16K to match the MiniMax M3 platform
+            // limit. The previous 32768 was a
+            // historical default from when the
+            // catalog was Anthropic-skewed; M3's
+            // published max output is 16K and
+            // M3-highspeed matches. A user with
+            // 32K configured silently lost the
+            // last 16K of any long-form response
+            // (truncated mid-sentence). The clamp
+            // is conservative: a future model
+            // with a higher cap will need its
+            // own model-specific ceiling here.
+            _settings.MaxOutputTokens = Math.Clamp(_settings.MaxOutputTokens, 256, 16384);
             _settings.ConversationContextRatio = Math.Clamp(_settings.ConversationContextRatio, 0.3, 1.0);
             ToolSettingsService.Normalize(_settings, _toolRegistry);
 

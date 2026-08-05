@@ -196,4 +196,73 @@ public class ActivityItemViewModelTests
         vm.Detail = "hello";
         Assert.Contains(nameof(ActivityItemViewModel.CanCopyAssistantBubble), reRaised);
     }
+
+    [Fact]
+    public void HasRunSummary_False_ByDefault()
+    {
+        // The footer line is hidden until the
+        // runner sets RunSummary after a
+        // successful run. A fresh AI bubble
+        // (no run yet) or a still-streaming
+        // one must not show a stray footer.
+        var vm = new ActivityItemViewModel("AIChat", "thinking...", "运行中");
+        Assert.False(vm.HasRunSummary);
+        Assert.Equal("", vm.RunSummary);
+    }
+
+    [Fact]
+    public void HasRunSummary_True_WhenRunnerSetsSummary()
+    {
+        // The agent runner sets RunSummary at
+        // terminal state (after the final
+        // status flip). The footer IsVisible
+        // gate must flip true so the XAML
+        // shows the line; a future run that
+        // re-uses the same ActivityItem (e.g.
+        // regenerate on the same bubble)
+        // would re-set RunSummary to a
+        // different value and the XAML
+        // updates live.
+        var vm = new ActivityItemViewModel("AIChat", "done", "完成");
+        vm.RunSummary = "改 3 个文件 · 用 5 次工具 · 12s";
+        Assert.True(vm.HasRunSummary);
+        Assert.Equal("改 3 个文件 · 用 5 次工具 · 12s", vm.RunSummary);
+    }
+
+    [Fact]
+    public void HasRunSummary_False_WhenSummaryIsWhitespace()
+    {
+        // Defensive: a runner that sets
+        // RunSummary = "   " (only
+        // whitespace) should not render
+        // a footer with empty text. The
+        // IsVisible gate treats
+        // IsNullOrWhiteSpace as empty.
+        var vm = new ActivityItemViewModel("AIChat", "done", "完成");
+        vm.RunSummary = "   ";
+        Assert.False(vm.HasRunSummary);
+    }
+
+    [Fact]
+    public void RunSummaryChange_ReRaisesHasRunSummary()
+    {
+        // The XAML binds the footer Border's
+        // IsVisible to HasRunSummary. A
+        // write to RunSummary must re-raise
+        // HasRunSummary or the footer stays
+        // hidden the entire run (the
+        // runner's terminal-state write is
+        // the only place that flips it
+        // from false to true, and the
+        // notification has to fire exactly
+        // once on that transition).
+        var vm = new ActivityItemViewModel("AIChat", "done", "完成");
+        var reRaised = new System.Collections.Generic.HashSet<string>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not null) reRaised.Add(e.PropertyName);
+        };
+        vm.RunSummary = "改 1 个文件 · 5s";
+        Assert.Contains(nameof(ActivityItemViewModel.HasRunSummary), reRaised);
+    }
 }

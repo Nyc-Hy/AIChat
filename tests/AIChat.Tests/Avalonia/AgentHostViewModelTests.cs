@@ -49,8 +49,19 @@ public sealed class AgentHostViewModelTests : IDisposable
         await host.RunVerificationCommand.ExecuteAsync(null);
 
         Assert.False(host.IsVerifying);
-        var result = Assert.Single(activity.Activity, item => item.Title == "验证：unsafe");
+        // 2026-08-05: the per-command "验证：unsafe"
+        // system bubble was collapsed into a
+        // single "⚠ 验证 0/1 通过" row so a
+        // multi-command project no longer
+        // floods the activity feed. The per-
+        // command status is now in the row's
+        // Detail (e.g. "✗ unsafe — ...") so
+        // the test pins both the header line
+        // and the per-row bullet.
+        var result = Assert.Single(activity.Activity, item =>
+            item.Title.StartsWith("⚠ 验证 ", StringComparison.Ordinal));
         Assert.Equal("失败", result.Status);
+        Assert.Contains("✗ unsafe", result.Detail);
         Assert.Contains(toast.Toasts, item =>
             item.Level == ToastLevel.Warning && item.Message.Contains("部分验证失败", StringComparison.Ordinal));
     }

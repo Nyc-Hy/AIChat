@@ -1122,6 +1122,36 @@
                                                                                     </ItemsControl.ItemTemplate>
                                                                                 </ItemsControl>
                                                                             </Expander>
+
+                                                                            <!--
+                                                                              2026-08-05: per-run
+                                                                              summary footer. Pinned
+                                                                              to the AI bubble
+                                                                              instead of a separate
+                                                                              centred system
+                                                                              bubble — keeps the
+                                                                              user / AI rhythm
+                                                                              strict, and the
+                                                                              stats are anchored
+                                                                              to the response that
+                                                                              produced them. The
+                                                                              separator line + muted
+                                                                              font size + hairline
+                                                                              border style make it
+                                                                              read as a footnote,
+                                                                              not part of the
+                                                                              answer body.
+                                                                            -->
+                                                                            <Border Classes="run-summary"
+                                                                                    IsVisible="{Binding HasRunSummary}"
+                                                                                    Margin="0,2,0,0"
+                                                                                    Padding="0,6,0,0">
+                                                                                <TextBlock Text="{Binding RunSummary}"
+                                                                                           Classes="muted"
+                                                                                           FontSize="10"
+                                                                                           TextWrapping="Wrap"
+                                                                                           LineHeight="14"/>
+                                                                            </Border>
                                                                         </StackPanel>
                                                                     </Border>
                                                                 </StackPanel>

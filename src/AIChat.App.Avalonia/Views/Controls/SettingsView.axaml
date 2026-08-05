@@ -104,7 +104,7 @@
                   <TextBox Grid.Column="1" Text="{Binding Temperature}" />
 
                   <TextBlock Grid.Row="1" Text="最大输出 tokens" Classes="body" VerticalAlignment="Center"
-                             ToolTip.Tip="单次回复的 token 上限。Anthropic 与 OpenAI 兼容协议都按这个值。"/>
+                             ToolTip.Tip="单次回复的 token 上限 (256–16384)。MiniMax M3 / M3-highspeed 的平台上限是 16K；超过 16K 的设置会在加载时静默截到 16K，回复也会在 16K 处被服务端截断。"/>
                   <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MaxOutputTokens}" />
 
                   <TextBlock Grid.Row="2" Text="重试次数" Classes="body" VerticalAlignment="Center"

@@ -243,6 +243,26 @@
             <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
         </Style>
         <!--
+          2026-08-05: per-run summary footer on
+          the AI bubble. The previous shape
+          rendered this as a separate "本次运行"
+          centred system bubble between turns;
+          the new shape keeps it anchored to
+          the AI bubble that produced it. The
+          style is intentionally muted —
+          FontSize 10, muted brush, no border
+          — so it reads as a footnote rather
+          than part of the answer body, and
+          the user can scan past it to the
+          next turn without losing their
+          place.
+        -->
+        <Style Selector="Border.run-summary">
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!--
           Status-chip color when an AI bubble is in a terminal
           state. Default (muted) is used for in-flight / time
           stamps; .failed / .stopped swap the foreground so the

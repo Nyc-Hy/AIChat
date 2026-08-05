@@ -267,25 +267,39 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
             assistantItem.Status = terminal.ActivityStatus;
             _host.LastAssistantStatus = terminal.ActivityStatus;
-            // Drop a "本次运行" summary bubble into the activity
-            // feed so the user can see at a glance what happened
-            // — file count, tool call count, duration — without
-            // opening the git modal or scrolling through tool
-            // cards.
+            // 2026-08-05: pin the run summary to
+            // the AI bubble as a footer instead
+            // of dropping a separate "本次运行"
+            // system bubble. The previous shape
+            // (user → AI → system → user → AI →
+            // system ...) made long agent runs
+            // feel like the conversation was
+            // half-bubbles, half-status lines.
+            // Now the summary lives on the AI
+            // bubble itself so the activity feed
+            // reads as a strict user / AI rhythm
+            // and the stats are anchored to the
+            // response that produced them.
+            //
+            // isReadOnly is passed so a no-write
+            // run with 0 changes can be tagged
+            // in the summary — the user sent a
+            // refactor / fix / add request, the
+            // agent did all the planning,
+            // nothing landed, and the "改 0 个
+            // 文件" line by itself doesn't tell
+            // them whether the agent's plan was
+            // a no-op or whether read-only
+            // mode silently swallowed every
+            // write. The tag keeps the cause
+            // visible.
             if (run is not null)
             {
                 _host.RecordLastRun(run);
-                // Pass isReadOnly so a no-write run with 0
-                // changes can be tagged in the summary — the
-                // user sent a refactor / fix / add request, the
-                // agent did all the planning, nothing landed,
-                // and the "改 0 个文件" line by itself doesn't
-                // tell them whether the agent's plan was a no-op
-                // or whether read-only mode silently swallowed
-                // every write. Tagging the line in the summary
-                // keeps the cause visible without an extra system
-                // bubble.
-                _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite, usage: _host.LastRunUsage), terminal.ActivityStatus);
+                assistantItem.RunSummary = BuildRunSummary(
+                    run,
+                    isReadOnly: noWrite,
+                    usage: _host.LastRunUsage);
             }
             await PersistConversationAsync(project, conversation, isExistingConversation);
             _host.SetStatusMessage(terminal.StatusMessage);

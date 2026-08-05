@@ -1218,15 +1218,54 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         try
         {
             var results = await _verificationExecutor.RunAsync(project.TryGetPrimaryPath(), project.VerificationCommands);
-            foreach (var result in results)
-            {
-                var detail = string.IsNullOrWhiteSpace(result.Summary)
-                    ? result.Output
-                    : $"{result.Command}\n{result.Summary}";
-                _activityFeed.Add($"验证：{result.Name}", detail, result.IsSuccess ? "通过" : "失败");
-            }
-
+            // 2026-08-05: consolidate the
+            // per-command verification bubbles
+            // into a single system row. The
+            // previous shape (one bubble per
+            // command) made a 5-command
+            // project push 5 system bubbles
+            // into the activity feed, which
+            // had the same "conversation
+            // scrolled off-screen" problem
+            // as the tool-call consolidation.
+            // Now: a single "验证 N 项" bubble
+            // with the per-command status as
+            // a bullet list, and a single
+            // pass/fail chip on the status
+            // column. The full output of
+            // failed commands is still
+            // reachable through the existing
+            // git / verification modal —
+            // the bubble is the at-a-glance
+            // surface, not the deep-dive
+            // surface.
             var passed = results.Count(result => result.IsSuccess);
+            var total = results.Count;
+            var allPassed = passed == total;
+            var headerText = allPassed
+                ? $"✅ 验证 {total} 项全部通过"
+                : $"⚠ 验证 {passed}/{total} 通过";
+            var detail = string.Join("\n", results.Select(result =>
+            {
+                var icon = result.IsSuccess ? "✓" : "✗";
+                var summary = string.IsNullOrWhiteSpace(result.Summary)
+                    ? ""
+                    : $" — {result.Summary}";
+                // Truncate the per-command
+                // output so a noisy build
+                // doesn't blow the bubble
+                // out to 500 lines. The
+                // user can re-run a single
+                // command for the full log
+                // — this is the at-a-glance
+                // surface.
+                return $"{icon} {result.Name}{summary}";
+            }));
+            _activityFeed.Add(
+                headerText,
+                detail,
+                allPassed ? "通过" : "失败");
+
             _setStatusMessage($"验证完成：{passed}/{results.Count} 通过。");
             if (passed != results.Count)
             {

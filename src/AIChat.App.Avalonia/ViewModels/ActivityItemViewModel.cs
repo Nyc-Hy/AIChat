@@ -65,6 +65,34 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
     // per call" pattern that cluttered the feed.
     public ObservableCollection<ToolCallRecord> ToolCalls { get; } = [];
 
+    // 2026-08-05: per-run summary footer. The
+    // agent runner used to drop this as a
+    // separate "本次运行" system bubble between
+    // the AI bubble and the next user message —
+    // a centered, muted one-liner that
+    // duplicated the bubble-status info the AI
+    // bubble already shows. The bubble also
+    // pushed long agent runs further from the
+    // user's eye-line: user → AI → summary →
+    // (next turn) instead of user → AI → (next
+    // turn). Now the summary is a footer row
+    // inside the AI bubble's StackPanel so the
+    // conversation reads as a strict
+    // user / AI / user / AI rhythm, with the
+    // run stats anchored to the response that
+    // produced them.
+    //
+    // Empty for the user bubble and for any
+    // non-assistant bubble (the XAML's
+    // IsVisible binds to HasRunSummary so the
+    // footer line is hidden on bubbles that
+    // have no run to summarise).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasRunSummary))]
+    private string runSummary = "";
+
+    public bool HasRunSummary => !string.IsNullOrWhiteSpace(RunSummary);
+
     public ActivityItemViewModel(string title, string detail, string status)
     {
         Title = title;
