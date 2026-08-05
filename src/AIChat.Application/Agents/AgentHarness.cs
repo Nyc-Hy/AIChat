@@ -407,6 +407,26 @@ public sealed partial class AgentHarness
                         RawJson = agentEvent.RawJson
                     };
                     break;
+                case AgentRunEventType.RunUsage:
+                    // 2026-08-05: forward the platform's
+                    // per-call usage block (prompt /
+                    // completion / cached) so the runner
+                    // can surface the cache hit rate in
+                    // the activity feed / status bar.
+                    // The harness itself doesn't care
+                    // about token counts — it just
+                    // re-emits the event with the same
+                    // payload.
+                    if (agentEvent.Usage is not null)
+                    {
+                        yield return new AgentHarnessEvent
+                        {
+                            Type = AgentHarnessEventType.RunUsage,
+                            Run = run,
+                            Usage = agentEvent.Usage
+                        };
+                    }
+                    break;
                 case AgentRunEventType.ContentDelta:
                     yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成最终回复"));
                     assistantContent += agentEvent.Content;

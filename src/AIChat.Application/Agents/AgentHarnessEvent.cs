@@ -16,4 +16,10 @@ public sealed class AgentHarnessEvent
     public AgentToolResult? ToolResult { get; init; }
     public AgentPhaseTransition? PhaseTransition { get; init; }
     public AgentSubAgentRun? SubAgentRun { get; init; }
+    // 2026-08-05: token usage (prompt / completion /
+    // cached) from the most recent model call.
+    // Forwarded to the runner so the activity feed
+    // can append a "X tokens, Y% cache 命中" footer
+    // and the status bar can show the cache ring.
+    public ChatUsage? Usage { get; init; }
 }

@@ -144,6 +144,17 @@ public sealed class SubAgentScheduler
                         case AgentRunEventType.ContentDelta:
                             content += SensitiveDataRedactor.RedactText(agentEvent.Content);
                             break;
+                        case AgentRunEventType.RunUsage:
+                            // 2026-08-05: sub-agents can also
+                            // carry per-call usage. We don't
+                            // surface it anywhere today
+                            // (sub-agent results are summarized
+                            // as text), but the type must
+                            // match the switch — unhandled
+                            // cases were causing a compile
+                            // error when the new RunUsage
+                            // enum value was added.
+                            break;
                         case AgentRunEventType.Error:
                             findings.Add(SensitiveDataRedactor.RedactText(agentEvent.Content));
                             return Complete(run, SubAgentStatus.Failed, agentEvent.Content, findings, "Inspect the sub-agent error and retry with narrower context.");

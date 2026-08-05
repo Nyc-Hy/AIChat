@@ -206,6 +206,22 @@ public sealed partial class AgentHarness
                             RawJson = fixEvent.RawJson
                         };
                         break;
+                    case AgentRunEventType.RunUsage:
+                        // 2026-08-05: forward the auto-verify
+                        // round's per-call usage. Same
+                        // intent as the main run's RunUsage
+                        // case — the runner reads it to
+                        // surface the cache hit rate.
+                        if (fixEvent.Usage is not null)
+                        {
+                            yield return new AgentHarnessEvent
+                            {
+                                Type = AgentHarnessEventType.RunUsage,
+                                Run = run,
+                                Usage = fixEvent.Usage
+                            };
+                        }
+                        break;
                     case AgentRunEventType.ContentDelta:
                         yield return CreatePhaseChanged(run, _coordinator.StartPhase(run, AgentRunPhase.Summarizing, "生成修复说明"));
                         yield return new AgentHarnessEvent

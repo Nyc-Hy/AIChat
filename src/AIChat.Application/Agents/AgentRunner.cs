@@ -30,7 +30,7 @@ public sealed class AgentRunner
     // IAsyncEnumerable<T> at yield break, so they stash their
     // final state here and RunAsync reads it after the foreach
     // exhausts.
-    private ChatRoundState _lastChatState = new("", "", [], ShouldStop: true);
+    private ChatRoundState _lastChatState = new("", "", [], ShouldStop: true, Usage: null);
     private ToolRoundState _lastToolState = new(Stop: false, Cancelled: false);
     private AgentRunEvent? _terminalChatEvent;
 
@@ -158,6 +158,18 @@ public sealed class AgentRunner
             var toolCalls = new List<ChatToolCall>();
             var pendingEvents = new List<AgentRunEvent>();
             var hadTransientError = false;
+            // 2026-08-05: track the usage block from
+            // the most recent delta. OpenAI streaming
+            // puts the usage in the final chunk
+            // (which may be the [DONE]-preceding
+            // chunk or the [DONE] itself, depending
+            // on the platform). Some providers emit a
+            // separate usage-only chunk between the
+            // last content delta and [DONE]; this
+            // variable just remembers the most
+            // recent non-null value, so the loop end
+            // emits a single RunUsage event.
+            var lastUsage = (ChatUsage?)null;
 
             try
             {
@@ -193,6 +205,11 @@ public sealed class AgentRunner
                     {
                         toolCalls.AddRange(delta.ToolCalls);
                     }
+
+                    if (delta.Usage is not null)
+                    {
+                        lastUsage = delta.Usage;
+                    }
                 }
             }
             catch (HttpRequestException)
@@ -203,13 +220,13 @@ public sealed class AgentRunner
             {
                 // C# forbids yield inside catch / finally; capture
                 // the result and emit after the catch block.
-                _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: true);
+                _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: true, Usage: lastUsage);
                 _terminalChatEvent = new AgentRunEvent { Type = AgentRunEventType.Cancelled, Content = "Agent 运行已取消。" };
                 hadTransientError = false;
             }
             catch (Exception ex)
             {
-                _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: true);
+                _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: true, Usage: lastUsage);
                 _terminalChatEvent = new AgentRunEvent { Type = AgentRunEventType.Error, Content = $"LLM 请求失败：{ex.Message}" };
                 hadTransientError = false;
             }
@@ -231,7 +248,7 @@ public sealed class AgentRunner
 
             if (hadTransientError)
             {
-                _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: true);
+                _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: true, Usage: lastUsage);
                 yield return new AgentRunEvent
                 {
                     Type = AgentRunEventType.Error,
@@ -247,7 +264,25 @@ public sealed class AgentRunner
                 yield return pending;
             }
 
-            _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: toolCalls.Count == 0);
+            // 2026-08-05: emit a single RunUsage event
+            // carrying the platform's per-call token
+            // tally + cache hit. The harness forwards
+            // it to the runner, which surfaces the
+            // cache hit rate in the activity feed. Only
+            // emitted when the platform actually
+            // attached a usage block — null on legacy
+            // providers or stream_options:include_usage
+            // not honored.
+            if (lastUsage is not null)
+            {
+                yield return new AgentRunEvent
+                {
+                    Type = AgentRunEventType.RunUsage,
+                    Usage = lastUsage
+                };
+            }
+
+            _lastChatState = new ChatRoundState(content, reasoning, toolCalls, ShouldStop: toolCalls.Count == 0, Usage: lastUsage);
             yield break;
         }
     }
@@ -387,7 +422,16 @@ public sealed class AgentRunner
         string Content,
         string ReasoningContent,
         IReadOnlyList<ChatToolCall> ToolCalls,
-        bool ShouldStop);
+        bool ShouldStop,
+        // 2026-08-05: token usage from the final
+        // chunk of the model's streaming response.
+        // Carries the prompt / completion / cached
+        // breakdown that the runner surfaces in the
+        // activity feed. Null when the platform
+        // didn't attach a usage block (older
+        // providers, or stream_options: include_usage
+        // not honored).
+        ChatUsage? Usage);
 
     private sealed record ToolRoundState(bool Stop, bool Cancelled);
 

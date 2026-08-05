@@ -170,6 +170,49 @@ public sealed partial class AgentHostViewModel : ViewModelBase
         $"上下文估算：约 {InputTokens:N0} / {Math.Max(1, _getSettings().ModelContextLimit):N0} tokens ({ContextBudgetPercent}%)\n" +
         "这是本地路由估算，不是提供方计费 usage。";
 
+    // 2026-08-05: actual billing usage from the
+    // platform (the InputTokens above is a pre-build
+    // estimate). Set per model call from the
+    // streaming response's final usage block —
+    // carries the prompt / completion / cached
+    // breakdown. Surfaced in the activity feed
+    // footer (e.g. "182 tokens, 64% cache 命中")
+    // and in the status bar context details.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LastRunUsageText))]
+    [NotifyPropertyChangedFor(nameof(LastRunCacheHitPercent))]
+    private ChatUsage? lastRunUsage;
+
+    public string LastRunUsageText
+    {
+        get
+        {
+            var usage = LastRunUsage;
+            if (usage is null || usage.PromptTokens == 0)
+            {
+                return "本轮未拿到 usage（平台未返回或请求失败）。";
+            }
+            var cacheNote = usage.CachedTokens > 0
+                ? $"，{usage.CacheHitPercent}% 命中 cache"
+                : "";
+            return $"本轮 {usage.TotalTokens:N0} tokens (输入 {usage.PromptTokens:N0} / 输出 {usage.CompletionTokens:N0}{cacheNote})。";
+        }
+    }
+
+    public double LastRunCacheHitPercent => LastRunUsage?.CacheHitPercent ?? 0;
+
+    // 2026-08-05: agent runner callback. Called from
+    // the UI thread (the runner marshals the
+    // AgentHarnessEventType.RunUsage handler through
+    // Dispatcher.UIThread.InvokeAsync before calling
+    // this). Updates LastRunUsage; the activity feed
+    // + status bar both bind to the derived
+    // properties.
+    public void RecordRunUsage(ChatUsage usage)
+    {
+        LastRunUsage = usage;
+    }
+
     // Width in DIPs for the inline context meter in the status
     // bar. The mini bar is 80px wide so the percent→width factor
     // is 0.8.

@@ -240,7 +240,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 // every write. Tagging the line in the summary
                 // keeps the cause visible without an extra system
                 // bubble.
-                _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite), terminal.ActivityStatus);
+                _activityFeed.Add("本次运行", BuildRunSummary(run, isReadOnly: noWrite, usage: _host.LastRunUsage), terminal.ActivityStatus);
             }
             await PersistConversationAsync(project, conversation, isExistingConversation);
             _host.SetStatusMessage(terminal.StatusMessage);
@@ -435,6 +435,24 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     _host.SetStatusMessage(agentEvent.Run?.CompletionReason is { Length: > 0 } reason ? reason : "运行完成。");
                 });
                 break;
+            case AgentHarnessEventType.RunUsage:
+                // 2026-08-05: per-call token usage (prompt /
+                // completion / cached). Forward to the
+                // host so the activity feed can append a
+                // "X tokens, Y% cache 命中" footer and
+                // the status bar can show the cache
+                // ring. Marshal to the UI thread
+                // because the host's setters are
+                // observable-collection-bound and Avalonia
+                // throws on cross-thread mutations.
+                if (agentEvent.Usage is not null)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        _host.RecordRunUsage(agentEvent.Usage);
+                    });
+                }
+                break;
         }
     }
 
@@ -485,7 +503,7 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     // them whether to flip read-only off and retry or whether
     // the agent decided the task was already done. The tag
     // makes the cause visible without an extra system bubble.
-    public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run, bool isReadOnly = false)
+    public static string BuildRunSummary(AIChat.Domain.Chat.AgentRun run, bool isReadOnly = false, ChatUsage? usage = null)
     {
         var fileChangeCount = run.FileChanges?.Count ?? 0;
         var toolCount = run.ToolCallCount;
@@ -513,7 +531,27 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
         {
             parts.Add($"模型 {run.ModelCallCount} 轮");
         }
-        if (run.ContextEstimatedTokens > 0)
+        if (usage is not null && usage.PromptTokens > 0)
+        {
+            // 2026-08-05: surface the platform's actual
+            // token usage + prompt-cache hit rate so
+            // a daily driver can see "182 tokens, 64%
+            // cache 命中" after every run. Cached
+            // reads are 1/5 input price on M3, so the
+            // cache% is the cheapest ROI number on
+            // the screen — a user with 50%+ cache
+            // hit is paying roughly half the input
+            // cost of one without cache.
+            if (usage.CachedTokens > 0)
+            {
+                parts.Add($"{usage.TotalTokens:N0} tokens · {usage.CacheHitPercent}% cache 命中");
+            }
+            else
+            {
+                parts.Add($"{usage.TotalTokens:N0} tokens");
+            }
+        }
+        else if (run.ContextEstimatedTokens > 0)
         {
             parts.Add($"输入约 {run.ContextEstimatedTokens:N0} tokens");
         }

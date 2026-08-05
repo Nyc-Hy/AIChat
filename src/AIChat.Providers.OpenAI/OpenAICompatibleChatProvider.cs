@@ -70,6 +70,23 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
             ["model"] = request.Model,
             ["temperature"] = request.Temperature,
             ["stream"] = true,
+            // 2026-08-05: ask the platform to attach the
+            // token-usage block to the final streaming
+            // chunk. Without this flag the
+            // OpenAI-compatible surface omits usage
+            // entirely on streaming responses, and the
+            // runner can't surface the cache hit rate
+            // (or even the billed token count) in the
+            // UI. MiniMax honors the standard
+            // `stream_options.include_usage` shape —
+            // verified on 2026-08-05 with a curl probe
+            // (response included prompt_tokens,
+            // completion_tokens, and
+            // prompt_tokens_details.cached_tokens).
+            ["stream_options"] = new Dictionary<string, object?>
+            {
+                ["include_usage"] = true
+            },
             ["messages"] = request.Messages.Select(ToApiMessage).ToList()
         };
 
@@ -477,9 +494,29 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         if (payload == "[DONE]")
         {
             // Convert protocol-specific completion into the common stream signal.
+            // 2026-08-05: even the [DONE] sentinel can be
+            // preceded by a chunk that carries only the
+            // `usage` block (no choices). If the previous
+            // chunk's usage was already captured, the
+            // IsCompleted marker here just terminates the
+            // stream — no need to re-attach usage. The
+            // current chunk itself doesn't carry a
+            // usage block (just "[DONE]"), so the
+            // TryReadUsageNoContent path below would
+            // return null.
             yield return new ChatDelta { IsCompleted = true, RawJson = payload };
             yield break;
         }
+
+        // 2026-08-05: usage is delivered in the final
+        // chunk alongside an empty `choices` array.
+        // Parse it before the content checks so a
+        // usage-only chunk still yields a delta (with
+        // IsCompleted=false but Usage populated). The
+        // OpenAI protocol reuses the same `data: …`
+        // envelope for the usage chunk; we just need
+        // to read past the missing choices array.
+        var usage = TryReadUsage(payload);
 
         var content = TryReadDeltaContent(payload);
         var reasoningContent = TryReadReasoningContent(payload);
@@ -491,12 +528,23 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
                 Content = content,
                 ReasoningContent = reasoningContent,
                 RawJson = payload,
-                ToolCalls = toolCalls
+                ToolCalls = toolCalls,
+                Usage = usage
             };
         }
         else if (toolCalls.Count > 0)
         {
-            yield return new ChatDelta { RawJson = payload, ToolCalls = toolCalls };
+            yield return new ChatDelta { RawJson = payload, ToolCalls = toolCalls, Usage = usage };
+        }
+        else if (usage is not null)
+        {
+            // The usage-only final chunk — carries no
+            // content, no reasoning, no tool calls, just
+            // the token tally + cache hit. The runner
+            // reads Usage off this delta to populate the
+            // activity-feed footer / status-bar cache
+            // ring.
+            yield return new ChatDelta { RawJson = payload, Usage = usage };
         }
     }
 
@@ -568,6 +616,74 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         }
 
         return "";
+    }
+
+    // 2026-08-05: extract the platform's per-call
+    // usage block from a streaming chunk. The shape
+    // (when stream_options.include_usage is true):
+    //   {
+    //     "id": "…", "model": "…", "choices": [],
+    //     "usage": {
+    //       "prompt_tokens": 177,
+    //       "completion_tokens": 5,
+    //       "total_tokens": 182,
+    //       "prompt_tokens_details": {
+    //         "cached_tokens": 114
+    //       }
+    //     }
+    //   }
+    // The cached_tokens field is MiniMax-specific
+    // (the M3 README mentions automatic prompt cache
+    // at 1/5 input price; the field surfaces how much
+    // of the prompt was served from cache). Other
+    // OpenAI-compatible providers may omit
+    // prompt_tokens_details entirely — the read is
+    // defensive (TryGetProperty + default int 0). The
+    // function returns null on the no-usage case so
+    // the caller can distinguish "platform didn't
+    // include usage" from "usage was 0" (e.g. a
+    // zero-token ping).
+    private static ChatUsage? TryReadUsage(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("usage", out var usage) ||
+                usage.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var promptTokens = usage.TryGetProperty("prompt_tokens", out var p) && p.ValueKind == JsonValueKind.Number
+                ? p.GetInt32()
+                : 0;
+            var completionTokens = usage.TryGetProperty("completion_tokens", out var c) && c.ValueKind == JsonValueKind.Number
+                ? c.GetInt32()
+                : 0;
+            var cachedTokens = 0;
+            if (usage.TryGetProperty("prompt_tokens_details", out var details) &&
+                details.ValueKind == JsonValueKind.Object &&
+                details.TryGetProperty("cached_tokens", out var cached) &&
+                cached.ValueKind == JsonValueKind.Number)
+            {
+                cachedTokens = cached.GetInt32();
+            }
+
+            return new ChatUsage
+            {
+                PromptTokens = promptTokens,
+                CompletionTokens = completionTokens,
+                CachedTokens = cachedTokens
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static IReadOnlyList<ChatToolCall> TryReadToolCallDeltas(string json)
