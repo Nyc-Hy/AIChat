@@ -42,7 +42,47 @@ internal partial class MainWindow : Window
     // after ScrollToEnd runs the ScrollChanged handler would update
     // it too, but doing it eagerly keeps the very next streaming
     // chunk from falling into the "user is scrolled up" branch while
-    // the scroll is still settling.
+
+    // 2026-08-05: PropertyChanged handler for
+    // each ActivityItemViewModel. Subscribed
+    // when the item is added to
+    // ActivityFeed.Activity; fires for every
+    // Detail / Thinking / RunSummary update
+    // during streaming. We only care about
+    // Detail (the visible content) — every
+    // chunk the model emits bumps Detail
+    // and the user expects the scroll to
+    // follow if they were at the bottom.
+    // Thinking + RunSummary mutations are
+    // covered by the existing CollectionChanged
+    // path (they don't change the visible
+    // height of the row until Detail grows).
+    private void OnActivityItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ActivityItemViewModel.Detail))
+        {
+            return;
+        }
+        if (!_isUserAtBottom)
+        {
+            // User is reading something older;
+            // don't yank them back. The
+            // "↓ N 条新消息" pill is the
+            // affordance for the next chunk.
+            return;
+        }
+        // Use a small post so the
+        // ItemsControl re-measures the
+        // updated Detail and the new
+        // extent is visible to ScrollToEnd
+        // before we ask for the offset.
+        // Same pattern as the
+        // CollectionChanged.Add branch.
+        Dispatcher.UIThread.Post(() =>
+            ConversationScroll.ScrollToEnd(),
+            DispatcherPriority.Background);
+    }
+
     private bool _isUserAtBottom = true;
 
     public MainWindow(
@@ -424,6 +464,36 @@ internal partial class MainWindow : Window
             else
             {
                 viewModel.IncrementUnseenMessageCount();
+            }
+            // 2026-08-05: hook the newly added
+            // item's PropertyChanged so the
+            // scroll keeps following during a
+            // streaming response. The previous
+            // shape only listened to
+            // CollectionChanged.Add, which fires
+            // once when the assistant bubble is
+            // created — every subsequent Detail
+            // update (each SSE chunk) was
+            // PropertyChanged, NOT
+            // CollectionChanged, so a user who
+            // stayed at the bottom during a
+            // long stream would watch new
+            // content land below the visible
+            // area. Now: the new item is
+            // auto-subscribed; whenever its
+            // Detail grows, we re-evaluate the
+            // scroll position and follow the
+            // tail if the user is still at
+            // the bottom. Items removed by
+            // Reset (the only removal path —
+            // items aren't individually
+            // removed) keep their dead
+            // subscription, which is harmless
+            // (a disposed item never fires
+            // PropertyChanged again).
+            if (e.NewItems is { Count: > 0 } && e.NewItems[0] is ActivityItemViewModel newItem)
+            {
+                newItem.PropertyChanged += OnActivityItemPropertyChanged;
             }
         };
 
