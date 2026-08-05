@@ -201,6 +201,60 @@ public sealed partial class AgentHostViewModel : ViewModelBase
 
     public double LastRunCacheHitPercent => LastRunUsage?.CacheHitPercent ?? 0;
 
+    // 2026-08-05: visibility gate for the
+    // status-bar cache hint chip. Returns
+    // true when the last completed run
+    // actually hit the platform's prompt
+    // cache — a user on M3 with a 60%+
+    // hit rate should see the hint
+    // permanently lit (one of the cheapest
+    // ROI numbers on the screen, since
+    // cached reads are 1/5 input price).
+    // Returns false when the run had no
+    // usage block, no cached tokens, or
+    // the parser returned 0% — the chip
+    // is hidden rather than rendered as
+    // "cache 0%" noise.
+    public bool HasCacheHint => LastRunUsage is not null
+        && LastRunUsage.CachedTokens > 0
+        && LastRunCacheHitPercent > 0;
+
+    // Width in DIPs for the inline cache
+    // ring. 50px wide, so 0% = 0px,
+    // 100% = 50px.
+    public double LastRunCacheHitWidth =>
+        Math.Clamp(LastRunCacheHitPercent * 0.5, 0, 50);
+
+    // Display text for the status-bar
+    // chip. Truncates the percent to 0
+    // decimals when it's a clean
+    // integer (60.0% → "60%") and shows
+    // 1 decimal otherwise ("64.4%"). The
+    // format is the same the activity
+    // feed's "本次运行" summary uses so a
+    // user scanning both surfaces sees
+    // the same number.
+    public string LastRunCacheHitText
+    {
+        get
+        {
+            var percent = LastRunCacheHitPercent;
+            if (percent <= 0)
+            {
+                return "";
+            }
+            // 0.05 rounds to 0.1 (1 decimal
+            // place) for a clean visual
+            // when the percent is < 10. The
+            // activity feed uses the same
+            // rounding so the two surfaces
+            // never disagree.
+            return Math.Abs(percent - Math.Round(percent)) < 0.05
+                ? $"{(int)Math.Round(percent)}% cache"
+                : $"{percent:F1}% cache";
+        }
+    }
+
     // 2026-08-05: agent runner callback. Called from
     // the UI thread (the runner marshals the
     // AgentHarnessEventType.RunUsage handler through

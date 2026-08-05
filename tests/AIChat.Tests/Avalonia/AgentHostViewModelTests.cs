@@ -80,6 +80,104 @@ public sealed class AgentHostViewModelTests : IDisposable
     }
 
     [Fact]
+    public void HasCacheHint_NoUsage_Hides()
+    {
+        // No LastRunUsage yet (fresh
+        // install / first run hasn't
+        // completed) — the status-bar
+        // cache chip must stay hidden
+        // rather than render "0% cache"
+        // as visual noise.
+        var (host, _, _, _) = CreateHost();
+        Assert.False(host.HasCacheHint);
+        Assert.Equal("", host.LastRunCacheHitText);
+    }
+
+    [Fact]
+    public void HasCacheHint_ZeroCachedTokens_Hides()
+    {
+        // The platform returned a usage
+        // block but no cached tokens
+        // (M2.7 path, or a model that
+        // doesn't enable prompt cache).
+        // Chip stays hidden.
+        var (host, _, _, _) = CreateHost();
+        host.RecordRunUsage(new AIChat.Domain.Chat.ChatUsage
+        {
+            PromptTokens = 100,
+            CompletionTokens = 50,
+            CachedTokens = 0,
+        });
+        Assert.False(host.HasCacheHint);
+    }
+
+    [Fact]
+    public void HasCacheHint_CachedTokens_ShowsAndFormats()
+    {
+        // The real M3 case from the
+        // 2026-08-05 curl probe: 64.4%
+        // of the prompt was served
+        // from cache. The chip must
+        // show, the width must scale,
+        // and the text must be
+        // "64.4% cache".
+        var (host, _, _, _) = CreateHost();
+        host.RecordRunUsage(new AIChat.Domain.Chat.ChatUsage
+        {
+            PromptTokens = 177,
+            CompletionTokens = 5,
+            CachedTokens = 114,
+        });
+        Assert.True(host.HasCacheHint);
+        Assert.Equal("64.4% cache", host.LastRunCacheHitText);
+        // 64.4% × 50px max width = 32.2px
+        // (rounded by Math.Clamp).
+        Assert.Equal(32.2, host.LastRunCacheHitWidth, 1);
+    }
+
+    [Fact]
+    public void HasCacheHint_WholePercent_RendersWithoutDecimal()
+    {
+        // A clean 60% (not 60.4%)
+        // should render as "60% cache",
+        // not "60.0% cache" — daily
+        // drivers don't need the .0
+        // when the value is a whole
+        // number.
+        var (host, _, _, _) = CreateHost();
+        host.RecordRunUsage(new AIChat.Domain.Chat.ChatUsage
+        {
+            PromptTokens = 100,
+            CompletionTokens = 50,
+            CachedTokens = 60,
+        });
+        Assert.Equal("60% cache", host.LastRunCacheHitText);
+    }
+
+    [Fact]
+    public void LastRunCacheHitWidth_ClampsToFifty()
+    {
+        // Defensive: a malformed
+        // provider that reports >100%
+        // cache hit (or a math bug
+        // upstream that lets a value
+        // escape the ChatUsage
+        // invariant) must not push the
+        // ring past 50px and overlap
+        // the next status-bar element.
+        // The clamp in the property
+        // keeps the visual stable.
+        var (host, _, _, _) = CreateHost();
+        host.RecordRunUsage(new AIChat.Domain.Chat.ChatUsage
+        {
+            PromptTokens = 100,
+            CompletionTokens = 50,
+            CachedTokens = 100,
+        });
+        Assert.Equal(50, host.LastRunCacheHitWidth, 1);
+    }
+
+    [Fact]
     public void PrepareContinuation_ClearsComposerForNewInstruction()
     {
         var (host, _, _, _) = CreateHost();

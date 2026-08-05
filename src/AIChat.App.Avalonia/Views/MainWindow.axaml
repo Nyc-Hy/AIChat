@@ -1875,7 +1875,7 @@
                   same flag the existing StatusMessage text reflects.
                 -->
                 <Border Grid.Row="2" Background="{DynamicResource SurfaceSunkenBrush}">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="14">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="14">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <Path Data="M12 3 L20 6 V12 a8 8 0 0 1 -8 8 a8 8 0 0 1 -8 -8 V6 Z"
                                   Stroke="{DynamicResource AccentBrush}"
@@ -1912,6 +1912,39 @@
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
                                    MaxWidth="320"/>
+                        <!-- 2026-08-05: per-run prompt-cache
+                             hint. Mirrors the activity
+                             feed's "X% cache 命中" footer
+                             so a daily driver can see the
+                             cache ROI in the status bar at
+                             all times (no need to scroll
+                             back to the last run summary).
+                             The ring is the same shape as
+                             the context-budget bar (mini
+                             fill, accent colour) for visual
+                             consistency; the tooltip shows
+                             the full LastRunUsageText so a
+                             user hovering gets "本轮 182
+                             tokens (输入 177 / 输出 5),
+                             64.4% 命中 cache". Hidden
+                             when there's no usage / no
+                             cache hits so a fresh run
+                             doesn't show "0% cache". -->
+                        <StackPanel Grid.Column="3"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding AgentHost.HasCacheHint}">
+                            <Border Background="{DynamicResource LineBrush}" CornerRadius="2" Height="3" Width="50" ClipToBounds="True" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="2" Height="3" HorizontalAlignment="Left" Width="{Binding AgentHost.LastRunCacheHitWidth}"/>
+                            </Border>
+                            <TextBlock Text="{Binding AgentHost.LastRunCacheHitText}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="{Binding AgentHost.LastRunUsageText}"/>
+                        </StackPanel>
                         <!-- 1.0.1: trailing "+" on the
                              right of the status bar.
                              The previous shape was a
@@ -1928,7 +1961,7 @@
                              settings) so the user
                              doesn't need a separate
                              picker surface. -->
-                        <Button Grid.Column="3"
+                        <Button Grid.Column="4"
                                 Classes="chrome-button"
                                 Padding="6,1"
                                 Click="StatusBarAdd_OnClick"
