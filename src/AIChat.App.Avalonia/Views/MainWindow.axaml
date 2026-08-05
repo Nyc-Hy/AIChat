@@ -1017,18 +1017,112 @@
                                                                         </Button>
                                                                     </Grid>
                                                                     <Border Classes="bubble-ai" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}">
-                                                                        <Panel>
+                                                                        <StackPanel Spacing="8">
+                                                                            <!--
+                                                                              2026-08-05: thinking + tool-chain
+                                                                              consolidation. The previous
+                                                                              "MarkdownTextBlock + Detail only"
+                                                                              layout couldn't render ``
+                                                                              blocks (they leaked into the
+                                                                              answer as raw XML-ish text) and
+                                                                              the tool events all landed as
+                                                                              separate centered system bubbles
+                                                                              that pushed the real
+                                                                              conversation off-screen on
+                                                                              long agent runs.
+
+                                                                              New layout (top to bottom):
+                                                                              1. "💭 思考过程" collapsible
+                                                                                 section. Visible when
+                                                                                 HasThinking is true; hidden
+                                                                                 when the model didn't
+                                                                                 emit `` blocks
+                                                                                 (M2.7 default, M3
+                                                                                 thinking=disabled).
+                                                                              2. The markdown answer
+                                                                                 (Detail, post-parse —
+                                                                                 think tags stripped).
+                                                                              3. "工具调用 (N)" collapsible
+                                                                                 section. Visible when
+                                                                                 HasToolCalls is true;
+                                                                                 collapsed by default to
+                                                                                 avoid stealing vertical
+                                                                                 space from the answer
+                                                                                 when the chain is short.
+                                                                              4. The 3-dot "thinking"
+                                                                                 placeholder (no content
+                                                                                 yet) for the very
+                                                                                 first delta.
+                                                                            -->
+                                                                            <Expander IsVisible="{Binding HasThinking}"
+                                                                                      Classes="think-block"
+                                                                                      HorizontalAlignment="Stretch"
+                                                                                      HorizontalContentAlignment="Stretch">
+                                                                                <Expander.Header>
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                        <TextBlock Text="💭" FontSize="11"/>
+                                                                                        <TextBlock Text="思考过程" Classes="muted" FontSize="11" FontWeight="SemiBold"/>
+                                                                                        <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                                        <TextBlock Text="{Binding ThinkingSummary}"
+                                                                                                   Classes="muted" FontSize="10"
+                                                                                                   TextTrimming="CharacterEllipsis"/>
+                                                                                    </StackPanel>
+                                                                                </Expander.Header>
+                                                                                <controls:MarkdownTextBlock Markdown="{Binding Thinking}"
+                                                                                                            Foreground="{DynamicResource MutedBrush}"
+                                                                                                            FontSize="12"
+                                                                                                            TextWrapping="Wrap"
+                                                                                                            FontFamily="{StaticResource FontMono}"/>
+                                                                            </Expander>
+
                                                                             <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
                                                                                                         Markdown="{Binding Detail}"
                                                                                                         Foreground="{DynamicResource TextBrush}"
                                                                                                         FontSize="14"
                                                                                                         TextWrapping="Wrap"/>
-                                                                            <StackPanel IsVisible="{Binding IsThinking}" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" HorizontalAlignment="Left">
+
+                                                                            <StackPanel IsVisible="{Binding IsThinking}" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Left">
                                                                                 <Ellipse Classes="thinking-dot" Width="6" Height="6"/>
                                                                                 <Ellipse Classes="thinking-dot delay-1" Width="6" Height="6"/>
                                                                                 <Ellipse Classes="thinking-dot delay-2" Width="6" Height="6"/>
                                                                             </StackPanel>
-                                                                        </Panel>
+
+                                                                            <Expander IsVisible="{Binding HasToolCalls}"
+                                                                                      Classes="tool-chain"
+                                                                                      HorizontalAlignment="Stretch"
+                                                                                      HorizontalContentAlignment="Stretch">
+                                                                                <Expander.Header>
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                        <TextBlock Text="🔧" FontSize="11"/>
+                                                                                        <TextBlock Text="工具调用" Classes="muted" FontSize="11" FontWeight="SemiBold"/>
+                                                                                        <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                                        <TextBlock Text="{Binding ToolCalls.Count, StringFormat='{}{0} 次'}"
+                                                                                                   Classes="muted" FontSize="11"/>
+                                                                                    </StackPanel>
+                                                                                </Expander.Header>
+                                                                                <ItemsControl ItemsSource="{Binding ToolCalls}">
+                                                                                    <ItemsControl.ItemTemplate>
+                                                                                        <DataTemplate x:DataType="vm:ToolCallRecord">
+                                                                                            <Grid ColumnDefinitions="*,Auto" Margin="0,2" ColumnSpacing="8">
+                                                                                                <StackPanel Grid.Column="0">
+                                                                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"/>
+                                                                                                    <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="10"/>
+                                                                                                    <TextBlock Text="{Binding ErrorMessage}" Classes="muted" FontSize="10"
+                                                                                                               IsVisible="{Binding IsError}"
+                                                                                                               Foreground="{DynamicResource ErrorBorderBrush}"
+                                                                                                               TextWrapping="Wrap"/>
+                                                                                                </StackPanel>
+                                                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                                                    <TextBlock Text="{Binding Status}" Classes="muted" FontSize="10"/>
+                                                                                                    <TextBlock Text="·" Classes="muted" FontSize="10"/>
+                                                                                                    <TextBlock Text="{Binding DurationDisplay}" Classes="muted" FontSize="10"/>
+                                                                                                </StackPanel>
+                                                                                            </Grid>
+                                                                                        </DataTemplate>
+                                                                                    </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
+                                                                            </Expander>
+                                                                        </StackPanel>
                                                                     </Border>
                                                                 </StackPanel>
                                                             </Grid>

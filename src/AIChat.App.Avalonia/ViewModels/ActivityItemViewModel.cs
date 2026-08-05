@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AIChat.App.Avalonia.ViewModels;
@@ -12,6 +13,26 @@ namespace AIChat.App.Avalonia.ViewModels;
 // The IsX flags derive from Title + Detail + Status rather than
 // from an enum, so the strings stay free-form and the XAML stays
 // declarative.
+//
+// 2026-08-05: thinking + tool-call consolidation. AI
+// bubbles now carry two new fields beyond Detail:
+//   - Thinking: the model-side reasoning chain
+//     (M3's ``...`` blocks), parsed by
+//     AIChat.Domain.Chat.ThinkBlockParser and
+//     rendered as a collapsible "思考过程" section
+//     above the answer. The chain is captured per
+//     streaming delta so partial tags at chunk
+//     boundaries don't leak into the visible
+//     content.
+//   - ToolCalls: ordered list of tool invocations
+//     the model issued during the run. Renders as
+//     a single expandable "工具调用 (N)" section
+//     on the AI bubble instead of the previous
+//     one-system-bubble-per-call layout that
+//     flooded the activity feed on long runs
+//     (10-tool runs were emitting 10–30+ center
+//     "正在读取"/"工具问题" rows that pushed the
+//     real conversation off-screen).
 public sealed partial class ActivityItemViewModel : ViewModelBase
 {
     [ObservableProperty]
@@ -22,6 +43,27 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
 
     [ObservableProperty]
     private string status = "";
+
+    // 2026-08-05: extracted `` chain. The XAML
+    // renders this as a collapsible "💭 思考过程
+    // (Xs)" section above the answer when
+    // non-empty. Empty for the user bubble (the
+    // parser is AI-only) and for AI models that
+    // don't emit think blocks (M2.7 reasoning
+    // content goes through a separate field).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasThinking))]
+    [NotifyPropertyChangedFor(nameof(ThinkingSummary))]
+    private string thinking = "";
+
+    // 2026-08-05: tool call list. The agent
+    // runner appends one entry per AgentRunEvent
+    // type ToolCall; the XAML renders this as
+    // a single expandable section on the AI
+    // bubble (name + status + duration per row).
+    // Replacing the previous "one system bubble
+    // per call" pattern that cluttered the feed.
+    public ObservableCollection<ToolCallRecord> ToolCalls { get; } = [];
 
     public ActivityItemViewModel(string title, string detail, string status)
     {
@@ -81,6 +123,65 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
     [ObservableProperty]
     private bool hasReceivedFirstContent;
 
+    partial void OnTitleChanged(string value)
+    {
+        // Title drives the bubble classification (IsUserBubble /
+        // IsAssistantBubble / IsSystemBubble) and the thinking
+        // state, so a Title flip must re-raise all of them or
+        // the XAML re-render uses the old classification.
+        OnPropertyChanged(nameof(IsUserBubble));
+        OnPropertyChanged(nameof(IsAssistantBubble));
+        OnPropertyChanged(nameof(IsSystemBubble));
+        OnPropertyChanged(nameof(IsThinking));
+    }
+
+    // 2026-08-05: derived helpers for the think-
+    // section XAML. HasThinking is the IsVisible
+    // gate; ThinkingSummary is the collapsed
+    // preview text shown on the header row.
+    public bool HasThinking => !string.IsNullOrWhiteSpace(Thinking);
+
+    public string ThinkingSummary
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Thinking))
+            {
+                return "";
+            }
+            // Trim to one line for the header
+            // preview; the full chain is in the
+            // expanded body. Falls back to the
+            // first 80 chars when the chain has
+            // no newline (most MiniMax think
+            // blocks are short and one-line).
+            var firstLine = Thinking.Split('\n')[0].Trim();
+            if (firstLine.Length > 80)
+            {
+                firstLine = firstLine[..80] + "…";
+            }
+            return firstLine;
+        }
+    }
+
+    // 2026-08-05: derived gate for the tool-call
+    // section. The XAML uses ToolCalls.Count > 0
+    // directly, but this property is the single
+    // place the IsVisible binding lives so a
+    // future rename / refactor is one edit not
+    // ten.
+    public bool HasToolCalls => ToolCalls.Count > 0;
+
+    partial void OnThinkingChanged(string value)
+    {
+        // HasThinking + ThinkingSummary both
+        // derive from the raw Thinking string,
+        // so a write must re-raise both or the
+        // header row stays stale mid-stream.
+        OnPropertyChanged(nameof(HasThinking));
+        OnPropertyChanged(nameof(ThinkingSummary));
+    }
+
     partial void OnDetailChanged(string value)
     {
         // Detail drives IsThinking (the 3-dot
@@ -92,6 +193,7 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsThinking));
         OnPropertyChanged(nameof(CanCopyAssistantBubble));
     }
+
     partial void OnStatusChanged(string value)
     {
         // Status drives the in-flight spinner AND the terminal
@@ -101,16 +203,5 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsThinking));
         OnPropertyChanged(nameof(IsFailed));
         OnPropertyChanged(nameof(IsStopped));
-    }
-    partial void OnTitleChanged(string value)
-    {
-        // Title drives the bubble classification (IsUserBubble /
-        // IsAssistantBubble / IsSystemBubble) and the thinking
-        // state, so a Title flip must re-raise all of them or
-        // the XAML re-render uses the old classification.
-        OnPropertyChanged(nameof(IsUserBubble));
-        OnPropertyChanged(nameof(IsAssistantBubble));
-        OnPropertyChanged(nameof(IsSystemBubble));
-        OnPropertyChanged(nameof(IsThinking));
     }
 }

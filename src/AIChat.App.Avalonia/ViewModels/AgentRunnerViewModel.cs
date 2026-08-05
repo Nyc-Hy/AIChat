@@ -126,6 +126,17 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
         try
         {
+            // 2026-08-05: think-block parser for the
+            // AI bubble. Maintained across the
+            // stream lifetime so partial ``
+            // tags at chunk boundaries don't leak
+            // into the visible content. The
+            // parser is created fresh per run
+            // (the user's expectation is that
+            // each new turn starts a new chain,
+            // not that it concatenates onto the
+            // previous one).
+            var thinkParser = new ThinkBlockParser();
             var settings = _host.GetSettings();
             var noWrite = _host.GetNoWriteMode();
             var runtimeSettings = noWrite
@@ -196,6 +207,20 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                     _toolRegistry,
                     retryPolicy: new RetryPolicy(maxRetries: settings.RetryMaxAttempts)));
             assistantItem.Detail = "";
+            // 2026-08-05: tool-call records keyed by
+            // call id (or name when id is missing on
+            // the started chunk — the harness can
+            // emit the name first and the id a few
+            // chunks later on streaming tool calls).
+            // The ToolResult handler updates the
+            // matching record's status + duration
+            // rather than emitting a new system
+            // bubble per call. This consolidates
+            // the 10–30+ per-call "正在读取" /
+            // "工具问题" rows that used to push the
+            // real conversation off-screen on long
+            // agent runs.
+            var toolRecords = new Dictionary<string, ToolCallRecord>(StringComparer.OrdinalIgnoreCase);
             await foreach (var agentEvent in harness.RunAsync(new AgentHarnessRunRequest
             {
                 Conversation = conversation,
@@ -210,7 +235,27 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 RetriedFromRunId = retriedFromRunId
             }, cancellationToken))
             {
-                await ApplyAgentEventAsync(agentEvent, assistantItem, assistantMessage);
+                await ApplyAgentEventAsync(agentEvent, assistantItem, assistantMessage, thinkParser, toolRecords);
+            }
+            // 2026-08-05: flush any partial ``
+            // tag the parser was holding when the
+            // stream ended (a clean [DONE] path
+            // doesn't need this — the parser
+            // already drained the buffer — but a
+            // truncated stream that ends mid-tag
+            // would otherwise drop the literal
+            // tag text). Force-emit the pending
+            // buffer to the visible content so
+            // the user sees the raw tag rather
+            // than a silent loss.
+            thinkParser.Flush();
+            if (!string.IsNullOrEmpty(thinkParser.VisibleContent))
+            {
+                assistantMessage.Content += thinkParser.VisibleContent;
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    assistantItem.Detail = thinkParser.VisibleContent;
+                });
             }
 
             var run = conversation.AgentRuns.LastOrDefault();
@@ -315,7 +360,20 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
     private async Task ApplyAgentEventAsync(
         AgentHarnessEvent agentEvent,
         ActivityItemViewModel assistantItem,
-        ChatMessage assistantMessage)
+        ChatMessage assistantMessage,
+        // 2026-08-05: parser + tool records passed
+        // through to keep the per-run state
+        // across streaming events. The parser
+        // is local to the run lifetime so a
+        // previous run's think chain doesn't
+        // bleed into the next turn. The dict
+        // keys tool-call-id → ToolCallRecord
+        // so the ToolResult handler can find
+        // and update the matching row in place
+        // (replaces the previous "one new
+        // system bubble per event" pattern).
+        ThinkBlockParser thinkParser,
+        Dictionary<string, ToolCallRecord> toolRecords)
     {
         switch (agentEvent.Type)
         {
@@ -358,19 +416,51 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
 
                 break;
             case AgentHarnessEventType.ToolCall:
+                // 2026-08-05: append a ToolCallRecord to
+                // the AI bubble's tool-calls list
+                // instead of emitting a "正在读取"
+                // system bubble. The new
+                // collapsible "工具调用 (N)"
+                // section on the AI bubble is the
+                // single place the user sees the
+                // tool chain — long agent runs no
+                // longer push the real
+                // conversation off-screen with
+                // 10–30+ system rows.
                 if (!string.IsNullOrWhiteSpace(agentEvent.ToolCall?.Name))
                 {
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        _activityFeed.Add(
-                            "正在读取",
-                            FriendlyToolSummary(agentEvent.ToolCall.Name),
-                            "工具");
+                        var record = new ToolCallRecord
+                        {
+                            Name = agentEvent.ToolCall.Name,
+                            Summary = FriendlyToolSummary(agentEvent.ToolCall.Name),
+                            StartedAt = DateTimeOffset.Now,
+                            Status = "运行中"
+                        };
+                        var key = !string.IsNullOrWhiteSpace(agentEvent.ToolCall.Id)
+                            ? agentEvent.ToolCall.Id
+                            : $"__pending::{agentEvent.ToolCall.Name}::{assistantItem.ToolCalls.Count}";
+                        toolRecords[key] = record;
+                        assistantItem.ToolCalls.Add(record);
                     });
                 }
 
                 break;
             case AgentHarnessEventType.ToolApprovalRejected:
+                // 2026-08-05: tool rejections are still
+                // surfaced inline. The XAML's
+                // approval-modal has its own
+                // affordance, and the system
+                // bubble is the only signal that
+                // the runner-level state machine
+                // sees — it's the rare case where
+                // a single line is genuinely the
+                // best fit. Kept for now; if the
+                // tool-call consolidation grows to
+                // cover this too the rejection
+                // becomes a ToolCallRecord with a
+                // "已阻止" status.
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     _activityFeed.Add(
@@ -380,8 +470,48 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                 });
                 break;
             case AgentHarnessEventType.ToolResult:
-                if (agentEvent.ToolResult?.IsError == true)
+                // 2026-08-05: update the matching
+                // ToolCallRecord in place rather
+                // than emitting a new system
+                // bubble. The record is keyed by
+                // tool-call-id (or the pending
+                // name+index key the started-event
+                // handler used when the id wasn't
+                // available yet — the harness can
+                // emit the name before the id on
+                // streaming tool calls). Falls
+                // through to the old "工具问题"
+                // system-bubble path when the
+                // started event was missed (e.g.
+                // a tool that was approved at
+                // session level and fired without
+                // a corresponding ToolCall event
+                // — defensive, shouldn't happen in
+                // practice).
+                var resultKey = !string.IsNullOrWhiteSpace(agentEvent.ToolCall?.Id)
+                    ? agentEvent.ToolCall!.Id
+                    : $"__pending::{agentEvent.ToolCall?.Name}::{assistantItem.ToolCalls.Count - 1}";
+                if (agentEvent.ToolResult is not null
+                    && !string.IsNullOrWhiteSpace(agentEvent.ToolCall?.Id)
+                    && toolRecords.TryGetValue(agentEvent.ToolCall.Id, out var existing))
                 {
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        existing.CompletedAt = DateTimeOffset.Now;
+                        existing.IsError = agentEvent.ToolResult.IsError;
+                        existing.ErrorMessage = agentEvent.ToolResult.IsError
+                            ? (agentEvent.ToolResult.Content ?? "").Split('\n').FirstOrDefault() ?? ""
+                            : "";
+                        existing.Status = agentEvent.ToolResult.IsError ? "失败" : "完成";
+                    });
+                }
+                else if (agentEvent.ToolResult?.IsError == true)
+                {
+                    // Defensive fallback — the
+                    // started event was missed or
+                    // the id changed mid-stream.
+                    // Keep the old behavior so the
+                    // error still surfaces.
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         _activityFeed.Add(
@@ -403,27 +533,62 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
             case AgentHarnessEventType.ContentDelta:
                 if (!string.IsNullOrEmpty(agentEvent.Content))
                 {
-                    assistantMessage.Content += agentEvent.Content;
+                    // 2026-08-05: feed the think-block
+                    // parser. The parser splits the
+                    // delta into the visible content
+                    // (the answer) and the hidden
+                    // `` chain. Storing the
+                    // visible content in
+                    // assistantMessage.Content (not
+                    // the raw delta with the
+                    // `` tags inline) keeps the
+                    // conversation log clean — a
+                    // future "export as markdown"
+                    // feature gets the answer
+                    // without the chain noise.
+                    thinkParser.Append(agentEvent.Content);
+                    var visibleChunk = thinkParser.VisibleContent;
+                    // The parser is stateful; reset
+                    // VisibleContent so the next
+                    // Append() reports the diff,
+                    // not the cumulative total.
+                    thinkParser.ResetVisibleDelta();
+                    assistantMessage.Content += visibleChunk;
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
-                        // First content delta after the "正在
-                        // 启动任务..." placeholder: clear the
-                        // placeholder (replace, don't append) so
-                        // the rendered markdown shows the model's
-                        // actual response rather than "正在启动
-                        // 任务...Hello there...". Subsequent
-                        // deltas append as usual. The flag lives
-                        // on the bubble itself so the lambda
-                        // doesn't have to carry per-run state.
+                        // First content delta after
+                        // the "正在启动任务..."
+                        // placeholder: clear the
+                        // placeholder (replace,
+                        // don't append) so the bubble
+                        // doesn't render as
+                        // "正在启动任务...Hello there..."
+                        // in the markdown view. The
+                        // flag lives on the bubble
+                        // itself so the lambda
+                        // doesn't have to carry
+                        // per-run state.
                         if (!assistantItem.HasReceivedFirstContent)
                         {
-                            assistantItem.Detail = agentEvent.Content;
+                            assistantItem.Detail = visibleChunk;
                             assistantItem.HasReceivedFirstContent = true;
                         }
                         else
                         {
-                            assistantItem.Detail += agentEvent.Content;
+                            assistantItem.Detail += visibleChunk;
                         }
+                        // The think chain is
+                        // appended separately. The
+                        // XAML's collapsible "💭
+                        // 思考过程" section
+                        // (IsVisible via HasThinking)
+                        // opens automatically when
+                        // the chain starts
+                        // accumulating and the
+                        // user can dismiss it once
+                        // the answer is done
+                        // streaming.
+                        assistantItem.Thinking = thinkParser.Thinking;
                         _host.SetStatusMessage("正在接收回复...");
                     });
                 }
