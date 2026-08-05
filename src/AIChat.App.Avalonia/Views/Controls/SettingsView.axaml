@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             xmlns:abstractions="using:AIChat.Abstractions.Llm"
              x:DataType="vm:MainWindowViewModel"
              x:Class="AIChat.App.Avalonia.Views.Controls.SettingsView">
   <!--
@@ -176,6 +177,62 @@
                              Text="{Binding ProviderBaseUrl}"
                              PlaceholderText="Base URL"/>
                   </Grid>
+
+                  <!--
+                    2026-08-04: per-model parameter rows.
+                    The catalog defines the knob set per
+                    model (M3 = thinking + reasoning_split
+                    + top_p + parallel_tool_calls +
+                    response_format; M2.7 = reasoning_split
+                    + top_p only); this ItemsControl
+                    renders one labeled ComboBox per knob.
+                    The combo shows the parameter's
+                    DisplayName + Description as a
+                    tooltip, options come from the
+                    catalog's Options list, and the
+                    selected value 2-way binds to
+                    settings.ModelParameters[id].
+
+                    This block was the missing half of
+                    the "Settings 没啥能用的" complaint:
+                    the catalog had the parameter
+                    definitions for weeks (reasoning_split
+                    in 2a247af, thinking + JSON in 65b61f7)
+                    but the UI never exposed them. With
+                    these rows the daily driver can flip
+                    "思考模式" to 总是思考 for a hard
+                    refactor, drop top_p to 0.1 for
+                    reproducible code review, or switch
+                    response_format to JSON 对象 for a
+                    structured-output agent loop —
+                    without leaving the Settings modal.
+                  -->
+                  <ItemsControl ItemsSource="{Binding ModelParameters}"
+                                IsVisible="{Binding ModelParameters.Count}"
+                                Margin="0,10,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ModelParameterViewModel">
+                        <Grid ColumnDefinitions="160,*" Margin="0,3" ColumnSpacing="12">
+                          <TextBlock Grid.Column="0"
+                                     Text="{Binding Parameter.DisplayName}"
+                                     Classes="body"
+                                     VerticalAlignment="Center"
+                                     ToolTip.Tip="{Binding Parameter.Description}"/>
+                          <ComboBox Grid.Column="1"
+                                    ItemsSource="{Binding Options}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding SelectedValue, Mode=TwoWay}"
+                                    HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate x:DataType="abstractions:LlmParameterOption">
+                                <TextBlock Text="{Binding DisplayName}"/>
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
 
                   <!--
                     2026-08-04: inline "测试连接" button +

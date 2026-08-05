@@ -116,6 +116,32 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
     public ObservableCollection<ProviderTemplateViewModel> ProviderTemplates { get; } = [];
     public ObservableCollection<ProviderCardViewModel> AdvancedProviders { get; } = [];
 
+    // 2026-08-04: per-model parameters surfaced as
+    // labeled ComboBox rows below the model textbox.
+    // The catalog defines the knob set per model
+    // (M3 gets thinking + reasoning_split + top_p +
+    // parallel_tool_calls + response_format; M2.7
+    // gets reasoning_split + top_p only); the VM
+    // materializes one row per knob when the user
+    // picks a model. SelectedValue on each row is
+    // 2-way bound to settings.ModelParameters[id]
+    // so saving the modal writes through to disk.
+    //
+    // 2026-08-04: this is the UI half of the
+    // "Settings 没啥能用的" complaint — the catalog
+    // has had the parameter definitions for weeks
+    // (reasoning_split landed in 2a247af, top_p /
+    // parallel_tool_calls in the same commit, plus
+    // thinking + response_format in 65b61f7), but
+    // there was no XAML rendering them. The user
+    // could see the model dropdown, type a model
+    // id, click 测试连接, and then have no way to
+    // actually flip any of the knobs that make the
+    // model behave differently. Adding the
+    // ItemsControl binding to this collection
+    // completes the half-finished Settings modal.
+    public ObservableCollection<ModelParameterViewModel> ModelParameters { get; } = [];
+
     public ProviderConfigViewModel(
         IAppRepository repository,
         ProviderConnectionTester tester,
@@ -181,6 +207,26 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
                 result.Provider.TemplateId,
                 ProviderModel.Trim()).Id;
         }
+
+        // 2026-08-04: sync the per-model parameter
+        // ComboBoxes into the configured provider's
+        // ModelParameters BEFORE ApplySelectedProvider
+        // runs. ApplySelectedProvider propagates
+        // configured.ModelParameters → settings.ModelParameters
+        // (overwriting anything we'd written directly
+        // to settings), so writing to
+        // result.Provider.ModelParameters is the
+        // only spot that survives the round-trip.
+        // The user picks values from the rendered
+        // rows; the empty-string "" means "默认"
+        // (don't send on the wire) and is dropped
+        // here so the JSON file doesn't accumulate
+        // noise entries. NormalizeModelParameters
+        // then filters to current-model keys
+        // (dropping any leftover entries from a
+        // previous model the user switched away
+        // from).
+        SyncModelParametersToProvider(result.Provider);
 
         ProviderSettingsService.ApplySelectedProvider(settings);
         ProviderSettingsService.NormalizeModelParameters(settings);
@@ -354,6 +400,101 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
                                 string.Equals(active.TemplateId, SelectedProviderTemplate.Id, StringComparison.OrdinalIgnoreCase);
         ProviderBaseUrl = useActiveProvider ? active!.BaseUrl : SelectedProviderTemplate.DefaultBaseUrl;
         ProviderModel = useActiveProvider ? active!.SelectedModelId : SelectedProviderTemplate.DefaultModel;
+    }
+
+    // 2026-08-04: rebuild the per-model parameter rows
+    // whenever the resolved model changes. Three trigger
+    // paths:
+    //   1. The user picks a different template
+    //      (OnSelectedProviderTemplateChanged →
+    //      ApplySelectedProviderTemplateDefaults
+    //      sets ProviderModel → OnProviderModelChanged
+    //      fires).
+    //   2. The user types a different model id into
+    //      the textbox (OnProviderModelChanged fires
+    //      directly).
+    //   3. Refresh() runs on initial load / after
+    //      save — PopulateProviderTemplates
+    //      eventually sets ProviderModel, which
+    //      re-triggers the OnProviderModelChanged
+    //      handler below.
+    //
+    // For each parameter in the catalog row, create
+    // a VM seeded with the user's saved value (from
+    // _settingsHolder.Current.ModelParameters, or "" if
+    // not set). The empty value means "默认" — the
+    // OpenAICompatibleChatProvider switch skips
+    // emitting the field on the wire when the value
+    // is whitespace.
+    //
+    // We DON'T trim ProviderModel — the user might
+    // have typed a custom id (e.g. a private
+    // deployment's model id) and ResolveModel's
+    // "non-empty user-typed id" path preserves it
+    // verbatim. The XAML re-resolves on every change
+    // because the catalog's Parameters list is the
+    // source of truth for which knobs even exist.
+    partial void OnProviderModelChanged(string value)
+    {
+        RebuildModelParametersForCurrentModel();
+    }
+
+    private void RebuildModelParametersForCurrentModel()
+    {
+        ModelParameters.Clear();
+        if (SelectedProviderTemplate is null || string.IsNullOrWhiteSpace(ProviderModel))
+        {
+            return;
+        }
+
+        var model = ChatProviderCatalog.ResolveModel(
+            SelectedProviderTemplate.Id,
+            ProviderModel);
+        if (model.Parameters.Count == 0)
+        {
+            // User-typed custom model id with no
+            // catalog row → no parameters to render.
+            // The OpenAICompatibleChatProvider's
+            // switch silently skips unknown
+            // parameters, so a stale settings entry
+            // for the previous model is harmless.
+            return;
+        }
+
+        var saved = _settingsHolder.Current.ModelParameters;
+        foreach (var parameter in model.Parameters)
+        {
+            saved.TryGetValue(parameter.Id, out var currentValue);
+            ModelParameters.Add(new ModelParameterViewModel(parameter, currentValue ?? ""));
+        }
+    }
+
+    // 2026-08-04: write the user's per-row dropdown
+    // picks into the configured provider's
+    // ModelParameters dict. The ApplySelectedProvider
+    // call in SaveProviderAsync propagates this into
+    // settings.ModelParameters on the way to disk.
+    // The dictionary is rebuilt from scratch (not
+    // merged) so a user who switched from M3 → M2.7
+    // (which drops parallel_tool_calls + thinking
+    // from its catalog Parameters) loses the M3-only
+    // entries here, before NormalizeModelParameters
+    // has a chance to filter them. Whitespace /
+    // empty values are dropped (they mean "默认" —
+    // don't send on the wire; keeping them in the
+    // dict would just be noise on disk).
+    private void SyncModelParametersToProvider(ConfiguredLlmProvider provider)
+    {
+        var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in ModelParameters)
+        {
+            if (string.IsNullOrWhiteSpace(row.SelectedValue))
+            {
+                continue;
+            }
+            merged[row.Parameter.Id] = row.SelectedValue;
+        }
+        provider.ModelParameters = merged;
     }
 
     // 2026-08-04: pick a fallback model to suggest in
