@@ -510,23 +510,36 @@ public sealed partial class AgentHostViewModel : ViewModelBase
             }
 
             // @file references: pull @path tokens out of the
-            // prompt, read the file contents, and drop a system
-            // bubble per attachment so the user can see what got
-            // inlined. Warnings (file not found, too large) render
-            // as their own system bubble so the user gets feedback
-            // rather than a silent skip. The cleaned prompt (with
-            // the @tokens stripped) plus a context block listing
-            // the attached file contents is what the agent sees.
+            // prompt, read the file contents, and drop ONE
+            // system bubble per run (not one per attachment) so
+            // the activity feed stays clean on multi-@file
+            // prompts. Previously this loop rendered a centred
+            // 📎 bubble per file — a 5-@file prompt would push
+            // 5 system bubbles between the user message and
+            // the AI bubble, drowning the real conversation.
+            //
+            // Now: if there are attachments, render a single
+            // "📎 N 个附件 (X KB)" line + the joined list of
+            // paths in the detail, so the user can see at a
+            // glance what got inlined. Warnings (file not
+            // found, too large) stay as their own system bubble
+            // because they need their own affordance — a
+            // warning that the user can't see is the same as a
+            // silent skip. The cleaned prompt (with the @tokens
+            // stripped) plus a context block listing the
+            // attached file contents is what the agent sees.
             var projectRoot = _sidebar.CurrentProject?.TryGetPrimaryPath();
             var parsed = PromptAttachmentParser.Parse(prompt, projectRoot);
-            foreach (var attachment in parsed.Attachments)
+            if (parsed.Attachments.Count > 0)
             {
-                var preview = attachment.Content.Length > 200
-                    ? attachment.Content[..200] + "…"
-                    : attachment.Content;
+                var totalBytes = parsed.Attachments.Sum(item => item.ByteCount);
+                var totalKb = totalBytes / 1024.0;
+                var sizeText = totalKb >= 1 ? $"{totalKb:F1} KB" : $"{totalBytes} 字节";
+                var detail = string.Join("\n", parsed.Attachments.Select(item =>
+                    $"• {item.ResolvedPath}  ({item.ByteCount} 字节)"));
                 _activityFeed.Add(
-                    $"📎 {attachment.ResolvedPath}  ({attachment.ByteCount} 字节)",
-                    preview,
+                    $"📎 {parsed.Attachments.Count} 个附件  ({sizeText})",
+                    detail,
                     "附件");
             }
             foreach (var warning in parsed.Warnings)
