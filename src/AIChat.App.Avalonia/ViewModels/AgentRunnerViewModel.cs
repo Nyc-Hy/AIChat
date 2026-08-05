@@ -603,7 +603,27 @@ public sealed partial class AgentRunnerViewModel : ObservableObject
                         // the answer is done
                         // streaming.
                         assistantItem.Thinking = thinkParser.Thinking;
-                        _host.SetStatusMessage("正在接收回复...");
+                        // 2026-08-05: status bar reflects
+                        // whether the model is currently
+                        // emitting the hidden think chain
+                        // (M3 thinking=adaptive) or the
+                        // visible answer. Daily drivers who
+                        // look at the status bar to see
+                        // "is it still working?" used to see
+                        // "正在接收回复..." throughout, even
+                        // during a 30s think chain where no
+                        // visible content was arriving. Now
+                        // the status flips to "正在思考..."
+                        // when the parser is in think mode
+                        // and back to "正在接收回复..." when
+                        // the answer starts. Setting the
+                        // same string repeatedly is a no-op
+                        // (the binding's value-compare
+                        // short-circuits the UI render).
+                        _host.SetStatusMessage(
+                            thinkParser.IsInsideThink
+                                ? "正在思考..."
+                                : "正在接收回复...");
                     });
                 }
 
