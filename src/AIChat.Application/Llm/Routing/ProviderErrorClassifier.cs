@@ -85,13 +85,17 @@ public static class ProviderErrorClassifier
         {
             // 401 covers both "key is dead / revoked" and
             // "key is on the wrong tier for the model
-            // you picked". The Coding Plan key (sk-cp-…)
-            // case is the one we hit hardest in 2026-08
-            // user testing — the key is valid for M2.7
-            // but the user picked M3 from the dropdown
-            // and got a 401. The hint covers both fixes.
+            // you picked". 2026-08-05: MiniMax unified the
+            // Coding Plan + Token Plan billing surfaces,
+            // so sk-cp-… keys now authenticate against M3
+            // too. The old "switch to M2.7" instruction
+            // is misleading now (it'd route the user
+            // AWAY from a model their key pays for). The
+            // remaining 401 causes are: dead/revoked key
+            // (regenerate in the console) or a typo
+            // (paste error). Both fixes are out-of-app.
             ProviderErrorKind.Authentication =>
-                "检查 API Key 是否过期或被撤销。如果是 Coding Plan (sk-cp-…) 订阅，可能不覆盖当前模型——在 Settings 里换到 M2.7 试试，或去 MiniMax 控制台拿 Token Plan key。",
+                "检查 API Key 是否过期或被撤销（重新生成见 MiniMax 控制台「API Keys」页），或确认粘贴时没漏字符。",
             // 403 is "key valid, account blocked from this
             // resource" — billing / region / org
             // permission issue. Out of app.
@@ -113,7 +117,7 @@ public static class ProviderErrorClassifier
             // correctly-keyed .io sometimes returns 404
             // for older model ids).
             ProviderErrorKind.ModelNotFound =>
-                "当前 model id 在 MiniMax 上不存在或被下线了。打开 Settings 把模型换成 M3 / M3-highspeed / M2.7 之一试试。",
+                "当前 model id 在 MiniMax 上不存在或被下线了。打开 Settings 把模型换成 M3 / M3-highspeed 之一试试。",
             // 422 / 400 + context keywords = prompt too
             // long. M2.7 caps at 200K, M3 at 1M. The
             // hint routes the user to the model dropdown
@@ -139,12 +143,12 @@ public static class ProviderErrorClassifier
             ProviderErrorKind.Network =>
                 "网络层失败。检查 baseUrl 拼写（默认应该是 https://api.minimax.chat/v1），或公司代理/VPN 是否拦截了出站 HTTPS。",
             // Timeout: 20s client-side default. A 1M
-            // context prefill on a Coding Plan key can
-            // blow past 20s. The hint points at
-            // /clear or the model dropdown, not at the
-            // user trying to "wait it out".
+            // context prefill can blow past 20s. The
+            // hint points at /clear or the model
+            // dropdown, not at the user trying to
+            // "wait it out".
             ProviderErrorKind.Timeout =>
-                "20 秒没收到响应。长 prompt 配 1M 上下文 + Coding Plan 路由容易超时。/clear 缩短上下文，或换 M3-highspeed。",
+                "20 秒没收到响应。长 prompt 配 1M 上下文 prefill 容易超时。/clear 缩短上下文，或换 M3-highspeed 优先调度档。",
             // 5xx: transient. The user should just
             // retry. No actionable hint — the previous
             // shape didn't have one either, and "wait

@@ -42,10 +42,10 @@ public sealed class ProviderErrorClassifierTests
     // daily-driver "the toast said nothing useful"
     // support ticket.
     [Theory]
-    [InlineData(401, "{\"error\":\"invalid api key\"}", ProviderErrorKind.Authentication, "Coding Plan")]
+    [InlineData(401, "{\"error\":\"invalid api key\"}", ProviderErrorKind.Authentication, "API Key")]
     [InlineData(403, "{}", ProviderErrorKind.PermissionDenied, "账单")]
     [InlineData(429, "{}", ProviderErrorKind.RateLimited, "用量")]
-    [InlineData(404, "{\"error\":\"model not found\"}", ProviderErrorKind.ModelNotFound, "M2.7")]
+    [InlineData(404, "{\"error\":\"model not found\"}", ProviderErrorKind.ModelNotFound, "M3")]
     [InlineData(400, "{\"error\":\"maximum context length exceeded\"}", ProviderErrorKind.ContextLengthExceeded, "1M 上下文")]
     [InlineData(400, "{\"error\":\"developer role not supported\"}", ProviderErrorKind.InvalidRequest, "system")]
     public void FromHttp_HasActionableHintForEveryCommonKind(

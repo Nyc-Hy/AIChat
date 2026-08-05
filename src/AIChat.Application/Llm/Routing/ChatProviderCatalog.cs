@@ -16,15 +16,23 @@ namespace AIChat.Application.Llm.Routing;
 // "non-empty user-typed id" path (so a self-hosted MiniMax-style endpoint
 // with a private model id still works).
 //
-// 2026-08-04: expanded the MiniMax model list to the three shipping
-// tiers (M3 flagship, M3-highspeed same-model faster variant, M2.7
-// for users on the older Coding Plan subscription that doesn't
-// include M3). All three share the same capabilities surface (tools +
-// interleaved thinking) but differ in context window and pricing.
+// 2026-08-04: two shipping MiniMax tiers (M3 flagship, M3-highspeed
+// same-model faster variant). M2.7 / M2.7-highspeed used to be in the
+// dropdown too (for the brief 2026-08-03 window when Coding Plan keys
+// returned 401 on M3) but the platform unified the billing surfaces
+// overnight and Coding Plan keys (sk-cp-…) now authenticate against
+// M3 too (curl-confirmed 200 on 2026-08-05). The M2.7 catalog rows
+// are gone; the 1-click "切到 M2.7 试试" failure-row button that
+// pointed users at the now-redundant tier is also gone (see commit
+// that lands this header).
+//
 // The free-form "type any model id" path is still the escape hatch
 // for M2 / M2.5 / private deployments — ResolveModel's "non-empty
 // user-typed id" branch returns a synthetic LlmModelInfo with the
-// user-supplied id verbatim.
+// user-supplied id verbatim. A user who already has
+// `model: MiniMax-M2.7` in their settings.json is preserved through
+// that path (with the M2.7 parameter shape from MiniMaxM27Parameters
+// applied).
 public static class ChatProviderCatalog
 {
     private static readonly LlmModelCapabilities ToolCapable = new()
@@ -41,21 +49,25 @@ public static class ChatProviderCatalog
         SupportsVision = true
     };
 
-    // MiniMax-M2.7 capabilities. 200K context (no 1M on the
-    // 2.x line), no native vision (M2.7 is text-only), but
-    // still supports tools + thinking. The Coding Plan tier
-    // covers M2.7 — M3 is reserved for Token Plan / pay-as-you-go,
-    // so a user whose `.env` holds a Coding Plan key (sk-cp-…)
-    // must pick M2.7 to actually hit a model the key pays for.
-    private static readonly LlmModelCapabilities MiniMaxM27Capabilities = new()
-    {
-        SupportsTools = true,
-        SupportsThinking = true,
-        SupportsInterleavedThinking = true,
-        SupportsJsonOutput = true,
-        SupportsVision = false
-    };
-
+    // 2026-08-04: MiniMax unified the Coding Plan and
+    // Token Plan billing surfaces so that Coding Plan
+    // keys (sk-cp-…) now authenticate against M3 / M3-
+    // highspeed too. The earlier split (Coding Plan →
+    // M2.7, Token Plan → M3) was the 2026-08-03
+    // reality; the platform quietly changed it
+    // overnight and a curl probe on 2026-08-05 now
+    // returns 200 from M3 with a Coding Plan key. The
+    // M2.7 / M2.7-highspeed catalog rows that landed
+    // in 65b61f7 to cover the old "key works for M2.7
+    // but not M3" trap are now actively misleading
+    // (the failure-row "切到 M2.7 试试" button points
+    // users away from a model their key actually
+    // pays for). Both rows are dropped; existing user
+    // settings.json with `model: MiniMax-M2.7` still
+    // works through the user-typed-id path in
+    // ResolveModel, but the dropdown no longer
+    // surfaces M2.7 as a pickable option.
+    //
     // Per-model parameters. Each model gets its own copy because
     // Parameters is init-only on LlmModelInfo, and MiniMax's
     // reasoning_split / top_p knobs are model-level decisions the
@@ -189,43 +201,6 @@ public static class ChatProviderCatalog
         }
     ];
 
-    // 2026-08-04: M2.7 ships a smaller parameter set because the
-    // 2.x line doesn't honor `parallel_tool_calls` (the tool
-    // batching only landed on M3). Top_p and reasoning_split
-    // still apply.
-    private static readonly IReadOnlyList<LlmModelParameterInfo> MiniMaxM27Parameters =
-    [
-        new()
-        {
-            Id = "minimax.reasoning_split",
-            DisplayName = "思考分离",
-            Description = "MiniMax reasoning_split — true 时 reasoning_content 作为 content 的兄弟字段返回。",
-            DefaultValue = "",
-            Options =
-            [
-                new LlmParameterOption { Value = "", DisplayName = "默认" },
-                new LlmParameterOption { Value = "true", DisplayName = "开启" },
-                new LlmParameterOption { Value = "false", DisplayName = "关闭" }
-            ]
-        },
-        new()
-        {
-            Id = "top_p",
-            DisplayName = "top_p",
-            Description = "nucleus sampling — 0~1, 越大输出越多样。",
-            DefaultValue = "",
-            Options =
-            [
-                new LlmParameterOption { Value = "", DisplayName = "默认" },
-                new LlmParameterOption { Value = "0.1", DisplayName = "0.1 (集中)" },
-                new LlmParameterOption { Value = "0.5", DisplayName = "0.5" },
-                new LlmParameterOption { Value = "0.9", DisplayName = "0.9" },
-                new LlmParameterOption { Value = "0.95", DisplayName = "0.95 (推荐)" },
-                new LlmParameterOption { Value = "1.0", DisplayName = "1.0 (全开)" }
-            ]
-        }
-    ];
-
     public static readonly LlmProviderInfo MiniMax = new()
     {
         Id = "minimax",
@@ -283,55 +258,6 @@ public static class ChatProviderCatalog
                 CapabilityLabel = "1M · multimodal · thinking · tools · 优先调度",
                 Capabilities = MiniMaxCapabilities,
                 Parameters = MiniMaxM3Parameters
-            },
-            // 2026-08-04: M2.7 is here so a user whose .env
-            // holds a Coding Plan key (sk-cp-…) has a
-            // dropdown option that the key actually pays for.
-            // M3 lives on the Token Plan / pay-as-you-go
-            // billing surface; a Coding Plan key returns 402
-            // on M3 even when the key is valid. Listing M2.7
-            // makes the "I have a Coding Plan, which model
-            // should I pick?" question answerable in the
-            // UI rather than as a curl test. The Vision
-            // capability is intentionally off — M2.7 is
-            // text-only and the multimodal input pipeline
-            // (InputArtifact → chat message) would otherwise
-            // 4xx on image attachments.
-            new LlmModelInfo
-            {
-                Id = "MiniMax-M2.7",
-                DisplayName = "MiniMax-M2.7 (Coding Plan)",
-                ContextLimit = 200_000,
-                CapabilityLabel = "200K · thinking · tools · Coding Plan 覆盖",
-                Capabilities = MiniMaxM27Capabilities,
-                Parameters = MiniMaxM27Parameters
-            },
-            // 2026-08-04: M2.7-highspeed is the high-speed
-            // tier of the M2.7 line — same context (200K),
-            // same capability set (text-only, tools, thinking
-            // via reasoning_content), but routed to a faster
-            // inference tier. Per MiniMax's own Claude Code
-            // setup docs (cSDN/博客园), the model id is
-            // `MiniMax-M2.7-highspeed` (literal, the
-            // highspeed suffix sticks to M2.7 the same way
-            // it sticks to M3 — not a separate
-            // M2.7-highspeed lineage). Sharing
-            // MiniMaxM27Parameters is fine: same knob set
-            // (reasoning_split + top_p, no parallel_tool_calls
-            // since M2.x doesn't batch). The Coding Plan
-            // token-budget page lists M2.7-highspeed in
-            // dedicated RPM slots (e.g. 750 calls per 5 hours
-            // on the Plus tier), so a daily driver who hits
-            // the M2.7 RPM limit can still fall back without
-            // upgrading to M3 / Token Plan.
-            new LlmModelInfo
-            {
-                Id = "MiniMax-M2.7-highspeed",
-                DisplayName = "MiniMax-M2.7 (highspeed)",
-                ContextLimit = 200_000,
-                CapabilityLabel = "200K · thinking · tools · Coding Plan 覆盖 · 优先调度",
-                Capabilities = MiniMaxM27Capabilities,
-                Parameters = MiniMaxM27Parameters
             }
         ]
     };

@@ -499,45 +499,42 @@ public sealed partial class ProviderConfigViewModel : ViewModelBase
 
     // 2026-08-04: pick a fallback model to suggest in
     // the test-failure UI when the configured model
-    // is the cause of the error. The dominant case
-    // is "key works for M2.7 but not M3" (Coding
-    // Plan tier coverage) — a 1-click "切到 M2.7 试试"
-    // button on the failure row is the difference
-    // between a daily driver reading a 401 in 10
-    // seconds and figuring it out in 10 minutes.
-    // For transient / network / config errors, the
-    // hint is "wait / check network / fix settings" —
-    // no model swap helps, so the suggestion is null.
+    // is the cause of the error. The dominant 2026-08
+    // case was "key works for M2.7 but not M3" (the
+    // brief window where Coding Plan keys returned 401
+    // on M3) — a 1-click "切到 M2.7 试试" button on the
+    // failure row was the difference between reading a
+    // 401 in 10 seconds and figuring it out in 10
+    // minutes.
+    //
+    // 2026-08-05: MiniMax unified the Coding Plan +
+    // Token Plan billing surfaces so sk-cp-… keys now
+    // authenticate against M3 too. M2.7 was dropped
+    // from the catalog; the "switch to a lower tier"
+    // instruction is gone. The remaining 401 / 403
+    // causes (dead key, org lockout) have no
+    // lower-tier fallback — return null and let the
+    // remediation hint carry the user to the
+    // platform's billing/region settings page.
     //
     // `internal` so the ProviderConfigViewModelTests
     // test class can pin the routing logic without
     // booting a test surface to drive the public
     // method. The test class reaches the helper
-    // through a thin shim (InferSuggestedFallbackModelForTest)
-    // so the public surface stays clean.
+    // directly because InternalsVisibleTo is set on
+    // AIChat.Tests.
     internal static string? InferSuggestedFallbackModel(string currentModelId, ProviderErrorKind errorKind)
     {
-        // 401 / 403 / 404 → the model the user picked
-        // is the wrong fit for their key. The "go down
-        // a tier" rule: if the user is on the
-        // flagship and we have a lower-tier that the
-        // older Coding Plan covered, suggest the
-        // lower-tier (M2.7). If the user is already
-        // on M2.7, there's no lower tier to fall
-        // back to — return null and let the
-        // remediation hint carry the user to the
-        // platform's billing dashboard.
-        if (errorKind is not (ProviderErrorKind.Authentication
-                            or ProviderErrorKind.PermissionDenied
-                            or ProviderErrorKind.ModelNotFound))
-        {
-            return null;
-        }
-        if (string.Equals(currentModelId, "MiniMax-M3", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(currentModelId, "MiniMax-M3-highspeed", StringComparison.OrdinalIgnoreCase))
-        {
-            return "MiniMax-M2.7";
-        }
+        // 401 / 403 / 404 used to map to "switch
+        // tiers"; today they map to "no tier swap
+        // helps, see the remediation hint". The
+        // method is kept (rather than deleted) so
+        // the SettingsView's 1-click failure button
+        // stays bound to a stable surface; a future
+        // tier shift (M4 → M3-highspeed, say) can
+        // re-add a non-null return here.
+        _ = currentModelId;
+        _ = errorKind;
         return null;
     }
 }

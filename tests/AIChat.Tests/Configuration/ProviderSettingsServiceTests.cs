@@ -32,23 +32,25 @@ public sealed class ProviderSettingsServiceTests
         Assert.Equal("MiniMax-M3", settings.Model);
     }
 
-    // 2026-08-04: catalog surface lock. Four shipping
-    // models, each with a distinct context limit and
-    // capability shape (M3 / M3-highspeed = 1M + vision,
-    // M2.7 / M2.7-highspeed = 200K + no vision for Coding
-    // Plan users). A future change that adds / removes a
-    // model — or bumps the context limit on the flagship —
-    // breaks here rather than as a silent 200K-clip of a
-    // 1M-capable model in production.
+    // 2026-08-05: catalog surface lock. Two shipping
+    // models (M3 / M3-highspeed), each 1M context +
+    // multimodal + thinking. M2.7 / M2.7-highspeed
+    // dropped 2026-08-05 — MiniMax unified the Coding
+    // Plan + Token Plan billing surfaces so sk-cp-…
+    // keys now authenticate against M3 too. A future
+    // change that adds / removes a model — or bumps
+    // the context limit on the flagship — breaks
+    // here rather than as a silent feature drop in
+    // production.
     [Fact]
-    public void Catalog_ListsM3AndM3HighspeedAndM27()
+    public void Catalog_ListsM3AndM3Highspeed()
     {
         var ids = ChatProviderCatalog.MiniMax.Models.Select(m => m.Id).ToArray();
 
         Assert.Contains("MiniMax-M3", ids);
         Assert.Contains("MiniMax-M3-highspeed", ids);
-        Assert.Contains("MiniMax-M2.7", ids);
-        Assert.Contains("MiniMax-M2.7-highspeed", ids);
+        Assert.DoesNotContain("MiniMax-M2.7", ids);
+        Assert.DoesNotContain("MiniMax-M2.7-highspeed", ids);
     }
 
     // 2026-08-04: M3 ships a thinking-mode switch
@@ -77,24 +79,12 @@ public sealed class ProviderSettingsServiceTests
         Assert.Contains("disabled", values);
     }
 
-    // 2026-08-04: M2.7 is on the M2.x line and predates
-    // the M3 thinking-mode switch. M2.7 still produces
-    // reasoning_content (via reasoning_split) when the
-    // model chooses to reason, but the user has no
-    // on/off toggle — the M3 thinking switch must not
-    // leak into the M2.7 dropdown.
-    [Fact]
-    public void Catalog_M27DoesNotExposeThinkingModeSwitch()
-    {
-        var m27 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M2.7");
-
-        Assert.DoesNotContain(m27.Parameters, p => p.Id == "minimax.thinking");
-    }
-
     // 2026-08-04: structured JSON output (response_format)
     // is wired as a per-model dropdown for M3. M2.7
-    // inherits the same knob — both model lines support
-    // the OpenAI-compatible response_format contract.
+    // inherits the same knob (kept in MiniMaxM27Parameters
+    // for the freeform-id path) — both model lines
+    // support the OpenAI-compatible response_format
+    // contract.
     [Fact]
     public void Catalog_M3ExposesJsonMode()
     {
@@ -105,6 +95,43 @@ public sealed class ProviderSettingsServiceTests
 
         Assert.Contains("", values);
         Assert.Contains("json_object", values);
+    }
+
+    // 2026-08-05: M2.7 dropped from the catalog dropdown
+    // (Coding Plan keys now auth M3). A user with
+    // `model: MiniMax-M2.7` already in their settings.json
+    // still resolves through ResolveModel's
+    // "non-empty user-typed id" path — but the result
+    // is a synthetic LlmModelInfo carrying the provider
+    // defaults (1M context, ToolCapable, empty Parameters)
+    // rather than the M2.7-specific 200K / no-vision
+    // shape. The user-typed-id branch deliberately
+    // doesn't special-case legacy model ids — it'd
+    // re-introduce the "M2.7 is special" coupling that
+    // we just dropped. The OpenAICompatibleChatProvider's
+    // switch handles parameters by id, not by model, so
+    // a M2.7 user who has `top_p=0.5` in their
+    // settings.json still gets that knob on the wire
+    // (and M2.7's API honors it). Pin the synthetic
+    // shape so a future ResolveModel refactor that
+    // re-introduces M2.7 special-casing shows up here.
+    [Fact]
+    public void ResolveModel_TypedM27Id_ReturnsSyntheticWithProviderDefaults()
+    {
+        var resolved = ChatProviderCatalog.ResolveModel("minimax", "MiniMax-M2.7");
+
+        Assert.Equal("MiniMax-M2.7", resolved.Id);
+        // Synthetic falls back to provider.DefaultContextLimit
+        // (1M, the M3 limit) — not the M2.7 historical
+        // 200K. Users with old M2.7 settings should
+        // re-pick M3 from the dropdown; the Settings
+        // modal now shows the M3-only knob set.
+        Assert.Equal(1_048_576, resolved.ContextLimit);
+        // Empty parameters list: the OpenAI provider
+        // reads settings.ModelParameters by id, so
+        // any saved M2.7-era knob values (top_p etc.)
+        // still take effect on the wire.
+        Assert.Empty(resolved.Parameters);
     }
 
     [Fact]
@@ -124,20 +151,6 @@ public sealed class ProviderSettingsServiceTests
         Assert.Equal(1_048_576, m3.ContextLimit);
         Assert.True(m3.Capabilities.SupportsVision,
             "M3 is native multimodal — SupportsVision must stay on for the image-paste pipeline to work");
-    }
-
-    [Fact]
-    public void Catalog_M27ContextLimitIsTwoHundredK_AndNoVision()
-    {
-        // M2.7 is the Coding-Plan-covered fallback. 200K
-        // context (not 1M — the M2.x line never crossed
-        // the million-token threshold) and text-only
-        // (no multimodal — M2.7 predates native vision).
-        // A future flags-upgrade has to be a deliberate
-        // change, not a silent feature promotion.
-        var m27 = ChatProviderCatalog.MiniMax.Models.Single(m => m.Id == "MiniMax-M2.7");
-        Assert.Equal(200_000, m27.ContextLimit);
-        Assert.False(m27.Capabilities.SupportsVision);
     }
 
     [Fact]

@@ -25,42 +25,34 @@ public class ProviderConfigViewModelTests
         Assert.NotNull(vm.SelectedProviderTemplate);
     }
 
-    // 2026-08-04: the 1-click "切到 M2.7 试试" affordance
-    // on the test-failure row. Pure static helper —
-    // the input is (currentModelId, errorKind) and
-    // the output is either a fallback model id from
-    // the catalog (M3 → M2.7 for auth/model-not-found
-    // errors) or null (transient / network / config
-    // errors where a model swap doesn't help). The
-    // "internal" visibility mirrors the class's
-    // existing helper pattern.
+    // 2026-08-05: the 1-click "切到 M2.7 试试" affordance
+    // on the test-failure row is gone — MiniMax
+    // unified the Coding Plan + Token Plan billing
+    // surfaces overnight, so sk-cp-… keys now
+    // authenticate against M3 too. The remaining
+    // 401/403/404 causes (dead key, org lockout, model
+    // typo) have no lower-tier fallback. The method
+    // is kept (rather than deleted) so the SettingsView
+    // binds to a stable surface; the theory pins
+    // the "always null" contract so a future tier
+    // shift (M4 → M3-highspeed) that re-adds a
+    // non-null return shows up in code review.
     [Theory]
-    [InlineData("MiniMax-M3", ProviderErrorKind.Authentication, "MiniMax-M2.7")]
-    [InlineData("MiniMax-M3-highspeed", ProviderErrorKind.Authentication, "MiniMax-M2.7")]
-    [InlineData("MiniMax-M3", ProviderErrorKind.ModelNotFound, "MiniMax-M2.7")]
-    [InlineData("MiniMax-M3", ProviderErrorKind.PermissionDenied, "MiniMax-M2.7")]
-    [InlineData("MiniMax-M2.7", ProviderErrorKind.Authentication, null)]
-    [InlineData("MiniMax-M3", ProviderErrorKind.RateLimited, null)]
-    [InlineData("MiniMax-M3", ProviderErrorKind.Timeout, null)]
-    [InlineData("MiniMax-M3", ProviderErrorKind.Server, null)]
-    [InlineData("MiniMax-M3", ProviderErrorKind.Network, null)]
-    public void InferSuggestedFallbackModel_PicksLowerTierForTierErrors(
-        string currentModelId, ProviderErrorKind kind, string? expected)
+    [InlineData("MiniMax-M3", ProviderErrorKind.Authentication)]
+    [InlineData("MiniMax-M3-highspeed", ProviderErrorKind.Authentication)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.ModelNotFound)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.PermissionDenied)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.RateLimited)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Timeout)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Server)]
+    [InlineData("MiniMax-M3", ProviderErrorKind.Network)]
+    public void InferSuggestedFallbackModel_AlwaysReturnsNullAfterM2xRetirement(
+        string currentModelId, ProviderErrorKind kind)
     {
-        // The method is `internal` on
-        // ProviderConfigViewModel — AIChat.Tests
-        // has InternalsVisibleTo so the test can
-        // call it directly. The test pins the
-        // routing logic so a future regression
-        // (e.g. dropping the M2.7 fallback on
-        // M3 auth errors, or suggesting M2.7 on
-        // a 5xx transient) breaks the build
-        // rather than as a daily-driver "the
-        // suggestion is wrong" support ticket.
         var actual = ProviderConfigViewModel.InferSuggestedFallbackModel(
             currentModelId, kind);
 
-        Assert.Equal(expected, actual);
+        Assert.Null(actual);
     }
 
     [Fact]
@@ -173,48 +165,49 @@ public class ProviderConfigViewModelTests
         Assert.Contains(vm.ModelParameters, row => row.Parameter.Id == "response_format");
     }
 
-    // 2026-08-04: M2.7 is the M2.x line and predates
-    // the M3 thinking-mode switch + parallel_tool_calls
-    // (M2.x doesn't batch) + response_format (M2.7 has
-    // JSON output via the same OpenAI-compatible
-    // response_format, but we keep the M2.7 knob set
-    // minimal so the daily driver on a Coding Plan
-    // doesn't see switches their model can't honor).
-    // The row count is 2 (reasoning_split + top_p).
+    // 2026-08-05: M2.7 dropped from the catalog
+    // (Coding Plan keys now auth M3). A user with
+    // `model: MiniMax-M2.7` in their settings.json
+    // resolves through the "non-empty user-typed
+    // id" branch which returns a synthetic model
+    // (provider defaults, no parameters). The
+    // Settings UI shows the M2.7 id in the textbox
+    // but renders an empty parameters list — the
+    // M3-only knobs (thinking / parallel_tool_calls /
+    // response_format) are absent, and the M2.7-only
+    // knobs (reasoning_split / top_p) are also
+    // absent (the synthetic model has no Parameters).
+    // The OpenAICompatibleChatProvider's switch reads
+    // settings.ModelParameters by id though, so a
+    // user who already has `top_p=0.5` saved from
+    // the M2.7 era still has it sent on the wire.
     [Fact]
-    public void OnProviderModelChanged_PopulatesM27ParameterRows_WithoutM3Knobs()
+    public void OnProviderModelChanged_TypedM27Id_RendersEmptyParameterList()
     {
         var (vm, _, _, _) = CreateViewModel();
         vm.Refresh();
         vm.ProviderModel = "MiniMax-M2.7";
 
-        Assert.Equal(2, vm.ModelParameters.Count);
-        Assert.Contains(vm.ModelParameters, row => row.Parameter.Id == "minimax.reasoning_split");
-        Assert.Contains(vm.ModelParameters, row => row.Parameter.Id == "top_p");
-        Assert.DoesNotContain(vm.ModelParameters, row => row.Parameter.Id == "minimax.thinking");
-        Assert.DoesNotContain(vm.ModelParameters, row => row.Parameter.Id == "parallel_tool_calls");
+        Assert.Empty(vm.ModelParameters);
     }
 
-    // 2026-08-04: switching from M3 → M2.7 repopulates
-    // the rows from scratch. The user-typed selection
-    // on the previous model is dropped — the new model
-    // has its own knob set, and the old pick would
-    // silently no-op in the OpenAI provider's switch.
-    // This is the "swap model and the parameter UI
-    // changes shape" expectation that completes the
-    // half-finished Settings piece.
+    // 2026-08-05: switching from M3 → a user-typed
+    // M2.7 id collapses the 5 M3 rows to zero. The
+    // "swap model and the parameter UI changes
+    // shape" contract holds — a user migrating from
+    // M2.7 to M3 (or vice versa) sees the row count
+    // track the catalog shape for the active model.
     [Fact]
-    public void OnProviderModelChanged_FromM3ToM27_RebuildsRows()
+    public void OnProviderModelChanged_FromM3HighspeedToUserTypedM27_CollapsesToEmptyRows()
     {
         var (vm, _, _, _) = CreateViewModel();
         vm.Refresh();
-        vm.ProviderModel = "MiniMax-M3";
+        vm.ProviderModel = "MiniMax-M3-highspeed";
         Assert.Equal(5, vm.ModelParameters.Count);
 
         vm.ProviderModel = "MiniMax-M2.7";
 
-        Assert.Equal(2, vm.ModelParameters.Count);
-        Assert.DoesNotContain(vm.ModelParameters, row => row.Parameter.Id == "minimax.thinking");
+        Assert.Empty(vm.ModelParameters);
     }
 
     // 2026-08-04: each row's SelectedValue is
