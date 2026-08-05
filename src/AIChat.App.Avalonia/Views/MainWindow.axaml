@@ -939,7 +939,49 @@
                                                                 <StackPanel Grid.Column="1" Spacing="4">
                                                                     <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
                                                                         <TextBlock Grid.Column="0" Text="{Binding Title}" Foreground="{DynamicResource Text2Brush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11" VerticalAlignment="Center"/>
+                                                                        <!--
+                                                                          2026-08-05: time +
+                                                                          status chip
+                                                                          (e.g. "10:23 ·
+                                                                          完成"). The
+                                                                          time is the
+                                                                          bubble's
+                                                                          construction
+                                                                          time (see
+                                                                          ActivityItemViewModel
+                                                                          ctor), so
+                                                                          scrolling
+                                                                          back to old
+                                                                          turns keeps
+                                                                          the original
+                                                                          stamp
+                                                                          regardless of
+                                                                          when the user
+                                                                          is reading.
+                                                                          Format
+                                                                          "HH:mm" is
+                                                                          5 chars so
+                                                                          the column
+                                                                          doesn't
+                                                                          jitter
+                                                                          between
+                                                                          single/double
+                                                                          digit hours.
+                                                                          Status keeps
+                                                                          the same
+                                                                          Classes.failed
+                                                                          / .stopped
+                                                                          styling for
+                                                                          the
+                                                                          terminal
+                                                                          state
+                                                                          colouring.
+                                                                        -->
+                                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding TimeDisplay}" Classes="muted" FontSize="11" FontFamily="{StaticResource FontMono}"/>
+                                                                            <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                            <TextBlock Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11"/>
+                                                                        </StackPanel>
                                                                         <!--
                                                                           1.0.1: per-AI-bubble 重新生成
                                                                           button. Re-sends the same
@@ -1162,7 +1204,11 @@
                                                                         HorizontalAlignment="Right"
                                                                         MaxWidth="720"
                                                                         Spacing="4">
-                                                                <TextBlock Text="{Binding Status}" Classes="muted" FontSize="11" HorizontalAlignment="Right"/>
+                                                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                                                    <TextBlock Text="{Binding TimeDisplay}" Classes="muted" FontSize="11" FontFamily="{StaticResource FontMono}"/>
+                                                                    <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                    <TextBlock Text="{Binding Status}" Classes="muted" FontSize="11"/>
+                                                                </StackPanel>
                                                                 <!-- User bubble is a Button (not a Border) so the
                                                                      user can click it to copy the message back into
                                                                      the input for editing + resending. The
@@ -1186,7 +1232,11 @@
                                                                         HorizontalAlignment="Center"
                                                                         MaxWidth="640"
                                                                         Spacing="2">
-                                                                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource MutedBrush}" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"/>
+                                                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                                                    <TextBlock Text="{Binding TimeDisplay}" Classes="muted" FontSize="10" FontFamily="{StaticResource FontMono}"/>
+                                                                    <TextBlock Text="·" Classes="muted" FontSize="10"/>
+                                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource MutedBrush}" FontWeight="SemiBold" FontSize="11"/>
+                                                                </StackPanel>
                                                                 <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"/>
                                                             </StackPanel>
                                                         </Grid>

@@ -98,7 +98,65 @@ public sealed partial class ActivityItemViewModel : ViewModelBase
         Title = title;
         Detail = detail;
         Status = status;
+        // 2026-08-05: stamp the bubble at
+        // construction so the XAML's
+        // TimeDisplay can show a stable
+        // "10:23" header. Set here
+        // (rather than lazily derived
+        // on first access) so a long
+        // conversation that's been
+        // scrolled back to keeps the
+        // original timestamp even if
+        // the user is reading the
+        // bubble an hour later. The
+        // XAML is a small "10:23"
+        // prefix before the Status
+        // text — daily drivers with
+        // 5+ turns in a conversation
+        // can finally see which turn
+        // was when without having to
+        // scroll back to the sidebar
+        // conversation list.
+        CreatedAt = DateTimeOffset.Now;
     }
+
+    // 2026-08-05: when the bubble was
+    // added. Stamped at construction
+    // (see ctor) so a later read
+    // returns the same value the
+    // XAML rendered. Not observable
+    // because it never changes after
+    // construction — no need to
+    // re-raise.
+    private DateTimeOffset _createdAt;
+    public DateTimeOffset CreatedAt
+    {
+        get => _createdAt;
+        private set
+        {
+            if (_createdAt == value)
+            {
+                return;
+            }
+            _createdAt = value;
+            OnPropertyChanged(nameof(CreatedAt));
+            OnPropertyChanged(nameof(TimeDisplay));
+        }
+    }
+
+    // Local time, hour:minute, 24-hour
+    // format. Daily drivers compare
+    // bubbles by relative time
+    // ("上午 / 下午" is less useful
+    // for a 30-minute coding session
+    // than "10:23 → 10:51" tracking
+    // how long each turn took). The
+    // format is fixed-width-ish
+    // (always 5 chars: "HH:mm") so
+    // the column doesn't visually
+    // jitter between single-digit
+    // and double-digit hours.
+    public string TimeDisplay => CreatedAt.ToString("HH:mm");
 
     // The "thinking" state is: an assistant bubble that has not yet received
     // any content from the model. The XAML renders three animated dots

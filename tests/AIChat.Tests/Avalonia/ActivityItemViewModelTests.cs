@@ -265,4 +265,39 @@ public class ActivityItemViewModelTests
         vm.RunSummary = "改 1 个文件 · 5s";
         Assert.Contains(nameof(ActivityItemViewModel.HasRunSummary), reRaised);
     }
+
+    [Fact]
+    public void TimeDisplay_StampedAtConstruction_StableFormat()
+    {
+        // The XAML's per-bubble "10:23"
+        // header must come from the
+        // construction time, not lazy
+        // now-time. A long conversation
+        // scrolled back to keeps the
+        // original stamp regardless of
+        // when the user is reading.
+        // The format is fixed at "HH:mm"
+        // (5 chars) so the column doesn't
+        // jitter between single-digit and
+        // double-digit hours.
+        var before = DateTimeOffset.Now;
+        var vm = new ActivityItemViewModel("你", "hi", "已发送");
+        var after = DateTimeOffset.Now;
+
+        // The stamp is between the two
+        // wall-clock samples (allowing
+        // for ties when the test runs
+        // very fast).
+        Assert.InRange(vm.CreatedAt, before.AddSeconds(-1), after.AddSeconds(1));
+
+        // Format: 5 chars "HH:mm". A
+        // sanity-check on a known sample
+        // (the time at test construction
+        // is hard to pin to a specific
+        // value, but the format check is
+        // — "HH:mm" always produces 5
+        // characters).
+        Assert.Equal(5, vm.TimeDisplay.Length);
+        Assert.Matches(@"^\d{2}:\d{2}$", vm.TimeDisplay);
+    }
 }
