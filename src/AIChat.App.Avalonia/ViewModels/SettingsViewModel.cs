@@ -66,6 +66,34 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     partial void OnMaxOutputTokensChanged(int value)
     {
+        // 2026-08-05: clamp the value at the
+        // write site. The same clamp lives
+        // in MainWindowViewModel ctor (the
+        // defensive belt-and-suspenders
+        // pass) but clamping here means
+        // the TextBox always shows the
+        // corrected value immediately
+        // after a typo. Without the
+        // local clamp, a user who types
+        // 100000 sees the TextBox show
+        // 100000, the request payload go
+        // out with 100000, the platform
+        // 422, and then on next save
+        // MainWindowViewModel ctor
+        // finally corrects the value.
+        // Clamping here collapses the
+        // feedback loop to one frame.
+        var clamped = Math.Clamp(value, 256, 16384);
+        if (clamped != value)
+        {
+            // Push the corrected value back
+            // to the TextBox without
+            // re-entering this setter (the
+            // early-out below catches the
+            // round-trip).
+            MaxOutputTokens = clamped;
+            return;
+        }
         if (_settings.MaxOutputTokens == value)
         {
             return;
