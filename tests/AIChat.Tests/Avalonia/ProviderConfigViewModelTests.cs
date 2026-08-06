@@ -107,6 +107,39 @@ public class ProviderConfigViewModelTests
     }
 
     [Fact]
+    public async Task SaveProvider_WithCustomModelId_PreservesUserInput()
+    {
+        // 1.0 P0 fix: ChatProviderCatalog.ResolveModel used to silently
+        // fall back to Models.First() for non-OpenAI-compatible providers
+        // when the user typed a model id the catalog didn't know about
+        // (e.g. a brand-new release, a private deployment, a beta
+        // channel). The save would then commit the catalog-default
+        // model instead of what the user typed — making it impossible
+        // to bind a model the catalog hasn't been updated for. The fix
+        // returns a synthetic LlmModelInfo carrying the user's id
+        // verbatim; the saved SelectedModelId must therefore match the
+        // input character-for-character (modulo trim).
+        var (vm, _, holder, saved) = CreateViewModel();
+        vm.Refresh();
+        // Use the first template — any non-OpenAI-compatible provider
+        // exercises the synthetic-Id path.
+        vm.SelectedProviderTemplate = vm.ProviderTemplates[0];
+        vm.ProviderApiKey = "test-key";
+        vm.ProviderModel = "my-future-model-v9000-experimental";
+
+        await vm.SaveProviderCommand.ExecuteAsync(null);
+
+        var args = Assert.Single(saved);
+        Assert.Null(args.ErrorMessage);
+        // The model id saved to settings must be exactly what the user
+        // typed — no silent substitution to the catalog default.
+        Assert.Equal("my-future-model-v9000-experimental", args.ModelId);
+        var savedProvider = holder.Current.ConfiguredProviders
+            .Single(p => string.Equals(p.TemplateId, vm.SelectedProviderTemplate!.Id, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("my-future-model-v9000-experimental", savedProvider.SelectedModelId);
+    }
+
+    [Fact]
     public async Task TestProvider_WithoutConfiguredProvider_RaisesFailedTestOnly()
     {
         var (vm, _, _, _, started, completed) = CreateViewModelWithTestCapture();
