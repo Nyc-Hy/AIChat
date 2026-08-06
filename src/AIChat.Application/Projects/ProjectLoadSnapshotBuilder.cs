@@ -5,27 +5,28 @@ namespace AIChat.Application.Projects;
 
 public static class ProjectLoadSnapshotBuilder
 {
-    public static ProjectLoadSnapshot Build(ProjectWorkspace project)
+    public static ProjectLoadSnapshot Build(WorkspaceProject project, IReadOnlyList<ChatSession> sessionsForProject)
     {
-        if (string.IsNullOrWhiteSpace(project.Path))
+        var primaryPath = TryGetPrimaryPath(project);
+        if (string.IsNullOrWhiteSpace(primaryPath))
         {
             return new ProjectLoadSnapshot(
                 "健康：未设置项目路径",
                 "画像：等待选择项目文件夹",
-                BuildActivity(project),
+                BuildActivity(project, sessionsForProject),
                 "建议：先设置项目路径，再推断验证命令和生成 AGENTS.md。");
         }
 
-        if (!Directory.Exists(project.Path))
+        if (!Directory.Exists(primaryPath))
         {
             return new ProjectLoadSnapshot(
                 "健康：项目路径不存在",
-                $"画像：{project.Path}",
-                BuildActivity(project),
+                $"画像：{primaryPath}",
+                BuildActivity(project, sessionsForProject),
                 "建议：重新选择项目文件夹，避免 Agent 在错误目录运行工具。");
         }
 
-        var agentsExists = File.Exists(Path.Combine(project.Path, "AGENTS.md"));
+        var agentsExists = File.Exists(Path.Combine(primaryPath, "AGENTS.md"));
         var verification = project.VerificationCommands.Count;
         var healthParts = new List<string>
         {
@@ -36,9 +37,22 @@ public static class ProjectLoadSnapshotBuilder
 
         return new ProjectLoadSnapshot(
             string.Join(" · ", healthParts),
-            BuildProfile(project.Path),
-            BuildActivity(project),
+            BuildProfile(primaryPath),
+            BuildActivity(project, sessionsForProject),
             BuildRecommendation(agentsExists, verification));
+    }
+
+    private static string? TryGetPrimaryPath(WorkspaceProject project)
+    {
+        try
+        {
+            return project.PrimaryPath;
+        }
+        catch (InvalidOperationException)
+        {
+            // 没 primary / folder 漂移 → 当成 "未设置" 处理
+            return null;
+        }
     }
 
     private static string BuildProfile(string projectPath)
@@ -58,9 +72,9 @@ public static class ProjectLoadSnapshotBuilder
         return $"画像：{techText} · 目录：{dirText} · 锚点：{anchorText}";
     }
 
-    private static string BuildActivity(ProjectWorkspace project)
+    private static string BuildActivity(WorkspaceProject project, IReadOnlyList<ChatSession> sessionsForProject)
     {
-        var runs = project.Conversations.SelectMany(conversation => conversation.AgentRuns).ToList();
+        var runs = sessionsForProject.SelectMany(session => session.AgentRuns).ToList();
         var needsChanges = runs.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.NeedsChanges);
         var unreviewed = runs.Count(run => run.AcceptanceStatus == AgentRunAcceptanceStatus.Unreviewed && run.Status == AgentRunStatus.Completed);
         var memoryCount = project.Memories.Count;
@@ -70,7 +84,7 @@ public static class ProjectLoadSnapshotBuilder
             ? "暂无 Agent Run"
             : $"最近：{FormatStatus(lastRun.Status)} · {Trim(lastRun.Goal, 42)}";
         var pendingText = pendingMemoryCount == 0 ? "" : $" · {pendingMemoryCount} 条待确认记忆";
-        return $"活动：{project.Conversations.Count} 个对话 · {runs.Count} 次运行 · {memoryCount} 条记忆{pendingText} · {needsChanges} 个需修改 · {unreviewed} 个未验收 · {lastRunText}";
+        return $"活动：{sessionsForProject.Count} 个对话 · {runs.Count} 次运行 · {memoryCount} 条记忆{pendingText} · {needsChanges} 个需修改 · {unreviewed} 个未验收 · {lastRunText}";
     }
 
     private static string BuildRecommendation(bool agentsExists, int verificationCount)

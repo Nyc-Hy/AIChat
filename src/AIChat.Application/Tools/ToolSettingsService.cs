@@ -15,11 +15,13 @@ public static class ToolSettingsService
     public static void Normalize(AppSettings settings, AgentToolRegistry registry)
     {
         var knownIds = registry.All.Select(tool => tool.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hasExplicitConfiguration = settings.EnabledToolIds.Count > 0 ||
+                                       settings.ToolPermissionModes.Count > 0;
         settings.EnabledToolIds = settings.EnabledToolIds
             .Where(knownIds.Contains)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (settings.EnabledToolIds.Count == 0)
+        if (!hasExplicitConfiguration)
         {
             settings.EnabledToolIds = registry.All
                 .Select(tool => tool.Id)
@@ -41,6 +43,10 @@ public static class ToolSettingsService
         {
             settings.ToolPermissionModes.TryAdd(tool.Id, registry.GetMetadata(tool.Id).DefaultPermissionMode);
         }
+
+        settings.EnabledToolIds.RemoveAll(toolId =>
+            settings.ToolPermissionModes.TryGetValue(toolId, out var mode) &&
+            mode == ToolPermissionMode.Disabled);
     }
 
     public static IReadOnlyList<ToolOptionState> CreateToolOptions(AppSettings settings, AgentToolRegistry registry)
@@ -120,6 +126,7 @@ public static class ToolSettingsService
     private static void AddEnabledToolIfKnown(AppSettings settings, HashSet<string> knownIds, string toolId)
     {
         if (knownIds.Contains(toolId) &&
+            (!settings.ToolPermissionModes.TryGetValue(toolId, out var mode) || mode != ToolPermissionMode.Disabled) &&
             !settings.EnabledToolIds.Contains(toolId, StringComparer.OrdinalIgnoreCase))
         {
             settings.EnabledToolIds.Add(toolId);

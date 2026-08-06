@@ -19,7 +19,34 @@ public static class ProviderSettingsService
         settings.ProviderId = provider.Id;
         settings.ProviderName = provider.Name;
         settings.ProtocolId = provider.ProtocolId;
-        settings.BaseUrl = provider.DefaultBaseUrl;
+        // 2026-08-02: BaseUrl is preserved when the user has a
+        // valid http(s) URL. The previous behaviour was to
+        // overwrite unconditionally with the provider's default,
+        // which silently broke self-hosted users on every startup
+        // (e.g. someone proxying MiniMax through a private gateway
+        // at https://proxy.example.com/v1 would see their BaseUrl
+        // reset to https://api.minimax.io/v1, then ship the next
+        // message to the wrong endpoint and get an auth failure).
+        // Falling back to the default only when the stored value
+        // is missing or malformed keeps the migration safe for
+        // self-hosted users without changing the default for
+        // brand-new installs (where BaseUrl is empty by
+        // construction).
+        if (!IsValidHttpUrl(settings.BaseUrl))
+        {
+            settings.BaseUrl = provider.DefaultBaseUrl;
+        }
+        // 2026-08-02: If a 0.5 user upgrades with a stored BaseUrl that
+        // points at a now-removed provider (Anthropic / DeepSeek / Xiaomi
+        // MIMO), silently keeping that host would ship the next message to
+        // the wrong endpoint and the user would see a 401 / 404 with no
+        // explanation. Force-rewrite to the catalog default in that case;
+        // self-hosted MiniMax-style proxies that share `api.minimax.io`'s
+        // pattern are unaffected (their host is not in the legacy list).
+        else if (IsLegacyProviderHost(settings.BaseUrl))
+        {
+            settings.BaseUrl = provider.DefaultBaseUrl;
+        }
         settings.Temperature = defaultTemperature;
 
         if (string.IsNullOrWhiteSpace(settings.Model))
@@ -282,7 +309,9 @@ public static class ProviderSettingsService
         configured.Name = template.Name;
         configured.BaseUrl = string.IsNullOrWhiteSpace(configured.BaseUrl)
             ? template.DefaultBaseUrl
-            : configured.BaseUrl.Trim();
+            : IsLegacyProviderHost(configured.BaseUrl)
+                ? template.DefaultBaseUrl
+                : configured.BaseUrl.Trim();
         configured.SelectedModelId = model.Id;
         configured.ModelParameters = NormalizeModelParameterValues(template.Id, model.Id, configured.ModelParameters);
     }
@@ -326,5 +355,66 @@ public static class ProviderSettingsService
         {
             settings.ActiveConfiguredProviderId = settings.ConfiguredProviders.FirstOrDefault()?.Id ?? "";
         }
+    }
+
+    // Shared URL shape check used by Normalize to decide whether
+    // a stored BaseUrl is worth keeping. Mirrors the equivalent
+    // private helper in ProviderConfigurationValidator (the two
+    // services intentionally keep the rules independent — the
+    // validator's full check also runs on every UI save, so
+    // Normalize's job is only to be a defensive boot-time guard).
+    private static bool IsValidHttpUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+               !string.IsNullOrWhiteSpace(uri.Host);
+    }
+
+    // Hostnames that belonged to providers removed in the 1.0 Provider
+    // prune. A 0.5 user upgrading with one of these stored in their
+    // BaseUrl would otherwise hit `https://api.anthropic.com/v1/
+    // chat/completions` (404 — no such endpoint on Anthropic) or
+    // `https://token-plan-cn.xiaomimimo.com/v1/chat/completions` with
+    // a model name that Xiaomi's gateway does not recognise. Both
+    // surface as opaque auth / 404 errors to the user. Keep this list
+    // tight: only the providers the catalog definitively retired.
+    internal static readonly System.Collections.Generic.HashSet<string> LegacyProviderHosts =
+        new(System.StringComparer.OrdinalIgnoreCase)
+        {
+            "api.anthropic.com",
+            "api.deepseek.com",
+            "token-plan-cn.xiaomimimo.com",
+            "api.xiaomimimo.com",
+            // 2026-08-04: api.minimax.io is the host that the
+            // pre-1.0.0 catalog defaulted to. The live MiniMax
+            // surface for M3 / M3-highspeed / M2.7 is now
+            // api.minimax.chat; .io is a redirect / older
+            // gateway that returns HTTP 401 ("invalid api key
+            // (2049)") for keys minted on the current platform.
+            // Auto-rewrite old .io entries to the catalog
+            // default (.chat) so the next message goes to a
+            // host that actually accepts the user's key. True
+            // self-hosted users on a custom .io host are
+            // unaffected because the comparison is on the host
+            // segment, not the full URL — a "proxy.io" or
+            // "minimax-proxy.example.io" stays put.
+            "api.minimax.io"
+        };
+
+    private static bool IsLegacyProviderHost(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+        return LegacyProviderHosts.Contains(uri.Host);
     }
 }

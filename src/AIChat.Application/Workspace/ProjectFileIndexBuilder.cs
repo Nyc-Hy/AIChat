@@ -7,6 +7,11 @@ public sealed class ProjectFileIndexBuilder
         ".git", ".vs", ".idea", "bin", "obj", "artifacts", "TestResults", "node_modules"
     };
 
+    private static readonly HashSet<string> IgnoredFileNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".DS_Store", "Thumbs.db", "desktop.ini"
+    };
+
     private static readonly HashSet<string> BinaryExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".dll", ".exe", ".pdb", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".bmp",
@@ -34,11 +39,15 @@ public sealed class ProjectFileIndexBuilder
         ".md", ".txt", ".rst", ".adoc", ".wiki"
     };
 
-    public ProjectFileIndex Build(string rootPath, int maxFiles = 500)
+    public ProjectFileIndex Build(string? rootPath, int maxFiles = 500)
     {
         if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath))
         {
-            return new ProjectFileIndex { RootPath = rootPath };
+            // RootPath is non-nullable in the model, so default
+            // an absent project to "". The caller pattern is
+            // "build a snapshot for whatever the sidebar has
+            // selected" — empty string is the no-op case.
+            return new ProjectFileIndex { RootPath = rootPath ?? "" };
         }
 
         var entries = new List<ProjectFileIndexEntry>();
@@ -108,7 +117,10 @@ public sealed class ProjectFileIndexBuilder
 
             foreach (var file in files)
             {
-                yield return file;
+                if (!IgnoredFileNames.Contains(Path.GetFileName(file)))
+                {
+                    yield return file;
+                }
             }
 
             string[] subdirectories;
@@ -144,7 +156,7 @@ public sealed class ProjectFileIndexBuilder
                 return true;
             }
         }
-        return false;
+        return segments.Length > 0 && IgnoredFileNames.Contains(segments[^1]);
     }
 
     public static string ClassifyFile(string relativePath, string extension)

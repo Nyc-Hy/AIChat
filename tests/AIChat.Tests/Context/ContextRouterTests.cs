@@ -128,4 +128,26 @@ public sealed class ContextRouterTests
         Assert.Contains(pack.ArtifactRefs, artifact => artifact.Contains("input-artifact:artifact-1", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(pack.ArtifactRefs, artifact => artifact.Contains("checkout button disabled", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Route_IgnoresCommonGoalStopWords()
+    {
+        var pack = new ContextRouter().Route(new ContextRouterRequest
+        {
+            Goal = "optimize cache and token usage",
+            Phase = AgentRunPhase.Executing,
+            FileIndex = new ProjectFileIndex
+            {
+                Entries =
+                [
+                    new ProjectFileIndexEntry { RelativePath = "tests/Tools/ShellCommandToolTests.cs", TypeTag = "test", SizeBytes = 1000 },
+                    new ProjectFileIndexEntry { RelativePath = "tests/Context/TokenizerContextEstimatorTests.cs", TypeTag = "test", SizeBytes = 1000 }
+                ]
+            },
+            MaxTokens = 500
+        });
+
+        Assert.DoesNotContain(pack.IncludedFiles, file => file.Reason.Contains("goal:and", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(pack.IncludedFiles, file => file.Path.Contains("Tokenizer", StringComparison.OrdinalIgnoreCase));
+    }
 }

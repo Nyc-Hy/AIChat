@@ -16,7 +16,7 @@ public sealed class ProjectLoadSnapshotBuilderTests : IDisposable
     [Fact]
     public void Build_ReportsMissingPath()
     {
-        var snapshot = ProjectLoadSnapshotBuilder.Build(new ProjectWorkspace { Path = "" });
+        var snapshot = ProjectLoadSnapshotBuilder.Build(new WorkspaceProject { Folders = [new WorkspaceFolder { Id = "f1", Path = "" }], PrimaryFolderId = "f1"}, []);
 
         Assert.Contains("未设置项目路径", snapshot.HealthText);
         Assert.Contains("设置项目路径", snapshot.RecommendationText);
@@ -29,16 +29,15 @@ public sealed class ProjectLoadSnapshotBuilderTests : IDisposable
         File.WriteAllText(Path.Combine(_tempDir, "README.md"), "# Readme");
         File.WriteAllText(Path.Combine(_tempDir, "App.sln"), "");
         Directory.CreateDirectory(Path.Combine(_tempDir, "src"));
-        var workspace = new ProjectWorkspace
-        {
-            Path = _tempDir,
+        var workspace = new WorkspaceProject {
+            Folders = [new WorkspaceFolder { Id = "f1", Path = _tempDir }], PrimaryFolderId = "f1",
             VerificationCommands =
             [
                 new ProjectVerificationCommand { Name = "test", Command = "dotnet test" }
             ]
         };
 
-        var snapshot = ProjectLoadSnapshotBuilder.Build(workspace);
+        var snapshot = ProjectLoadSnapshotBuilder.Build(workspace, []);
 
         Assert.Contains("路径可用", snapshot.HealthText);
         Assert.Contains("AGENTS.md 已就绪", snapshot.HealthText);
@@ -50,8 +49,7 @@ public sealed class ProjectLoadSnapshotBuilderTests : IDisposable
     [Fact]
     public void Build_ReportsAgentRunActivity()
     {
-        var conversation = new Conversation
-        {
+        var session = new Project {
             AgentRuns =
             [
                 new AgentRun
@@ -63,13 +61,11 @@ public sealed class ProjectLoadSnapshotBuilderTests : IDisposable
                 }
             ]
         };
-        var workspace = new ProjectWorkspace
-        {
-            Path = _tempDir,
-            Conversations = [conversation]
+        var workspace = new WorkspaceProject {
+            Folders = [new WorkspaceFolder { Id = "f1", Path = _tempDir }], PrimaryFolderId = "f1"
         };
 
-        var snapshot = ProjectLoadSnapshotBuilder.Build(workspace);
+        var snapshot = ProjectLoadSnapshotBuilder.Build(workspace, [session]);
 
         Assert.Contains("1 个对话", snapshot.ActivityText);
         Assert.Contains("1 次运行", snapshot.ActivityText);

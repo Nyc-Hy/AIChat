@@ -107,26 +107,5 @@ public static class PluginManifestLoader
             }
         }
 
-        foreach (var skill in manifest.Skills)
-        {
-            if (!string.IsNullOrWhiteSpace(skill.Id))
-            {
-                skill.Id = PluginIds.NormalizeToolId(manifest.Id, skill.Id);
-            }
-            skill.Name = string.IsNullOrWhiteSpace(skill.Name) ? skill.Id : skill.Name.Trim();
-        }
-
-        foreach (var server in manifest.McpServers)
-        {
-            if (!string.IsNullOrWhiteSpace(server.Id))
-            {
-                server.Id = PluginIds.NormalizeToolId(manifest.Id, server.Id);
-            }
-            server.Name = string.IsNullOrWhiteSpace(server.Name) ? server.Id : server.Name.Trim();
-            if (string.IsNullOrWhiteSpace(server.WorkingDirectory))
-            {
-                server.WorkingDirectory = manifestDirectory;
-            }
-        }
     }
 }

@@ -1,3 +1,4 @@
+using AIChat.Abstractions.Configuration;
 using AIChat.Domain.Artifacts;
 
 namespace AIChat.Application.Artifacts;
@@ -8,9 +9,9 @@ public sealed class InputArtifactFileStore
 
     public InputArtifactFileStore(string? rootDirectory = null)
     {
-        _rootDirectory = string.IsNullOrWhiteSpace(rootDirectory)
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AIChat", "artifacts")
-            : rootDirectory;
+        _rootDirectory = Path.GetFullPath(string.IsNullOrWhiteSpace(rootDirectory)
+            ? AppRuntimeProfile.ArtifactsDirectory
+            : rootDirectory);
     }
 
     public async Task StoreAsync(InputArtifact artifact, string sourcePath, CancellationToken cancellationToken = default)
@@ -20,22 +21,22 @@ public sealed class InputArtifactFileStore
             return;
         }
 
-        var projectId = string.IsNullOrWhiteSpace(artifact.ProjectId) ? "project" : SanitizePathSegment(artifact.ProjectId);
         var extension = Path.GetExtension(artifact.FileName);
         if (string.IsNullOrWhiteSpace(extension))
         {
             extension = Path.GetExtension(sourcePath);
         }
 
-        var directory = Path.Combine(_rootDirectory, projectId);
-        Directory.CreateDirectory(directory);
-        var storedPath = Path.Combine(directory, artifact.Id + extension.ToLowerInvariant());
+        var storedPath = CreateManagedFilePath(artifact, NormalizeExtension(extension));
 
-        await using (var source = File.OpenRead(sourcePath))
-        await using (var destination = File.Create(storedPath))
-        {
-            await source.CopyToAsync(destination, cancellationToken);
-        }
+        await WriteAtomicallyAsync(
+            storedPath,
+            async destination =>
+            {
+                await using var source = File.OpenRead(sourcePath);
+                await source.CopyToAsync(destination, cancellationToken);
+            },
+            cancellationToken);
 
         artifact.Metadata["storedPath"] = storedPath;
         artifact.Metadata["storedRelativePath"] = Path.GetRelativePath(_rootDirectory, storedPath);
@@ -52,13 +53,13 @@ public sealed class InputArtifactFileStore
             return;
         }
 
-        var projectId = string.IsNullOrWhiteSpace(artifact.ProjectId) ? "project" : SanitizePathSegment(artifact.ProjectId);
         var normalizedExtension = NormalizeExtension(extension);
-        var directory = Path.Combine(_rootDirectory, projectId);
-        Directory.CreateDirectory(directory);
-        var storedPath = Path.Combine(directory, artifact.Id + normalizedExtension);
+        var storedPath = CreateManagedFilePath(artifact, normalizedExtension);
 
-        await File.WriteAllBytesAsync(storedPath, bytes, cancellationToken);
+        await WriteAtomicallyAsync(
+            storedPath,
+            destination => destination.WriteAsync(bytes, cancellationToken).AsTask(),
+            cancellationToken);
 
         artifact.Metadata["storedPath"] = storedPath;
         artifact.Metadata["storedRelativePath"] = Path.GetRelativePath(_rootDirectory, storedPath);
@@ -101,12 +102,12 @@ public sealed class InputArtifactFileStore
                 return;
             }
 
-            var root = Path.GetFullPath(_rootDirectory);
             var fullPath = Path.GetFullPath(path);
-            if (!fullPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
+            EnsureInsideRoot(fullPath, allowRoot: false);
+            EnsureNotSymbolicLink(_rootDirectory);
+            if (Path.GetDirectoryName(fullPath) is { } parent)
             {
-                return;
+                EnsureNotSymbolicLink(parent);
             }
 
             if (File.Exists(fullPath))
@@ -129,13 +130,10 @@ public sealed class InputArtifactFileStore
                 return;
             }
 
-            var root = Path.GetFullPath(_rootDirectory);
             var fullPath = Path.GetFullPath(path);
-            if (!fullPath.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
+            EnsureInsideRoot(fullPath, allowRoot: false);
+            EnsureNotSymbolicLink(_rootDirectory);
+            EnsureNotSymbolicLink(fullPath);
 
             if (Directory.Exists(fullPath))
             {
@@ -150,12 +148,13 @@ public sealed class InputArtifactFileStore
 
     private static string SanitizePathSegment(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars();
         var chars = value
-            .Select(ch => invalid.Contains(ch) ? '_' : ch)
+            .Select(ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.' ? ch : '_')
             .ToArray();
         var sanitized = new string(chars).Trim();
-        return string.IsNullOrWhiteSpace(sanitized) ? "project" : sanitized;
+        return string.IsNullOrWhiteSpace(sanitized) || sanitized is "." or ".."
+            ? "project"
+            : sanitized;
     }
 
     private static string NormalizeExtension(string extension)
@@ -166,6 +165,140 @@ public sealed class InputArtifactFileStore
             return ".bin";
         }
 
-        return (trimmed.StartsWith('.') ? trimmed : "." + trimmed).ToLowerInvariant();
+        var normalized = (trimmed.StartsWith('.') ? trimmed : "." + trimmed).ToLowerInvariant();
+        if (normalized.Length > 16 ||
+            normalized.Length < 2 ||
+            normalized.Skip(1).Any(ch => !char.IsAsciiLetterOrDigit(ch)))
+        {
+            throw new ArgumentException("文件扩展名包含不安全字符。", nameof(extension));
+        }
+
+        return normalized;
+    }
+
+    private string CreateManagedFilePath(InputArtifact artifact, string extension)
+    {
+        ValidateArtifactId(artifact.Id);
+        var projectId = string.IsNullOrWhiteSpace(artifact.ProjectId)
+            ? "project"
+            : SanitizePathSegment(artifact.ProjectId);
+        var directory = Path.GetFullPath(Path.Combine(_rootDirectory, projectId));
+        EnsureInsideRoot(directory, allowRoot: false);
+
+        Directory.CreateDirectory(_rootDirectory);
+        EnsureNotSymbolicLink(_rootDirectory);
+        EnsurePrivateDirectoryPermissions(_rootDirectory);
+        Directory.CreateDirectory(directory);
+        EnsureNotSymbolicLink(directory);
+        EnsurePrivateDirectoryPermissions(directory);
+
+        var storedPath = Path.GetFullPath(Path.Combine(directory, artifact.Id + extension));
+        EnsureInsideRoot(storedPath, allowRoot: false);
+        EnsureDestinationNotSymbolicLink(storedPath);
+        return storedPath;
+    }
+
+    private static async Task WriteAtomicallyAsync(
+        string storedPath,
+        Func<FileStream, Task> writeAsync,
+        CancellationToken cancellationToken)
+    {
+        var tempPath = $"{storedPath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await using var destination = new FileStream(
+                tempPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 4096,
+                useAsync: true);
+            EnsurePrivateFilePermissions(tempPath);
+            await writeAsync(destination);
+            await destination.FlushAsync(cancellationToken);
+            destination.Flush(flushToDisk: true);
+            destination.Close();
+
+            EnsureDestinationNotSymbolicLink(storedPath);
+            File.Move(tempPath, storedPath, overwrite: true);
+            EnsurePrivateFilePermissions(storedPath);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup must not hide the original write failure.
+            }
+        }
+    }
+
+    private static void ValidateArtifactId(string artifactId)
+    {
+        if (string.IsNullOrWhiteSpace(artifactId) ||
+            artifactId is "." or ".." ||
+            artifactId.Any(ch => !char.IsAsciiLetterOrDigit(ch) && ch is not '-' and not '_' and not '.'))
+        {
+            throw new ArgumentException("Artifact ID 必须是安全的单一路径片段。", nameof(artifactId));
+        }
+    }
+
+    private void EnsureInsideRoot(string path, bool allowRoot)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var root = _rootDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(path);
+        if ((allowRoot && string.Equals(fullPath, root, comparison)) ||
+            fullPath.StartsWith(root + Path.DirectorySeparatorChar, comparison))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException("Artifact 路径超出托管目录。");
+    }
+
+    private static void EnsureNotSymbolicLink(string path)
+    {
+        var info = new DirectoryInfo(path);
+        if (info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            throw new InvalidOperationException("Artifact 托管目录不能是符号链接。");
+        }
+    }
+
+    private static void EnsureDestinationNotSymbolicLink(string path)
+    {
+        var info = new FileInfo(path);
+        if (info.LinkTarget is not null ||
+            (info.Exists && info.Attributes.HasFlag(FileAttributes.ReparsePoint)))
+        {
+            throw new InvalidOperationException("Artifact 托管文件不能是符号链接。");
+        }
+    }
+
+    private static void EnsurePrivateDirectoryPermissions(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(
+                path,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static void EnsurePrivateFilePermissions(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
     }
 }

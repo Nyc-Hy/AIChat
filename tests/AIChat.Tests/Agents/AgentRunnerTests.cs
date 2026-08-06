@@ -25,7 +25,7 @@ public sealed class AgentRunnerTests
         ]);
         var runner = new AgentRunner(
             chatService,
-            new AgentToolCatalog([new LargeReadOnlyTool(content)]));
+            AgentToolRegistry.CreateForTests([new LargeReadOnlyTool(content)]));
 
         await foreach (var _ in runner.RunAsync(
                            new ChatRequest
@@ -54,7 +54,7 @@ public sealed class AgentRunnerTests
             new RecordingChatCompletionService([
                 [new ChatDelta { ToolCalls = [first, second] }]
             ]),
-            new AgentToolCatalog([tool]));
+            AgentToolRegistry.CreateForTests([tool]));
 
         var events = new List<AgentRunEvent>();
         await foreach (var item in runner.RunAsync(
@@ -87,7 +87,7 @@ public sealed class AgentRunnerTests
         ]);
         var runner = new AgentRunner(
             chatService,
-            new AgentToolCatalog([new LargeReadOnlyTool("ok")]));
+            AgentToolRegistry.CreateForTests([new LargeReadOnlyTool("ok")]));
 
         var events = new List<AgentRunEvent>();
         await foreach (var item in runner.RunAsync(
@@ -125,7 +125,7 @@ public sealed class AgentRunnerTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "handled failure" }]
             ]),
-            new AgentToolCatalog([new ThrowingReadTool()]));
+            AgentToolRegistry.CreateForTests([new ThrowingReadTool()]));
 
         var events = new List<AgentRunEvent>();
         await foreach (var item in runner.RunAsync(
@@ -154,7 +154,7 @@ public sealed class AgentRunnerTests
         cts.Cancel();
         var runner = new AgentRunner(
             new RecordingChatCompletionService([[new ChatDelta { Content = "never" }]]),
-            new AgentToolCatalog([]));
+            AgentToolRegistry.CreateForTests([]));
 
         var events = new List<AgentRunEvent>();
         await foreach (var item in runner.RunAsync(

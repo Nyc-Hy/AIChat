@@ -1,0 +1,296 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="AIChat.App.Avalonia.Views.Controls.GitStatusView">
+    <Border Background="{DynamicResource ScrimBrush}"
+            PointerPressed="GitStatusScrim_OnClick">
+        <Border Background="{DynamicResource SurfaceBrush}"
+                Width="960"
+                MaxHeight="680"
+                Padding="{StaticResource Padding6}"
+                CornerRadius="{StaticResource RadiusLg}"
+                BoxShadow="{DynamicResource Elevation4Shadow}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                PointerPressed="GitStatusContent_OnPointerPressed">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="14">
+
+                <!-- Header: title + branch + refresh + close -->
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Classes="page-title">
+                            <Run Text="Git"/>
+                            <Run Text=" — "/>
+                            <Run Text="{Binding GitStatus.ProjectName}" Foreground="{DynamicResource MutedBrush}"/>
+                        </TextBlock>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="分支:" Classes="muted" FontSize="12"/>
+                            <TextBlock Text="{Binding GitStatus.Branch}" Classes="body" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock Classes="muted" FontSize="11"
+                                       IsVisible="{Binding GitStatus.HasLastUpdated}"
+                                       Text="更新于 "/>
+                            <TextBlock Classes="muted" FontSize="11"
+                                       IsVisible="{Binding GitStatus.HasLastUpdated}"
+                                       Text="{Binding GitStatus.LastUpdatedDisplay}"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="chrome-button"
+                            Command="{Binding GitStatus.RefreshCommand}"
+                            ToolTip.Tip="刷新 (⌘⇧G)"
+                            IsEnabled="{Binding !GitStatus.IsLoading}">
+                        <!--
+                          Refresh button content swaps between the
+                          refresh-arrow glyph and a small spinner arc
+                          based on IsLoading. Button can only hold one
+                          Content child, so wrap both in a Grid — the
+                          two Paths share the same cell, IsVisible
+                          flips between them. The arc has a rotation
+                          animation so the user sees the action is
+                          running, not just that the button got
+                          disabled.
+                        -->
+                        <Grid Width="14" Height="14">
+                            <Path Data="M3 12 a9 9 0 1 0 3 -6.7 M3 4 v5 h5"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="14" Height="14" Stretch="Uniform"
+                                  IsVisible="{Binding !GitStatus.IsLoading}"/>
+                            <Panel Width="14" Height="14"
+                                   IsVisible="{Binding GitStatus.IsLoading}">
+                                <Path Data="M12 3 a9 9 0 0 1 9 9"
+                                      Stroke="{Binding $parent[Button].Foreground}"
+                                      StrokeThickness="1.6" StrokeLineCap="Round"
+                                      Width="14" Height="14" Stretch="Uniform"
+                                      RenderTransformOrigin="50%,50%">
+                                    <Path.RenderTransform>
+                                        <RotateTransform/>
+                                    </Path.RenderTransform>
+                                </Path>
+                                <Panel.Styles>
+                                    <Style Selector="Panel Path">
+                                        <Style.Animations>
+                                            <Animation Duration="0:0:0.8"
+                                                       IterationCount="Infinite"
+                                                       PlaybackDirection="Normal">
+                                                <KeyFrame Cue="0%">
+                                                    <Setter Property="RotateTransform.Angle" Value="0"/>
+                                                </KeyFrame>
+                                                <KeyFrame Cue="100%">
+                                                    <Setter Property="RotateTransform.Angle" Value="360"/>
+                                                </KeyFrame>
+                                            </Animation>
+                                        </Style.Animations>
+                                    </Style>
+                                </Panel.Styles>
+                            </Panel>
+                        </Grid>
+                    </Button>
+                    <Button Grid.Column="2" Classes="chrome-button"
+                            Command="{Binding CloseGitStatusCommand}"
+                            ToolTip.Tip="关闭 (Esc)">
+                        <Path Data="M6 6 L18 18 M18 6 L6 18"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              StrokeThickness="1.6" StrokeLineCap="Round"
+                              Width="14" Height="14" Stretch="Uniform"/>
+                    </Button>
+                </Grid>
+
+                <!-- Error banner. RefreshAsync sets ErrorMessage when
+                     the git call throws; without this row the user
+                     sees a silent no-op (the modal stays open with
+                     whatever it showed before, no visible failure
+                     indicator). Same pattern as the MemoryEditor
+                     error message. -->
+                <Border Grid.Row="1"
+                        Background="{DynamicResource ErrorBgBrush}"
+                        BorderBrush="{DynamicResource ErrorBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource RadiusMd}"
+                        Padding="{StaticResource Padding2}"
+                        IsVisible="{Binding GitStatus.ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding GitStatus.ErrorMessage}"
+                               Foreground="{DynamicResource ErrorFgBrush}"
+                               FontSize="12"
+                               TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Body: file list + diff viewer -->
+                <Grid Grid.Row="2" ColumnDefinitions="320,*" ColumnSpacing="0">
+
+                    <!-- File list (left column) -->
+                    <Border Grid.Column="0"
+                            Background="{DynamicResource SurfaceSunkenBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1,1,1,1"
+                            CornerRadius="{StaticResource RadiusMd}">
+                        <Grid RowDefinitions="Auto,*">
+                            <Border Grid.Row="0"
+                                    Classes="section-divider"
+                                    Margin="0,0,0,4"
+                                    Padding="{StaticResource Padding3}">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="变更" Classes="section-title"/>
+                                    <TextBlock Grid.Column="1" Classes="muted" FontSize="11">
+                                        <Run Text="{Binding GitStatus.ChangeCount}"/>
+                                        <Run Text=" 个文件"/>
+                                    </TextBlock>
+                                </Grid>
+                            </Border>
+                            <ScrollViewer Grid.Row="1" Padding="{StaticResource Padding2}">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="{Binding GitStatus.EmptyStateMessage}"
+                                               Classes="muted"
+                                               HorizontalAlignment="Center"
+                                               Margin="0,24,0,0"
+                                               IsVisible="{Binding !GitStatus.HasChanges}"/>
+                                    <ItemsControl ItemsSource="{Binding GitStatus.Changes}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:GitFileChangeViewModel">
+                                                <Button Classes="sidebar-row"
+                                                        Classes.selected="{Binding IsSelected}"
+                                                        Command="{Binding SelectCommand}"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Stretch">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                                        <Border Grid.Column="0"
+                                                                Classes="git-status-badge"
+                                                                Classes.modified="{Binding IsModified}"
+                                                                Classes.added="{Binding IsAdded}"
+                                                                Classes.deleted="{Binding IsDeleted}"
+                                                                Classes.untracked="{Binding IsUntracked}"
+                                                                Classes.renamed="{Binding IsRenamed}"
+                                                                Classes.copied="{Binding IsCopied}"
+                                                                Classes.conflict="{Binding IsConflict}"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding StatusDisplay}"
+                                                                       FontSize="10"
+                                                                       FontFamily="{StaticResource FontMono}"
+                                                                       FontWeight="SemiBold"/>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding FileName}"
+                                                                       Classes="body"
+                                                                       FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       MaxLines="1"/>
+                                                            <TextBlock Text="{Binding Path}"
+                                                                       Classes="muted"
+                                                                       FontSize="10"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       MaxLines="1"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <!-- Diff viewer (right column) -->
+                    <Border Grid.Column="1"
+                            Background="{DynamicResource CodeBgBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Margin="10,0,0,0">
+                        <Grid RowDefinitions="Auto,Auto,*">
+                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="{StaticResource Padding3}">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding GitStatus.SelectedPath}"
+                                           Classes="muted"
+                                           FontSize="11"
+                                           FontFamily="{StaticResource FontMono}"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="(diff 已截断)"
+                                           Classes="muted"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource WarningFgBrush}"
+                                           IsVisible="{Binding GitStatus.IsDiffTruncated}"/>
+                            </Grid>
+                            <Border Grid.Row="1" Classes="section-divider" Margin="0,0,0,4"/>
+                            <ScrollViewer Grid.Row="2"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto"
+                                          Padding="{StaticResource Padding3}">
+                                <TextBox Text="{Binding GitStatus.DiffText, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         FontFamily="{StaticResource FontMono}"
+                                         FontSize="12"
+                                         Foreground="{DynamicResource CodeFgBrush}"
+                                         TextWrapping="NoWrap"
+                                         AcceptsReturn="True"
+                                         CaretBrush="Transparent"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <StackPanel Grid.Row="3" Spacing="8">
+                    <Border Background="{DynamicResource SuccessBgBrush}"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding2}"
+                            IsVisible="{Binding GitStatus.OperationMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding GitStatus.OperationMessage}" FontSize="12" Foreground="{DynamicResource SuccessFgBrush}"/>
+                    </Border>
+
+                    <Border Background="{DynamicResource WarningBgBrush}"
+                            BorderBrush="{DynamicResource WarningBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            IsVisible="{Binding GitStatus.IsRestoreConfirmationOpen}">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <TextBlock Text="{Binding GitStatus.RestoreConfirmationText}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="取消" Command="{Binding GitStatus.CancelRestoreSelectedCommand}"/>
+                            <Button Grid.Column="2" Content="确认撤销" Classes="danger" Command="{Binding GitStatus.ConfirmRestoreSelectedCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!--
+                      Wave 6: surface Stage / Commit failures and the
+                      last-commit line. Without these the user has no
+                      way to see why a stage / unstage / commit didn't
+                      land (silent failure was the old behaviour).
+                    -->
+                    <Border Background="{DynamicResource ErrorBgBrush}"
+                            BorderBrush="{DynamicResource ErrorBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            IsVisible="{Binding GitStatus.StageError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding GitStatus.StageError}"
+                                   Foreground="{DynamicResource ErrorBorderBrush}"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"/>
+                    </Border>
+                    <TextBlock Text="{Binding GitStatus.LastCommitDisplay, StringFormat=上次提交：{0}}"
+                               Classes="muted"
+                               FontSize="11"
+                               FontFamily="{StaticResource FontMono}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding GitStatus.LastCommitDisplay, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" ColumnSpacing="8">
+                        <Button Content="暂存所选" Command="{Binding GitStatus.StageSelectedCommand}"/>
+                        <Button Grid.Column="1" Content="取消暂存" Command="{Binding GitStatus.UnstageSelectedCommand}"/>
+                        <Button Grid.Column="2" Content="撤销文件" Classes="danger" Command="{Binding GitStatus.RequestRestoreSelectedCommand}"/>
+                        <TextBox Grid.Column="3"
+                                 Text="{Binding GitStatus.CommitMessage}"
+                                 PlaceholderText="提交说明"
+                                 IsEnabled="{Binding !GitStatus.IsMutating}"/>
+                        <Button Grid.Column="4"
+                                Content="提交全部变更"
+                                Command="{Binding GitStatus.CommitCommand}"/>
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

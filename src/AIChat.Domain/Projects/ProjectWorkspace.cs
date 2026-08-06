@@ -5,8 +5,17 @@ using AIChat.Domain.Memory;
 
 namespace AIChat.Domain.Projects;
 
-// Project-level container. Later Agent features can attach files, commands, and
-// tool permissions here without mixing them into the chat-message model.
+// v0 schema container. Wave 3: replaced everywhere in the UI / domain
+// layer by WorkspaceProject + ChatSession. The type still exists
+// because JsonAppRepository's v0→v1 migration path (LoadProjectsCoreV0Async
+// + MigrationCoordinator) reads v0 projects.json off disk and feeds
+// them to V0ToV1Converter.Convert. After migration, this type is no
+// longer constructed or used in any other code path — it's a private
+// shape for the one-way v0→v1 bridge.
+//
+// New UI / domain code MUST NOT take a dependency on this type.
+// Use WorkspaceProject instead.
+[Obsolete("v0 schema container. Use WorkspaceProject for all new code. Kept only so JsonAppRepository's v0→v1 migration can read legacy projects.json files.", false)]
 public sealed class ProjectWorkspace
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");

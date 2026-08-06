@@ -1,0 +1,834 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.EnvironmentPanelView"
+             x:DataType="vm:EnvironmentPanelViewModel">
+
+  <!--
+    Sprint 0.5 Environment panel (right column).
+
+    Sections (top → bottom):
+      1. 变更 — git change count from WorkspaceChangeService
+      2. 本地 — current branch name
+      3. 子智能体 — Active / Completed / Failed counts from AgentHost.SubAgentRuns
+      4. 来源 — pending attachment count
+      5. Background processes (Wave 7.1 follow-up — the
+         BackgroundProcessSupervisor mirrors live, gated by
+         ShowBackgroundProcesses so the section stays out
+         when no supervisor is registered, e.g. a test
+         host with a fake)
+
+    "未实现" sections (PR / Worktree / Diff 5 视图) are
+    intentionally NOT shown as buttons — the plan §5.4 rule
+    "no placeholder nav" applies. When those Waves land,
+    add a new section with a real command behind it.
+  -->
+  <Border Classes="rail"
+          BorderBrush="{DynamicResource LineSoftBrush}"
+          BorderThickness="1,0,0,0">
+    <DockPanel>
+      <!-- Header: title + refresh button. The refresh is per-section; we
+           use one button for the whole panel because all sections read
+           the same WorkspaceChangeService state on refresh. -->
+      <Grid DockPanel.Dock="Top"
+            ColumnDefinitions="*,Auto"
+            Margin="{StaticResource Padding3}">
+        <TextBlock Text="环境信息"
+                   Classes="section-title"
+                   VerticalAlignment="Center"/>
+        <Button Grid.Column="1"
+                Classes="chrome-button"
+                Click="Refresh_OnClick"
+                ToolTip.Tip="刷新环境信息">
+          <Path Data="M5 12 a7 7 0 1 0 1.5 -4.2 M5 4 V8 H9"
+                Stroke="{Binding $parent[Button].Foreground}"
+                StrokeThickness="1.6" StrokeLineCap="Round"
+                Width="14" Height="14" Stretch="Uniform"/>
+        </Button>
+      </Grid>
+
+      <ScrollViewer Padding="{StaticResource Padding3}"
+                    VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="{StaticResource Space5}">
+
+          <!-- ===== 1. 变更 (Codex parity: +X -Y split + Diff 入口) =====
+               Codex surfaces added / removed counts in green / red.
+               We already carry both counts in the VM (ChangeAdded /
+               ChangeRemoved). The chevron button on the right opens
+               the Diff view (Wave 6 follow-up — for now it's a toast
+               so the user can see the affordance). -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="变更" Classes="section-title"/>
+              <Button Grid.Column="1"
+                      Classes="chrome-button"
+                      Padding="4,1"
+                      Click="OpenDiff_OnClick"
+                      IsVisible="{Binding !IsProjectRequired}"
+                      ToolTip.Tip="查看变更 Diff — 打开 Git 状态 viewer">
+                <Path Data="M9 6 L15 6 L15 12 M9 12 L15 12 M9 18 L15 18 M4 6 L4 18 M5 17 L3 18 L5 19"
+                      Stroke="{Binding $parent[Button].Foreground}"
+                      StrokeThickness="1.4" StrokeLineCap="Round"
+                      Width="12" Height="12" Stretch="Uniform"/>
+              </Button>
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="6"
+                        IsVisible="{Binding !IsProjectRequired}">
+              <TextBlock Text="{Binding ChangeAdded, StringFormat=+{0}}"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource SuccessBadgeFgBrush}"/>
+              <TextBlock Text="{Binding ChangeRemoved, StringFormat=-{0}}"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource ErrorBorderBrush}"/>
+              <TextBlock Text="个变更文件"
+                         Classes="muted"
+                         FontSize="11"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Text="(无项目,无法读取)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding IsProjectRequired}"/>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 2. 本地 (Codex parity: 2-level fold) =====
+               The "本地" header stays flat; underneath it we list the
+               current branch as a sub-row the user can click. The
+               chevron rotates on click (a future slice can wire that
+               to a "switch branch" picker). -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+              <TextBlock Grid.Column="0"
+                         Text="本地"
+                         Classes="section-title"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="2"
+                         Text="⌄"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         Foreground="{DynamicResource MutedBrush}"
+                         VerticalAlignment="Center"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding !IsProjectRequired}"
+                  Margin="8,2,0,2">
+              <Path Grid.Column="0"
+                    Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z"
+                    Stroke="{DynamicResource MutedBrush}"
+                    StrokeThickness="1.3" StrokeLineCap="Round"
+                    Width="13" Height="13" Stretch="Uniform"
+                    VerticalAlignment="Center"
+                    Margin="0,0,8,0"/>
+              <TextBlock Grid.Column="1"
+                         Text="{Binding BranchName}"
+                         FontFamily="{StaticResource FontMono}"
+                         FontSize="12"
+                         Foreground="{DynamicResource Text2Brush}"
+                         TextTrimming="CharacterEllipsis"
+                         MaxLines="1"
+                         VerticalAlignment="Center"/>
+            </Grid>
+            <TextBlock Text="(未选择项目)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding IsProjectRequired}"/>
+            <StackPanel Orientation="Horizontal" Spacing="6"
+                        IsVisible="{Binding !IsProjectRequired}"
+                        Margin="0,4,0,0">
+              <Button Classes="chrome-button"
+                      Click="CommitOrPush_OnClick"
+                      ToolTip.Tip="打开 Git 状态 — 提交/暂存/恢复 (⌘⇧G)">
+                <TextBlock Text="提交或推送" FontSize="11"/>
+              </Button>
+              <!--
+                1.0.1: 拉取请求 stays disabled
+                — needs GitHub OAuth (P1
+                deferred, plan §4 / SHIP_REPORT
+                §4). The button is visible
+                only to show the parity
+                surface; the tooltip explains
+                the gate.
+              -->
+              <Button Classes="chrome-button"
+                      Click="CreatePr_OnClick"
+                      IsEnabled="False"
+                      ToolTip.Tip="创建拉取请求（需要 GitHub OAuth — P1 deferred）">
+                <TextBlock Text="创建拉取请求" FontSize="11"/>
+              </Button>
+            </StackPanel>
+            <!--
+              1.0.1: Worktree row is read-only
+              for now (Worktree creation /
+              switch is P1 deferred per
+              plan §4 / SHIP_REPORT §4).
+              The previous shape had a
+              chevron that visually
+              implied "click to expand"
+              but the row was a static
+              Grid with no Click handler
+              — a daily-driver trap (the
+              user mouses over, sees a
+              chevron, clicks, nothing
+              happens). The chevron is
+              replaced with a small
+              "(P1 deferred)" label so
+              the affordance honestly
+              signals "not yet" instead
+              of pretending a menu is
+              about to open.
+            -->
+            <Grid ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding !IsProjectRequired}"
+                  Margin="8,6,0,2">
+              <TextBlock Grid.Column="0" Text="Worktree"
+                         Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="默认 (P1 deferred)"
+                         Classes="muted" FontSize="11"
+                         FontFamily="{StaticResource FontMono}"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center"/>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*"
+                  IsVisible="{Binding !IsProjectRequired}"
+                  Margin="8,2,0,2">
+              <TextBlock Grid.Column="0" Text="Remote"
+                         Classes="muted" FontSize="12" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="(未配置)"
+                         Classes="muted" FontSize="11"
+                         FontFamily="{StaticResource FontMono}"
+                         HorizontalAlignment="Right"
+                         VerticalAlignment="Center"/>
+            </Grid>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 3. 子智能体 (Codex parity: color dots + "66 完成" 数字) =====
+               Codex surfaces sub-agent state as a row of small colored
+               dots (one per template) followed by "N 完成" total. The
+               dots are driven by a fixed palette of 4 (explorer /
+               coder / reviewer / researcher) so the visual stays
+               stable across runs. Wave 7 adds the per-run list so
+               the user can see the most recent dispatch + status /
+               duration / tool-call count without leaving the panel. -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="子智能体" Classes="section-title"/>
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasSubAgents}">
+              <ItemsControl ItemsSource="{Binding SubAgentTemplateDots}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="4"/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:SubAgentTemplateDotViewModel">
+                    <Ellipse Width="8" Height="8"
+                             Fill="{Binding ColorBrush}"
+                             ToolTip.Tip="{Binding Label}"/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="muted"
+                         FontSize="12"
+                         VerticalAlignment="Center"
+                         Text="{Binding SubAgentCompleted, StringFormat={}{0} 完成}"/>
+            </StackPanel>
+            <TextBlock Text="(暂无子智能体)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding SubAgentTotal, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+            <!--
+              Wave 7: per-run list. Each row shows template + status +
+              duration + tool-call count, so the user can tell at a
+              glance whether the most recent sub-agent dispatch
+              completed cleanly or got budget-cancelled. The list
+              is bound to SubAgentRuns (mirrors AgentHost.SubAgentRuns
+              — see RefreshSubAgentDots / RecountSubAgents for the
+              wiring).
+
+              The status dot uses the same fixed palette as the
+              sub-agent template dots in the section header (green /
+              amber / red / grey) so a user scanning the panel can
+              read state without reading the label. Hover exposes
+              the full summary when the run produced one.
+            -->
+            <ItemsControl ItemsSource="{Binding SubAgentRuns}"
+                          IsVisible="{Binding HasSubAgents}"
+                          Margin="0,4,0,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SubAgentRunViewModel">
+                  <StackPanel Spacing="2">
+                  <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,2">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding TemplateDisplay}"
+                               Classes="muted"
+                               FontSize="10"
+                               FontFamily="{StaticResource FontMono}"
+                               VerticalAlignment="Center"
+                               MinWidth="50"/>
+                    <!--
+                      1.0.1: the Task
+                      column is now
+                      the click target
+                      for inline expand
+                      (PointerPressed
+                      so the whole
+                      header strip
+                      registers, like
+                      the Sources row
+                      header). The
+                      ToolTip on hover
+                      was a touchpad
+                      trap — daily
+                      drivers rarely
+                      hover long enough
+                      to see the full
+                      summary text. The
+                      click lands the
+                      expand panel
+                      below the row.
+                    -->
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Task}"
+                               FontSize="11"
+                               Foreground="{DynamicResource Text2Brush}"
+                               TextTrimming="CharacterEllipsis"
+                               MaxLines="1"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding Summary}"
+                               PointerPressed="SubAgentRowHeader_OnPointerPressed"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Ellipse Width="6" Height="6"
+                               Fill="{Binding StatusBrush}"
+                               VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Status}"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="62"/>
+                      <TextBlock Text="{Binding DurationDisplay}"
+                                 Classes="muted"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="36"/>
+                      <TextBlock Text="{Binding ToolCallCount, StringFormat=↻{0}}"
+                                 Classes="muted"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <!--
+                      2026-08-03: per-row stop button. IsVisible is
+                      bound to CanStop (which combines IsRunning
+                      with the wired-up command), so the button
+                      only renders for in-flight runs. The
+                      command is wired by AgentHostViewModel.
+                    -->
+                    <Button Grid.Column="3"
+                            Classes="chrome-button"
+                            Padding="4,1"
+                            IsVisible="{Binding CanStop}"
+                            Command="{Binding StopCommand}"
+                            CommandParameter="{Binding Id}"
+                            ToolTip.Tip="停止该子智能体 (会取消正在进行的工具调用)">
+                      <TextBlock Text="停止" FontSize="10"/>
+                    </Button>
+                  </Grid>
+                  <!--
+                    1.0.1: per-row inline
+                    expand panel for
+                    the Summary text.
+                    The panel is gated
+                    on HasSummary (not
+                    just IsExpanded) so
+                    a row with no
+                    summary doesn't
+                    render an empty
+                    bordered block —
+                    same fix as the
+                    Plan detail panel
+                    (commit aeedf40).
+                    MaxHeight caps the
+                    inline panel so a
+                    10-line summary
+                    doesn't push every
+                    other sub-agent
+                    row off-screen.
+                    Multi-line
+                    SelectableTextBlock
+                    so the user can
+                    ⌘C any chunk of
+                    the summary
+                    directly.
+                  -->
+                  <Border IsVisible="{Binding ShouldShowSummary}"
+                          Background="{DynamicResource CodeBgBrush}"
+                          BorderBrush="{DynamicResource LineSoftBrush}"
+                          BorderThickness="1"
+                          CornerRadius="{StaticResource RadiusSm}"
+                          Padding="6,4"
+                          Margin="0,0,0,4">
+                    <SelectableTextBlock Text="{Binding Summary}"
+                                         FontSize="10"
+                                         FontFamily="{StaticResource FontMono}"
+                                         TextWrapping="Wrap"
+                                         MaxHeight="160"
+                                         Foreground="{DynamicResource Text2Brush}"/>
+                  </Border>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 4. 来源 (Codex parity: list of source items) =====
+               Codex lists each "source" — clipboard snapshots, web
+               searches, attached files — as its own row. Wave 7
+               ships with the pasted-image surface: every ⌘V image
+               the user added shows up here with the same file name
+               as the attachment strip above the composer, so the
+               right rail mirrors what will actually travel with
+               the next message.
+
+               Future source kinds (web search / connector / plugin)
+               will plug in through the same ItemsControl binding
+               by adding rows to the VM's Sources collection with a
+               different Kind value. 1.0.1: this section does NOT
+               show its own "+" button — the add-source surface is
+               the composer's "+" menu (粘贴图片 / 剪贴板快照 /
+               网页搜索 / @file 引用), which writes through the
+               same ISourceRegistry the panel mirrors. Two
+               add-paths for the same registry would be a
+               daily-driver paper cut.
+            -->
+          <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+              <TextBlock Grid.Column="0" Text="来源" Classes="section-title" VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1"
+                         Classes="muted"
+                         FontSize="11"
+                         VerticalAlignment="Center"
+                         Text="{Binding SourceSummary}"/>
+              <!--
+                1.0.1: "清空" button.
+                Visible only when
+                HasPersistedSources —
+                pending attachments
+                can't be cleared
+                from the right rail
+                (they're owned by
+                the composer strip).
+                A daily driver
+                who's accumulated
+                20+ clipboard
+                snapshots or web
+                fetches over a
+                session needs a
+                1-click reset;
+                the per-row ×
+                button works for
+                1 or 2 entries but
+                is a paper cut at
+                10+. No
+                confirmation: the
+                registry's
+                persistence is
+                "soft" (the next
+                ⌘V snapshot re-uses
+                the slot, and the
+                actual content is
+                gone anyway), so
+                a confirmation
+                dialog is just
+                friction. Tooltip
+                explains the
+                scope so a
+                misclick on the
+                "引用" / "×"
+                column header
+                can't be
+                confused.
+              -->
+              <Button Grid.Column="2"
+                      Classes="chrome-button"
+                      Padding="6,1"
+                      IsVisible="{Binding HasPersistedSources}"
+                      Click="ClearSources_OnClick"
+                      ToolTip.Tip="清空所有已保存的来源 (不影响待发送的附件)">
+                <TextBlock Text="清空" FontSize="10"/>
+              </Button>
+            </Grid>
+            <!--
+              1.0.1: empty-state hint. The previous
+              shape only mentioned the paste
+              path, which made the section look
+              narrow to a daily-driver user who
+              has a clipboard snapshot OR a web
+              fetch OR a paste-image they were
+              about to do. The new copy walks
+              through the three add-paths the
+              "+" menu actually exposes
+              (clipboard snapshot, web fetch,
+              paste image), so the user who
+              hits an empty Sources section
+              sees "here's how you populate it"
+              rather than "you can only paste
+              images". The 「+」 char on the
+              leading 提示 is the visual cue
+              for the menu — same glyph the
+              titlebar "+" uses.
+            -->
+            <TextBlock Classes="muted"
+                       FontSize="12"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}">
+              <Run Text="(暂无来源 — 点 「+」: 粘贴图像 / 剪贴板快照 / 网页搜索)"/>
+            </TextBlock>
+            <ItemsControl ItemsSource="{Binding Sources}"
+                          IsVisible="{Binding SourceCount, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SourceRowViewModel">
+                  <Grid RowDefinitions="Auto,Auto">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6" Margin="0,1">
+                      <Path Grid.Column="0"
+                            Data="M3 5 h12 v10 h-12 z M3 9 h12 M7 5 v10 M3 15 l-2 2 h16 l-2 -2"
+                            Stroke="{DynamicResource MutedBrush}"
+                            StrokeThickness="1.3" StrokeLineCap="Round"
+                            Width="14" Height="14" Stretch="Uniform" VerticalAlignment="Center"/>
+                      <StackPanel Grid.Column="1" Spacing="0" VerticalAlignment="Center"
+                                  PointerPressed="SourceRowHeader_OnPointerPressed">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="12" Foreground="{DynamicResource Text2Brush}"
+                                   TextTrimming="CharacterEllipsis" MaxLines="1"/>
+                        <TextBlock Text="{Binding Detail}"
+                                   Classes="muted" FontSize="10"
+                                   FontFamily="{StaticResource FontMono}"/>
+                        <!--
+                          1.0.1: the @-reference text the
+                          user would type to cite this
+                          Source by hand. The display
+                          name + URL/capture-time line
+                          is what the user reads; this
+                          line is the "machine name"
+                          the parser and the agent
+                          loop see. Hidden for pending
+                          attachment rows (no real
+                          Source.Id to reference).
+                          SelectableTextBlock so the user
+                          can ⌘C the @<kind>:<id> text
+                          directly (e.g. to paste into
+                          a future prompt by hand) —
+                          before this change the user
+                          had to either click 引用 to
+                          insert it into the composer
+                          or right-click → select all →
+                          copy the mono string. The
+                          first forces a side-effect on
+                          the composer; the second is
+                          3 steps for a daily-driver
+                          affordance that should be 1.
+                        -->
+                        <SelectableTextBlock Text="{Binding Reference}"
+                                             IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                                             FontSize="10"
+                                             FontFamily="{StaticResource FontMono}"
+                                             Foreground="{DynamicResource MutedBrush}"/>
+                      </StackPanel>
+                      <!--
+                        Per-row "insert @-reference" button. Hidden
+                        for pending attachment rows (no Source.Id
+                        to reference — the paste path sends the
+                        image as a normal artifact, not an
+                        @-reference; the button's IsVisible binding
+                        checks Source != null).
+                      -->
+                      <Button Grid.Column="2"
+                              Classes="chrome-button"
+                              Padding="6,1"
+                              IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                              Click="SourceInsert_OnClick"
+                              Tag="{Binding}"
+                              ToolTip.Tip="在光标位置插入 @-引用到 composer">
+                        <TextBlock Text="引用" FontSize="10"/>
+                      </Button>
+                      <!--
+                        Per-row "×" delete button. Same
+                        visibility rule as 引用 (hidden
+                        for pending attachment rows —
+                        the Sources list reuses the
+                        visual surface but pending
+                        attachments are owned by
+                        PendingAttachments, not the
+                        registry). The Tag carries the
+                        Source.Id so the click handler
+                        can target the right registry
+                        entry without taking a
+                        dependency on the row's full
+                        Source object.
+                      -->
+                      <Button Grid.Column="3"
+                              Classes="chrome-button"
+                              Padding="4,1"
+                              IsVisible="{Binding Source, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=null}"
+                              Click="SourceRemove_OnClick"
+                              Tag="{Binding Id}"
+                              ToolTip.Tip="从数据源删除">
+                        <Path Data="M6 6 L18 18 M18 6 L6 18"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              StrokeThickness="1.6" StrokeLineCap="Round"
+                              Width="10" Height="10" Stretch="Uniform"/>
+                      </Button>
+                    </Grid>
+                    <!--
+                      1.0.1: per-row inline expand panel.
+                      Toggled by the row's IsExpanded
+                      property (currently driven by
+                      the SourceToggleExpand_OnClick
+                      handler in
+                      EnvironmentPanelView.axaml.cs,
+                      but the click target is the
+                      row's display name rather than
+                      a separate chevron — the daily-
+                      driver user reaching for the
+                      captured body reads the name,
+                      sees the truncated 60-char
+                      preview, and naturally clicks
+                      the row). Hidden for pending
+                      attachment rows (no Source to
+                      show).
+                    -->
+                    <Border Grid.Row="1"
+                            IsVisible="{Binding IsExpanded}"
+                            Background="{DynamicResource CodeBgBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusSm}"
+                            Padding="{StaticResource Padding3}"
+                            Margin="18,2,0,4">
+                      <ScrollViewer MaxHeight="160"
+                                    HorizontalScrollBarVisibility="Disabled"
+                                    VerticalScrollBarVisibility="Auto">
+                        <SelectableTextBlock Text="{Binding DetailContent}"
+                                             FontSize="11"
+                                             FontFamily="{StaticResource FontMono}"
+                                             Foreground="{DynamicResource CodeFgBrush}"
+                                             TextWrapping="Wrap"/>
+                      </ScrollViewer>
+                    </Border>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <!--
+              1.0.1: removed the "查看全部"
+              stub button. The Sources
+              section above already
+              renders every persisted
+              source (in the panel's
+              own ScrollViewer); a
+              "view all" affordance
+              that no-ops to a stub
+              toast was misleading
+              the user into thinking
+              there was a more
+              complete view behind
+              the button. If a real
+              "sources modal with
+              search + sort" ever
+              lands (P1 deferred
+              per SHIP_REPORT §4),
+              re-introduce a button
+              bound to the modal
+              command at that time.
+            -->
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 5. Background Processes (Codex parity, Wave 7 follow-up) =====
+               Codex surfaces long-running background processes (build
+               watchers, dev servers, sub-agent scratch spaces, local
+               site previews) as a collapsible list. Wave 7 follow-up
+               wires the real BackgroundProcessSupervisor: each row
+               shows the process name + colored status dot + status
+               label + PID, and exposes a Stop button that signals
+               the whole process tree (plan §13 P0 risk "整个子进程树").
+
+               The plan §7.7 rule ("supervisor 未建前不得展示入口")
+               is now satisfied — the supervisor is built and
+               registered in DI, so ShowBackgroundProcesses defaults
+               to true. An empty list still shows the empty-state
+               hint so the user understands the section is alive. -->
+          <StackPanel Spacing="4" IsVisible="{Binding ShowBackgroundProcesses}">
+            <TextBlock Text="Background Processes" Classes="section-title"/>
+            <TextBlock Text="(暂无后台进程)"
+                       Classes="muted"
+                       FontSize="12"
+                       IsVisible="{Binding !HasBackgroundProcesses}"/>
+            <ItemsControl ItemsSource="{Binding BackgroundProcesses}"
+                          IsVisible="{Binding HasBackgroundProcesses}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:BackgroundProcessViewModel">
+                  <StackPanel Margin="0,2">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                          ColumnSpacing="6">
+                      <Ellipse Grid.Column="0"
+                               Width="8" Height="8"
+                               Fill="{Binding StatusBrush}"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding CommandLine}"/>
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding DisplayName}"
+                                 FontSize="12"
+                                 Foreground="{DynamicResource Text2Brush}"
+                                 TextTrimming="CharacterEllipsis" MaxLines="1"
+                                 VerticalAlignment="Center"
+                                 ToolTip.Tip="{Binding CommandLine}"/>
+                      <TextBlock Grid.Column="2"
+                                 Text="{Binding StatusLabel}"
+                                 Classes="muted" FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 VerticalAlignment="Center"
+                                 MinWidth="50"/>
+                      <Button Grid.Column="3"
+                              Classes="chrome-button"
+                              Padding="4,1"
+                              IsVisible="{Binding IsRunning}"
+                              Click="StopBackgroundProcess_OnClick"
+                              Tag="{Binding Id}"
+                              ToolTip.Tip="停止该进程 (会发信号到整个进程树)">
+                        <TextBlock Text="停止" FontSize="10"/>
+                      </Button>
+                      <ToggleButton Grid.Column="4"
+                                    Classes="chrome-button"
+                                    Padding="4,1"
+                                    IsVisible="{Binding HasLog}"
+                                    x:Name="LogToggle"
+                                    ToolTip.Tip="展开/收起最近日志">
+                        <TextBlock Text="日志" FontSize="10"/>
+                      </ToggleButton>
+                    </Grid>
+                    <Border Background="{DynamicResource SurfaceSunkenBrush}"
+                            BorderBrush="{DynamicResource LineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusSm}"
+                            Padding="8,6"
+                            Margin="22,2,0,4"
+                            IsVisible="{Binding #LogToggle.IsChecked}"
+                            MaxHeight="160">
+                      <TextBlock Text="{Binding LogTail}"
+                                 FontSize="10"
+                                 FontFamily="{StaticResource FontMono}"
+                                 TextWrapping="Wrap"
+                                 TextTrimming="CharacterEllipsis"
+                                 Foreground="{DynamicResource Text2Brush}"/>
+                    </Border>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="(进程在运行中显示停止按钮;点击会向整个进程组发 SIGTERM,5 秒后升级为 SIGKILL)"
+                       Classes="muted" FontSize="11"
+                       IsVisible="{Binding HasBackgroundProcesses}"/>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 6. 进度 (Mavis / Codex parity) ===== -->
+          <!--
+            Mirrors the "what is the agent doing right now" line that
+            sits next to the session id in Mavis. Two rows: while a
+            task is running we show "正在跑: <prompt excerpt>"; once
+            it ends we keep the last status visible (上次运行: 完成)
+            so the section never collapses to nothing between runs
+            — the user can always answer "did the last task land?".
+          -->
+          <StackPanel Spacing="4">
+            <TextBlock Text="进度" Classes="section-title"/>
+            <TextBlock Text="{Binding LastRunSummary}"
+                       FontSize="12"
+                       Foreground="{Binding LastRunSummaryBrush}"
+                       FontFamily="{StaticResource FontSans}"
+                       TextTrimming="CharacterEllipsis"
+                       MaxLines="2"
+                       TextWrapping="Wrap"/>
+            <TextBlock Text="(本节显示当前任务 / 上次运行状态)"
+                       Classes="muted"
+                       FontSize="11"
+                       IsVisible="{Binding LastRunSummary, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== 6. 交付物 (Mavis / Codex parity) ===== -->
+          <!--
+            Lists the 5 most recent files in art/ (the directory we
+            use for image_synthesize outputs and user screenshots).
+            Click handler opens the file in the system default app
+            via the OpenDeliverable command below. Empty when the
+            directory is missing or has no files — the section
+            collapses via the HasDeliverables binding so the panel
+            doesn't show a "no deliverables" empty state at the
+            top of the day.
+          -->
+          <StackPanel Spacing="4" IsVisible="{Binding HasDeliverables}">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Text="交付物" Classes="section-title"/>
+              <TextBlock Grid.Column="1"
+                         Classes="muted"
+                         FontSize="11"
+                         Text="{Binding Deliverables.Count, StringFormat={}{0} 个}"/>
+            </Grid>
+            <ItemsControl ItemsSource="{Binding Deliverables}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DeliverableViewModel">
+                  <Button Classes="env-row"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch"
+                          Click="Deliverable_OnClick"
+                          Tag="{Binding FullPath}"
+                          ToolTip.Tip="{Binding FullPath}">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Name}"
+                                 FontSize="12"
+                                 Foreground="{DynamicResource TextBrush}"
+                                 TextTrimming="CharacterEllipsis"
+                                 MaxLines="1"/>
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding DisplaySize}"
+                                   Classes="muted"
+                                   FontSize="10"
+                                   FontFamily="{StaticResource FontMono}"/>
+                        <TextBlock Text="·" Classes="muted" FontSize="10"/>
+                        <TextBlock Text="{Binding ModifiedDisplay}"
+                                   Classes="muted"
+                                   FontSize="10"/>
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
+          <Border Classes="section-divider"/>
+
+          <!-- ===== footer: last refresh time ===== -->
+          <TextBlock Text="{Binding LastRefreshDisplay, StringFormat=上次刷新: {0}}"
+                     Classes="muted"
+                     FontFamily="{StaticResource FontMono}"
+                     FontSize="10"/>
+        </StackPanel>
+      </ScrollViewer>
+    </DockPanel>
+  </Border>
+</UserControl>

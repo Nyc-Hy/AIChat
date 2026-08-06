@@ -1,137 +1,160 @@
 # AIChat
 
-AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话和本地代码 Agent 工作流。
+AIChat is a cross-platform Vibe Coding assistant for local repository work. The goal is a small, fast, low-cost coding workbench that lets MiniMax (and any other OpenAI-compatible endpoint, by setting a custom base URL) deliver an experience close to Claude Code — without the Claude Code price tag.
 
-本项目使用 [Apache License 2.0](LICENSE) 开源。
+The 1.0 Beta release ships a single product surface: an **Avalonia desktop application** for macOS, Linux, and Windows. The legacy CLI / TUI surface has been removed; everything (provider setup, project context, agent loop, tool approval, run history) lives in the desktop UI.
 
-## 功能特性
+This project is open source under [Apache License 2.0](LICENSE).
 
-- **项目级对话**：每个项目拥有独立的会话历史和设置
-- **多模型提供商**：支持 OpenAI-compatible 和 Anthropic 协议
-- **Agent Harness**：模型/工具循环，包含规划、执行、验证和自动修复
-- **14 个内置工具**：文件读写编辑、搜索、补丁、Git、构建、测试、Shell
-- **工具权限模型**：禁用、只读自动执行、每次确认、本会话允许
-- **项目级权限覆盖**：每个项目可覆盖全局工具权限
-- **审计日志**：记录工具调用、审批、拒绝和运行生命周期
-- **Agent 运行历史**：浏览、筛选、重试和继续历史运行
-- **验证系统**：可配置构建/测试命令，并支持自动修复循环
-- **上下文工程**：文件索引、预算化上下文包、固定上下文项
-- **变更控制**：基于快照和哈希的冲突检测与安全回滚
+## Features
 
-## 运行
+- **Cross-platform Avalonia desktop UI** — Mac / Linux / Windows from a single codebase.
+- **Project-scoped conversations** — every project has its own session history, settings, and verification commands.
+- **Single provider with custom-base-URL support** — ships with MiniMax (M3) using the OpenAI-compatible protocol; any other OpenAI-compatible endpoint (self-hosted proxies included) works by setting a custom `BaseUrl` in Settings.
+- **Single-agent loop by default** — planner / sub-agents / auto-fix / memory writes are kept off the main path to keep token usage low and behaviour predictable.
+- **15 built-in tools** — read / edit / patch / search / plan / Git / build / test / shell.
+- **Tool permission model** — disabled, auto-execute read-only, confirm each call, or allow for the session.
+- **Project-level permission overrides** — every project can override the global defaults.
+- **Agent run history** — browse, filter, retry, and continue historical runs.
+- **Verification & auto-fix (opt-in)** — `dotnet build` / `dotnet test`-style commands; off by default so small tasks don't burn extra tokens.
+- **Context engineering** — file index, budgeted context packs, pinned context items.
+- **Change control** — snapshot- and hash-based conflict detection and safe rollback.
 
-```powershell
-dotnet run --project src\AIChat.App\AIChat.App.csproj
+## Run the Desktop App
+
+```bash
+dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj
 ```
 
-首次启动后，进入设置页，选择模型提供商模板，填写 API Key，并添加到已配置提供商列表。
+On first run, open **Settings** (`⌘,`) to confirm the MiniMax base URL, paste an API key, and click **Test connection**. To point at a self-hosted OpenAI-compatible endpoint instead, change the `BaseUrl` in the same panel — the protocol stays the same. Then add a project from the left sidebar and send a task from the bottom input box.
 
-## 测试
+For UI trials or demos that must not touch your real projects, settings, or
+credential vault, launch with an explicit isolated profile:
 
-```powershell
-dotnet build AIChat.sln --no-restore -m:1
-dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1
+```bash
+AICHAT_ISOLATED_DATA_ROOT="$(mktemp -d)" \
+  dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj
 ```
 
-GitHub Actions 会在每个 Pull Request 上运行同样的构建和测试。
+The isolated profile stores all JSON, artifacts, and pasted-image staging files
+under that directory and keeps API keys in memory for that process only.
 
-## Agent 模式
+See [docs/INSTALL.md](docs/INSTALL.md) for packaged installers and checksum verification on each platform.
 
-当当前模型支持工具调用时，AIChat 会自动进入 Agent 模式。Agent 会：
+## Execution Modes
 
-1. 接收用户目标和项目上下文
-2. 创建计划，并在详情面板中展示
-3. 调用工具读取、修改和验证代码
-4. 运行验证命令，并在失败时尝试自动修复
-5. 记录所有变更和快照，便于安全回滚
+| Mode | Purpose | Default behaviour |
+|---|---|---|
+| `fast` | Quick questions, small fixes | 6 tool-round budget, no auto-verify |
+| `standard` | Default coding loop | 16 tool-round budget, single-agent |
+| `deep` | Hard tasks, refactors, repairs | 40 tool-round budget, planner + verify on |
 
-### 工具权限
+Mode selection lives in the Settings modal. The main workspace stays conversation-first and shows only the active mode and essential run state.
 
-每个工具都有一个权限模式：
+### Tool Permission Model
 
-| 模式 | 行为 |
+| Mode | Behaviour |
 |---|---|
-| Disabled | 不暴露给模型 |
-| Auto ReadOnly | 只读工具无需确认自动执行 |
-| Confirm Each Time | 每次调用都需要用户确认 |
-| Allow for Session | 首次确认后，本轮会话内自动允许 |
+| Disabled | Not exposed to the model |
+| Auto ReadOnly | Read-only tools run without confirmation |
+| Confirm Each Time | Every call needs explicit user approval in the UI |
+| Allow for Session | First approval auto-allows for the rest of the run |
 
-全局默认值在设置页的 Tools 区域配置。项目级覆盖规则可在同一面板中添加。
+Global defaults are configurable per project from the desktop settings panel.
 
-### Agent 运行历史
+## Model Profile
 
-Agent 运行会随会话一起持久化。历史面板可用于：
+- **MiniMax (M3)** — short action loop, tight tool parameter convergence, 200K context, no vision by default. Custom MiniMax-style endpoints (self-hosted gateways, internal mirrors) work by setting `BaseUrl` in Settings.
 
-- 浏览历史运行，并按状态筛选
-- 查看执行步骤、文件变更和验证结果
-- 从头重试失败运行
-- 继续已停止或未完成的运行
-- 复制 review packet 用于分享或调试
-
-### 验证与自动修复
-
-可以为每个项目配置验证命令，例如 `dotnet build`、`dotnet test`。Agent 修改文件后：
-
-1. 自动运行验证命令
-2. 如果验证失败，将失败摘要反馈给模型
-3. 模型尝试修复问题
-4. 最多重复到配置的修复轮数，默认 3 轮
-
-## 架构
+## Architecture
 
 ```text
 src/
-  AIChat.App/                  WPF Shell、MVVM 状态、组合根
-  AIChat.Domain/               纯领域模型（聊天、项目、审计、上下文）
-  AIChat.Abstractions/         跨边界契约和 DTO
-  AIChat.Application/          Agent Harness、工具、提示词、上下文、验证
-  AIChat.Providers.OpenAI/     OpenAI-compatible 协议适配器
-  AIChat.Providers.Anthropic/  Anthropic 协议适配器
-  AIChat.Storage.Json/         本地 JSON 持久化（%APPDATA%\AIChat）
+  AIChat.App.Avalonia/         Cross-platform Avalonia desktop UI (only product surface)
+  AIChat.Domain/               Pure domain models (chat, project, audit, context)
+  AIChat.Abstractions/         Cross-boundary contracts and DTOs
+  AIChat.Application/          Agent Harness, tools, prompting, context, verification, registries
+  AIChat.Providers.OpenAI/     OpenAI-compatible protocol adapter (the only provider adapter; the catalog ships with MiniMax)
+  AIChat.Storage.Json/         Local JSON persistence (macOS: ~/Library/Application Support/AIChat/; Linux: ~/.config/AIChat/; Windows: %APPDATA%\AIChat\)
 tests/
-  AIChat.Tests/                工具、Harness、Provider、序列化等单元测试
+  AIChat.Tests/                Tools, Harness, Providers, serialisation, ViewModel unit tests
 ```
 
-### 分层规则
+### Layering Rules
 
-1. UI (`AIChat.App`) 负责 MVVM 状态和应用组合，不承载业务逻辑。
-2. Domain (`AIChat.Domain`) 只放纯模型，不依赖其他项目。
-3. Application (`AIChat.Application`) 负责 Agent 循环、工具和提示词。
-4. Providers (`AIChat.Providers.*`) 将具体模型协议适配到统一的 `IChatProvider`。
-5. Storage (`AIChat.Storage.Json`) 将领域对象持久化到本地 JSON。
+1. UI (`AIChat.App.Avalonia`) owns interaction and app composition. No business logic.
+2. Domain (`AIChat.Domain`) is pure models, no other project references.
+3. Application (`AIChat.Application`) owns the agent loop, tools, prompting.
+4. Providers (`AIChat.Providers.*`) adapt each model protocol to `IChatProvider`.
+5. Storage (`AIChat.Storage.Json`) persists domain objects to local JSON.
 
-## 文档
+## Testing
 
-- [架构说明](docs/ARCHITECTURE.md)
+```bash
+dotnet build AIChat.sln --no-restore -m:1
+dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1
+```
+
+GitHub Actions runs the same build + test on every Pull Request.
+
+## Agent Mode
+
+When the active model supports tool calls, AIChat enters agent mode. The default product path is a simplified single-agent loop:
+
+1. Receive the user goal and project context.
+2. Select the minimum context needed.
+3. Read, modify, and verify code with the tool registry.
+4. Surface changes, verification results, and a follow-up summary.
+5. Persist the run for later review.
+
+Planner / sub-agents / benchmark / memory / plugin / MCP / audit detail remain in the code as advanced capabilities but stay off the main path by default.
+
+## Documentation
+
+- [Product baseline](docs/PRODUCT_BASELINE.md)
+- [Product scope](docs/PRODUCT_SCOPE.md)
+- [Install instructions](docs/INSTALL.md)
+- [Launch plan](docs/LAUNCH_PLAN.md)
+- [1.0 roadmap](docs/ROADMAP_1.0.md)
+- [Release checklist](docs/RELEASE_CHECKLIST.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [Agent Harness](docs/AGENT_HARNESS.md)
-- [工具安全模型](docs/TOOL_SECURITY.md)
-- [插件系统](docs/PLUGIN_SYSTEM.md)
-- [GitHub 工作流](docs/GITHUB_WORKFLOW.md)
-- [A2A Adapter 设计](docs/A2A_ADAPTER_DESIGN.md)
-- [开发路线图](docs/REMAINING_DEVELOPMENT_PLAN.md)
-- [安全策略](SECURITY.md)
-- [变更日志](CHANGELOG.md)
+- [Tool security](docs/TOOL_SECURITY.md)
+- [Plugin system](docs/PLUGIN_SYSTEM.md)
+- [GitHub workflow](docs/GITHUB_WORKFLOW.md)
+- [A2A adapter design](docs/A2A_ADAPTER_DESIGN.md)
+- [Remaining development plan](docs/REMAINING_DEVELOPMENT_PLAN.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
-## 贡献
+## Contributing
 
-使用 GitHub Issues 跟踪工作，使用 Pull Request 进行评审，CI 作为合并门禁。
-请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，并遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+Track work via GitHub Issues, review with focused Pull Requests, gate merges on CI. See [CONTRIBUTING.md](CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-## 贡献者
+## Credits
 
-- Nyc-Hy：项目维护者
-- CodeX：AI 编码协作者
+- **Nyc-Hy** — project maintainer
+- **CodeX** — AI coding collaborator
 
-## 发布
+## Release
 
-```powershell
-dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained false
+The Avalonia desktop app is published as a self-contained per-platform archive:
+
+```bash
+# Apple Silicon macOS
+dotnet publish src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj \
+  -c Release -r osx-arm64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+# Linux x64
+dotnet publish src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj \
+  -c Release -r linux-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+
+# Windows x64
+dotnet publish src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj \
+  -c Release -r win-x64 --self-contained true \
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-该命令生成依赖 .NET 8 Runtime 的发布包。
-
-如果需要自包含发布包：
-
-```powershell
-dotnet publish src\AIChat.App\AIChat.App.csproj -c Release -r win-x64 --self-contained true
-```
+A `scripts/publish-desktop.ps1` helper script produces all four platform archives and a `SHA256SUMS.txt` file. The GitHub Actions `Release Desktop` workflow does the same on a `v*` tag.

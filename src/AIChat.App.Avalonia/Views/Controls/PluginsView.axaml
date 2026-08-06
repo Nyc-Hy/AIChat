@@ -1,0 +1,164 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.PluginsView"
+             x:DataType="vm:MainWindowViewModel">
+
+  <!--
+    Wave 8 (parity plan §7 Wave 8): Plugins modal. Mirrors the
+    layout shape of MemoryEditorView / SettingsView — full-window
+    scrim with a centered card. The card lists every plugin the
+    registry has loaded plus any loader diagnostics, and has a
+    Refresh button at the top so the user can re-scan after
+    dropping a new plugin folder.
+
+    Per-row enable / disable, install / uninstall, and the search
+    + detail journey land in a follow-up slice. This first pass
+    is intentionally read-only — the registry contract is the
+    harder piece and the rest rides on the same surface.
+
+    We set x:DataType to MainWindowViewModel and route the inner
+    bindings through `Plugins.*` so the existing `IsPluginsOpen`
+    bool on the host continues to drive IsVisible without
+    needing a DataContext swap (matching the pattern used by
+    SettingsView / MemoryEditorView).
+  -->
+  <Grid Background="{DynamicResource ScrimBrush}"
+        IsVisible="{Binding IsPluginsOpen}">
+    <Border Classes="modal-card"
+            Width="640" MaxHeight="640"
+            VerticalAlignment="Center" HorizontalAlignment="Center"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource LineSoftBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="20">
+      <DockPanel DataContext="{Binding Plugins}">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+          <StackPanel Grid.Column="0" Spacing="2">
+            <TextBlock Text="插件" Classes="section-title" FontSize="16"/>
+            <TextBlock Classes="muted" FontSize="11"
+                       Text="{Binding PluginsDirectory, StringFormat=扫描目录: {0}}"
+                       FontFamily="{StaticResource FontMono}"/>
+          </StackPanel>
+          <Button Grid.Column="1"
+                  Classes="chrome-button"
+                  Command="{Binding ReloadCommand}"
+                  ToolTip.Tip="重新扫描插件目录">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Data="M5 12 a7 7 0 1 0 1.5 -4.2 M5 4 V8 H9"
+                    Stroke="{Binding $parent[Button].Foreground}"
+                    StrokeThickness="1.6" StrokeLineCap="Round"
+                    Width="14" Height="14" Stretch="Uniform"/>
+              <TextBlock Text="刷新" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="12">
+
+            <!-- 加载中占位 — 第一次 ReloadAsync 完成前显示。
+                 Wave 8 first slice: registry 在 VM 构造时立即 fire
+                 ReloadAsync; 加载通常 < 50 ms, 用户几乎看不到这
+                 个占位. -->
+            <TextBlock Text="(加载中...)"
+                       Classes="muted" FontSize="12"
+                       IsVisible="{Binding IsLoading}"/>
+
+            <!-- 错误横幅 — ReloadAsync 抛异常时显示. -->
+            <Border Classes="error-banner"
+                    Background="{DynamicResource ErrorBgBrush}"
+                    BorderBrush="{DynamicResource ErrorBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Padding="8,6"
+                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <TextBlock Text="{Binding ErrorMessage}"
+                         Foreground="{DynamicResource ErrorFgBrush}"
+                         FontSize="12"
+                         TextWrapping="Wrap"/>
+            </Border>
+
+            <!-- 空状态 — 没有可用 plugin 时显示引导.
+                 不显示 "(无插件)" 这种空话, 而是告诉用户怎么加. -->
+            <StackPanel Spacing="4"
+                        IsVisible="{Binding !IsLoading}">
+              <TextBlock Classes="muted" FontSize="12"
+                         IsVisible="{Binding Plugins.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}">
+                <Run Text="暂无插件. 把带 "/>
+                <Run Text="plugin.json" FontFamily="{StaticResource FontMono}"/>
+                <Run Text=" 的子目录放到上面列出的扫描目录, 然后点刷新."/>
+              </TextBlock>
+
+              <ItemsControl ItemsSource="{Binding Plugins}"
+                            IsVisible="{Binding Plugins.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:PluginSummary">
+                    <Border Classes="env-row"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="0,0,0,1"
+                            Padding="0,8">
+                      <StackPanel Spacing="4">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding Name}"
+                                     FontSize="13" FontWeight="SemiBold"
+                                     Foreground="{DynamicResource TextBrush}"/>
+                          <TextBlock Text="{Binding Version}"
+                                     Classes="muted" FontSize="11"
+                                     FontFamily="{StaticResource FontMono}"
+                                     VerticalAlignment="Center"/>
+                          <TextBlock Text="{Binding Id}"
+                                     Classes="muted" FontSize="10"
+                                     FontFamily="{StaticResource FontMono}"
+                                     VerticalAlignment="Center"
+                                     Margin="6,0,0,0"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding Description}"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource Text2Brush}"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Classes="muted" FontSize="11"
+                                     FontFamily="{StaticResource FontMono}"
+                                     VerticalAlignment="Center">
+                            <Run Text="{Binding ToolCount, Mode=OneWay}"/>
+                            <Run Text=" 个工具 · "/>
+                            <Run Text="{Binding RiskBreakdown, Mode=OneWay}"/>
+                          </TextBlock>
+                        </StackPanel>
+                        <TextBlock Text="{Binding DirectoryPath}"
+                                   Classes="muted" FontSize="10"
+                                   FontFamily="{StaticResource FontMono}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1"/>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+
+            <!-- 诊断 — 失败的 manifest / validation 错误. -->
+            <StackPanel Spacing="4"
+                        IsVisible="{Binding Diagnostics.Count, Converter={x:Static ObjectConverters.NotEqual}, ConverterParameter=0}">
+              <TextBlock Text="加载诊断" Classes="section-title" FontSize="13"/>
+              <ItemsControl ItemsSource="{Binding Diagnostics}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}"
+                               Classes="muted" FontSize="11"
+                               FontFamily="{StaticResource FontMono}"
+                               TextWrapping="Wrap"
+                               Margin="0,2"/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

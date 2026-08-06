@@ -14,13 +14,21 @@ public sealed class RoutedChatCompletionService : IChatCompletionService
     public RoutedChatCompletionService(IEnumerable<IChatProvider> providers)
     {
         _providers = providers.ToList();
+        if (_providers.Count == 0)
+        {
+            throw new InvalidOperationException("No chat providers are registered.");
+        }
     }
 
     public IAsyncEnumerable<ChatDelta> SendAsync(ChatRequest request, AppSettings settings, CancellationToken cancellationToken = default)
     {
-        // Providers decide if they can handle the settings by protocol/provider
-        // metadata. If nothing matches, fall back to the first registered provider.
-        var provider = _providers.FirstOrDefault(item => item.CanHandle(settings)) ?? _providers.First();
+        // A mismatched adapter can send provider-specific headers and credentials
+        // to the wrong endpoint. Treat stale/unknown settings as configuration
+        // errors instead of silently falling back to registration order.
+        var provider = _providers.FirstOrDefault(item => item.CanHandle(settings))
+                       ?? throw new InvalidOperationException(
+                           $"No chat provider can handle provider '{settings.ProviderId}' " +
+                           $"with protocol '{settings.ProtocolId}'.");
         return SendWithStandardizedErrorsAsync(provider, request, settings, cancellationToken);
     }
 

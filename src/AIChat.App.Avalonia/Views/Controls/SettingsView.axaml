@@ -1,0 +1,449 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             xmlns:abstractions="using:AIChat.Abstractions.Llm"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="AIChat.App.Avalonia.Views.Controls.SettingsView">
+  <!--
+    Wave 10 (parity plan §7 Wave 10): Settings modal with the
+    Codex-aligned 4-category sidebar (个人 / 集成 / 编码 /
+    已归档) + a search box that filters across all categories.
+
+    The modal keeps the original scrim + center-card layout.
+    The card body is now a 2-column grid: a 200px-wide left
+    rail listing the 4 categories + a search box, and the
+    right pane that hosts the actual settings. Each section
+    binds `IsVisible` to `Settings.IsSectionVisible(...)` so
+    the search filter takes precedence over the category
+    selection (the user can type "温度" and see the
+    Temperature field regardless of which category is
+    selected).
+
+    Each section is tagged with its category + a few search
+    keywords so the filter is meaningful. The keyword list
+    is the second `params string[]` argument to
+    `IsSectionVisible` — keep it small (section title +
+    1-2 synonyms) so the filter doesn't surprise the user
+    with hidden matches.
+  -->
+  <Border Background="{DynamicResource ScrimBrush}"
+          PointerPressed="SettingsScrim_OnClick">
+    <Border Background="{DynamicResource SurfaceBrush}"
+            Width="840"
+            MaxHeight="640"
+            Padding="{StaticResource Padding6}"
+            CornerRadius="{StaticResource RadiusLg}"
+            BoxShadow="{DynamicResource Elevation4Shadow}"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            PointerPressed="SettingsContent_OnPointerPressed">
+      <Grid RowDefinitions="Auto,*" RowSpacing="12">
+
+        <!-- header: title + close -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="4">
+            <TextBlock Text="设置" Classes="page-title"/>
+            <TextBlock Text="Wave 10: 4 大分类 + 搜索 (按 ⌘, 打开 / Esc 关闭)" Classes="muted"/>
+          </StackPanel>
+          <Button Grid.Column="1" Classes="chrome-button" Command="{Binding CloseSettingsCommand}" ToolTip.Tip="关闭 (Esc)">
+            <Path Data="M6 6 L18 18 M18 6 L6 18"
+                  Stroke="{Binding $parent[Button].Foreground}"
+                  StrokeThickness="1.6" StrokeLineCap="Round"
+                  Width="14" Height="14" Stretch="Uniform"/>
+          </Button>
+        </Grid>
+
+        <!-- body: 2-column layout (left rail + right content) -->
+        <Grid Grid.Row="1" ColumnDefinitions="200,*">
+
+          <!-- ===== left rail: 4 categories + search box ===== -->
+          <DockPanel Grid.Column="0" Margin="0,0,12,0">
+            <TextBox DockPanel.Dock="Top"
+                     PlaceholderText="搜索设置..."
+                     Text="{Binding Settings.SearchText, Mode=TwoWay}"
+                     Margin="0,0,0,8"/>
+
+            <ItemsControl ItemsSource="{Binding Settings.Categories}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SettingsCategoryOption">
+                  <Button Classes="settings-nav-row"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch"
+                          Margin="0,2"
+                          Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).ShowCategoryCommand}"
+                          CommandParameter="{Binding Category}">
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding Label}"
+                                 FontSize="13" FontWeight="SemiBold"
+                                 FontFamily="{StaticResource FontSans}"/>
+                      <TextBlock Text="{Binding Description}"
+                                 Classes="muted" FontSize="10"
+                                 TextWrapping="Wrap"/>
+                    </StackPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </DockPanel>
+
+          <!-- ===== right pane: settings sections ===== -->
+          <ScrollViewer Grid.Column="1" DataContext="{Binding Settings}">
+            <StackPanel Spacing="16">
+
+              <!--
+                ============================================
+                个人 (Personal) — generation parameters
+                ============================================
+              -->
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsPersonalSectionVisible}">
+                <TextBlock Text="默认行为" Classes="section-title"/>
+                <Grid ColumnDefinitions="*,160" RowDefinitions="Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="12">
+                  <TextBlock Text="Temperature" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="0 = 严格按 top token；2 = 自由发散。多数场景 0.3 即可。"/>
+                  <TextBox Grid.Column="1" Text="{Binding Temperature}" />
+
+                  <TextBlock Grid.Row="1" Text="最大输出 tokens" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="单次回复的 token 上限 (256–16384)。MiniMax M3 / M3-highspeed 的平台上限是 16K；超过 16K 的设置会在加载时静默截到 16K，回复也会在 16K 处被服务端截断。"/>
+                  <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MaxOutputTokens}" />
+
+                  <TextBlock Grid.Row="2" Text="重试次数" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="瞬时 429 / 5xx 错误时的重试次数。" />
+                  <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding RetryMaxAttempts}" />
+                </Grid>
+              </StackPanel>
+
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsPersonalSectionVisible}">
+                <TextBlock Text="执行模式" Classes="section-title"/>
+                <ComboBox ItemsSource="{Binding AgentExecutionModeOptions}"
+                          SelectedValueBinding="{Binding Mode}"
+                          SelectedValue="{Binding AgentExecutionMode, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AgentExecutionModeOption">
+                      <TextBlock Text="{Binding Label}"/>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsPersonalSectionVisible}">
+                <TextBlock Text="外观" Classes="section-title"/>
+                <ComboBox ItemsSource="{Binding ThemeOptions}"
+                          SelectedValueBinding="{Binding Mode}"
+                          SelectedValue="{Binding ThemePreference, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ThemeOption">
+                      <TextBlock Text="{Binding Label}"/>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+
+              <Border Classes="section-divider" Margin="0,2"
+                      IsVisible="{Binding IsPersonalSectionVisible}"/>
+
+              <!--
+                ============================================
+                集成 (Integrations) — provider + plugins
+                ============================================
+              -->
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsIntegrationsSectionVisible}">
+                <StackPanel DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Provider}">
+                  <TextBlock Text="模型提供方" Classes="section-title"/>
+                  <ComboBox ItemsSource="{Binding ProviderTemplates}"
+                            SelectedItem="{Binding SelectedProviderTemplate}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ProviderTemplateViewModel">
+                        <TextBlock Text="{Binding Name}"/>
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+
+                  <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" RowSpacing="10" ColumnSpacing="10" Margin="0,8,0,0">
+                    <TextBox Grid.Row="0" Grid.Column="0"
+                             Text="{Binding ProviderApiKey}"
+                             PlaceholderText="API Key"
+                             PasswordChar="●"/>
+                    <TextBox Grid.Row="0" Grid.Column="1"
+                             Text="{Binding ProviderModel}"
+                             PlaceholderText="模型 ID"/>
+                    <TextBox Grid.Row="1" Grid.ColumnSpan="2"
+                             Text="{Binding ProviderBaseUrl}"
+                             PlaceholderText="Base URL"/>
+                  </Grid>
+
+                  <!--
+                    2026-08-04: per-model parameter rows.
+                    The catalog defines the knob set per
+                    model (M3 = thinking + reasoning_split
+                    + top_p + parallel_tool_calls +
+                    response_format; M2.7 = reasoning_split
+                    + top_p only); this ItemsControl
+                    renders one labeled ComboBox per knob.
+                    The combo shows the parameter's
+                    DisplayName + Description as a
+                    tooltip, options come from the
+                    catalog's Options list, and the
+                    selected value 2-way binds to
+                    settings.ModelParameters[id].
+
+                    This block was the missing half of
+                    the "Settings 没啥能用的" complaint:
+                    the catalog had the parameter
+                    definitions for weeks (reasoning_split
+                    in 2a247af, thinking + JSON in 65b61f7)
+                    but the UI never exposed them. With
+                    these rows the daily driver can flip
+                    "思考模式" to 总是思考 for a hard
+                    refactor, drop top_p to 0.1 for
+                    reproducible code review, or switch
+                    response_format to JSON 对象 for a
+                    structured-output agent loop —
+                    without leaving the Settings modal.
+                  -->
+                  <ItemsControl ItemsSource="{Binding ModelParameters}"
+                                IsVisible="{Binding ModelParameters.Count}"
+                                Margin="0,10,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ModelParameterViewModel">
+                        <Grid ColumnDefinitions="160,*" Margin="0,3" ColumnSpacing="12">
+                          <TextBlock Grid.Column="0"
+                                     Text="{Binding Parameter.DisplayName}"
+                                     Classes="body"
+                                     VerticalAlignment="Center"
+                                     ToolTip.Tip="{Binding Parameter.Description}"/>
+                          <ComboBox Grid.Column="1"
+                                    ItemsSource="{Binding Options}"
+                                    SelectedValueBinding="{Binding Value}"
+                                    SelectedValue="{Binding SelectedValue, Mode=TwoWay}"
+                                    HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                              <DataTemplate x:DataType="abstractions:LlmParameterOption">
+                                <TextBlock Text="{Binding DisplayName}"/>
+                              </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                          </ComboBox>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <!--
+                    2026-08-04: inline "测试连接" button +
+                    result row. The previous shape had
+                    the test wired to ⌘T but no UI
+                    affordance — a daily driver who
+                    typed the wrong key had to either
+                    remember the shortcut or send a
+                    real message and read the failure
+                    bubble. The button here makes the
+                    test discoverable; the result row
+                    below surfaces both the raw error
+                    AND the actionable "what to do
+                    next" hint that ProviderErrorClassifier
+                    fills in. The hint covers the
+                    2026-08 trap cases (Coding Plan
+                    key + M3 → 401 with "switch to
+                    M2.7" hint; old .io baseUrl → 401
+                    with "switch to .chat" hint).
+                  -->
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+                    <TextBlock Grid.Column="0" Text="测试当前 key + baseUrl 连通性（⌘T）"
+                               Classes="muted" FontSize="11" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Classes="chrome-button"
+                            Command="{Binding TestProviderCommand}"
+                            IsEnabled="{Binding !IsTestInFlight}">
+                      <TextBlock Text="测试连接" FontSize="11"/>
+                    </Button>
+                  </Grid>
+
+                  <Border IsVisible="{Binding LastTestHasResult}"
+                          Background="{DynamicResource CodeBgBrush}"
+                          BorderBrush="{DynamicResource LineSoftBrush}"
+                          BorderThickness="1"
+                          CornerRadius="{StaticResource RadiusSm}"
+                          Padding="8,6"
+                          Margin="0,6,0,0">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="{Binding LastTestMessage}"
+                                 FontSize="11"
+                                 TextWrapping="Wrap"
+                                 Foreground="{DynamicResource Text2Brush}"/>
+                      <TextBlock Text="{Binding LastTestRemediationHint}"
+                                 Classes="muted"
+                                 FontSize="10"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding LastTestRemediationHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                      <StackPanel Orientation="Horizontal" Spacing="6"
+                                  IsVisible="{Binding LastTestSuggestedModelId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Button Classes="secondary"
+                                Command="{Binding ApplySuggestedModelCommand}"
+                                CommandParameter="{Binding LastTestSuggestedModelId}"
+                                ToolTip.Tip="在 Settings 把模型下拉切到这个值。Key + baseUrl 保持不变。">
+                          <TextBlock FontSize="10">
+                            <Run Text="切到 "/>
+                            <Run Text="{Binding LastTestSuggestedModelId}"/>
+                            <Run Text=" 试试"/>
+                          </TextBlock>
+                        </Button>
+                      </StackPanel>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </StackPanel>
+
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsIntegrationsSectionVisible}">
+                <StackPanel DataContext="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Provider}">
+                  <TextBlock Text="可用的提供方" Classes="section-title"/>
+                  <ItemsControl ItemsSource="{Binding AdvancedProviders}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ProviderCardViewModel">
+                        <Button Classes="provider-card"
+                                Command="{Binding SelectCommand}"
+                                Classes.active="{Binding IsActive}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch">
+                          <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel>
+                              <TextBlock Text="{Binding Name}" Classes="body" FontWeight="SemiBold"/>
+                              <TextBlock Text="{Binding DefaultModel}" Classes="muted"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding Status}" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsIntegrationsSectionVisible}">
+                <TextBlock Text="插件" Classes="section-title"/>
+                <TextBlock Classes="muted" FontSize="11"
+                           Text="从主窗口的 5 first-level nav 进入 '插件' 面板管理已安装插件。本节是入口;配置在那个面板完成。"
+                           TextWrapping="Wrap"/>
+              </StackPanel>
+
+              <Border Classes="section-divider" Margin="0,2"
+                      IsVisible="{Binding IsIntegrationsSectionVisible}"/>
+
+              <!--
+                ============================================
+                编码 (Coding) — safety + tool permissions
+                ============================================
+              -->
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsCodingSectionVisible}">
+                <TextBlock Text="权限模型" Classes="section-title"/>
+                <TextBlock Classes="muted" FontSize="11"
+                           Text="Sprint 0.5 Codex 对齐 2-toggle 模型。两个开关组合出 4 种状态: 都关 = 只读;仅默认 = 工作区写入+网络需确认;都开 = 全部自动;仅完全访问 = 工作区写入但网络仍确认。"
+                           TextWrapping="Wrap" Margin="0,0,0,4"/>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                  <TextBlock Text="默认访问 (Default Access)" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="开启: 可在工作区内写文件,网络请求每次确认。关闭: 任何写入 / 网络都被拒。"/>
+                  <CheckBox Grid.Column="1" IsChecked="{Binding DefaultAccess}"/>
+                  <TextBlock Grid.Row="1" Text="完全访问 (Full Access)" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="开启: 所有工具跳过确认 (包括网络 + 系统命令)。只在受信任环境用。"/>
+                  <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding FullAccessEnabled}"/>
+                  <TextBlock Grid.Row="2" Text="显示 Environment 面板" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="右侧栏的 Environment 面板 (变更 / 子智能体 / Sources / Background)。关掉腾出主区域空间。"/>
+                  <CheckBox Grid.Row="2" Grid.Column="1" IsChecked="{Binding EnvironmentPanelOpen}"/>
+                </Grid>
+                <Border Classes="section-divider" Margin="0,4"/>
+                <TextBlock Text="兼容快捷键" Classes="section-title"/>
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                  <TextBlock Text="只读模式 (与默认访问同步)" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="跟 DefaultAccess 镜像。⌘⇧R 在 titlebar 切换。改这里 = 改 DefaultAccess。"/>
+                  <CheckBox Grid.Column="1" IsChecked="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).NoWriteMode}"/>
+                  <TextBlock Grid.Row="1" Text="修改后自动验证" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="Agent 完成一轮修改后自动跑项目的 verification commands (dotnet test / npm run build 等)。"/>
+                  <CheckBox Grid.Row="1" Grid.Column="1" IsChecked="{Binding AutoVerify}"/>
+                </Grid>
+              </StackPanel>
+
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsCodingSectionVisible}">
+                <TextBlock Text="自动修复" Classes="section-title"/>
+                <Grid ColumnDefinitions="*,160" RowSpacing="10" ColumnSpacing="12">
+                  <TextBlock Text="自动修复轮数" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="自动验证失败后允许 AIChat 自我修复的轮数。0 = 不修。"/>
+                  <TextBox Grid.Column="1" Text="{Binding MaxAutoFixRounds}"/>
+                </Grid>
+                <Grid ColumnDefinitions="*,160" RowSpacing="10" ColumnSpacing="12">
+                  <TextBlock Text="使用分词器估算" Classes="body" VerticalAlignment="Center"
+                             ToolTip.Tip="开启 → SharpToken 精确估算;关闭 → 字符/3.6 启发式。更准但启动慢一点。"/>
+                  <CheckBox Grid.Column="1" IsChecked="{Binding UseTokenizerEstimation}" HorizontalAlignment="Left"/>
+                </Grid>
+              </StackPanel>
+
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsCodingSectionVisible}">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                  <TextBlock Grid.Column="0" Text="工具权限" Classes="section-title" VerticalAlignment="Center"/>
+                  <Button Grid.Column="1" Classes="secondary" Content="只读自动"
+                          Command="{Binding ApplyReadOnlyAutoPresetCommand}"
+                          ToolTip.Tip="只读类自动放行,写入类每次确认"/>
+                  <Button Grid.Column="2" Classes="secondary" Content="全部确认"
+                          Command="{Binding ApplyConfirmAllPresetCommand}"
+                          ToolTip.Tip="所有工具每次都弹确认"/>
+                  <Button Grid.Column="3" Classes="secondary" Content="恢复默认"
+                          Command="{Binding ApplyDefaultPresetCommand}"
+                          ToolTip.Tip="清除所有 override,用每个工具的默认设置"/>
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Tools}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ToolSettingViewModel">
+                      <Grid ColumnDefinitions="160,*" Margin="0,4" ColumnSpacing="12">
+                        <StackPanel>
+                          <TextBlock Text="{Binding DisplayName}" Classes="body" FontWeight="SemiBold"/>
+                          <TextBlock Text="{Binding Category}" Classes="muted" FontSize="11"/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="1"
+                                  ItemsSource="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).ToolModeOptions}"
+                                  SelectedValueBinding="{Binding Mode}"
+                                  SelectedValue="{Binding SelectedMode, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                          <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ToolModeOption">
+                              <TextBlock Text="{Binding Label}"/>
+                            </DataTemplate>
+                          </ComboBox.ItemTemplate>
+                        </ComboBox>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <Border Classes="section-divider" Margin="0,2"
+                      IsVisible="{Binding IsCodingSectionVisible}"/>
+
+              <!--
+                ============================================
+                已归档 (Archived) — placeholder
+                ============================================
+              -->
+              <StackPanel Spacing="8"
+                          IsVisible="{Binding IsArchivedSectionVisible}">
+                <TextBlock Text="已归档" Classes="section-title"/>
+                <TextBlock Classes="muted" FontSize="12"
+                           Text="(已归档的会话列表 — 暂未实现,需要先有 '软删除 + 恢复' 数据模型)"
+                           TextWrapping="Wrap"/>
+              </StackPanel>
+
+            </StackPanel>
+          </ScrollViewer>
+
+        </Grid>
+      </Grid>
+    </Border>
+  </Border>
+</UserControl>

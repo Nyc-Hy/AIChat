@@ -1,15 +1,20 @@
 # AIChat 开发路线图
 
+> **Status: superseded.** 本文档保留作为历史参考。
+> 当前唯一权威规划入口是 **[`docs/CODEX_DESKTOP_PARITY_PLAN.md`](CODEX_DESKTOP_PARITY_PLAN.md)**（Codex Desktop 操作对等 12 Wave 计划），取代了 1.0 milestone 模型。
+> 工程分层、权限/审计/路径保护、Provider 适配等仍有效的工程约束（见 parity plan §1、§5.1）继续生效；`A2A` / `Multi-Agent Queue` / `Benchmark` 等"未来功能"已从主开发线下线（见 parity plan §5.4 "明确不做"）。
+> 日常开发以 [parity 追踪表](PARITY_TRACKING.md) 中每个 Feature ID 的状态为准。
+
 本文档是 AIChat 当前的规划入口。它取代了早期按阶段交接的旧说明；那些说明在早期开发中有帮助，但在优化工作完成后已经不再准确。
 
 ## 当前状态
 
-AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话和本地代码 Agent 工作流。
+AIChat 是一个基于 .NET 10 的跨平台 Avalonia 桌面编程助手。**桌面 UI 是唯一的产品形态**——CLI/TUI 已移除。
 
 目前稳定基础包括：
 
-- WPF 桌面 Shell、MVVM、项目级会话、设置和持久化运行历史。
-- OpenAI-compatible 和 Anthropic Provider 适配器，包括 tool-call 请求/响应处理。
+- Avalonia 主 UI、项目级会话、设置和持久化运行历史。
+- OpenAI-compatible Provider 适配器（MiniMax M3 是当前唯一 catalog 条目；自定义 base URL 可指向其他 OpenAI-compatible 端点）。Anthropic 适配器已在 1.0 Beta Provider prune 删除。
 - Agent Harness，支持模型/工具循环、规划、执行、验证、自动修复、重试和继续。
 - 内置工具：文件读写编辑、搜索、补丁、Git 操作、构建/测试和 Shell 执行。
 - 工具权限、项目级覆盖、审批流程、Shell 安全检查和项目路径保护。
@@ -25,11 +30,12 @@ AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话
 | 优先级 | 区域 | 目标 |
 |---|---|---|
 | 高 | GitHub 工作流 | 使用 Issues 跟踪计划，通过聚焦 PR 评审，并在合并前保持 CI 通过。 |
-| 高 | `MainViewModel` 体积 | 继续把纯工作区、审计和 Agent 运行逻辑拆到小服务中。 |
+| 高 | Avalonia 主 UI | 保持主界面聚焦，避免高级 Agent 能力重新挤入默认流程。 |
 | 高 | 测试覆盖 | 覆盖 Provider 协议解析、工具审批、审计一致性和工作区安全。 |
 | 中 | 上下文质量 | 提升相关性评分、最近文件选择和增量索引，避免增加提示词噪声。 |
 | 中 | 可观测性 | 通过更清晰的运行摘要、审计分组和验证输出，让 Agent 失败更容易排查。 |
 | 中低 | 打包 | 在 framework-dependent 发布路径稳定后，改进安装包和发布体验。 |
+| 中 | 跨平台凭据验收 | Keychain / Secret Service 已接入；在发布机器验证保存、读取、删除及 session-only 降级。 |
 
 ## 未来功能
 
@@ -55,14 +61,17 @@ AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话
 
 ### 桌面体验
 
-- 安装器和自动更新。
-- 主题自定义。
-- 常用 Agent 操作快捷键。
+Avalonia 是桌面主线。桌面体验应复用 `AIChat.Application` 能力，不把业务逻辑重新塞回 UI 层。
+
+### 跨平台凭据存储验收
+
+- 在发布机器上验证 macOS Keychain / Linux Secret Service 的保存、读取和删除。
+- 验证凭据库不可用时只保留 session-only key、显示明确警告，并确保 settings.json 不出现明文。
 
 ## 开发原则
 
-1. 保持分层：UI 在 `AIChat.App`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
-2. 避免继续扩大 `MainViewModel.cs`，可复用逻辑应迁移到独立服务。
+1. 保持分层：交互入口在 `AIChat.App.Avalonia`，Agent 编排在 `AIChat.Application`，领域模型在 `AIChat.Domain`，协议适配在 `AIChat.Providers.*`，持久化在 `AIChat.Storage.Json`。
+2. 避免把交互层做成业务逻辑承载点，可复用逻辑应迁移到独立服务。
 3. 保持改动小而聚焦。除非功能需要，不要把 UI、Provider、Harness 和 Storage 工作混在一起。
 4. 工具和 Agent 变更必须考虑权限、审计、恢复和测试。
 5. 文件写入、Shell 和 Git 修改功能必须保持保守，不能绕过 `ProjectPathGuard` 或审批机制。
@@ -72,14 +81,21 @@ AIChat 是一个基于 .NET 8 / WPF 的桌面应用，用于项目级 LLM 对话
 
 代码变更：
 
-```powershell
+```bash
 dotnet build AIChat.sln --no-restore -m:1 -v:minimal
-dotnet test tests\AIChat.Tests\AIChat.Tests.csproj --no-restore -m:1 -v:minimal
+dotnet test tests/AIChat.Tests/AIChat.Tests.csproj --no-restore -m:1 -v:minimal
 git diff --check
 ```
 
 仅文档变更：
 
-```powershell
+```bash
 git diff --check
+```
+
+桌面端冒烟（在 macOS / Linux / Windows 真机上）：
+
+```bash
+dotnet run --project src/AIChat.App.Avalonia/AIChat.App.Avalonia.csproj
+# 验证：窗口打开 → 添加项目 → 配置 Provider → Test connection → 发送任务 → Tool approval → 完成
 ```

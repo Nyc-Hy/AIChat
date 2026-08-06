@@ -1,0 +1,316 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:DataType="vm:MainWindowViewModel"
+             x:Class="AIChat.App.Avalonia.Views.Controls.RunHistoryView">
+    <Border Background="{DynamicResource ScrimBrush}"
+            PointerPressed="RunHistoryScrim_OnPointerPressed">
+        <Border Background="{DynamicResource SurfaceBrush}"
+                Width="980"
+                MaxHeight="700"
+                Padding="{StaticResource Padding6}"
+                CornerRadius="{StaticResource RadiusLg}"
+                BoxShadow="{DynamicResource Elevation4Shadow}"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Center"
+                PointerPressed="RunHistoryContent_OnPointerPressed">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="运行记录" Classes="page-title"/>
+                        <TextBlock Text="{Binding RunHistory.RunCountText}" Classes="muted"/>
+                    </StackPanel>
+                    <ComboBox Grid.Column="1"
+                              Width="130"
+                              AutomationProperties.Name="按状态筛选运行记录"
+                              ItemsSource="{Binding RunHistory.StatusFilters}"
+                              SelectedItem="{Binding RunHistory.SelectedStatusFilter}"/>
+                    <Button Grid.Column="2"
+                            Classes="chrome-button"
+                            AutomationProperties.Name="关闭运行记录"
+                            Command="{Binding CloseRunHistoryCommand}"
+                            ToolTip.Tip="关闭 (Esc)">
+                        <Path Data="M6 6 L18 18 M18 6 L6 18"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              StrokeThickness="1.6" StrokeLineCap="Round"
+                              Width="14" Height="14" Stretch="Uniform"/>
+                    </Button>
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="360,*" ColumnSpacing="14" MinHeight="470">
+                    <Border Grid.Column="0"
+                            Background="{DynamicResource SurfaceSunkenBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}">
+                        <Grid>
+                            <TextBlock Text="{Binding RunHistory.EmptyStateMessage}"
+                                       Classes="muted"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       IsVisible="{Binding !RunHistory.HasRuns}"/>
+                            <ListBox ItemsSource="{Binding RunHistory.Runs}"
+                                     SelectedItem="{Binding RunHistory.SelectedRun}"
+                                     AutomationProperties.Name="运行记录列表"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Padding="6"
+                                     IsVisible="{Binding RunHistory.HasRuns}">
+                                <ListBox.Resources>
+                                    <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush"
+                                                     Color="{DynamicResource AccentSoftColor}"/>
+                                    <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush"
+                                                     Color="{DynamicResource Accent100Color}"/>
+                                    <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush"
+                                                     Color="{DynamicResource Accent500Color}"/>
+                                </ListBox.Resources>
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem:selected">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                    </Style>
+                                </ListBox.Styles>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RunHistoryItemViewModel">
+                                        <Grid RowDefinitions="Auto,Auto,Auto" Margin="6" RowSpacing="4">
+                                            <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                                <TextBlock Text="{Binding ConversationTitle}"
+                                                           Classes="body"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxLines="1"
+                                                           VerticalAlignment="Center"/>
+                                                <!--
+                                                  1.0.1: status
+                                                  pill — colored
+                                                  dot + text. The
+                                                  previous shape
+                                                  was text-only
+                                                  ("完成" /
+                                                  "失败" / "已停止")
+                                                  in muted gray,
+                                                  which was
+                                                  invisible
+                                                  when the user
+                                                  skimmed a
+                                                  long run
+                                                  history list
+                                                  (often 20+ rows
+                                                  after a week of
+                                                  daily driving).
+                                                  The dot is the
+                                                  same palette
+                                                  SubAgentRunViewModel
+                                                  uses, so
+                                                  "Completed" on
+                                                  the sub-agent
+                                                  row reads as
+                                                  the same shade
+                                                  of green.
+                                                -->
+                                                <StackPanel Grid.Column="1"
+                                                            Orientation="Horizontal"
+                                                            Spacing="6"
+                                                            VerticalAlignment="Center">
+                                                    <Ellipse Width="8" Height="8"
+                                                             Fill="{Binding StatusBrush}"
+                                                             VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding StatusDisplay}"
+                                                               Classes="muted"
+                                                               FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <TextBlock Grid.Row="1"
+                                                       Text="{Binding Goal}"
+                                                       Classes="muted"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxLines="2"/>
+                                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                                <TextBlock Text="{Binding StartedAtDisplay}" Classes="muted" FontSize="11"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding DurationDisplay}" Classes="muted" FontSize="11"/>
+                                            </Grid>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1"
+                            Background="{DynamicResource SurfaceRaisedBrush}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding5}">
+                        <Grid>
+                            <TextBlock Text="选择一条运行查看详情。"
+                                       Classes="muted"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       IsVisible="{Binding !RunHistory.HasSelection}"/>
+                            <ScrollViewer IsVisible="{Binding RunHistory.HasSelection}">
+                                <StackPanel Spacing="14">
+                                    <StackPanel Spacing="5">
+                                        <!--
+                                          1.0.1: Goal is now a
+                                          SelectableTextBlock so
+                                          the user can copy the
+                                          original prompt to
+                                          paste into a new run.
+                                          The previous TextBlock
+                                          forced the 3-step
+                                          right-click → select
+                                          all → copy for a
+                                          daily-driver action
+                                          ("this prompt worked
+                                          but on the wrong
+                                          branch — let me
+                                          retry on main").
+                                        -->
+                                        <SelectableTextBlock Text="{Binding RunHistory.SelectedRun.Goal}"
+                                                             Classes="body"
+                                                             FontSize="16"
+                                                             FontWeight="SemiBold"
+                                                             TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.LineageDisplay}" Classes="muted"/>
+                                        <!--
+                                          1.0.1: "→ composer" affordance on
+                                          Goal. The SelectableTextBlock
+                                          lets the user ⌘C the goal
+                                          text, but the daily-driver
+                                          flow "this prompt worked,
+                                          let me paste it into the
+                                          composer and tweak it"
+                                          needs the text in the
+                                          composer, not the clipboard.
+                                          The button calls a small
+                                          host-side helper that drops
+                                          the goal into DraftPrompt
+                                          + focuses the composer +
+                                          closes the modal. Same
+                                          shape as the user-bubble
+                                          "edit" affordance in
+                                          MainWindow.axaml.cs
+                                          (EditUserBubble_OnClick) —
+                                          one click to re-use a
+                                          previous prompt. The
+                                          "继续" button below
+                                          already does the
+                                          "continue the
+                                          conversation, type new
+                                          followup" flow; this
+                                          button is the
+                                          "start fresh with the
+                                          same goal" flow.
+                                          The handler lives on
+                                          the code-behind (the
+                                          modal needs a focus
+                                          call on the composer
+                                          after closing itself,
+                                          which only the host
+                                          window can do).
+                                        -->
+                                        <Button Classes="chrome-button"
+                                                Padding="6,1"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,2,0,0"
+                                                Click="CopyGoalToComposer_OnClick"
+                                                Tag="{Binding RunHistory.SelectedRun.Goal}"
+                                                ToolTip.Tip="把目标 prompt 复制到 composer,改完再发">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <Path Data="M9 3 H17 a2 2 0 0 1 2 2 V15 M5 9 H13 a2 2 0 0 1 2 2 V19 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 V11 a2 2 0 0 1 2 -2 z M5 9 V7 a2 2 0 0 1 2 -2 H13"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="12" Height="12" Stretch="Uniform"
+                                                      VerticalAlignment="Center"/>
+                                                <TextBlock Text="→ composer" FontSize="11" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="8">
+                                        <TextBlock Grid.Row="0" Text="状态" Classes="section-title"/>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.StatusDisplay}" Classes="body"/>
+                                        <TextBlock Grid.Row="1" Text="模型" Classes="section-title"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.ModelDisplay}" Classes="body"/>
+                                        <TextBlock Grid.Row="2" Text="上下文" Classes="section-title"/>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.ContextDisplay}" Classes="body"/>
+                                        <TextBlock Grid.Row="3" Text="执行" Classes="section-title"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.MetricsDisplay}" Classes="body" TextWrapping="Wrap"/>
+                                        <TextBlock Grid.Row="4" Text="验证" Classes="section-title"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding RunHistory.SelectedRun.VerificationDisplay}" Classes="body"/>
+                                    </Grid>
+
+                                    <Border Background="{DynamicResource InfoBgBrush}"
+                                            BorderBrush="{DynamicResource InfoBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="{StaticResource RadiusMd}"
+                                            Padding="{StaticResource Padding3}">
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.UsageNote}"
+                                                   Foreground="{DynamicResource InfoFgBrush}"
+                                                   FontSize="12"
+                                                   TextWrapping="Wrap"/>
+                                    </Border>
+
+                                    <StackPanel Spacing="5">
+                                        <TextBlock Text="结束原因" Classes="section-title"/>
+                                        <TextBlock Text="{Binding RunHistory.SelectedRun.CompletionReasonDisplay}" Classes="body" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <StackPanel Spacing="5">
+                                        <TextBlock Text="文件变更" Classes="section-title"/>
+                                        <!--
+                                          1.0.1: file paths
+                                          rendered as a
+                                          SelectableTextBlock
+                                          so the user can
+                                          ⌘C a path and
+                                          paste it into
+                                          ⌘T (test) /
+                                          ⌘P (open) /
+                                          terminal without
+                                          the right-click →
+                                          "select all" →
+                                          "copy" three-step.
+                                          A previous run's
+                                          12 touched files
+                                          were shown as a
+                                          plain TextBlock;
+                                          the user had to
+                                          mouse over the
+                                          blob, find the
+                                          path they wanted,
+                                          drag-select, copy.
+                                          Now the path is
+                                          a single click +
+                                          ⌘C away.
+                                        -->
+                                        <SelectableTextBlock Text="{Binding RunHistory.SelectedRun.FileChangesDisplay}"
+                                                             Classes="body"
+                                                             FontFamily="{StaticResource FontMono}"
+                                                             FontSize="12"
+                                                             TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Grid.Column="0"
+                               Text="继续会载入原对话并等待新的要求；重试会重新发送原任务。"
+                               Classes="muted"
+                               VerticalAlignment="Center"/>
+                    <Button Grid.Column="1"
+                            Content="继续此运行"
+                            AutomationProperties.Name="继续所选运行"
+                            Command="{Binding RunHistory.ContinueSelectedCommand}"/>
+                    <Button Grid.Column="2"
+                            Classes="primary"
+                            Content="重试原任务"
+                            AutomationProperties.Name="重试所选运行的原任务"
+                            Command="{Binding RunHistory.RetrySelectedCommand}"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

@@ -99,6 +99,17 @@ public static class ProviderConfigurationValidator
 
         var knownModel = provider.Models.FirstOrDefault(model =>
             string.Equals(model.Id, modelId, StringComparison.OrdinalIgnoreCase));
+        if (knownModel is null &&
+            string.Equals(provider.Id, ChatProviderCatalog.MiniMax.Id, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(modelId))
+        {
+            // MiniMax exposes an OpenAI-compatible endpoint, so users
+            // running against a self-hosted proxy / private deployment
+            // can type any model id and have it bind. The catalog's
+            // model list is a defaults source, not a gate.
+            knownModel = ChatProviderCatalog.ResolveModel(provider.Id, modelId);
+        }
+
         if (knownModel is null)
         {
             issues.Add(Error("provider.model", $"{provider.Name} 不包含模型“{modelId}”。"));

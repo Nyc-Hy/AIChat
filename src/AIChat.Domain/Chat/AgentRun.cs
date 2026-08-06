@@ -33,30 +33,14 @@ public sealed class AgentRun
     public int ToolApprovalRequiredCount { get; set; }
     public int ToolApprovalRejectedCount { get; set; }
     public int ToolSessionAllowedCount { get; set; }
-    public string FinalValidationSummary { get; set; } = "";
-    public string CompletionEvidenceStatus { get; set; } = "";
-    public string CompletionEvidenceSummary { get; set; } = "";
-    public bool CanClaimVerified { get; set; }
-    public bool CanClaimModified { get; set; }
     public string ExecutionPolicySummary { get; set; } = "";
-    public string FinalStatusReason { get; set; } = "";
-    public AgentRunOutcomeKind OutcomeKind { get; set; } = AgentRunOutcomeKind.Unknown;
-    public AgentRunTelemetry Telemetry { get; set; } = new();
-    public int QualityScore { get; set; }
-    public string QualitySummary { get; set; } = "";
-    public string StrategySuggestion { get; set; } = "";
     public string TaskComplexity { get; set; } = "";
     public bool PlannerUsed { get; set; }
     public bool ExplorerUsed { get; set; }
     public string ExplorerDecisionReason { get; set; } = "";
-    public string RecoverySuggestion { get; set; } = "";
-    public string CheckpointSummary { get; set; } = "";
-    public string VerificationRecoveryPacket { get; set; } = "";
-    public List<string> CheckpointArtifactRefs { get; set; } = [];
     public string ContinuedFromRunId { get; set; } = "";
     public string RetriedFromRunId { get; set; } = "";
     public AgentRunAcceptanceStatus AcceptanceStatus { get; set; } = AgentRunAcceptanceStatus.Unreviewed;
-    public string AcceptanceNote { get; set; } = "";
     public DateTimeOffset? AcceptanceReviewedAt { get; set; }
     public AgentRunStatus Status { get; set; } = AgentRunStatus.Running;
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.Now;

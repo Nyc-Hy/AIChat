@@ -7,7 +7,7 @@ public static class ProjectPathGuard
         ".git", ".vs", "bin", "obj", "artifacts", "TestResults"
     };
 
-    public static string ResolveInsideProject(string projectPath, string relativePath)
+    public static string ResolveInsideProject(string? projectPath, string relativePath)
     {
         var root = Path.GetFullPath(string.IsNullOrWhiteSpace(projectPath)
             ? Environment.CurrentDirectory
@@ -24,7 +24,7 @@ public static class ProjectPathGuard
         return candidate;
     }
 
-    public static string ToProjectRelativePath(string projectPath, string fullPath)
+    public static string ToProjectRelativePath(string? projectPath, string fullPath)
     {
         var root = Path.GetFullPath(string.IsNullOrWhiteSpace(projectPath)
             ? Environment.CurrentDirectory
@@ -32,7 +32,7 @@ public static class ProjectPathGuard
         return Path.GetRelativePath(root, fullPath);
     }
 
-    public static void EnsureWritableProjectPath(string projectPath, string fullPath)
+    public static void EnsureWritableProjectPath(string? projectPath, string fullPath)
     {
         _ = ResolveInsideProject(projectPath, ToProjectRelativePath(projectPath, fullPath));
         var relative = ToProjectRelativePath(projectPath, fullPath);

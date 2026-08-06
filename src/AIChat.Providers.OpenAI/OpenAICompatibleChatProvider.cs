@@ -31,8 +31,12 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
     public bool CanHandle(AppSettings settings)
     {
-        // Match by either product provider ID or lower-level protocol ID. This is
-        // why TokenPlan MIMO can reuse this adapter.
+        // Match by either product provider ID or lower-level protocol ID. The
+        // protocol match is what lets MiniMax (the only ship target after
+        // the 2026-08-02 catalog prune) reuse this adapter — MiniMax is
+        // OpenAI-protocol, the Info.Id check covers it for settings that
+        // carry the canonical "minimax" provider id, and the ProtocolId
+        // check covers any legacy settings that pre-date the prune.
         return string.Equals(settings.ProviderId, Info.Id, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(settings.ProtocolId, Info.ProtocolId, StringComparison.OrdinalIgnoreCase) ||
                string.Equals(settings.ProviderName, Info.Name, StringComparison.OrdinalIgnoreCase);
@@ -66,6 +70,23 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
             ["model"] = request.Model,
             ["temperature"] = request.Temperature,
             ["stream"] = true,
+            // 2026-08-05: ask the platform to attach the
+            // token-usage block to the final streaming
+            // chunk. Without this flag the
+            // OpenAI-compatible surface omits usage
+            // entirely on streaming responses, and the
+            // runner can't surface the cache hit rate
+            // (or even the billed token count) in the
+            // UI. MiniMax honors the standard
+            // `stream_options.include_usage` shape —
+            // verified on 2026-08-05 with a curl probe
+            // (response included prompt_tokens,
+            // completion_tokens, and
+            // prompt_tokens_details.cached_tokens).
+            ["stream_options"] = new Dictionary<string, object?>
+            {
+                ["include_usage"] = true
+            },
             ["messages"] = request.Messages.Select(ToApiMessage).ToList()
         };
 
@@ -115,12 +136,12 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
         // SSE frames may span multiple lines. Accumulate data: lines until a
         // blank line, then parse the complete event.
-        while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken);
             if (line is null)
             {
-                continue;
+                break;
             }
 
             if (string.IsNullOrWhiteSpace(line))
@@ -152,6 +173,17 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         foreach (var delta in FlushEventData(eventData))
         {
             AccumulateToolCalls(delta, toolCallChunks);
+            if (delta.IsCompleted)
+            {
+                foreach (var toolCall in FlushToolCalls(toolCallChunks))
+                {
+                    yield return new ChatDelta { ToolCalls = [toolCall] };
+                }
+
+                yield return StripInternalToolCallChunks(delta);
+                yield break;
+            }
+
             yield return StripInternalToolCallChunks(delta);
         }
 
@@ -167,7 +199,14 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         string? reasoningContent,
         IReadOnlyList<ChatToolCall>? toolCalls)
     {
-        // DeepSeek thinking mode requires reasoning_content to be passed back.
+        // Some OpenAI-compatible providers stream reasoning content
+        // separately from the final answer (DeepSeek's thinking mode
+        // was the original use case; MiniMax's interleaved thinking
+        // uses the same field). The OpenAI protocol field name is
+        // `reasoning_content`; we pass it back as a sibling of
+        // `content` so the model sees its own reasoning in the
+        // next turn. Without this the model loses its chain of
+        // thought across multi-turn reasoning tasks.
         if (!string.IsNullOrWhiteSpace(reasoningContent))
         {
             var result = new Dictionary<string, object?>
@@ -257,6 +296,19 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
     private static void ApplyProviderSpecificParameters(Dictionary<string, object?> payload, AppSettings settings)
     {
+        // AppSettings.MaxOutputTokens is a real schema field, gets
+        // clamped on every load by the inline normalize in
+        // MainWindowViewModel ctor, and is honored by the Anthropic
+        // provider. The OpenAI-
+        // compatible path also takes max_tokens — every model that
+        // speaks the /chat/completions schema understands it — but
+        // the request payload was built from ChatRequest which
+        // doesn't carry a max_tokens field, so the schema setting
+        // was silently ignored for OpenAI users. Inject it here
+        // instead, mirroring the Anthropic provider's direct
+        // payload["max_tokens"] = settings.MaxOutputTokens.
+        payload["max_tokens"] = settings.MaxOutputTokens;
+
         foreach (var parameter in settings.ModelParameters)
         {
             if (string.IsNullOrWhiteSpace(parameter.Value))
@@ -266,17 +318,92 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
 
             switch (parameter.Key)
             {
-                case "deepseek.thinking":
-                    payload["thinking"] = new { type = parameter.Value };
+                // 2026-08-04: M3 native thinking-mode switch
+                // (the knob the daily driver actually wants
+                // when they say "思考模式的开关" — see
+                // ChatProviderCatalog.MiniMaxM3Parameters).
+                // Per the M3 README the values are
+                // `enabled` / `adaptive` / `disabled`. The
+                // M3 OpenAI-compatible path accepts them as a
+                // top-level string field (not the Anthropic
+                // {"type":"enabled"} object form). Catalog
+                // dropdowns are the only source of these
+                // values, so we don't need to parse defensively
+                // here — a freeform text entry would round-trip
+                // the literal user input, which is the desired
+                // behavior for a power user typing a custom
+                // M3.x / M4 value into the Settings modal.
+                // Empty / whitespace falls through the early
+                // `continue` above so we never send an empty
+                // `thinking: ""` that would override the
+                // platform default. M2.7 is unaffected — it
+                // doesn't list this parameter in
+                // MiniMaxM27Parameters, so the dropdown never
+                // surfaces it for M2.x.
+                case "minimax.thinking":
+                    payload["thinking"] = parameter.Value;
                     break;
-                case "deepseek.reasoning_effort":
-                    payload["reasoning_effort"] = parameter.Value;
-                    break;
-                case "deepseek.response_format" when parameter.Value == "json_object":
-                    payload["response_format"] = new { type = "json_object" };
-                    break;
+                // 2026-08-02: DeepSeek-specific parameter shaping
+                // (`deepseek.thinking` / `deepseek.reasoning_effort`
+                // / `deepseek.response_format`) is gone — the
+                // DeepSeek provider was pruned from the catalog.
+                // Old settings files that still carry these keys
+                // fall through ProviderConfigurationValidator's
+                // "unknown parameter" warning path, and this
+                // switch silently skips them. The MiniMax shape
+                // below is the only one that survives.
                 case "minimax.reasoning_split" when bool.TryParse(parameter.Value, out var reasoningSplit):
                     payload["reasoning_split"] = reasoningSplit;
+                    break;
+                // 2026-08-04: top_p (nucleus sampling). MiniMax
+                // honors the same parameter on the
+                // /chat/completions surface as OpenAI. The UI
+                // exposes it as a per-model dropdown (see
+                // ChatProviderCatalog.MiniMaxM3Parameters) with
+                // preset values 0.1 / 0.5 / 0.9 / 0.95 / 1.0;
+                // any empty / non-numeric value falls through
+                // and is ignored (the API default applies).
+                // Mapped through double.TryParse with
+                // InvariantCulture so a locale-formatted "0,5"
+                // (German / French) doesn't sneak in — the
+                // catalog emits a fixed "." decimal point.
+                case "top_p" when double.TryParse(parameter.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var topP):
+                    payload["top_p"] = topP;
+                    break;
+                // 2026-08-04: parallel_tool_calls. M3 supports
+                // firing multiple tool calls in a single turn
+                // (e.g. read 3 files in parallel) — disabling
+                // it here forces single-flight and is the
+                // escape hatch when a daily driver hits a
+                // per-request parallel-call rate limit. Sent
+                // as a boolean; the API ignores it on models
+                // that don't honor it (M2.7), so the same
+                // Settings file is safe across the model
+                // dropdown even though only M3 reads the value.
+                case "parallel_tool_calls" when bool.TryParse(parameter.Value, out var parallelToolCalls):
+                    payload["parallel_tool_calls"] = parallelToolCalls;
+                    break;
+                // 2026-08-04: structured JSON output
+                // (response_format). Standard
+                // OpenAI-compatible shape: when the user picks
+                // "json_object" from the Settings dropdown, we
+                // inject {"type": "json_object"} into the
+                // payload and the M3 model is forced to emit
+                // valid JSON. The only value we accept is
+                // "json_object" — anything else (the empty
+                // default OR a freeform value) is treated as
+                // "leave the platform default in place" and
+                // nothing is sent. The OpenAI API itself
+                // validates that the prompt contains the word
+                // "json" in some form; if the user picks this
+                // without adjusting their prompt, the API
+                // returns 400 and the existing error pipeline
+                // surfaces the message verbatim.
+                case "response_format" when string.Equals(parameter.Value, "json_object", StringComparison.OrdinalIgnoreCase):
+                    payload["response_format"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "json_object"
+                    };
                     break;
             }
         }
@@ -367,9 +494,29 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         if (payload == "[DONE]")
         {
             // Convert protocol-specific completion into the common stream signal.
+            // 2026-08-05: even the [DONE] sentinel can be
+            // preceded by a chunk that carries only the
+            // `usage` block (no choices). If the previous
+            // chunk's usage was already captured, the
+            // IsCompleted marker here just terminates the
+            // stream — no need to re-attach usage. The
+            // current chunk itself doesn't carry a
+            // usage block (just "[DONE]"), so the
+            // TryReadUsageNoContent path below would
+            // return null.
             yield return new ChatDelta { IsCompleted = true, RawJson = payload };
             yield break;
         }
+
+        // 2026-08-05: usage is delivered in the final
+        // chunk alongside an empty `choices` array.
+        // Parse it before the content checks so a
+        // usage-only chunk still yields a delta (with
+        // IsCompleted=false but Usage populated). The
+        // OpenAI protocol reuses the same `data: …`
+        // envelope for the usage chunk; we just need
+        // to read past the missing choices array.
+        var usage = TryReadUsage(payload);
 
         var content = TryReadDeltaContent(payload);
         var reasoningContent = TryReadReasoningContent(payload);
@@ -381,12 +528,23 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
                 Content = content,
                 ReasoningContent = reasoningContent,
                 RawJson = payload,
-                ToolCalls = toolCalls
+                ToolCalls = toolCalls,
+                Usage = usage
             };
         }
         else if (toolCalls.Count > 0)
         {
-            yield return new ChatDelta { RawJson = payload, ToolCalls = toolCalls };
+            yield return new ChatDelta { RawJson = payload, ToolCalls = toolCalls, Usage = usage };
+        }
+        else if (usage is not null)
+        {
+            // The usage-only final chunk — carries no
+            // content, no reasoning, no tool calls, just
+            // the token tally + cache hit. The runner
+            // reads Usage off this delta to populate the
+            // activity-feed footer / status-bar cache
+            // ring.
+            yield return new ChatDelta { RawJson = payload, Usage = usage };
         }
     }
 
@@ -458,6 +616,74 @@ public sealed class OpenAICompatibleChatProvider : IChatProvider
         }
 
         return "";
+    }
+
+    // 2026-08-05: extract the platform's per-call
+    // usage block from a streaming chunk. The shape
+    // (when stream_options.include_usage is true):
+    //   {
+    //     "id": "…", "model": "…", "choices": [],
+    //     "usage": {
+    //       "prompt_tokens": 177,
+    //       "completion_tokens": 5,
+    //       "total_tokens": 182,
+    //       "prompt_tokens_details": {
+    //         "cached_tokens": 114
+    //       }
+    //     }
+    //   }
+    // The cached_tokens field is MiniMax-specific
+    // (the M3 README mentions automatic prompt cache
+    // at 1/5 input price; the field surfaces how much
+    // of the prompt was served from cache). Other
+    // OpenAI-compatible providers may omit
+    // prompt_tokens_details entirely — the read is
+    // defensive (TryGetProperty + default int 0). The
+    // function returns null on the no-usage case so
+    // the caller can distinguish "platform didn't
+    // include usage" from "usage was 0" (e.g. a
+    // zero-token ping).
+    private static ChatUsage? TryReadUsage(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (!document.RootElement.TryGetProperty("usage", out var usage) ||
+                usage.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var promptTokens = usage.TryGetProperty("prompt_tokens", out var p) && p.ValueKind == JsonValueKind.Number
+                ? p.GetInt32()
+                : 0;
+            var completionTokens = usage.TryGetProperty("completion_tokens", out var c) && c.ValueKind == JsonValueKind.Number
+                ? c.GetInt32()
+                : 0;
+            var cachedTokens = 0;
+            if (usage.TryGetProperty("prompt_tokens_details", out var details) &&
+                details.ValueKind == JsonValueKind.Object &&
+                details.TryGetProperty("cached_tokens", out var cached) &&
+                cached.ValueKind == JsonValueKind.Number)
+            {
+                cachedTokens = cached.GetInt32();
+            }
+
+            return new ChatUsage
+            {
+                PromptTokens = promptTokens,
+                CompletionTokens = completionTokens,
+                CachedTokens = cachedTokens
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private static IReadOnlyList<ChatToolCall> TryReadToolCallDeltas(string json)

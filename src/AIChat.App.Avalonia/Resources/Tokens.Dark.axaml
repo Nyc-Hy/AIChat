@@ -1,0 +1,151 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Dark-mode token overrides. Loaded by App.axaml under
+    ResourceDictionary.ThemeDictionaries when RequestedThemeVariant resolves
+    to Dark. Every Color and BoxShadows key from Tokens.axaml is redefined
+    here with its dark equivalent; brushes are re-derived from the updated
+    Color values via StaticResource so any Setter that references
+    <token>Brush flips automatically.
+  -->
+
+  <!-- 1. Surface ladder — Material-3-style tonal steps, ~3-4 L* apart. -->
+  <Color x:Key="BgColor">#0d0d10</Color>
+  <Color x:Key="SurfaceSunkenColor">#131318</Color>
+  <Color x:Key="SurfaceColor">#1c1c22</Color>
+  <Color x:Key="SurfaceRaisedColor">#232329</Color>
+  <Color x:Key="SurfaceOverlayColor">#2b2b33</Color>
+
+  <!-- 2. Line ladder — dark borders need more luminance contrast to read. -->
+  <Color x:Key="LineColor">#34343c</Color>
+  <Color x:Key="LineSoftColor">#2a2a31</Color>
+  <Color x:Key="LineStrongColor">#3d3d46</Color>
+
+  <!-- 3. Text ladder — same names, dark equivalents. -->
+  <Color x:Key="TextColor">#e8e8eb</Color>
+  <Color x:Key="Text2Color">#d8d8df</Color>
+  <Color x:Key="MutedColor">#9a9aa3</Color>
+
+  <!-- 4. Accent ramp (teal) — dark variant. -->
+  <Color x:Key="Accent50Color">#0e2620</Color>
+  <Color x:Key="Accent100Color">#133a31</Color>
+  <Color x:Key="Accent200Color">#1a4f42</Color>
+  <Color x:Key="Accent300Color">#236856</Color>
+  <Color x:Key="Accent400Color">#4d9a82</Color>
+  <Color x:Key="AccentColor">#80e8c4</Color>
+  <Color x:Key="Accent600Color">#a3edd1</Color>
+  <Color x:Key="Accent700Color">#c2f3de</Color>
+  <Color x:Key="Accent800Color">#d8f7e8</Color>
+  <Color x:Key="Accent900Color">#e9faf2</Color>
+  <Color x:Key="AccentSoftColor">#2F80e8c4</Color>
+  <Color x:Key="AccentHoverColor">#a3edd1</Color>
+  <Color x:Key="AccentActiveColor">#c2f3de</Color>
+  <Color x:Key="AccentFgColor">#0d0d10</Color>
+
+  <!-- 5. Status — dark variants. -->
+  <Color x:Key="InfoBgColor">#1a2940</Color>
+  <Color x:Key="InfoFgColor">#80b8ff</Color>
+  <Color x:Key="InfoBorderColor">#2c4566</Color>
+  <Color x:Key="SuccessBgColor">#0e3b21</Color>
+  <Color x:Key="SuccessFgColor">#80e8c4</Color>
+  <Color x:Key="SuccessBorderColor">#1d6a45</Color>
+  <Color x:Key="WarningBgColor">#3d2e10</Color>
+  <Color x:Key="WarningFgColor">#e0a16e</Color>
+  <Color x:Key="WarningBorderColor">#7c5a1f</Color>
+  <Color x:Key="ErrorBgColor">#2a1517</Color>
+  <Color x:Key="ErrorFgColor">#e08488</Color>
+  <Color x:Key="ErrorBorderColor">#6b3a3d</Color>
+
+  <!-- 6. Special. -->
+  <Color x:Key="CodeBgColor">#131318</Color>
+  <Color x:Key="CodeFgColor">#c2f3de</Color>
+  <Color x:Key="HeroGradientStartColor">#0d0d10</Color>
+  <Color x:Key="HeroGradientEndColor">#1a2030</Color>
+  <Color x:Key="ScrimColor">#B0000000</Color>
+  <Color x:Key="FocusRingColor">#80e8c4</Color>
+  <!-- 1.0.1: drag-and-drop overlay wash. Slightly higher alpha on dark
+       so the accent still reads against the near-black surface. -->
+  <Color x:Key="OverlayWashColor">#55e8c4</Color>
+
+  <!-- 12. Elevation — dark shadows need higher alpha to read on dark bg. -->
+  <BoxShadows x:Key="Elevation0Shadow">0 0 0 0 #00000000</BoxShadows>
+  <BoxShadows x:Key="Elevation1Shadow">0 1 2 0 #40000000, 0 0 0 1 #1A000000</BoxShadows>
+  <BoxShadows x:Key="Elevation2Shadow">0 4 12 0 #50000000, 0 0 0 1 #1A000000</BoxShadows>
+  <BoxShadows x:Key="Elevation3Shadow">0 8 24 0 #60000000, 0 0 0 1 #20000000</BoxShadows>
+  <BoxShadows x:Key="Elevation4Shadow">0 16 40 0 #70000000, 0 0 0 1 #24000000</BoxShadows>
+  <BoxShadows x:Key="Elevation5Shadow">0 24 64 0 #80000000, 0 0 0 1 #30000000</BoxShadows>
+  <BoxShadows x:Key="ElevationToastShadow">0 4 12 0 #50000000, 0 0 0 1 #30000000</BoxShadows>
+
+  <!-- Backward-compatible aliases -->
+  <BoxShadows x:Key="ModalShadow">0 16 40 0 #70000000, 0 0 0 1 #24000000</BoxShadows>
+  <BoxShadows x:Key="ToastShadow">0 4 12 0 #50000000, 0 0 0 1 #30000000</BoxShadows>
+  <BoxShadows x:Key="FloatingShadow">0 8 24 0 #60000000, 0 0 0 1 #20000000</BoxShadows>
+
+
+  <!-- 7. Brushes — dark overrides. Each brush re-derives its Color from the
+       dark Color token above via DynamicResource. The Avalonia resource
+       resolver walks the merged dictionaries and resolves the right Color
+       for whichever theme is active. Identical key list to Tokens.axaml so
+       the ThemeTokenTests.DarkTheme_OverridesEveryBaseBrushInstance contract
+       holds (every light brush has a dark counterpart). -->
+  <SolidColorBrush x:Key="BgBrush"                 Color="{DynamicResource BgColor}" />
+  <SolidColorBrush x:Key="SurfaceSunkenBrush"      Color="{DynamicResource SurfaceSunkenColor}" />
+  <SolidColorBrush x:Key="SurfaceBrush"            Color="{DynamicResource SurfaceColor}" />
+  <SolidColorBrush x:Key="SurfaceRaisedBrush"      Color="{DynamicResource SurfaceRaisedColor}" />
+  <SolidColorBrush x:Key="SurfaceOverlayBrush"     Color="{DynamicResource SurfaceOverlayColor}" />
+  <SolidColorBrush x:Key="OverlayWashBrush"        Color="{DynamicResource OverlayWashColor}" />
+
+  <SolidColorBrush x:Key="LineBrush"               Color="{DynamicResource LineColor}" />
+  <SolidColorBrush x:Key="LineSoftBrush"           Color="{DynamicResource LineSoftColor}" />
+  <SolidColorBrush x:Key="LineStrongBrush"         Color="{DynamicResource LineStrongColor}" />
+
+  <SolidColorBrush x:Key="TextBrush"               Color="{DynamicResource TextColor}" />
+  <SolidColorBrush x:Key="Text2Brush"              Color="{DynamicResource Text2Color}" />
+  <SolidColorBrush x:Key="MutedBrush"              Color="{DynamicResource MutedColor}" />
+  <SolidColorBrush x:Key="AccentBrush"             Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="Accent50Brush"           Color="{DynamicResource Accent50Color}" />
+  <SolidColorBrush x:Key="Accent100Brush"          Color="{DynamicResource Accent100Color}" />
+  <SolidColorBrush x:Key="Accent200Brush"          Color="{DynamicResource Accent200Color}" />
+  <SolidColorBrush x:Key="Accent300Brush"          Color="{DynamicResource Accent300Color}" />
+  <SolidColorBrush x:Key="Accent400Brush"          Color="{DynamicResource Accent400Color}" />
+  <SolidColorBrush x:Key="Accent500Brush"          Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="Accent600Brush"          Color="{DynamicResource Accent600Color}" />
+  <SolidColorBrush x:Key="Accent700Brush"          Color="{DynamicResource Accent700Color}" />
+  <SolidColorBrush x:Key="Accent800Brush"          Color="{DynamicResource Accent800Color}" />
+  <SolidColorBrush x:Key="Accent900Brush"          Color="{DynamicResource Accent900Color}" />
+  <SolidColorBrush x:Key="AccentSoftBrush"         Color="{DynamicResource AccentSoftColor}" />
+  <SolidColorBrush x:Key="AccentHoverBrush"        Color="{DynamicResource AccentHoverColor}" />
+  <SolidColorBrush x:Key="AccentActiveBrush"       Color="{DynamicResource AccentActiveColor}" />
+  <SolidColorBrush x:Key="AccentFgBrush"           Color="{DynamicResource AccentFgColor}" />
+  <SolidColorBrush x:Key="InfoBgBrush"             Color="{DynamicResource InfoBgColor}" />
+  <SolidColorBrush x:Key="InfoFgBrush"             Color="{DynamicResource InfoFgColor}" />
+  <SolidColorBrush x:Key="InfoBorderBrush"         Color="{DynamicResource InfoBorderColor}" />
+  <SolidColorBrush x:Key="SuccessBgBrush"          Color="{DynamicResource SuccessBgColor}" />
+  <SolidColorBrush x:Key="SuccessFgBrush"          Color="{DynamicResource SuccessFgColor}" />
+  <SolidColorBrush x:Key="SuccessBorderBrush"      Color="{DynamicResource SuccessBorderColor}" />
+  <SolidColorBrush x:Key="WarningBgBrush"          Color="{DynamicResource WarningBgColor}" />
+  <SolidColorBrush x:Key="WarningFgBrush"          Color="{DynamicResource WarningFgColor}" />
+  <SolidColorBrush x:Key="WarningBorderBrush"      Color="{DynamicResource WarningBorderColor}" />
+  <SolidColorBrush x:Key="ErrorBgBrush"            Color="{DynamicResource ErrorBgColor}" />
+  <SolidColorBrush x:Key="ErrorFgBrush"            Color="{DynamicResource ErrorFgColor}" />
+  <SolidColorBrush x:Key="ErrorBorderBrush"        Color="{DynamicResource ErrorBorderColor}" />
+  <SolidColorBrush x:Key="CodeBgBrush"             Color="{DynamicResource CodeBgColor}" />
+  <SolidColorBrush x:Key="CodeFgBrush"             Color="{DynamicResource CodeFgColor}" />
+  <SolidColorBrush x:Key="HeroGradientStartBrush"  Color="{DynamicResource HeroGradientStartColor}" />
+  <SolidColorBrush x:Key="HeroGradientEndBrush"    Color="{DynamicResource HeroGradientEndColor}" />
+  <SolidColorBrush x:Key="ScrimBrush"              Color="{DynamicResource ScrimColor}" />
+  <SolidColorBrush x:Key="FocusRingBrush"          Color="{DynamicResource FocusRingColor}" />
+  <SolidColorBrush x:Key="BadgeFgBrush"            Color="{DynamicResource TextColor}" />
+  <SolidColorBrush x:Key="InfoBadgeFgBrush"        Color="{DynamicResource InfoFgColor}" />
+  <SolidColorBrush x:Key="SuccessBadgeFgBrush"     Color="{DynamicResource SuccessFgColor}" />
+  <SolidColorBrush x:Key="WarningBadgeFgBrush"     Color="{DynamicResource WarningFgColor}" />
+  <SolidColorBrush x:Key="AccentVariantFgBrush"    Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentBlueBrush"         Color="{DynamicResource AccentColor}" />
+  <SolidColorBrush x:Key="HoverBgBrush"            Color="{DynamicResource SurfaceSunkenColor}" />
+  <SolidColorBrush x:Key="HoverBg2Brush"           Color="{DynamicResource LineColor}" />
+  <SolidColorBrush x:Key="DividerBrush"            Color="{DynamicResource LineColor}" />
+  <SolidColorBrush x:Key="CloseHoverBrush"         Color="{DynamicResource ErrorFgColor}" />
+  <SolidColorBrush x:Key="TextOnAccentBrush"       Color="{DynamicResource AccentFgColor}" />
+
+</ResourceDictionary>

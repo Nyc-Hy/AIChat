@@ -43,8 +43,8 @@ public sealed class AgentRequestFactoryTests : IDisposable
             CreateRuntimeSettings(),
             ["read_file", "read_file", "write_file"]);
 
-        Assert.Equal("DeepSeek", snapshot.Provider);
-        Assert.Equal("deepseek-v4-pro", snapshot.Model);
+        Assert.Equal("MiniMax", snapshot.Provider);
+        Assert.Equal("MiniMax-M3", snapshot.Model);
         Assert.Equal(["read_file", "write_file"], snapshot.EnabledTools);
         Assert.DoesNotContain(snapshot.Messages, message => message.Id == assistant.Id);
         Assert.Contains(snapshot.Messages, message => message.Role == "user" && message.Content == "fix bug");
@@ -55,7 +55,7 @@ public sealed class AgentRequestFactoryTests : IDisposable
     {
         var request = new ChatRequest
         {
-            Model = "deepseek-v4-pro",
+            Model = "MiniMax-M3",
             Messages =
             [
                 new ChatMessage
@@ -107,7 +107,7 @@ public sealed class AgentRequestFactoryTests : IDisposable
     {
         var request = new ChatRequest
         {
-            Model = "deepseek-v4-pro",
+            Model = "MiniMax-M3",
             Messages =
             [
                 new ChatMessage
@@ -176,7 +176,7 @@ public sealed class AgentRequestFactoryTests : IDisposable
             ]
         });
 
-        Assert.Equal("deepseek-v4-pro", result.ChatRequest.Model);
+        Assert.Equal("MiniMax-M3", result.ChatRequest.Model);
         Assert.Equal(0.3, result.ChatRequest.Temperature);
         Assert.Equal(_tempDir, result.FileIndex.RootPath);
         Assert.Contains(result.FileIndex.Entries, entry => entry.RelativePath == "Program.cs");
@@ -264,15 +264,13 @@ public sealed class AgentRequestFactoryTests : IDisposable
         Assert.Equal(2, result.AgentContext.MaxAutoFixRounds);
         Assert.True(result.AgentContext.AdaptiveStrategiesEnabled);
         Assert.True(result.AgentContext.AdaptiveBudgetAndExplorerEnabled);
-        Assert.True(result.AgentContext.AdaptiveRecoveryEnabled);
-        Assert.True(result.AgentContext.AdaptiveAutoVerifyEnabled);
         Assert.Single(result.AgentContext.VerificationCommands);
     }
 
     [Fact]
     public void Build_UsesSmallContextPackForSimpleFastPathTasks()
     {
-        var conversation = new Conversation { Title = "Test" };
+        var conversation = new Project { Title = "Test" };
         AddMessage(conversation, ChatRole.User, "解释这个项目结构");
         var assistant = AddMessage(conversation, ChatRole.Assistant, "placeholder");
         var factory = CreateFactory();
@@ -407,14 +405,14 @@ public sealed class AgentRequestFactoryTests : IDisposable
             new SystemPromptBuilder()));
     }
 
-    private static Conversation CreateConversation()
+    private static ChatSession CreateConversation()
     {
-        var conversation = new Conversation { Title = "Test" };
+        var conversation = new Project { Title = "Test" };
         AddMessage(conversation, ChatRole.User, "fix bug");
         return conversation;
     }
 
-    private static ChatMessage AddMessage(Conversation conversation, ChatRole role, string content)
+    private static ChatMessage AddMessage(ChatSession conversation, ChatRole role, string content)
     {
         var message = new ChatMessage
         {
@@ -431,16 +429,16 @@ public sealed class AgentRequestFactoryTests : IDisposable
     {
         return new AppSettings
         {
-            ProviderId = "deepseek",
+            ProviderId = "minimax",
             ProtocolId = "openai",
-            ProviderName = "DeepSeek",
-            BaseUrl = "https://api.deepseek.com",
-            Model = "deepseek-v4-pro",
+            ProviderName = "MiniMax",
+            BaseUrl = "https://api.minimax.io/v1",
+            Model = "MiniMax-M3",
             Temperature = 0.3,
             ModelContextLimit = 128_000,
             ModelParameters = new Dictionary<string, string>
             {
-                ["deepseek.thinking"] = "enabled"
+                ["minimax.reasoning_split"] = "true"
             }
         };
     }
@@ -459,9 +457,7 @@ public sealed class AgentRequestFactoryTests : IDisposable
             AutoVerifyAgentRuns = true,
             MaxAutoFixRounds = 2,
             AgentAdaptiveStrategiesEnabled = true,
-            AgentAdaptiveBudgetAndExplorerEnabled = true,
-            AgentAdaptiveRecoveryEnabled = true,
-            AgentAdaptiveAutoVerifyEnabled = true
+            AgentAdaptiveBudgetAndExplorerEnabled = true
         };
     }
 }

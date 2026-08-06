@@ -6,6 +6,7 @@ namespace AIChat.Application.Agents.SubAgents;
 
 public sealed class SubAgentRunRequest
 {
+    public string RunId { get; init; } = Guid.NewGuid().ToString("N");
     public required string ParentRunId { get; init; }
     public required string Task { get; init; }
     public required string ProjectPath { get; init; }

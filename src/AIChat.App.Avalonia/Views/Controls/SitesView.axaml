@@ -1,0 +1,155 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+             x:Class="AIChat.App.Avalonia.Views.Controls.SitesView"
+             x:DataType="vm:MainWindowViewModel">
+
+  <!--
+    Wave 9 (parity plan §7 Wave 9): Sites modal. Mirrors
+    PluginsView / ScheduledView — full-window scrim with a
+    centered card. The card lists every site the registry
+    has loaded plus a per-row action strip (预览 / 停止 /
+    删除). The real preview runner (depends on
+    BackgroundProcessSupervisor deferred in Wave 7) lands
+    in a follow-up slice; the "预览" button here just
+    records a Running deployment so the user sees the
+    action took effect.
+
+    Cloud deploy is intentionally hidden — plan §5.4 says
+    no adapter is registered, and plan §7 Wave 9's
+    "no cloud deploy without adapter" rule is strict.
+    The AdapterLabel row in each site shows "本地" until an
+    adapter is added.
+  -->
+  <Grid Background="{DynamicResource ScrimBrush}"
+        IsVisible="{Binding IsSitesOpen}">
+    <Border Classes="modal-card"
+            Width="720" MaxHeight="640"
+            VerticalAlignment="Center" HorizontalAlignment="Center"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource LineSoftBrush}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="20">
+      <DockPanel DataContext="{Binding Sites}">
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+          <StackPanel Grid.Column="0" Spacing="2">
+            <TextBlock Text="站点" Classes="section-title" FontSize="16"/>
+            <TextBlock Classes="muted" FontSize="11"
+                       Text="Wave 9 first slice — 真实本地预览 / 云部署接入见 follow-up"
+                       FontFamily="{StaticResource FontMono}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+            <Button Classes="chrome-button"
+                    Command="{Binding ReloadCommand}"
+                    ToolTip.Tip="重新加载">
+              <Path Data="M5 12 a7 7 0 1 0 1.5 -4.2 M5 4 V8 H9"
+                    Stroke="{Binding $parent[Button].Foreground}"
+                    StrokeThickness="1.6" StrokeLineCap="Round"
+                    Width="14" Height="14" Stretch="Uniform"/>
+            </Button>
+            <Button Classes="chrome-button"
+                    Command="{Binding AddCommand}"
+                    ToolTip.Tip="添加新站点">
+              <TextBlock Text="+" FontSize="16" FontWeight="SemiBold" FontFamily="{StaticResource FontMono}"/>
+            </Button>
+          </StackPanel>
+        </Grid>
+
+        <Border Classes="error-banner"
+                Background="{DynamicResource ErrorBgBrush}"
+                BorderBrush="{DynamicResource ErrorBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="8,6"
+                Margin="0,0,0,8"
+                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding ErrorMessage}"
+                     Foreground="{DynamicResource ErrorFgBrush}"
+                     FontSize="12"
+                     TextWrapping="Wrap"/>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel Spacing="8">
+            <TextBlock Text="(加载中...)"
+                       Classes="muted" FontSize="12"
+                       IsVisible="{Binding IsLoading}"/>
+
+            <TextBlock Classes="muted" FontSize="12"
+                       Text="(暂无站点 — 点 + 添加第一个;云部署需 Hosting Provider,目前未注册)"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding Sites.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+
+            <ItemsControl ItemsSource="{Binding Sites}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SiteRowViewModel">
+                  <Border Classes="env-row"
+                          BorderBrush="{DynamicResource LineSoftBrush}"
+                          BorderThickness="0,0,0,1"
+                          Padding="0,8">
+                    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8">
+                      <StackPanel Grid.Row="0" Grid.Column="0" Spacing="2">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding Name}"
+                                     FontSize="13" FontWeight="SemiBold"
+                                     Foreground="{DynamicResource TextBrush}"/>
+                          <TextBlock Text="{Binding PreviewModeLabel}"
+                                     Classes="muted" FontSize="11"
+                                     FontFamily="{StaticResource FontMono}"
+                                     VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding SourceLabel}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource Text2Brush}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Classes="muted" FontSize="10"
+                                     FontFamily="{StaticResource FontMono}">
+                            <Run Text="端口: "/>
+                            <Run Text="{Binding PortLabel, Mode=OneWay}"/>
+                            <Run Text=" · 适配器: "/>
+                            <Run Text="{Binding AdapterLabel, Mode=OneWay}"/>
+                            <Run Text=" · 上次预览: "/>
+                            <Run Text="{Binding LastPreviewLabel, Mode=OneWay}"/>
+                          </TextBlock>
+                        </StackPanel>
+                      </StackPanel>
+                      <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <Button Classes="chrome-button" Padding="6,2"
+                                Command="{Binding $parent[ItemsControl].((vm:SitesViewModel)DataContext).PreviewCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="启动本地预览 (python3 -m http.server — supervisor 真实进程)">
+                          <TextBlock Text="预览" FontSize="11"/>
+                        </Button>
+                        <Button Classes="chrome-button" Padding="6,2"
+                                Command="{Binding $parent[ItemsControl].((vm:SitesViewModel)DataContext).StopPreviewCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="停止本地预览">
+                          <TextBlock Text="停止" FontSize="11"/>
+                        </Button>
+                        <Button Classes="chrome-button" Padding="6,2"
+                                IsEnabled="False"
+                                ToolTip.Tip="云部署 — 需 Hosting Provider 适配器 (plan §5.4 暂无)">
+                          <TextBlock Text="部署" FontSize="11"/>
+                        </Button>
+                        <Button Classes="chrome-button" Padding="6,2"
+                                Command="{Binding $parent[ItemsControl].((vm:SitesViewModel)DataContext).RemoveCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="删除">
+                          <TextBlock Text="删除" FontSize="11"/>
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

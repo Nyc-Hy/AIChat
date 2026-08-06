@@ -8,11 +8,9 @@ namespace AIChat.Application.Prompting;
 public sealed class SystemPromptBuilder
 {
     private readonly ProjectContextPackBuilder _contextPackBuilder = new();
-    private readonly IReadOnlyList<PluginSkill> _pluginSkills;
 
-    public SystemPromptBuilder(IReadOnlyList<PluginSkill>? pluginSkills = null)
+    public SystemPromptBuilder()
     {
-        _pluginSkills = pluginSkills ?? [];
     }
 
     public string Build(SystemPromptContext context)
@@ -49,6 +47,7 @@ public sealed class SystemPromptBuilder
         builder.AppendLine("当前项目：");
         builder.AppendLine($"- 名称：{Normalize(context.ProjectName, "AIChat")}");
         builder.AppendLine($"- 路径：{Normalize(context.ProjectPath, "(未设置)")}");
+        builder.AppendLine($"- 执行模式：{Normalize(context.ExecutionMode, "Standard")}");
         if (!string.IsNullOrWhiteSpace(context.ProjectLoadSnapshot))
         {
             builder.AppendLine("- 加载快照：");
@@ -93,7 +92,6 @@ public sealed class SystemPromptBuilder
         if (context.EnabledToolIds.Count == 0)
         {
             builder.AppendLine("- 无。不能声称已经读取、修改或执行项目操作。");
-            AppendPluginSkills(builder, _pluginSkills);
             AppendInputArtifacts(builder, context.InputArtifactRefs);
             return builder.ToString().Trim();
         }
@@ -117,34 +115,16 @@ public sealed class SystemPromptBuilder
         }
 
         AppendMemorySnippets(builder, context.MemorySnippets);
-        AppendPluginSkills(builder, _pluginSkills);
         AppendInputArtifacts(builder, context.InputArtifactRefs);
+        AppendModelProfile(builder, context);
 
-        AppendProviderSpecificInstructions(builder, context.ProviderId);
+        // Per-provider prompt sections used to live here (DeepSeek
+        // thinking guidance, etc.). After the 2026-08-02 catalog
+        // prune, AIChat ships with MiniMax only and the catalog's
+        // single ModelProfile carries the per-provider guidance
+        // through AppendModelProfile above. No more branches here.
 
         return builder.ToString().Trim();
-    }
-
-    private static void AppendPluginSkills(StringBuilder builder, IReadOnlyList<PluginSkill> skills)
-    {
-        if (skills.Count == 0)
-        {
-            return;
-        }
-
-        builder.AppendLine();
-        builder.AppendLine("已启用插件 Skill：");
-        builder.AppendLine("- Skill 是插件提供的任务说明和工作流建议；如果与用户要求或项目文件冲突，以用户要求和实际文件为准。");
-        foreach (var skill in skills.Where(item => !string.IsNullOrWhiteSpace(item.Content)).Take(8))
-        {
-            builder.AppendLine($"## {skill.Name} ({skill.Id})");
-            if (!string.IsNullOrWhiteSpace(skill.Description))
-            {
-                builder.AppendLine(skill.Description.Trim());
-            }
-
-            builder.AppendLine(skill.Content.Trim());
-        }
     }
 
     private static string Normalize(string value, string fallback)
@@ -195,16 +175,27 @@ public sealed class SystemPromptBuilder
         }
     }
 
-    private static void AppendProviderSpecificInstructions(StringBuilder builder, string providerId)
+    private static void AppendModelProfile(StringBuilder builder, SystemPromptContext context)
     {
-        if (string.Equals(providerId, "deepseek", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(context.ModelProfileName))
         {
-            builder.AppendLine();
-            builder.AppendLine("DeepSeek 模型提示：");
-            builder.AppendLine("- 复杂推理、多步代码重构、算法设计等任务，建议启用思考模式（thinking）以获得更准确的结果。");
-            builder.AppendLine("- 简单问答、文件读取、状态查询等轻量任务，关闭思考模式可显著提速。");
-            builder.AppendLine("- 代码修改任务建议推理强度设为 high，确保逻辑严谨。");
-            builder.AppendLine("- 工具调用时，JSON 参数尽量一次传完整，DeepSeek 对复杂嵌套 JSON 有良好支持。");
+            return;
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("模型执行策略：");
+        builder.AppendLine($"- Profile：{context.ModelProfileName}");
+        AppendProfileLine(builder, "工具调用", context.ModelProfileToolCallPolicy);
+        AppendProfileLine(builder, "思考策略", context.ModelProfileThinkingPolicy);
+        AppendProfileLine(builder, "缓存策略", context.ModelProfileCacheStrategy);
+        AppendProfileLine(builder, "提示建议", context.ModelProfilePromptGuidance);
+    }
+
+    private static void AppendProfileLine(StringBuilder builder, string title, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            builder.AppendLine($"- {title}：{value.Trim()}");
         }
     }
 }

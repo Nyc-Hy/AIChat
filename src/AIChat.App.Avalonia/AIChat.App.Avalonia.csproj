@@ -1,0 +1,64 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyName>AIChat.App.Avalonia</AssemblyName>
+    <RootNamespace>AIChat.App.Avalonia</RootNamespace>
+    <Product>AIChat Desktop</Product>
+    <Description>Cross-platform Vibe Coding assistant desktop application</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Expose internal types (MainWindow, MainWindowViewModel
+      internals, etc.) to the test assembly so the DI lock
+      in AppHostTests can reference them. Without this the
+      lock can only cover public types — the internal
+      `MainWindow` class is the most-wanted target because
+      every modal/Window the host adds depends on it being
+      resolvable from DI.
+    -->
+    <InternalsVisibleTo Include="AIChat.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Plain embedded resource (not AvaloniaResource) so the
+      /help body can be loaded via Assembly.GetManifestResourceStream
+      without an Avalonia asset pipeline — important for the
+      headless test host (AppHost.Build) which doesn't initialise
+      AssetLoader.
+    -->
+    <EmbeddedResource Include="Resources\HelpText.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AIChat.Abstractions\AIChat.Abstractions.csproj" />
+    <ProjectReference Include="..\AIChat.Application\AIChat.Application.csproj" />
+    <ProjectReference Include="..\AIChat.Domain\AIChat.Domain.csproj" />
+    <ProjectReference Include="..\AIChat.Providers.OpenAI\AIChat.Providers.OpenAI.csproj" />
+    <ProjectReference Include="..\AIChat.Storage.Json\AIChat.Storage.Json.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.3" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+  </ItemGroup>
+</Project>

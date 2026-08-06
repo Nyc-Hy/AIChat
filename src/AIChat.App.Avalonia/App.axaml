@@ -1,0 +1,969 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="AIChat.App.Avalonia.App"
+             Name="AIChat"
+             RequestedThemeVariant="Default">
+
+    <NativeMenu.Menu>
+        <NativeMenu>
+            <NativeMenuItem Header="关于 AIChat…" Click="About_OnClick" />
+            <NativeMenuItem Header="设置…" Click="Settings_OnClick" />
+        </NativeMenu>
+    </NativeMenu.Menu>
+
+    <!--
+      Token dictionaries. Tokens.axaml carries the light-mode base; the
+      dark theme dictionary gets merged in automatically when the app's
+      RequestedThemeVariant resolves to Dark.
+
+      Note: no global Application.DataTemplates block. Every view-model
+      in the app binds through an inline <DataTemplate x:DataType="vm:...">
+      inside the consuming ItemsControl / ContentControl, so the
+      old reflection-based ViewLocator was never actually invoked
+      at runtime — dropped in the v1.0 refactor.
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://AIChat.App.Avalonia/Resources/Tokens.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceInclude x:Key="Dark" Source="avares://AIChat.App.Avalonia/Resources/Tokens.Dark.axaml" />
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- ===== Window defaults ===== -->
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+            <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
+        </Style>
+
+        <!--
+          ===== Global transitions =====
+          Every interactive element gets a 100ms BrushTransition on its
+          background / foreground / border so hover / focus / press states
+          feel smooth rather than instant. The press scale uses
+          RenderTransform + TransformOperationsTransition. This single
+          block is the highest-impact "feels premium" change in the app.
+        -->
+        <Style Selector="Button">
+            <Setter Property="RenderTransform" Value="scale(1.0)" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource MotionFast}" Easing="CubicEaseOut" />
+                    <BrushTransition Property="Background" Duration="{StaticResource MotionFast}" />
+                    <BrushTransition Property="Foreground" Duration="{StaticResource MotionFast}" />
+                    <BrushTransition Property="BorderBrush" Duration="{StaticResource MotionFast}" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button:pressed">
+            <Setter Property="RenderTransform" Value="scale(0.97)" />
+        </Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="{StaticResource MotionFast}" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <!--
+          ===== Focus ring =====
+          WCAG 2.4.7 / 2.2.2 — every focusable surface gets a visible
+          focus indicator. Buttons / list items get a 2px teal border.
+          The input-floating Border is styled separately below (focus-within
+          style) so the inner TextBox doesn't fight a global
+          BorderThickness=2 that would clash with the 1px line border
+          around the composer.
+        -->
+        <Style Selector="Button:focus-visible,
+                          ListBoxItem:focus-visible,
+                          ToggleSwitch:focus-visible,
+                          CheckBox:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+
+        <!--
+          Typography — text style classes. The set below is what's
+          actually used by the XAML today (section-title / body /
+          muted / page-title / hero-title). A wider "t-display /
+          t-h1 / t-h2 / …" ramp was scaffolded earlier in 1.0 for a
+          future XAML migration but no element binds to it yet, so it
+          stays out of the file until the migration lands.
+        -->
+        <Style Selector="TextBlock.section-title">
+            <Setter Property="FontSize" Value="{StaticResource FontOverline}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.66" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.body">
+            <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
+            <Setter Property="LineHeight" Value="21" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="FontSize" Value="{StaticResource FontCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.kbd-display">
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+            <Setter Property="FontSize" Value="{StaticResource FontBodyM}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="TextBlock.page-title">
+            <Setter Property="FontSize" Value="{StaticResource FontH1}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+        <Style Selector="TextBlock.hero-title">
+            <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="{StaticResource FontDisplay}" />
+            <Setter Property="LineHeight" Value="44" />
+            <Setter Property="LetterSpacing" Value="{StaticResource TrackingDisplay}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+
+        <!-- ===== Surfaces (Border) ===== -->
+        <Style Selector="Border.panel">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding4}" />
+        </Style>
+        <Style Selector="Border.surface">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+        </Style>
+        <Style Selector="Border.rail">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+        </Style>
+        <!--
+          Floating input shell: the main chat-composer at the bottom of the
+          main column. v1.1 polish: warm sunken background + a 1px hairline
+          border + generous 16px internal padding. Dropped the
+          FloatingShadow in favor of the border — the warmer tone + the
+          border feel like a notebook line on a desk rather than a SaaS
+          chat-bubble lifted off the page. 14px corner keeps the rounded
+          feel without looking like a button.
+        -->
+        <Style Selector="Border.input-floating">
+            <!--
+              v1.1 revert: the original 5c1eace "floating composer" was
+              SurfaceBrush + 0 border + RadiusLg + Elevation3 shadow —
+              the input literally floated above the page. The 843335e
+              "polish" changed it to SurfaceSunken + 1px line + no shadow,
+              which read as a heavier, more AI-product form field. Going
+              back: cream floating block, no border, soft shadow.
+            -->
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+            <Setter Property="BoxShadow" Value="{DynamicResource Elevation3Shadow}" />
+        </Style>
+        <Style Selector="Border.input-floating:focus-within">
+            <!-- Focus indicator: deepen the shadow one elevation step. The
+                 2px AccentBrush border on the inner TextBox is removed so
+                 the cream block doesn't get a blue stripe inside it. -->
+            <Setter Property="BoxShadow" Value="{DynamicResource Elevation4Shadow}" />
+        </Style>
+
+        <!--
+          Conversation bubbles. User = soft-accent right-aligned card with
+          dark text (NOT white on a 8% wash — that was the v1 bug AP-3).
+          AI = transparent + hairline bottom rule so it reads as a document
+          section. System = no bubble, just text.
+        -->
+        <Style Selector="Border.bubble-user">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent100Brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+        </Style>
+        <!--
+          Same visual when the bubble is a Button (clickable for
+          'edit previous message'). Inherits the same background /
+          border / radius / padding so the two containers look
+          identical, and adds the click-affordance details:
+          HorizontalContentAlignment=Left so wrapping reads naturally,
+          IBeam cursor so it looks like text-editable, hover
+          background deepens one step.
+        -->
+        <Style Selector="Button.bubble-user">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent100Brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Cursor" Value="IBeam" />
+        </Style>
+        <Style Selector="Button.bubble-user:pointerover">
+            <Setter Property="Background" Value="{DynamicResource Accent100Brush}" />
+        </Style>
+        <Style Selector="Border.bubble-ai">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="0,0,0,12" />
+        </Style>
+        <!--
+          Terminal-state variants of the AI bubble. Failed = red
+          bottom border + soft red wash so a user who's
+          skimming the feed can't miss the error. Stopped =
+          amber, calm, intentional. Both are toggled on the
+          Border via Classes.failed / Classes.stopped from
+          ActivityItemViewModel.IsFailed / IsStopped.
+        -->
+        <Style Selector="Border.bubble-ai.failed">
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
+        </Style>
+        <Style Selector="Border.bubble-ai.stopped">
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
+            <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
+        </Style>
+        <!--
+          2026-08-05: per-run summary footer on
+          the AI bubble. The previous shape
+          rendered this as a separate "本次运行"
+          centred system bubble between turns;
+          the new shape keeps it anchored to
+          the AI bubble that produced it. The
+          style is intentionally muted —
+          FontSize 10, muted brush, no border
+          — so it reads as a footnote rather
+          than part of the answer body, and
+          the user can scan past it to the
+          next turn without losing their
+          place.
+        -->
+        <Style Selector="Border.run-summary">
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!--
+          Status-chip color when an AI bubble is in a terminal
+          state. Default (muted) is used for in-flight / time
+          stamps; .failed / .stopped swap the foreground so the
+          user can read the chip at a glance.
+        -->
+        <Style Selector="TextBlock.muted.failed">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.muted.stopped">
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
+        </Style>
+
+        <!--
+          Send button: 36x36 with the accent as background. The hover state
+          uses a SOLID darker accent (AccentHoverBrush), not Opacity — that
+          was the v1 bug B-1 follow-up. The :disabled variant pulls back
+          to a muted background so the user knows they can't send while
+          the model is running.
+        -->
+        <Style Selector="Button.send-button">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.send-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+        </Style>
+        <Style Selector="Button.send-button:disabled">
+            <Setter Property="Background" Value="{DynamicResource LineBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <!--
+          Stop button: same shape as the send button (36px circle) but
+          neutral surface + error-tinted foreground. Lives in the same
+          grid cell as send; the XAML swaps visibility based on
+          IsRunning.
+        -->
+        <Style Selector="Button.stop-button">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.stop-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
+        </Style>
+        <!--
+          Retry button: a secondary ghost button that only shows up after
+          a failed/cancelled run. Smaller than the primary send, sits to
+          its left so the user's eye lands on the natural next step.
+        -->
+        <Style Selector="Button.retry-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <Style Selector="Button.retry-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+        </Style>
+
+        <!--
+          Secondary button: the muted sibling of primary. Used for Reject
+          in tool approval, 测试连接 in settings, Cancel-style actions.
+          Surface background with a hairline border, dark text. Hover
+          deepens the background.
+        -->
+        <Style Selector="Button.secondary">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.secondary:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Icon toggle: 28x28 square with an icon. Cursor / Claude pattern
+          for boolean controls that should be lightweight. The :checked
+          variant pulls the icon into the accent color.
+        -->
+        <Style Selector="Button.icon-toggle">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.icon-toggle:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.icon-toggle:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Empty-state quick action card: ~280x76 (icon + title only, no
+          description — the full prompt lives in ToolTip.Tip). 1px hairline
+          border, hover deepens the background and tints the border with
+          the accent.
+        -->
+        <Style Selector="Button.quick-action">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+        </Style>
+        <Style Selector="Button.quick-action:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Provider card in the settings modal "可用的提供方" list. Each card
+          is a Button so clicking actually does something (selects that
+          template in the dropdown above). The earlier record-with-no-
+          handler shape had an AccentBrush "当前" badge that looked
+          interactive but wasn't — a daily-driver trap. The .active class
+          tints the current provider's row so the user can see which one
+          is selected without having to re-read the dropdown.
+        -->
+        <Style Selector="Button.provider-card">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        </Style>
+        <Style Selector="Button.provider-card:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.provider-card.active">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Sidebar conversation row: quiet background, no border, generous
+          padding. The .selected class tints the row with the soft accent
+          so the user knows which conversation is open.
+        -->
+        <Style Selector="Button.sidebar-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="{StaticResource Padding2}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+        </Style>
+        <Style Selector="Button.sidebar-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-row.selected">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+
+        <!--
+          Right-side Environment panel rows (交付物 list). Slightly
+          tighter padding than sidebar-row since each row is a 2-line
+          file card (name + size/age), not a single-line nav entry.
+        -->
+        <Style Selector="Button.env-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.env-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Codex parity: inline project popover that expands under the
+          selected project row in the sidebar. Sits on a slightly
+          tinted background so the user can tell the popover is a
+          sub-surface of the project, not another row in the list.
+        -->
+        <Style Selector="Border.project-popover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Sprint 0.5: 5 first-level nav icons at the top of the sidebar.
+          The .active class highlights the current entry; .disabled
+          fades the icon + text so the user sees "this is coming, not
+          available right now" without the design dead-ending at a
+          clickable empty action (plan §5.4).
+        -->
+        <Style Selector="Button.sidebar-icon-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,8" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-row.active">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-row.disabled">
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+
+        <!--
+          Codex parity: text+icon first-level nav rows. The icon is on
+          the left, the label on the right, full-row hover. Same .active /
+          .disabled classes so the sidebar visual language matches across
+          nav and project/conversation lists.
+        -->
+        <Style Selector="Button.sidebar-nav-row">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-row.active">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="Button.sidebar-nav-row.disabled">
+            <Setter Property="Opacity" Value="0.55" />
+        </Style>
+
+        <!--
+          Sprint 0.5+: sidebar top navigation layer. Matches Codex's
+          "Codex ▽" mode switcher + search + bell trio (top of sidebar).
+          The brand button is taller to hold a 14pt text label, the icon
+          buttons are square (32x32) to balance visually with the 5-icon
+          row below.
+        -->
+        <Style Selector="Button.sidebar-brand">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+        </Style>
+        <!--
+          1.0.1: sidebar top brand label. The
+          row used to be a Button (sidebar-brand
+          style above) firing a stub toast on
+          click. Made it a static TextBlock —
+          the same visual, no dead affordance.
+        -->
+        <Style Selector="TextBlock.brand-title">
+            <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Margin" Value="8,6" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,6" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+        </Style>
+        <Style Selector="Button.sidebar-icon-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+
+        <!--
+          Sprint 0.5: permission badge (default / full / read-only). Lives in
+          the composer. The .permission-full class flips the foreground
+          to the warning/amber tone (not red) so the user sees "this is
+          a deliberate grant of broad access" rather than "this is an
+          error state" — matches Codex Desktop's 完全访问 badge.
+        -->
+        <Style Selector="Button.chrome-button.permission-full">
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
+        </Style>
+        <Style Selector="Button.chrome-button.permission-readonly">
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Ellipse.permission-dot-full">
+            <Setter Property="Fill" Value="{DynamicResource WarningBrush}" />
+        </Style>
+        <Style Selector="Ellipse.permission-dot-default">
+            <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Ellipse.permission-dot-readonly">
+            <Setter Property="Fill" Value="{DynamicResource MutedBrush}" />
+        </Style>
+
+        <!-- Model chip: small flat rectangle with a status dot + name.
+             Sprint 0.5: padding tightened (6,4) so the chip doesn't crowd
+             the permission badge + 验证 button in the 3-column layout.
+             1.0.1: the chip is also a Button — clicking it routes to
+             Settings (the same place the user lands on ⌘,) so the most
+             natural "change the model" target is one click away instead
+             of "open ⌘, → find provider → switch model → close". The
+             Button variant uses the same SurfaceSunken background as
+             the Border variant so the visual is stable, plus a subtle
+             hover background swap so the click target is discoverable. -->
+        <Style Selector="Border.model-chip">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,4" />
+        </Style>
+        <Style Selector="Button.model-chip">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.model-chip:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+        </Style>
+
+        <Style Selector="Border.section-divider">
+            <Setter Property="Background" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="0,16" />
+        </Style>
+
+        <!-- ===== Badges ===== -->
+        <Style Selector="Border.badge">
+            <Setter Property="Background" Value="{DynamicResource InfoBgBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="9,4" />
+        </Style>
+        <!--
+          Git status badge: tight monospace pill that shows the raw
+          "M " / "A " / "??" / "R " porcelain code so the user can
+          tell at a glance what happened to a file. The default
+          style is a neutral cream surface; per-status class selectors
+          below recolour the badge + its inner text by outcome so the
+          user can scan a long change list and pick out the "deleted"
+          and "conflict" rows without reading the code.
+        -->
+        <Style Selector="Border.git-status-badge">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="MinWidth" Value="32" />
+        </Style>
+
+        <!--
+          Toast severity stripe: a 3px left edge in the level's
+          status colour, so the user can tell warning/error apart
+          from ambient info without reading the message. Matches
+          the per-status colour map used by the git status badge
+          and the sub-agent status row so the whole app reads as
+          one status language.
+        -->
+        <Style Selector="Border.toast-success">
+            <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
+            <Setter Property="BorderThickness" Value="3,1,1,1" />
+        </Style>
+        <Style Selector="Border.toast-warning">
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
+            <Setter Property="BorderThickness" Value="3,1,1,1" />
+        </Style>
+        <Style Selector="Border.toast-error">
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
+            <Setter Property="BorderThickness" Value="3,1,1,1" />
+        </Style>
+        <!--
+          1.0.1: clickable-toast affordance.
+          The Border is the entire row's
+          click target (no separate ×
+          button — a daily-driver user
+          reading an error toast wants the
+          whole row to feel clickable, not
+          to hunt for a tiny close icon).
+          Subtle background darken on
+          PointerOver + a thin pressed
+          state so the click reads as a
+          click. The dismissed-on-click
+          semantics are wired in
+          MainWindow.axaml.cs
+          ToastItem_OnPointerPressed —
+          the Border's Cursor=Hand is the
+          "this-thing-is-clickable"
+          signal.
+        -->
+        <Style Selector="Border.toast-row">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.toast-row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}"/>
+        </Style>
+        <Style Selector="Border.toast-row:pressed">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/>
+        </Style>
+        <Style Selector="Border.git-status-badge.modified">
+            <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.modified > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.added">
+            <Setter Property="Background" Value="{DynamicResource SuccessBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SuccessBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.added > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.deleted, Border.git-status-badge.conflict">
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.deleted > TextBlock, Border.git-status-badge.conflict > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.untracked">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent300Brush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.untracked > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.renamed, Border.git-status-badge.copied">
+            <Setter Property="Background" Value="{DynamicResource InfoBgBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource InfoBorderBrush}" />
+        </Style>
+        <Style Selector="Border.git-status-badge.renamed > TextBlock, Border.git-status-badge.copied > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource InfoFgBrush}" />
+        </Style>
+        <!--
+          Sub-agent status colour map. The plan panel renders a row
+          per dispatched sub-agent; the row's status text + duration
+          flip foreground colour based on the StatusKind class the
+          VM attaches. Kept here (theming) rather than on the VM so
+          the colour palette stays centralised.
+
+          running     — accent (in flight, attention-grabbing)
+          completed   — success green
+          failed      — error red
+          budget      — warning orange (tool budget hit)
+          cancelled   — muted gray (user stopped)
+          skipped     — muted gray (coordinator declined)
+        -->
+        <Style Selector="TextBlock.sub-agent-status.running">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.completed">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.failed">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.budget">
+            <Setter Property="Foreground" Value="{DynamicResource WarningFgBrush}" />
+        </Style>
+        <Style Selector="TextBlock.sub-agent-status.cancelled, TextBlock.sub-agent-status.skipped">
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <!--
+          Pending image attachment: 56x56 square thumbnail that sits
+          above the prompt. Hairline border + a small remove X in
+          the top-right corner. Subtle background so the thumbnail
+          reads as "this is going to travel with the next message",
+          not a permanent card.
+        -->
+        <Style Selector="Border.pending-attachment">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Width" Value="56" />
+            <Setter Property="Height" Value="56" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Button.pending-attachment-remove">
+            <Setter Property="Background" Value="{DynamicResource ScrimBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="Width" Value="18" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,2,2,0" />
+        </Style>
+        <Style Selector="Button.pending-attachment-remove:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ErrorBgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorFgBrush}" />
+        </Style>
+        <!--
+          Floating "↓ N 条新消息" pill. Anchored to the bottom-center
+          of the conversation panel; only visible when the user has
+          scrolled up and new activity has landed. Sits on a raised
+          surface with an accent border so it reads as an action,
+          not a status row. Hover deepens the border for affordance.
+        -->
+        <Style Selector="Button.new-message-pill">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Accent300Brush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
+        </Style>
+        <Style Selector="Button.new-message-pill:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!--
+          2026-08-05: "↑ 顶部" pill at the top of
+          the conversation panel. Inverse of the
+          "↓ N 条新消息" pill (different
+          background tone so the two aren't
+          confused at a glance). The
+          scroll-to-top affordance is for the
+          "I'm 50 turns deep, want to go back to
+          the beginning" flow; a small button is
+          enough because the affordance is rare
+          (most users scroll back via wheel /
+          trackpad).
+        -->
+        <Style Selector="Button.scroll-to-top-pill">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Button.scroll-to-top-pill:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
+        <Style Selector="Border.badge.success">
+            <Setter Property="Background" Value="{DynamicResource SuccessBgBrush}" />
+        </Style>
+        <Style Selector="Border.badge.warning">
+            <Setter Property="Background" Value="{DynamicResource WarningBgBrush}" />
+        </Style>
+
+        <!--
+          Thinking dots. The 3 Ellipses share the .thinking-dot class; the
+          second / third Ellipses also carry .delay-1 / .delay-2 to stagger
+          the animation. The previous in-template <Ellipse.Styles><Style
+          Selector="Ellipse"> was a no-op because Style inside Ellipse.Styles
+          only matches *descendants*. This is the v1 bug B-1 fix.
+        -->
+        <Style Selector="Ellipse.thinking-dot">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Fill" Value="{DynamicResource MutedBrush}" />
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse.thinking-dot.delay-1">
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0:0:0.2">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="Ellipse.thinking-dot.delay-2">
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionDot}" IterationCount="Infinite" Easing="SineEaseInOut" Delay="0:0:0.4">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                    <KeyFrame Cue="50%"><Setter Property="Opacity" Value="1.0"/></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25"/></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <!-- ===== Buttons ===== -->
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+        </Style>
+        <Style Selector="Button.chrome-button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+        <Style Selector="Button.chrome-button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource Text2Brush}" />
+        </Style>
+        <Style Selector="Button.chrome-button.close:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ErrorFgBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFgBrush}" />
+        </Style>
+
+        <!-- ===== Inputs ===== -->
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="{StaticResource Padding3}" />
+        </Style>
+        <!--
+          Kill Avalonia 12's default TextBox focus ring. The composer's
+          floating Border handles focus via a deeper shadow
+          (Border.input-floating:focus-within). Without this, the 2px blue
+          ring shows up inside the cream block AND its corners stick past
+          the parent Border's RadiusLg rounded shape.
+
+          Selector targets every Border inside the TextBox template, not
+          just a single named part — the focus ring's actual control name
+          varies across Avalonia 12 patch versions.
+        -->
+        <Style Selector="TextBox:focus /template/ Border">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <!--
+          Bubble enter: each new conversation bubble fades in. Avalonia 12
+          can't animate RenderTransform via Style.Animations (no
+          RenderTransform animator is registered), so we animate just
+          Opacity. The slide-up effect is left to a future code-behind
+          Loaded handler; for now the opacity wave alone signals "new".
+        -->
+        <Style Selector="Grid.bubble-enter">
+            <Setter Property="Opacity" Value="0" />
+            <Style.Animations>
+                <Animation Duration="{StaticResource MotionBubble}" Easing="CubicEaseOut" FillMode="Forward">
+                    <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0" /></KeyFrame>
+                    <KeyFrame Cue="100%"><Setter Property="Opacity" Value="1" /></KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+
+        <Style Selector="Border.kbd-pill">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style Selector="ListBox.command-list ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        </Style>
+        <Style Selector="ListBox.command-list ListBoxItem:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+        </Style>
+        <Style Selector="ListBox.command-list ListBoxItem:selected">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+        <Style Selector="ListBox.command-list ListBoxItem:selected:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+        </Style>
+    </Application.Styles>
+</Application>

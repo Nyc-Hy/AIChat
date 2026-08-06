@@ -1,0 +1,2251 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:views="using:AIChat.App.Avalonia.Views.Controls"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AIChat.App.Avalonia.ViewModels"
+        xmlns:composition="using:AIChat.App.Avalonia.Composition"
+        xmlns:controls="using:AIChat.App.Avalonia.Controls"
+        xmlns:vcontrols="using:AIChat.App.Avalonia.Views.Controls"
+        xmlns:behaviors="using:AIChat.App.Avalonia.Behaviors"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1240" d:DesignHeight="800"
+        x:Class="AIChat.App.Avalonia.Views.MainWindow"
+        x:ClassModifier="internal"
+        x:Name="RootWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="AIChat"
+        MinWidth="1080"
+        MinHeight="700"
+        WindowDecorations="None"
+        TransparencyLevelHint="Transparent"
+        CanResize="True"
+        Background="Transparent">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <!--
+      Layered overlay stack (back to front):
+        1. Main surface (slim titlebar + 2-col content + status bar)
+        2. Toasts (bottom-right)
+        3. Command palette (top-anchored modal, search-first)
+        4. Settings / Memory / Git / keyboard-help modals
+        5. Tool approval modal (always last and highest priority)
+
+      1.0 redesign: brand mark, 264px sidebar, borderless composer, AI
+      bubble mark, lean empty state, window-modal tool approval.
+    -->
+    <Grid>
+        <Border Background="{DynamicResource BgBrush}" CornerRadius="18" ClipToBounds="True">
+            <Grid RowDefinitions="48,*,32"
+                  DragDrop.AllowDrop="True"
+                  DragDrop.DragOver="OnDragOver"
+                  DragDrop.DragLeave="OnDragLeave"
+                  DragDrop.Drop="OnDrop">
+
+                <!-- ============== Titlebar (slim, with brand mark) ============== -->
+                <Grid Grid.Row="0"
+                      ColumnDefinitions="Auto,*,Auto"
+                      Margin="20,0,12,0"
+                      ColumnSpacing="12"
+                      Background="Transparent"
+                      PointerPressed="TitleBar_OnPointerPressed">
+                    <!-- Brand mark: a single solid teal dot. v1.1: dropped the
+                         3-dot constellation in favor of a single dot — reads
+                         less like an AI-startup logo, more like a private
+                         tool someone built for themselves. -->
+                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                        <Border Width="24" Height="24">
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="AIChat" FontFamily="{StaticResource FontSans}" FontWeight="SemiBold" FontSize="15" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Grid Grid.Column="2" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="1" VerticalAlignment="Center">
+                        <Button Grid.Column="0" Classes="chrome-button" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="切换主题 (⌘⇧T)">
+                            <Path Data="M12 4 V2 M12 22 V20 M4 12 H2 M22 12 H20 M5.5 5.5 L4.1 4.1 M19.9 19.9 L18.5 18.5 M5.5 18.5 L4.1 19.9 M19.9 4.1 L18.5 5.5 M12 8 a4 4 0 1 0 0 8 a4 4 0 1 0 0 -8"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <Button Grid.Column="1" Classes="chrome-button" Command="{Binding OpenSettingsCommand}" ToolTip.Tip="设置 (⌘,)">
+                            <Path Data="M4 4 H20 V20 H4 Z M9 9 H15 V15 H9 Z"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <!-- Sprint 0.5: toggle the right-side Environment panel. Icon flips
+                             when the panel state changes (handled via a binding on a derived
+                             bool). No global shortcut yet — user reaches it via this button
+                             or via the panel's own header refresh. -->
+                        <Button Grid.Column="2" Classes="chrome-button" Command="{Binding ToggleEnvironmentPanelCommand}" ToolTip.Tip="切换环境信息面板 (⌘⇧E)">
+                            <Path Data="M3 5 H21 M3 12 H21 M3 19 H15 M17 12 L3 5"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <Button Grid.Column="3" Classes="chrome-button" Command="{Binding OpenShortcutsCommand}" ToolTip.Tip="键盘快捷键 (⌘/)">
+                            <Path Data="M12 17 a1 1 0 1 0 0 -0.1 M9.1 9 a3 3 0 0 1 5.8 1 c0 2 -3 3 -3 3 M12 22 a10 10 0 1 0 0 -20 a10 10 0 0 0 0 20"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <Button Grid.Column="4" Classes="chrome-button" Click="Minimize_OnClick" ToolTip.Tip="最小化">
+                            <Path Data="M3 12 H21"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="2.2" StrokeLineCap="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <Button Grid.Column="5" Classes="chrome-button" Click="MaximizeRestore_OnClick" ToolTip.Tip="最大化">
+                            <Path Data="M4 4 H20 V20 H4 Z"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeJoin="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                        <Button Grid.Column="6" Classes="chrome-button close" Click="Close_OnClick" ToolTip.Tip="关闭">
+                            <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                  Stroke="{Binding $parent[Button].Foreground}"
+                                  StrokeThickness="1.6" StrokeLineCap="Round"
+                                  Width="16" Height="16" Stretch="Uniform"/>
+                        </Button>
+                    </Grid>
+                </Grid>
+
+                <!-- ============== Main: 3-col (sidebar 264 + flex + env panel 320) ============== -->
+                <Grid Grid.Row="1" ColumnDefinitions="264,*,320" Margin="14,4,14,6" ColumnSpacing="14">
+
+                    <!-- ========== Sidebar ========== -->
+                    <!--
+                      v1.2 list-style sidebar (Linear / Notion look):
+                        1. Task types (5 fixed items, first one = new task)
+                        2. 项目 section — bound to Sidebar.Projects
+                        3. 最近 section — bound to ConversationList.Conversations
+                      Sprint 0.5 + 12-wave parity: 5 first-level
+                      nav icons (新对话 / 拉取请求 / 站点 / 已安排 /
+                      插件) at the top. 1.0.1 status — 4 of 5 are
+                      live (新对话 / 站点 / 已安排 / 插件, all
+                      modal-backed). 拉取请求 stays disabled
+                      (needs GitHub OAuth, P1 deferred per
+                      SHIP_REPORT §4); the affordance is shown
+                      to surface the parity slot.
+                    -->
+                    <Border Grid.Column="0"
+                            Classes="rail"
+                            Padding="{StaticResource Padding2}"
+                            BorderBrush="{DynamicResource LineSoftBrush}"
+                            BorderThickness="0,0,1,0">
+                        <Grid RowDefinitions="*,Auto">
+                        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="2">
+
+                                <!--
+                                  Sidebar 顶 navigation layer (Sprint 0.5+, plan §4 first-level
+                                  nav). Layout matches Codex: a brand label on the
+                                  left, search icon on the right.
+
+                                  1.0.1: the "AIChat ▽" mode
+                                  switcher is now a static
+                                  brand label — the actual
+                                  mode surface is the
+                                  permission badge below the
+                                  composer + ⌘⇧R (no-write)
+                                  / ⌘⇧V (auto-verify).
+                                  The bell button was also
+                                  removed (383342d); its
+                                  data lives in the
+                                  Environment panel.
+
+                                  ⌘F is bound (a45645b) and
+                                  pre-fills the composer with
+                                  /search + caret to end so
+                                  the user can type their
+                                  query directly.
+                                -->
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,6" ColumnSpacing="2">
+                                    <!--
+                                      1.0.1: brand row used to be a
+                                      Button (Click="ModeSwitcher_OnClick"
+                                      + chevron) firing a stub toast
+                                      "模式切换 — 默认模式（Wave 2
+                                      接入）". The actual mode
+                                      surface is the permission
+                                      badge below the composer
+                                      (CyclePermissionStateCommand)
+                                      plus ⌘⇧R (no-write) /
+                                      ⌘⇧V (auto-verify). A brand
+                                      button with a chevron
+                                      promised a mode menu the
+                                      app doesn't have. Now a
+                                      static label — same
+                                      visual, no dead affordance.
+                                    -->
+                                    <TextBlock Grid.Column="0"
+                                               Text="AIChat"
+                                               Classes="brand-title"
+                                               VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            Classes="sidebar-icon-button"
+                                            Click="Search_OnClick"
+                                            ToolTip.Tip="搜索历史对话 (⌘F)">
+                                        <Path Data="M11 4 a7 7 0 1 0 4 12.5 L20 21 M16 11 a5 5 0 1 1 -10 0 a5 5 0 0 1 10 0"
+                                              Stroke="{Binding $parent[Button].Foreground}"
+                                              StrokeThickness="1.6" StrokeLineCap="Round" StrokeJoin="Round"
+                                              Width="14" Height="14" Stretch="Uniform"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                                    </Button>
+                                    <!--
+                                      1.0.1: removed the "通知"
+                                      bell button. The plan §7
+                                      Wave 7 reference ("Subagent
+                                      / Background Process
+                                      events") was overtaken by
+                                      the Environment panel's
+                                      SubAgentRuns + Background
+                                      sections (Wave 7 first
+                                      slice, then Wave 7.1
+                                      BackgroundProcessSupervisor
+                                      follow-up) which surface
+                                      the same data live. A
+                                      standalone bell with a
+                                      "Wave 7 接入" tooltip
+                                      promised a feature that
+                                      never materialised and
+                                      ended up wired to a stub
+                                      toast. The user gets the
+                                      same data from the
+                                      Environment panel and
+                                      Toast service already.
+                                    -->
+                                </Grid>
+
+                                <Border Classes="section-divider" Margin="0,2,0,4"/>
+
+                                <!-- Codex parity: 5 first-level nav items, each is text + icon
+                                     (matching Codex Desktop sidebar). 1.0.1 status: 4 of 5 are
+                                     live (新对话 / 站点 / 已安排 / 插件, all modal-backed via
+                                     Open*Command). 拉取请求 stays disabled — needs GitHub
+                                     OAuth, P1 deferred per plan §4 / SHIP_REPORT §4. The
+                                     affordance is shown to surface the parity slot. -->
+                                <StackPanel Spacing="2" Margin="0,0,0,6">
+                                    <Button Classes="sidebar-nav-row"
+                                            Classes.active="True"
+                                            Command="{Binding NewChatCommand}"
+                                            ToolTip.Tip="新对话 (⌘N) — 当前可用">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Path Data="M3 21 L8 14 L11 17 L21 5 M14 5 H21 V12"
+                                                  Stroke="{Binding $parent[Button].Foreground}"
+                                                  StrokeThickness="1.5" StrokeLineCap="Round"
+                                                  Width="16" Height="16" Stretch="Uniform"
+                                                  VerticalAlignment="Center"/>
+                                            <TextBlock Text="新对话" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="sidebar-nav-row"
+                                            Classes.disabled="True"
+                                            IsEnabled="False"
+                                            Command="{Binding OpenPullRequestsCommand}"
+                                            ToolTip.Tip="拉取请求 — 需要 GitHub OAuth (P1 deferred)">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Path Data="M6 4 v6 a4 4 0 0 0 4 4 h4 a4 4 0 0 1 4 4 v2 M16 4 a2 2 0 1 0 0 0.1"
+                                                  Stroke="{Binding $parent[Button].Foreground}"
+                                                  StrokeThickness="1.4" StrokeLineCap="Round"
+                                                  Width="16" Height="16" Stretch="Uniform"
+                                                  VerticalAlignment="Center"/>
+                                            <TextBlock Text="拉取请求" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="sidebar-nav-row"
+                                            Command="{Binding OpenSitesCommand}"
+                                            ToolTip.Tip="站点 — 浏览 / 添加 / 预览本地站点">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Path Data="M4 4 H20 V20 H4 Z M4 9 H20 M4 14 H20 M9 4 V20 M14 4 V20"
+                                                  Stroke="{Binding $parent[Button].Foreground}"
+                                                  StrokeThickness="1.4" StrokeJoin="Round"
+                                                  Width="16" Height="16" Stretch="Uniform"
+                                                  VerticalAlignment="Center"/>
+                                            <TextBlock Text="站点" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="sidebar-nav-row"
+                                            Command="{Binding OpenScheduledCommand}"
+                                            ToolTip.Tip="已安排 — 浏览 / 添加 / 暂停定时任务">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Path Data="M12 7 V12 L15 14 M12 21 a9 9 0 1 0 0 -18 a9 9 0 0 0 0 18"
+                                                  Stroke="{Binding $parent[Button].Foreground}"
+                                                  StrokeThickness="1.4" StrokeLineCap="Round"
+                                                  Width="16" Height="16" Stretch="Uniform"
+                                                  VerticalAlignment="Center"/>
+                                            <TextBlock Text="已安排" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="sidebar-nav-row"
+                                            Command="{Binding OpenPluginsCommand}"
+                                            ToolTip.Tip="插件 — 浏览 / 启用 / 刷新已安装插件">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <Path Data="M9 4 H15 V8 H20 V14 H15 V20 H9 V14 H4 V8 H9 Z"
+                                                  Stroke="{Binding $parent[Button].Foreground}"
+                                                  StrokeThickness="1.4" StrokeJoin="Round"
+                                                  Width="16" Height="16" Stretch="Uniform"
+                                                  VerticalAlignment="Center"/>
+                                            <TextBlock Text="插件" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+
+                                <Border Classes="section-divider" Margin="0,2,0,4"/>
+
+                                <!-- 1. New task (only entry — the 4 placeholder items I added
+                                     earlier (拉取请求/站点/已安排/插件) were dropped because
+                                     they had no backing functionality. UI without
+                                     commands is just noise.) -->
+                                <Button Classes="sidebar-row" Command="{Binding NewConversationCommand}" HorizontalAlignment="Stretch">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path Data="M3 21 L8 14 L11 17 L21 5 M14 5 H21 V12"
+                                              Stroke="{Binding $parent[Button].Foreground}"
+                                              StrokeThickness="1.5" StrokeLineCap="Round"
+                                              Width="16" Height="16" Stretch="Uniform"
+                                              VerticalAlignment="Center"/>
+                                        <TextBlock Text="新建任务" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Classes="sidebar-row" Command="{Binding OpenRunHistoryCommand}" HorizontalAlignment="Stretch"
+                                        ToolTip.Tip="查看运行记录 (⌘H)">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Path Data="M4 6 H20 M4 12 H20 M4 18 H14"
+                                              Stroke="{Binding $parent[Button].Foreground}"
+                                              StrokeThickness="1.5" StrokeLineCap="Round"
+                                              Width="16" Height="16" Stretch="Uniform"
+                                              VerticalAlignment="Center"/>
+                                        <TextBlock Text="运行记录" FontFamily="{StaticResource FontSans}" FontSize="13" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+
+                                <!-- 2. 项目 section -->
+                                <TextBlock Text="项目" Classes="section-title" Margin="4,16,0,6"/>
+                                <TextBlock Text="(还没有项目，按 ⌘O 添加)"
+                                           Classes="muted"
+                                           FontSize="12"
+                                           Margin="4,0,0,4"
+                                           IsVisible="{Binding Sidebar.Projects.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+                                <ItemsControl ItemsSource="{Binding Sidebar.Projects}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ProjectCardViewModel">
+                                            <!--
+                                              Project card (Codex parity): row + trailing
+                                              `...` (3-dot menu) on the right. The icon
+                                              only renders when the row is selected —
+                                              Codex fades it in so the steady-state list
+                                              is quiet. 1.0.1: the duplicate edit
+                                              (pencil) icon that was here was a no-op
+                                              stub pointing at "Wave 6 inline project
+                                              rename" — Wave 6 actually shipped Git
+                                              status / commit / restore, not project
+                                              rename. The icon was removed; project
+                                              management lives in the ··· menu + right-
+                                              click context flyout.
+                                            -->
+                                            <StackPanel>
+                                            <Button Classes="sidebar-row"
+                                                    Tag="{Binding Id}"
+                                                    Click="ProjectButton_OnClick"
+                                                    Classes.selected="{Binding IsSelected}"
+                                                    ToolTip.Tip="{Binding Name}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
+                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                                    <Path Grid.Column="0"
+                                                          Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.5" StrokeLineCap="Round"
+                                                          Width="16" Height="16" Stretch="Uniform"
+                                                          VerticalAlignment="Center"/>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Name}"
+                                                               FontFamily="{StaticResource FontSans}"
+                                                               FontSize="13"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxLines="1"
+                                                               VerticalAlignment="Center"/>
+                                                    <!--
+                                                      Wave 3 (plan §3.2): multi-folder badge.
+                                                      Shows when a workspace has more than one
+                                                      folder (e.g. monorepo with separate
+                                                      frontend / backend roots). Hidden for
+                                                      single-folder workspaces to keep the
+                                                      steady state quiet.
+                                                    -->
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding MultiFolderBadge}"
+                                                               Classes="muted"
+                                                               FontSize="10"
+                                                               FontFamily="{StaticResource FontMono}"
+                                                               Margin="6,0,0,0"
+                                                               VerticalAlignment="Center"
+                                                               IsVisible="{Binding IsMultiFolder}"/>
+                                                    <!--
+                                                      1.0.1: removed the
+                                                      edit (pencil) icon
+                                                      that was a no-op
+                                                      stub. The user gets
+                                                      the same project
+                                                      menu (delete) via
+                                                      the ··· button or
+                                                      the right-click
+                                                      context flyout.
+                                                      Two icons for the
+                                                      same menu was
+                                                      redundant; a
+                                                      pencil icon that
+                                                      opened no inline
+                                                      rename was a
+                                                      daily-driver trap.
+                                                    -->
+                                                    <StackPanel Grid.Column="2"
+                                                                Orientation="Horizontal"
+                                                                Spacing="4"
+                                                                VerticalAlignment="Center"
+                                                                IsVisible="{Binding IsSelected}">
+                                                        <Button Classes="chrome-button"
+                                                                Padding="2,0"
+                                                                Click="ProjectMenu_OnClick"
+                                                                Tag="{Binding Id}"
+                                                                ToolTip.Tip="项目菜单 (删除)">
+                                                            <TextBlock Text="···"
+                                                                       FontSize="14"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="{Binding $parent[Button].Foreground}"/>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <Button.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="删除项目"
+                                                                  Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).Sidebar.RemoveProjectCommand}"
+                                                                  CommandParameter="{Binding Id}"/>
+                                                    </MenuFlyout>
+                                                </Button.ContextFlyout>
+                                            </Button>
+                                            <!--
+                                              Codex parity: inline popover that expands
+                                              under the selected project row. Shows the
+                                              project's on-disk path + task count + an
+                                              "编辑项目" button. The popover is just a
+                                              nested StackPanel — no floating overlay
+                                              because Avalonia 12 Popup positioning
+                                              against a virtualized list is finicky; the
+                                              inline shape matches the visual mass of
+                                              Codex's popover without the layout cost.
+                                            -->
+                                            <Border Classes="project-popover"
+                                                    IsVisible="{Binding IsSelected}"
+                                                    Margin="22,2,4,6"
+                                                    Padding="8,6"
+                                                    CornerRadius="{StaticResource RadiusSm}">
+                                                <StackPanel Spacing="4">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <Path Data="M5 6 a2 2 0 0 1 2 -2 h6 l2 2 h4 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 Z"
+                                                              Stroke="{DynamicResource MutedBrush}"
+                                                              StrokeThickness="1.2" StrokeLineCap="Round"
+                                                              Width="11" Height="11" Stretch="Uniform"
+                                                              VerticalAlignment="Center"/>
+                                                        <TextBlock Text="0 个任务"
+                                                                   Classes="muted"
+                                                                   FontSize="11"
+                                                                   VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding Path}"
+                                                               Classes="muted"
+                                                               FontFamily="{StaticResource FontMono}"
+                                                               FontSize="11"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxLines="1"
+                                                               ToolTip.Tip="{Binding Path}"/>
+                                                    <!--
+                                                      1.0.1: removed the
+                                                      inline "编辑项目"
+                                                      button in the
+                                                      expanded multi-folder
+                                                      list — same reason
+                                                      as the sidebar
+                                                      trailing edit icon
+                                                      above (ProjectEdit_OnClick
+                                                      is gone). The user
+                                                      gets rename /
+                                                      delete via the
+                                                      ··· menu or the
+                                                      right-click context
+                                                      flyout. Inline
+                                                      project rename is
+                                                      still future work
+                                                      — no fake affordance.
+                                                    -->
+                                                    <!--
+                                                      Wave 3 (plan §3.2): multi-folder list.
+                                                      Lists every folder in the workspace with
+                                                      a "主" badge on the primary and a
+                                                      "设为主" button on the rest. Plus an
+                                                      "添加目录" button that opens the same
+                                                      picker as the project-add flow.
+                                                    -->
+                                                    <Border Classes="section-divider" Margin="0,4,0,2"
+                                                            IsVisible="{Binding IsMultiFolder}"/>
+                                                    <StackPanel Spacing="2" IsVisible="{Binding IsMultiFolder}">
+                                                        <TextBlock Text="目录" Classes="muted" FontSize="10" Margin="2,0,0,2"/>
+                                                        <ItemsControl ItemsSource="{Binding Folders}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:ProjectFolderItemViewModel">
+                                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="4" Margin="0,1">
+                                                                        <TextBlock Grid.Column="0"
+                                                                                   Text="●"
+                                                                                   FontSize="10"
+                                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                                   VerticalAlignment="Center"
+                                                                                   IsVisible="{Binding IsPrimary}"/>
+                                                                        <TextBlock Grid.Column="1"
+                                                                                   Text="{Binding Path}"
+                                                                                   Classes="muted"
+                                                                                   FontFamily="{StaticResource FontMono}"
+                                                                                   FontSize="10"
+                                                                                   TextTrimming="CharacterEllipsis"
+                                                                                   MaxLines="1"
+                                                                                   VerticalAlignment="Center"
+                                                                                   ToolTip.Tip="{Binding Path}"/>
+                                                                        <Button Grid.Column="2"
+                                                                                Classes="chrome-button"
+                                                                                Padding="4,1"
+                                                                                Click="SetPrimaryFolder_OnClick"
+                                                                                Tag="{Binding Id}"
+                                                                                IsVisible="{Binding !IsPrimary}"
+                                                                                ToolTip.Tip="设为主目录">
+                                                                            <TextBlock Text="设为主" FontSize="10" FontFamily="{StaticResource FontSans}"/>
+                                                                        </Button>
+                                                                    </Grid>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Border>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <!-- Coding Agent 的主导航是任务历史,不是 IDE 文件浏览器。
+                                     文件输入走 @file，修改结果走 Git diff。 -->
+
+                                <!--
+                                  1.0.1: "最近" section. Now
+                                  mirrors
+                                  ConversationList.Conversations
+                                  (same 8-row UpdatedAt-desc
+                                  projection the "对话"
+                                  section shows) and clicking
+                                  a row routes through
+                                  SelectedConversationCard so
+                                  the activity feed + selected
+                                  styling + status message all
+                                  land. The XAML tag carries
+                                  the full RecentItemViewModel
+                                  (Title + ConversationId) so
+                                  RecentItem_OnClick can look
+                                  up the live card by id.
+                                -->
+                                <TextBlock Text="最近" Classes="section-title" Margin="4,16,0,6"/>
+                                <StackPanel Spacing="2">
+                                    <ItemsControl ItemsSource="{Binding RecentItems}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:RecentItemViewModel">
+                                                <Button Classes="sidebar-row"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Stretch"
+                                                        Click="RecentItem_OnClick"
+                                                        Tag="{Binding}">
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Title}"
+                                                                   FontFamily="{StaticResource FontSans}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxLines="1"
+                                                                   VerticalAlignment="Center"/>
+                                                        <!--
+                                                          1.0.1: muted
+                                                          sub-text
+                                                          showing
+                                                          UpdatedAtDisplay
+                                                          (M月d日
+                                                          HH:mm) so
+                                                          two
+                                                          same-titled
+                                                          conversations
+                                                          are
+                                                          distinguishable
+                                                          and a stale
+                                                          "8月1日"
+                                                          entry
+                                                          doesn't
+                                                          masquerade
+                                                          as fresh
+                                                          alongside
+                                                          a "今天"
+                                                          entry.
+                                                        -->
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding UpdatedAtDisplay}"
+                                                                   Classes="muted"
+                                                                   FontSize="10"
+                                                                   FontFamily="{StaticResource FontMono}"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!--
+                                  Wave 3 (plan §3.1): Standalone section.
+                                  Sessions that don't belong to any project
+                                  (general Q&A, scripting help, "查资料"
+                                  style tasks). Shown above the project-
+                                  scoped "对话" section so the user sees the
+                                  "global" chat history first, and the
+                                  project context is the second-order scope.
+                                -->
+                                <Grid Margin="4,16,0,4" ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0" Text="Standalone" Classes="section-title" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1"
+                                            Classes="chrome-button"
+                                            Padding="4,1"
+                                            Click="NewStandaloneInline_OnClick"
+                                            ToolTip.Tip="新建 Standalone 对话 (⌘N)">
+                                        <TextBlock Text="+" FontSize="14" FontWeight="SemiBold" FontFamily="{StaticResource FontMono}"/>
+                                    </Button>
+                                </Grid>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Text="(还没有 Standalone 对话)"
+                                               Classes="muted"
+                                               FontSize="12"
+                                               Margin="4,0,0,4"
+                                               IsVisible="{Binding StandaloneConversations.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+                                    <ItemsControl ItemsSource="{Binding StandaloneConversations}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:ConversationCardViewModel">
+                                                <Button Classes="sidebar-row"
+                                                        Tag="{Binding Id}"
+                                                        Click="StandaloneConversation_OnClick"
+                                                        Classes.selected="{Binding IsSelected}"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Stretch">
+                                                    <!--
+                                                      1.0.1: Standalone row
+                                                      mirrors the
+                                                      project-scoped
+                                                      conversation
+                                                      card's
+                                                      title + muted
+                                                      timestamp
+                                                      layout. The
+                                                      Standalone
+                                                      section
+                                                      historically
+                                                      showed title
+                                                      only, which
+                                                      left same-titled
+                                                      "查资料"
+                                                      conversations
+                                                      indistinguishable
+                                                      in a 6-row
+                                                      list. Now the
+                                                      two card
+                                                      surfaces read
+                                                      the same.
+                                                    -->
+                                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                        <Panel Grid.Column="0" HorizontalAlignment="Stretch">
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       FontFamily="{StaticResource FontSans}"
+                                                                       FontSize="13"
+                                                                       Foreground="{DynamicResource Text2Brush}"
+                                                                       TextTrimming="CharacterEllipsis"
+                                                                       MaxLines="1"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBox Text="{Binding Title, Mode=TwoWay}"
+                                                                     FontFamily="{StaticResource FontSans}"
+                                                                     FontSize="13"
+                                                                     IsVisible="False"
+                                                                     KeyDown="StandaloneRename_OnKeyDown"
+                                                                     LostFocus="StandaloneRename_OnLostFocus"
+                                                                     Padding="4,2"/>
+                                                        </Panel>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Detail}"
+                                                                   Classes="muted"
+                                                                   FontSize="10"
+                                                                   FontFamily="{StaticResource FontMono}"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <TextBlock Text="对话" Classes="section-title" Margin="4,16,0,6"/>
+                                <StackPanel Spacing="2">
+                                <TextBlock Text="(还没有对话)"
+                                           Classes="muted"
+                                           FontSize="12"
+                                           Margin="4,0,0,4"
+                                           IsVisible="{Binding ConversationList.Conversations.Count, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=0}"/>
+                                <ItemsControl ItemsSource="{Binding ConversationList.Conversations}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:ConversationCardViewModel">
+                                            <Button Classes="sidebar-row"
+                                                    Tag="{Binding Id}"
+                                                    Click="ConversationButton_OnClick"
+                                                    Classes.selected="{Binding IsSelected}"
+                                                    ToolTip.Tip="{Binding Title}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
+                                                <!--
+                                                  Inline rename: TextBlock shows by default, TextBox takes
+                                                  over when IsRenaming flips. The TextBox is the same
+                                                  parent slot, so the row's height stays stable.
+                                                -->
+                                                <!--
+                                                  1.0.1: timestamp
+                                                  sub-text on the
+                                                  conversation
+                                                  card row. The
+                                                  Detail field
+                                                  was already
+                                                  populated by
+                                                  ConversationListViewModel.
+                                                  Refresh
+                                                  ("M月d日 HH:mm")
+                                                  but never bound
+                                                  — a daily-driver
+                                                  user with 5
+                                                  same-titled
+                                                  conversations
+                                                  could not tell
+                                                  them apart, and
+                                                  a stale "8月1日"
+                                                  entry masqueraded
+                                                  as fresh next to
+                                                  a "今天" entry.
+                                                  Matches the 最近
+                                                  section's two-
+                                                  column layout
+                                                  (title + muted
+                                                  monospace time)
+                                                  so the two
+                                                  surfaces read
+                                                  the same.
+                                                -->
+                                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                                    <Panel Grid.Column="0" HorizontalAlignment="Stretch">
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   FontFamily="{StaticResource FontSans}"
+                                                                   FontSize="13"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxLines="1"
+                                                                   IsVisible="{Binding !IsRenaming}"/>
+                                                        <TextBox Text="{Binding EditingTitle, Mode=TwoWay}"
+                                                                 FontFamily="{StaticResource FontSans}"
+                                                                 FontSize="13"
+                                                                 IsVisible="{Binding IsRenaming}"
+                                                                 behaviors:FocusOnLoadBehavior.IsEnabled="True"
+                                                                 KeyDown="ConversationRename_OnKeyDown"
+                                                                 LostFocus="ConversationRename_OnLostFocus"
+                                                                 Padding="4,2"/>
+                                                    </Panel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{Binding Detail}"
+                                                               Classes="muted"
+                                                               FontSize="10"
+                                                               FontFamily="{StaticResource FontMono}"
+                                                               VerticalAlignment="Center"
+                                                               IsVisible="{Binding !IsRenaming}"/>
+                                                </Grid>
+                                                <Button.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="重命名"
+                                                                  Command="{Binding StartRenameCommand}"/>
+                                                        <MenuItem Header="导出 Markdown"
+                                                                  Click="ExportConversationMenuItem_OnClick"
+                                                                  Tag="{Binding Id}"/>
+                                                        <Separator/>
+                                                        <MenuItem Header="删除对话"
+                                                                  Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ConversationList.RemoveConversationCommand}"
+                                                                  CommandParameter="{Binding Id}"/>
+                                                    </MenuFlyout>
+                                                </Button.ContextFlyout>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                        <!-- Codex parity: bottom-of-sidebar user pill.
+                             AIChat is a local-only tool (no user / plan
+                             concept), so we surface "AIChat · 本地版" —
+                             the same visual mass as Codex's user card so
+                             the steady-state layout is balanced. Wave 9
+                             can wire this to a "device / sync" menu. -->
+                        <Border Grid.Row="1"
+                                Classes="section-divider"
+                                Margin="0,2,0,0"/>
+                        <StackPanel Grid.Row="1"
+                                    Orientation="Horizontal"
+                                    Spacing="8"
+                                    Margin="0,8,0,4"
+                                    VerticalAlignment="Center">
+                            <Border Width="22" Height="22"
+                                    CornerRadius="11"
+                                    Background="{DynamicResource AccentSoftBrush}">
+                                <TextBlock Text="A"
+                                           FontWeight="SemiBold"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <StackPanel Orientation="Vertical" Spacing="0" VerticalAlignment="Center">
+                                <TextBlock Text="AIChat"
+                                           FontFamily="{StaticResource FontSans}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"/>
+                                <TextBlock Text="本地版"
+                                           FontFamily="{StaticResource FontSans}"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MutedBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    </Border>
+
+                    <!-- ========== Main column ========== -->
+                    <Grid Grid.Column="1">
+
+                        <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="{StaticResource Space3}">
+
+                            <!-- Slim page header: just project breadcrumb + readiness pill. No hero.
+                                 Hero lives in the empty state so the conversation starts at the top.
+                                 The breadcrumb's tooltip surfaces ProjectHealth (whether
+                                 AGENTS.md exists, how many verification commands the project
+                                 carries, etc.) — visible on hover so the steady state stays
+                                 quiet but the user can verify "is this project ready?" without
+                                 dropping to a terminal. -->
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0"
+                                  IsVisible="{Binding AppStatus.HasProject}">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                                            ToolTip.Tip="{Binding Sidebar.ProjectHealth}">
+                                    <Path Data="M4 4 H20 V20 H4 Z M4 9 H20"
+                                          Stroke="{DynamicResource MutedBrush}"
+                                          StrokeThickness="1.4" StrokeJoin="Round"
+                                          Width="12" Height="12" Stretch="Uniform"
+                                          VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Sidebar.SelectedProjectName}" Classes="muted" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <Border Classes="badge success" IsVisible="{Binding AppStatus.IsReady}">
+                                        <TextBlock Text="可运行" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBadgeFgBrush}"/>
+                                    </Border>
+                                    <Border Classes="badge warning" IsVisible="{Binding AppStatus.NeedsConfiguration}">
+                                        <TextBlock Text="需要密钥" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource WarningBadgeFgBrush}"/>
+                                    </Border>
+                                    <!--
+                                      Persistent indicator for the two user-controlled
+                                      toggles (read-only, auto-verify). The settings
+                                      modal hides these CheckBoxes inside a long
+                                      form, so the steady-state UI needs to surface
+                                      the active state here. Mirrors the git-status
+                                      pattern of small "is X" pills.
+                                    -->
+                                    <Border Classes="badge" IsVisible="{Binding NoWriteMode}"
+                                            ToolTip.Tip="只读模式已开启 — 写入类工具会被自动拒绝 (⌘⇧R 切换)">
+                                        <TextBlock Text="只读" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MutedBrush}"/>
+                                    </Border>
+                                    <Border Classes="badge" IsVisible="{Binding Settings.AutoVerify}"
+                                            ToolTip.Tip="修改完成后自动运行项目验证命令 (⌘⇧V 切换)">
+                                        <TextBlock Text="自动验证" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AccentFgBrush}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Conversation: empty state OR scrollable bubbles -->
+                            <Border Grid.Row="1" Classes="panel" Padding="0">
+                                <Grid>
+                                    <Panel>
+                                        <!-- Real conversation: bubbles, centered, max-width 720. AI = transparent + hairline.
+                                             A floating "↓ N 条新消息" pill anchors to the bottom-right; it only shows
+                                             when new activity has arrived while the user is scrolled up. -->
+                                        <Panel IsVisible="{Binding ActivityFeed.HasConversation}">
+                                        <!--
+                                          2026-08-05: "↑ 顶部" button. The
+                                          inverse of the "↓ N 条新消息"
+                                          pill at the bottom — visible
+                                          whenever the user has scrolled
+                                          away from the very top of a
+                                          long conversation. Anchored to
+                                          the top-right of the panel so
+                                          it doesn't fight with the
+                                          user-bubble's right alignment.
+                                          Click scrolls back to the
+                                          beginning in one frame;
+                                          MessageScroll.IsScrolledFromTop
+                                          is set back to false on click
+                                          eagerly so the very next
+                                          wheel-up event doesn't re-show
+                                          the button before the
+                                          ScrollChanged listener has a
+                                          chance to clear it.
+                                        -->
+                                        <Button Classes="scroll-to-top-pill"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Margin="0,8,14,0"
+                                                IsVisible="{Binding MessageScroll.CanScrollToTop}"
+                                                Click="ScrollToTop_OnClick"
+                                                ToolTip.Tip="跳到对话开头">
+                                            <TextBlock Text="↑ 顶部" FontSize="11" FontFamily="{StaticResource FontSans}"/>
+                                        </Button>
+                                        <ScrollViewer x:Name="ConversationScroll" Padding="20,12">
+                                            <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
+                                                <!--
+                                                  Virtualize the conversation feed so long
+                                                  runs (1000+ bubbles) only realise the
+                                                  visible windows. Plain StackPanel
+                                                  instantiates every bubble and tanks
+                                                  scroll perf + memory once the user has
+                                                  been chatting for a while. The
+                                                  ScrollViewer's ScrollChanged /
+                                                  ScrollToEnd APIs used by
+                                                  MainWindow.xaml.cs work the same way
+                                                  under the virtualizing panel.
+
+                                                  Avalonia 12's VirtualizingStackPanel
+                                                  recycles containers by default; there
+                                                  is no ItemsControl.VirtualizationMode
+                                                  setter to toggle (removed when the
+                                                  IDataTemplate virtualisation work landed).
+                                                -->
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <VirtualizingStackPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ActivityItemViewModel">
+                                                        <Grid Classes="bubble-enter" Margin="0,0,0,12">
+                                                            <!-- AI bubble: a single small dot on the left, document-section card.
+                                                                 v1.1 polish: dropped the 3-dot "constellation" mark that read
+                                                                 too much like an AI-startup brand; a single filled dot in the
+                                                                 accent tone reads as a person-typed bullet, less corporate. -->
+                                                            <Grid IsVisible="{Binding IsAssistantBubble}"
+                                                                  HorizontalAlignment="Left"
+                                                                  MaxWidth="720"
+                                                                  ColumnDefinitions="Auto,*"
+                                                                  ColumnSpacing="10">
+                                                                <Border Grid.Column="0" Width="28" Height="28" CornerRadius="14" Background="{DynamicResource SurfaceSunkenBrush}" BorderBrush="{DynamicResource LineSoftBrush}" BorderThickness="1" VerticalAlignment="Top">
+                                                                    <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <StackPanel Grid.Column="1" Spacing="4">
+                                                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                                                                        <TextBlock Grid.Column="0" Text="{Binding Title}" Foreground="{DynamicResource Text2Brush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                                                                        <!--
+                                                                          2026-08-05: time +
+                                                                          status chip
+                                                                          (e.g. "10:23 ·
+                                                                          完成"). The
+                                                                          time is the
+                                                                          bubble's
+                                                                          construction
+                                                                          time (see
+                                                                          ActivityItemViewModel
+                                                                          ctor), so
+                                                                          scrolling
+                                                                          back to old
+                                                                          turns keeps
+                                                                          the original
+                                                                          stamp
+                                                                          regardless of
+                                                                          when the user
+                                                                          is reading.
+                                                                          Format
+                                                                          "HH:mm" is
+                                                                          5 chars so
+                                                                          the column
+                                                                          doesn't
+                                                                          jitter
+                                                                          between
+                                                                          single/double
+                                                                          digit hours.
+                                                                          Status keeps
+                                                                          the same
+                                                                          Classes.failed
+                                                                          / .stopped
+                                                                          styling for
+                                                                          the
+                                                                          terminal
+                                                                          state
+                                                                          colouring.
+                                                                        -->
+                                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                            <TextBlock Text="{Binding TimeDisplay}" Classes="muted" FontSize="11" FontFamily="{StaticResource FontMono}"/>
+                                                                            <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                            <TextBlock Text="{Binding Status}" Classes="muted" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}" FontSize="11"/>
+                                                                        </StackPanel>
+                                                                        <!--
+                                                                          1.0.1: per-AI-bubble 重新生成
+                                                                          button. Re-sends the same
+                                                                          user prompt and appends
+                                                                          a new AI bubble below
+                                                                          (the old one stays as
+                                                                          history — the user can
+                                                                          compare takes).
+                                                                          Different from the
+                                                                          composer-level ⌘R retry:
+                                                                          that one only fires for
+                                                                          failed / stopped /
+                                                                          budget-paused runs
+                                                                          (CanRetry gate), this
+                                                                          one always works as
+                                                                          long as a prior prompt
+                                                                          exists. The CanRegenerate
+                                                                          gate on AgentHost
+                                                                          (non-empty last prompt,
+                                                                          not currently running) is
+                                                                          what disables the
+                                                                          button for the in-flight
+                                                                          thinking state. The
+                                                                          daily-driver flow this
+                                                                          targets: "the model
+                                                                          gave a workable answer
+                                                                          but I'd like a different
+                                                                          take" — without this
+                                                                          button the user has to
+                                                                          scroll to the composer,
+                                                                          re-type or re-paste the
+                                                                          prompt, and lose any
+                                                                          inline images.
+                                                                        -->
+                                                                        <Button Grid.Column="2"
+                                                                                Classes="chrome-button"
+                                                                                Padding="6,1"
+                                                                                IsVisible="{Binding IsAssistantBubble}"
+                                                                                IsEnabled="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AgentHost.CanRegenerate}"
+                                                                                Click="AiBubbleRegenerate_OnClick"
+                                                                                ToolTip.Tip="用相同 prompt 重新生成 (会追加一条新 AI 消息)">
+                                                                            <TextBlock Text="重新生成" FontSize="10"/>
+                                                                        </Button>
+                                                                        <!--
+                                                                          1.0.1: per-AI-bubble 复制
+                                                                          button. Hidden while the
+                                                                          run is still streaming
+                                                                          (CanCopyAssistantBubble
+                                                                          flips false on
+                                                                          IsThinking) and for
+                                                                          empty / system bubbles.
+                                                                          The button is always
+                                                                          visible (not hover-only)
+                                                                          because daily drivers
+                                                                          scroll on touchpads where
+                                                                          hover affordances tend
+                                                                          to flicker or never
+                                                                          appear — an
+                                                                          always-on control is the
+                                                                          simplest way to guarantee
+                                                                          the affordance surfaces.
+                                                                          Tag carries the full
+                                                                          Detail so the handler
+                                                                          does not need to read
+                                                                          the row's DataContext.
+                                                                        -->
+                                                                        <Button Grid.Column="3"
+                                                                                Classes="chrome-button"
+                                                                                Padding="6,1"
+                                                                                IsVisible="{Binding CanCopyAssistantBubble}"
+                                                                                Click="AiBubbleCopy_OnClick"
+                                                                                Tag="{Binding Detail}"
+                                                                                ToolTip.Tip="复制 AI 消息全文到剪贴板">
+                                                                            <TextBlock Text="复制" FontSize="10"/>
+                                                                        </Button>
+                                                                    </Grid>
+                                                                    <Border Classes="bubble-ai" Classes.failed="{Binding IsFailed}" Classes.stopped="{Binding IsStopped}">
+                                                                        <StackPanel Spacing="8">
+                                                                            <!--
+                                                                              2026-08-05: thinking + tool-chain
+                                                                              consolidation. The previous
+                                                                              "MarkdownTextBlock + Detail only"
+                                                                              layout couldn't render ``
+                                                                              blocks (they leaked into the
+                                                                              answer as raw XML-ish text) and
+                                                                              the tool events all landed as
+                                                                              separate centered system bubbles
+                                                                              that pushed the real
+                                                                              conversation off-screen on
+                                                                              long agent runs.
+
+                                                                              New layout (top to bottom):
+                                                                              1. "💭 思考过程" collapsible
+                                                                                 section. Visible when
+                                                                                 HasThinking is true; hidden
+                                                                                 when the model didn't
+                                                                                 emit `` blocks
+                                                                                 (M2.7 default, M3
+                                                                                 thinking=disabled).
+                                                                              2. The markdown answer
+                                                                                 (Detail, post-parse —
+                                                                                 think tags stripped).
+                                                                              3. "工具调用 (N)" collapsible
+                                                                                 section. Visible when
+                                                                                 HasToolCalls is true;
+                                                                                 collapsed by default to
+                                                                                 avoid stealing vertical
+                                                                                 space from the answer
+                                                                                 when the chain is short.
+                                                                              4. The 3-dot "thinking"
+                                                                                 placeholder (no content
+                                                                                 yet) for the very
+                                                                                 first delta.
+                                                                            -->
+                                                                            <Expander IsVisible="{Binding HasThinking}"
+                                                                                      Classes="think-block"
+                                                                                      HorizontalAlignment="Stretch"
+                                                                                      HorizontalContentAlignment="Stretch">
+                                                                                <Expander.Header>
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                        <TextBlock Text="💭" FontSize="11"/>
+                                                                                        <TextBlock Text="思考过程" Classes="muted" FontSize="11" FontWeight="SemiBold"/>
+                                                                                        <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                                        <TextBlock Text="{Binding ThinkingSummary}"
+                                                                                                   Classes="muted" FontSize="10"
+                                                                                                   TextTrimming="CharacterEllipsis"/>
+                                                                                    </StackPanel>
+                                                                                </Expander.Header>
+                                                                                <controls:MarkdownTextBlock Markdown="{Binding Thinking}"
+                                                                                                            Foreground="{DynamicResource MutedBrush}"
+                                                                                                            FontSize="12"
+                                                                                                            TextWrapping="Wrap"
+                                                                                                            FontFamily="{StaticResource FontMono}"/>
+                                                                            </Expander>
+
+                                                                            <controls:MarkdownTextBlock IsVisible="{Binding !IsThinking}"
+                                                                                                        Markdown="{Binding Detail}"
+                                                                                                        Foreground="{DynamicResource TextBrush}"
+                                                                                                        FontSize="14"
+                                                                                                        TextWrapping="Wrap"/>
+
+                                                                            <StackPanel IsVisible="{Binding IsThinking}" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Left">
+                                                                                <Ellipse Classes="thinking-dot" Width="6" Height="6"/>
+                                                                                <Ellipse Classes="thinking-dot delay-1" Width="6" Height="6"/>
+                                                                                <Ellipse Classes="thinking-dot delay-2" Width="6" Height="6"/>
+                                                                            </StackPanel>
+
+                                                                            <Expander IsVisible="{Binding HasToolCalls}"
+                                                                                      Classes="tool-chain"
+                                                                                      HorizontalAlignment="Stretch"
+                                                                                      HorizontalContentAlignment="Stretch">
+                                                                                <Expander.Header>
+                                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                                        <TextBlock Text="🔧" FontSize="11"/>
+                                                                                        <TextBlock Text="工具调用" Classes="muted" FontSize="11" FontWeight="SemiBold"/>
+                                                                                        <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                                        <TextBlock Text="{Binding ToolCalls.Count, StringFormat='{}{0} 次'}"
+                                                                                                   Classes="muted" FontSize="11"/>
+                                                                                    </StackPanel>
+                                                                                </Expander.Header>
+                                                                                <ItemsControl ItemsSource="{Binding ToolCalls}">
+                                                                                    <ItemsControl.ItemTemplate>
+                                                                                        <DataTemplate x:DataType="vm:ToolCallRecord">
+                                                                                            <Grid ColumnDefinitions="*,Auto" Margin="0,2" ColumnSpacing="8">
+                                                                                                <StackPanel Grid.Column="0">
+                                                                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"/>
+                                                                                                    <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="10"/>
+                                                                                                    <TextBlock Text="{Binding ErrorMessage}" Classes="muted" FontSize="10"
+                                                                                                               IsVisible="{Binding IsError}"
+                                                                                                               Foreground="{DynamicResource ErrorBorderBrush}"
+                                                                                                               TextWrapping="Wrap"/>
+                                                                                                </StackPanel>
+                                                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                                                                    <TextBlock Text="{Binding Status}" Classes="muted" FontSize="10"/>
+                                                                                                    <TextBlock Text="·" Classes="muted" FontSize="10"/>
+                                                                                                    <TextBlock Text="{Binding DurationDisplay}" Classes="muted" FontSize="10"/>
+                                                                                                </StackPanel>
+                                                                                            </Grid>
+                                                                                        </DataTemplate>
+                                                                                    </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
+                                                                            </Expander>
+
+                                                                            <!--
+                                                                              2026-08-05: per-run
+                                                                              summary footer. Pinned
+                                                                              to the AI bubble
+                                                                              instead of a separate
+                                                                              centred system
+                                                                              bubble — keeps the
+                                                                              user / AI rhythm
+                                                                              strict, and the
+                                                                              stats are anchored
+                                                                              to the response that
+                                                                              produced them. The
+                                                                              separator line + muted
+                                                                              font size + hairline
+                                                                              border style make it
+                                                                              read as a footnote,
+                                                                              not part of the
+                                                                              answer body.
+                                                                            -->
+                                                                            <Border Classes="run-summary"
+                                                                                    IsVisible="{Binding HasRunSummary}"
+                                                                                    Margin="0,2,0,0"
+                                                                                    Padding="0,6,0,0">
+                                                                                <TextBlock Text="{Binding RunSummary}"
+                                                                                           Classes="muted"
+                                                                                           FontSize="10"
+                                                                                           TextWrapping="Wrap"
+                                                                                           LineHeight="14"/>
+                                                                            </Border>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </StackPanel>
+                                                            </Grid>
+
+                                                            <!-- User bubble: right-aligned, soft accent card with dark text -->
+                                                            <StackPanel IsVisible="{Binding IsUserBubble}"
+                                                                        HorizontalAlignment="Right"
+                                                                        MaxWidth="720"
+                                                                        Spacing="4">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                                                    <TextBlock Text="{Binding TimeDisplay}" Classes="muted" FontSize="11" FontFamily="{StaticResource FontMono}"/>
+                                                                    <TextBlock Text="·" Classes="muted" FontSize="11"/>
+                                                                    <TextBlock Text="{Binding Status}" Classes="muted" FontSize="11"/>
+                                                                </StackPanel>
+                                                                <!-- User bubble is a Button (not a Border) so the
+                                                                     user can click it to copy the message back into
+                                                                     the input for editing + resending. The
+                                                                     bubble-user class still drives the visual so the
+                                                                     affordance looks identical to the read-only
+                                                                     variant. -->
+                                                                <Button Classes="bubble-user"
+                                                                        MaxWidth="720"
+                                                                        Tag="{Binding Detail}"
+                                                                        Click="EditUserBubble_OnClick"
+                                                                        ToolTip.Tip="点击编辑">
+                                                                    <controls:MarkdownTextBlock Markdown="{Binding Detail}"
+                                                                                                Foreground="{DynamicResource TextBrush}"
+                                                                                                FontSize="14"
+                                                                                                TextWrapping="Wrap"/>
+                                                                </Button>
+                                                            </StackPanel>
+
+                                                            <!-- System / tool message: centered, no bubble -->
+                                                            <StackPanel IsVisible="{Binding IsSystemBubble}"
+                                                                        HorizontalAlignment="Center"
+                                                                        MaxWidth="640"
+                                                                        Spacing="2">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                                                    <TextBlock Text="{Binding TimeDisplay}" Classes="muted" FontSize="10" FontFamily="{StaticResource FontMono}"/>
+                                                                    <TextBlock Text="·" Classes="muted" FontSize="10"/>
+                                                                    <TextBlock Text="{Binding Title}" Foreground="{DynamicResource MutedBrush}" FontWeight="SemiBold" FontSize="11"/>
+                                                                </StackPanel>
+                                                                <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+
+                                        <!--
+                                          "↓ N 条新消息" pill. Floats over the bottom-right of the
+                                          conversation panel; visible only when the user is scrolled
+                                          up and new activity has landed. Clicking it scrolls
+                                          to the bottom and resets the counter (the click handler
+                                          does both — the ScrollChanged listener would clear it too,
+                                          but doing it on click avoids one frame of "you have
+                                          unseen messages" after the user opted in).
+                                        -->
+                                        <Button Classes="new-message-pill"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Bottom"
+                                                Margin="0,0,0,14"
+                                                IsVisible="{Binding HasUnseenMessages}"
+                                                Click="NewMessagePill_OnClick"
+                                                ToolTip.Tip="跳到底部查看新消息">
+                                            <TextBlock Text="{Binding UnseenMessageLabel}"
+                                                       FontFamily="{StaticResource FontSans}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"/>
+                                        </Button>
+                                    </Panel>
+
+                                    <!-- Empty state (hero + first-run CTAs + 4 quick-action
+                                         cards) extracted to EmptyStateView so this file
+                                         stays focused on the conversation feed. The user
+                                         control exposes Greeting / SubGreeting /
+                                         HasProject / OpenSettingsCommand as styled
+                                         properties and raises AddProjectRequested /
+                                         QuickActionRequested events that bubble back to
+                                         the same handlers ⌘O / palette / direct click
+                                         have always used. -->
+                                    <vcontrols:EmptyStateView
+                                        IsVisible="{Binding !ActivityFeed.HasConversation}"
+                                        Greeting="{Binding AppStatus.Greeting}"
+                                        SubGreeting="{Binding AppStatus.SubGreeting}"
+                                        HasProject="{Binding AppStatus.HasProject}"
+                                        OpenSettingsCommand="{Binding OpenSettingsCommand}"
+                                        AddProjectRequested="AddProject_OnClick"
+                                        QuickActionRequested="EmptyStateCard_OnClick"/>
+                                </Panel>
+                                </Grid>
+                            </Border>
+
+                            <!--
+                              Floating composer (v1.1 revert to 5c1eace look).
+                              Surface + RadiusLg + Elevation3 shadow, no 1px
+                              border. The input "lifts" off the page. Focus
+                              indicator = shadow deepens one step (no blue
+                              ring inside the cream block).
+
+                              5*,40*,5* = 10% / 80% / 10% of the main column
+                              width, so the composer always fills 80% of the
+                              available chat area regardless of window size.
+                            -->
+                            <!--
+                              Plan panel: shows the current agent plan
+                              (the task list update_plan writes). Sits
+                              between the conversation and the composer
+                              so it's always visible while the agent is
+                              working. IsVisible collapses the row when
+                              the plan is empty (no plan or all items
+                              completed + cleared).
+                            -->
+                            <Border Grid.Row="2"
+                                    Classes="panel"
+                                    IsVisible="{Binding AgentHost.HasPlan}"
+                                    Padding="{StaticResource Padding3}">
+                                <!--
+                                  1.0.1: cap the plan
+                                  panel at 240 DIPs
+                                  with vertical scroll.
+                                  Without the cap, a
+                                  10+ item plan pushes
+                                  the composer (and
+                                  the plan itself) off
+                                  the bottom of the
+                                  window — a daily-
+                                  driver paper cut on
+                                  long refactor /
+                                  migration runs. 240
+                                  DIPs is the same
+                                  height the Sources
+                                  panel uses for its
+                                  per-row detail —
+                                  long enough for ~4
+                                  expanded rows, short
+                                  enough to keep the
+                                  composer on screen
+                                  during long runs.
+                                -->
+                                <ScrollViewer MaxHeight="240"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Spacing="4">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                                        <TextBlock Grid.Column="0" Text="计划" Classes="section-title"/>
+                                        <!--
+                                          1.0.1: 全部展开 /
+                                          全部折叠 buttons. The
+                                          agent emits a fresh
+                                          plan on every step
+                                          (snapshot-replace),
+                                          and a long plan (10+
+                                          items, common for
+                                          refactor / migration
+                                          runs) is painful to
+                                          expand one row at a
+                                          time. The two header
+                                          buttons flip every
+                                          row's IsExpanded in
+                                          one shot via
+                                          AgentHostViewModel
+                                          .ExpandAllPlanItems /
+                                          .CollapseAllPlanItems.
+                                          Hidden when there are
+                                          no notes — most plans
+                                          have at most a few
+                                          notes-bearing steps
+                                          and the buttons would
+                                          be visual noise.
+                                        -->
+                                        <Button Grid.Column="1"
+                                                Classes="chrome-button"
+                                                Padding="4,0"
+                                                Click="ExpandAllPlanItems_OnClick"
+                                                ToolTip.Tip="展开所有有 notes 的步骤">
+                                            <TextBlock Text="全部展开" FontSize="10" FontFamily="{StaticResource FontSans}"/>
+                                        </Button>
+                                        <Button Grid.Column="2"
+                                                Classes="chrome-button"
+                                                Padding="4,0"
+                                                Click="CollapseAllPlanItems_OnClick"
+                                                ToolTip.Tip="折叠所有步骤">
+                                            <TextBlock Text="全部折叠" FontSize="10" FontFamily="{StaticResource FontSans}"/>
+                                        </Button>
+                                        <TextBlock Grid.Column="3"
+                                                   Text="{Binding AgentHost.PlanProgressText}"
+                                                   Classes="muted"
+                                                   FontSize="11"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                    <ItemsControl ItemsSource="{Binding AgentHost.PlanItems}">
+                                        <!--
+                                          Virtualize the plan item list. Long
+                                          agent runs can produce 50+ plan
+                                          items, and the panel is open for
+                                          the whole duration of the run.
+                                          Without virtualization the agent
+                                          text additions + plan clears cause
+                                          a visible stutter on every step.
+                                        -->
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <VirtualizingStackPanel/>
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:PlanItemViewModel">
+                                                <Grid RowDefinitions="Auto,Auto" Margin="0,2">
+                                                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Glyph}"
+                                                                   FontFamily="{StaticResource FontMono}"
+                                                                   FontSize="13"
+                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                   VerticalAlignment="Center"
+                                                                   MinWidth="14"/>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Title}"
+                                                                   Classes="body"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   TextWrapping="Wrap"
+                                                                   VerticalAlignment="Center"
+                                                                   IsEnabled="{Binding HasNotes}"
+                                                                   PointerPressed="PlanItemHeader_OnPointerPressed"/>
+                                                    </Grid>
+                                                    <!--
+                                                      1.0.1: detail panel
+                                                      only renders when
+                                                      BOTH IsExpanded
+                                                      AND HasNotes are
+                                                      true. The previous
+                                                      shape was
+                                                      IsVisible
+                                                      =IsExpanded alone,
+                                                      which (after the
+                                                      全部展开 header
+                                                      button) made
+                                                      every empty-Notes
+                                                      row expand into
+                                                      a blank bordered
+                                                      block — visual
+                                                      noise that the
+                                                      user would have
+                                                      to dismiss
+                                                      one-by-one. The
+                                                      single-row click
+                                                      path was fine
+                                                      (the title
+                                                      TextBlock is
+                                                      IsEnabled only
+                                                      when HasNotes),
+                                                      but the bulk
+                                                      path bypassed
+                                                      the per-row
+                                                      guard. Now the
+                                                      panel's
+                                                      IsVisible reads
+                                                      the AND of both
+                                                      flags.
+                                                    -->
+                                                    <Border Grid.Row="1"
+                                                            IsVisible="{Binding HasNotes}"
+                                                            Margin="22,2,0,2"
+                                                            Padding="{StaticResource Padding3}"
+                                                            Background="{DynamicResource CodeBgBrush}"
+                                                            BorderBrush="{DynamicResource LineSoftBrush}"
+                                                            BorderThickness="1"
+                                                            CornerRadius="{StaticResource RadiusSm}">
+                                                        <SelectableTextBlock Text="{Binding Notes}"
+                                                                             FontSize="11"
+                                                                             FontFamily="{StaticResource FontMono}"
+                                                                             Foreground="{DynamicResource CodeFgBrush}"
+                                                                             TextWrapping="Wrap"/>
+                                                    </Border>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!--
+                                      Sub-agent runs: the harness runs read-only
+                                      explorer sub-agents in parallel-ish batches
+                                      during a run. Each row here is one
+                                      sub-agent dispatch (start → complete)
+                                      with a template badge, the task description,
+                                      duration, and a status glyph. Lives at
+                                      the foot of the plan panel because it IS
+                                      plan execution — not its own modal.
+                                    -->
+                                    <StackPanel Spacing="4" IsVisible="{Binding AgentHost.HasSubAgentRuns}">
+                                        <Border Classes="section-divider" Margin="0,6,0,2"/>
+                                        <TextBlock Text="子 Agent" Classes="section-title"/>
+                                        <ItemsControl ItemsSource="{Binding AgentHost.SubAgentRuns}">
+                                            <!--
+                                              Virtualize the sub-agent run list.
+                                              Parallel explorer dispatches can
+                                              fan out 20+ rows in a single run;
+                                              each row carries a duration timer
+                                              that ticks once a second, so non-
+                                              virtualized rows re-templated on
+                                              every tick. With virtualization
+                                              only the visible windows pay the
+                                              re-templating cost.
+                                            -->
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <VirtualizingStackPanel/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:SubAgentRunViewModel">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,2">
+                                                        <Border Grid.Column="0"
+                                                                Classes="badge"
+                                                                Padding="6,2"
+                                                                CornerRadius="{StaticResource RadiusSm}"
+                                                                VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding TemplateDisplay}"
+                                                                       FontSize="10"
+                                                                       FontWeight="SemiBold"/>
+                                                        </Border>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Task}"
+                                                                   Classes="body"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxLines="1"
+                                                                   VerticalAlignment="Center"/>
+                                                        <!-- Status + duration flip colour based on the
+                                                             outcome (see the sub-agent-status styles
+                                                             in App.axaml). Running rows read as
+                                                             "active" in accent; completed in green;
+                                                             failed / budget / cancelled fade to the
+                                                             matching status tone. -->
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding DurationDisplay}"
+                                                                   Classes="sub-agent-status"
+                                                                   Classes.running="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AgentHost.IsRunning}"
+                                                                   Classes.completed="{Binding IsCompleted}"
+                                                                   Classes.failed="{Binding IsFailed}"
+                                                                   Classes.budget="{Binding IsBudgetExceeded}"
+                                                                   Classes.cancelled="{Binding IsCancelled}"
+                                                                   Classes.skipped="{Binding IsSkipped}"
+                                                                   FontFamily="{StaticResource FontMono}"
+                                                                   FontSize="11"
+                                                                   VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+
+                            <Grid Grid.Row="3" ColumnDefinitions="5*,40*,5*">
+                                <Border Grid.Column="1" Classes="input-floating">
+                                    <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+                                        <!-- Pending image attachments: shown above the prompt
+                                             whenever the user has pasted an image with ⌘V. Each
+                                             row is a small thumbnail with a remove X. Collapses
+                                             to zero height when empty. -->
+                                        <ItemsControl Grid.Row="0"
+                                                      ItemsSource="{Binding AgentHost.PendingAttachments.Attachments}"
+                                                      IsVisible="{Binding AgentHost.PendingAttachments.HasAttachments}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:PendingAttachmentViewModel">
+                                                    <Border Classes="pending-attachment"
+                                                            ToolTip.Tip="{Binding DisplayName}">
+                                                        <Panel>
+                                                            <!--
+                                                              Image rows show the decoded thumbnail.
+                                                              Non-image rows swap to a flat
+                                                              "file icon + display name" chip —
+                                                              keeps the strip a fixed height so
+                                                              the composer doesn't jump when the
+                                                              user drops a 2 MB PDF next to a
+                                                              200 KB screenshot.
+                                                            -->
+                                                            <Image IsVisible="{Binding IsImage}"
+                                                                   Source="{Binding Thumbnail}"
+                                                                   Width="56" Height="56"
+                                                                   Stretch="UniformToFill"/>
+                                                            <Border IsVisible="{Binding !$parent[Border].((vm:PendingAttachmentViewModel)DataContext).IsImage}"
+                                                                    Width="120" Height="56"
+                                                                    Background="{DynamicResource SurfaceSunkenBrush}"
+                                                                    BorderBrush="{DynamicResource LineSoftBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="{StaticResource RadiusSm}"
+                                                                    Padding="8,6">
+                                                                <StackPanel Orientation="Vertical"
+                                                                            Spacing="2"
+                                                                            VerticalAlignment="Center">
+                                                                    <Path Data="M6 3 H14 L18 7 V19 a1 1 0 0 1 -1 1 H6 a1 1 0 0 1 -1 -1 V4 a1 1 0 0 1 1 -1 Z M14 3 V7 H18"
+                                                                          Stroke="{DynamicResource MutedBrush}"
+                                                                          StrokeThickness="1.4"
+                                                                          StrokeLineCap="Round"
+                                                                          StrokeJoin="Round"
+                                                                          Width="16" Height="16"
+                                                                          Stretch="Uniform"
+                                                                          HorizontalAlignment="Left"/>
+                                                                    <TextBlock Text="{Binding DisplayName}"
+                                                                               FontFamily="{StaticResource FontSans}"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource TextBrush}"
+                                                                               TextTrimming="CharacterEllipsis"
+                                                                               MaxLines="1"/>
+                                                                    <TextBlock Text="{Binding SizeDisplay}"
+                                                                               Classes="muted"
+                                                                               FontSize="10"
+                                                                               FontFamily="{StaticResource FontMono}"/>
+                                                                </StackPanel>
+                                                            </Border>
+                                                            <!--
+                                                              1.0.1: size badge in the lower-right
+                                                              of the image chip. Thumbnails are
+                                                              56×56 and don't leave room for
+                                                              a second line of text, so we
+                                                              overlay a small pill with the
+                                                              file size (matches the non-image
+                                                              chip's SizeDisplay so the user
+                                                              sees the same number regardless
+                                                              of which row type they dropped).
+                                                              The wash surface + bordered
+                                                              pill reads cleanly on any
+                                                              thumbnail colour without
+                                                              fighting the underlying image.
+                                                            -->
+                                                            <Border IsVisible="{Binding IsImage}"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Bottom"
+                                                                    Margin="0,0,4,4"
+                                                                    Background="{DynamicResource OverlayWashBrush}"
+                                                                    BorderBrush="{DynamicResource LineSoftBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="{StaticResource RadiusSm}"
+                                                                    Padding="4,1">
+                                                                <TextBlock Text="{Binding SizeDisplay}"
+                                                                           FontSize="9"
+                                                                           FontFamily="{StaticResource FontMono}"
+                                                                           Foreground="{DynamicResource TextBrush}"/>
+                                                            </Border>
+                                                            <Button Classes="pending-attachment-remove"
+                                                                    Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).AgentHost.PendingAttachments.RemoveCommand}"
+                                                                    CommandParameter="{Binding}"
+                                                                    ToolTip.Tip="移除">
+                                                                <Path Data="M6 6 L18 18 M18 6 L6 18"
+                                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                                      StrokeThickness="1.6" StrokeLineCap="Round"
+                                                                      Width="10" Height="10" Stretch="Uniform"/>
+                                                            </Button>
+                                                        </Panel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <TextBox x:Name="PromptInput"
+                                                 Grid.Row="1"
+                                                 Text="{Binding AgentHost.DraftPrompt}"
+                                                 PlaceholderText="{Binding PromptPlaceholder}"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 Height="72"
+                                                 MaxHeight="200"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 Padding="4,10,4,6"
+                                                 FontFamily="{StaticResource FontSans}"
+                                                 FontSize="14"
+                                                 VerticalContentAlignment="Top"
+                                                 VerticalAlignment="Top"
+                                                 KeyDown="PromptInput_OnKeyDown"/>
+
+                                        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="0,4,0,0">
+                                            <!-- Composer toolbar (Codex parity): left "+"
+                                                 (attachments), right cluster with model chip
+                                                 / permission badge / mic / send. The 验证 /
+                                                 继续 / 始终授权 / 思考 / extended controls are
+                                                 dropped from the composer to match Codex's
+                                                 minimal steady state — they're reachable
+                                                 through the keyboard (⌘T / ⌘R) or the
+                                                 settings modal, not parked in the composer. -->
+                                            <!--
+                                              Wave 4 (plan §4): the composer "+" button
+                                              opens a real menu with file / image / source /
+                                              plugin / @file items. The XAML drives a
+                                              MenuFlyout that calls back into the
+                                              code-behind for each item (file picker,
+                                              image paste, source picker, plugin entry).
+                                              ⌘V still pastes an image directly without
+                                              the menu — that's the fast path.
+                                            -->
+                                            <Button Grid.Column="0"
+                                                    Classes="chrome-button"
+                                                    ToolTip.Tip="添加附件 / 来源 / 插件">
+                                                <TextBlock Text="+" FontSize="16" FontWeight="SemiBold" FontFamily="{StaticResource FontMono}"/>
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <MenuItem Header="添加文件…"
+                                                                  Click="AddFileAttachment_OnClick"
+                                                                  InputGesture="Ctrl+O">
+                                                            <MenuItem.Icon>
+                                                                <Path Data="M3 5 a2 2 0 0 1 2 -2 h4 l2 2 h8 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 Z"
+                                                                      Stroke="{Binding $parent[MenuItem].Foreground}"
+                                                                      StrokeThickness="1.5" StrokeLineCap="Round"
+                                                                      Width="14" Height="14" Stretch="Uniform"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Header="粘贴图片"
+                                                                  Click="AddImageAttachment_OnClick"
+                                                                  InputGesture="Ctrl+V">
+                                                            <MenuItem.Icon>
+                                                                <Path Data="M4 5 H20 V19 H4 Z M4 14 L9 9 L14 14 L17 11 L20 14"
+                                                                      Stroke="{Binding $parent[MenuItem].Foreground}"
+                                                                      StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                                                      Width="14" Height="14" Stretch="Uniform"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Header="引用文件 (&#64;file)…"
+                                                                  Click="AddAtFile_OnClick"
+                                                                  InputGesture="Ctrl+Shift+2">
+                                                            <MenuItem.Icon>
+                                                                <Path Data="M12 2 a3 3 0 0 0 -3 3 v8 a3 3 0 0 0 6 0 V5 a1 1 0 0 0 -2 0 v8 M9 13 V8 M9 8 a3 3 0 0 1 6 0"
+                                                                      Stroke="{Binding $parent[MenuItem].Foreground}"
+                                                                      StrokeThickness="1.5" StrokeLineCap="Round"
+                                                                      Width="14" Height="14" Stretch="Uniform"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <Separator/>
+                                                        <MenuItem Header="剪贴板快照"
+                                                                  Click="AddClipboardSource_OnClick"
+                                                                  ToolTip.Tip="把当前剪贴板文本捕获为数据源 (Source)">
+                                                            <MenuItem.Icon>
+                                                                <Path Data="M9 4 H15 V6 H9 Z M7 6 H17 V20 H7 Z M9 9 H15 M9 12 H15 M9 15 H13"
+                                                                      Stroke="{Binding $parent[MenuItem].Foreground}"
+                                                                      StrokeThickness="1.3" StrokeLineCap="Round"
+                                                                      Width="14" Height="14" Stretch="Uniform"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <MenuItem Header="网页搜索"
+                                                                  Click="AddWebSearchSource_OnClick"
+                                                                  ToolTip.Tip="抓取 URL 内容并保存为 web 数据源">
+                                                            <MenuItem.Icon>
+                                                                <Path Data="M12 4 a8 8 0 1 0 0 16 a8 8 0 0 0 0 -16 M4 12 H20 M12 4 a12 12 0 0 1 0 16 M12 4 a12 12 0 0 0 0 16"
+                                                                      Stroke="{Binding $parent[MenuItem].Foreground}"
+                                                                      StrokeThickness="1.3" StrokeLineCap="Round"
+                                                                      Width="14" Height="14" Stretch="Uniform"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                        <Separator/>
+                                                        <MenuItem Header="插件"
+                                                                  Click="OpenPlugins_OnClick"
+                                                                  ToolTip.Tip="打开插件管理面板">
+                                                            <MenuItem.Icon>
+                                                                <Path Data="M9 4 H15 V8 H20 V14 H15 V20 H9 V14 H4 V8 H9 Z"
+                                                                      Stroke="{Binding $parent[MenuItem].Foreground}"
+                                                                      StrokeThickness="1.3"
+                                                                      Width="14" Height="14" Stretch="Uniform"/>
+                                                            </MenuItem.Icon>
+                                                        </MenuItem>
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                            <StackPanel Grid.Column="1"
+                                                        Orientation="Horizontal"
+                                                        Spacing="6"
+                                                        VerticalAlignment="Center"
+                                                        HorizontalAlignment="Right">
+                                                <!-- Model chip (Codex parity: compact, with
+                                                     provider dot + model name). 1.0.1: the
+                                                     chip is now a Button, not a Border, so
+                                                     clicking it opens Settings — the
+                                                     power user reaches for ⌘, anyway and
+                                                     the chip is the most natural target
+                                                     when the model is wrong (e.g. a Sonnet
+                                                     cost spike that wants a Haiku switch
+                                                     for the next few prompts). The ToolTip
+                                                     says "点此切换模型" so the new
+                                                     affordance is discoverable. -->
+                                                <Button Classes="model-chip"
+                                                        MaxWidth="200"
+                                                        Command="{Binding OpenSettingsCommand}"
+                                                        ToolTip.Tip="点此切换模型 (⌘,)">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <Ellipse Width="6" Height="6" Fill="{DynamicResource AccentBrush}"/>
+                                                        <TextBlock Text="{Binding AppStatus.StatusBarModel}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource Text2Brush}"
+                                                                   FontWeight="SemiBold"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="180"
+                                                                   FontFamily="{StaticResource FontSans}"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <!-- Permission badge (kept from Sprint 0.5; it
+                                                     is the 2-toggle Codex-aligned state and the
+                                                     existing settings work). -->
+                                                <Button Classes="chrome-button"
+                                                        Classes.permission-full="{Binding FullAccessEnabled}"
+                                                        Classes.permission-readonly="{Binding !DefaultAccess}"
+                                                        Command="{Binding CyclePermissionStateCommand}"
+                                                        ToolTip.Tip="{Binding PermissionBadgeTooltip}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <Ellipse Width="6" Height="6" Classes.permission-dot-full="{Binding FullAccessEnabled}" Classes.permission-dot-readonly="{Binding !DefaultAccess}" Classes.permission-dot-default="{Binding DefaultAccess}"/>
+                                                        <TextBlock Text="{Binding PermissionBadgeText}" FontSize="12" FontWeight="SemiBold" FontFamily="{StaticResource FontSans}"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <!-- Mic (Codex parity). Push-to-talk is
+                                                     disabled — the actual STT integration
+                                                     (wave 4.5 / Wave 7) needs a model that
+                                                     supports audio input. The button stays
+                                                     visible so the user sees the parity
+                                                     surface and the ⌘⇧M shortcut lands
+                                                     here. -->
+                                                <Button Classes="chrome-button"
+                                                        Click="Mic_OnClick"
+                                                        IsEnabled="False"
+                                                        ToolTip.Tip="语音输入 (Wave 4.5 接入)">
+                                                    <Path Data="M12 4 a3 3 0 0 1 3 3 v4 a3 3 0 0 1 -6 0 V7 a3 3 0 0 1 3 -3 M6 11 a6 6 0 0 0 12 0 M12 17 v3 M9 20 h6"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.5" StrokeLineCap="Round" StrokeJoin="Round"
+                                                          Width="16" Height="16" Stretch="Uniform"/>
+                                                </Button>
+                                            </StackPanel>
+                                            <!-- Send / Stop swap: same grid cell, only one
+                                                 visible at a time. Stop is enabled while
+                                                 IsRunning so a misclick on the now-disabled
+                                                 send can't accidentally fire another run. -->
+                                            <!-- Retry: only shown when CanRetry (last run
+                                                 failed or was stopped). Sits between the
+                                                 tools and the send button so it's the obvious
+                                                 next step. -->
+                                            <Button Grid.Column="2"
+                                                    Classes="retry-button"
+                                                    Command="{Binding AgentHost.RetryLastTaskCommand}"
+                                                    IsVisible="{Binding AgentHost.CanRetry}"
+                                                    ToolTip.Tip="继续上一次任务 (⌘R)">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Path Data="M5 12 a7 7 0 1 0 1.5 -4.2 M5 4 V8 H9"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.6" StrokeLineCap="Round"
+                                                          Width="14" Height="14" Stretch="Uniform"
+                                                          VerticalAlignment="Center"/>
+                                                    <TextBlock Text="继续" FontFamily="{StaticResource FontSans}" FontSize="12" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                            <Button Grid.Column="3"
+                                                    Classes="send-button"
+                                                    Command="{Binding AgentHost.SendTaskCommand}"
+                                                    IsEnabled="{Binding !AgentHost.IsRunning}"
+                                                    IsVisible="{Binding !AgentHost.IsRunning}"
+                                                    ToolTip.Tip="发送 (⌘↵)">
+                                                <Path Data="M5 12 L19 12 M12 5 L19 12 L12 19"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round"
+                                                      Width="16" Height="16" Stretch="Uniform"/>
+                                            </Button>
+                                            <Button Grid.Column="3"
+                                                    Classes="stop-button"
+                                                    Command="{Binding AgentHost.StopTaskCommand}"
+                                                    IsVisible="{Binding AgentHost.IsRunning}"
+                                                    ToolTip.Tip="停止 (⌘.)">
+                                                <Path Data="M6 6 H18 V18 H6 Z"
+                                                      Stroke="{Binding $parent[Button].Foreground}"
+                                                      StrokeThickness="2" StrokeLineCap="Round"
+                                                      Width="16" Height="16" Stretch="Uniform"/>
+                                            </Button>
+                                            <!--
+                                              Wave 4 (plan §4): "追加要求" button.
+                                              Shown while a run is in flight; click pushes
+                                              the current draft prompt into the run as a
+                                              follow-up message. The real queue / merge
+                                              logic lands in a follow-up slice (the
+                                              actual merge into AgentRunner's step loop
+                                              is its own design problem — for now the
+                                              click lands a follow-up ActivityItem so the
+                                              user can see "已加入追加队列" feedback).
+                                            -->
+                                            <Button Grid.Column="4"
+                                                    Classes="chrome-button"
+                                                    Click="AppendFollowup_OnClick"
+                                                    IsVisible="{Binding AgentHost.IsRunning}"
+                                                    IsEnabled="{Binding AgentHost.IsRunning}"
+                                                    ToolTip.Tip="追加要求 — 把 composer 内容暂存到队列，run 结束后自动续跑">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Path Data="M5 12 H12 M9 9 L12 12 L9 15 M19 5 V8 M16 8 L19 5 L22 8 M19 12 V19"
+                                                          Stroke="{Binding $parent[Button].Foreground}"
+                                                          StrokeThickness="1.5" StrokeLineCap="Round"
+                                                          Width="14" Height="14" Stretch="Uniform"
+                                                          VerticalAlignment="Center"/>
+                                                    <!--
+                                                      1.0.1: button label
+                                                      flips between
+                                                      "追加要求" (queue
+                                                      empty) and
+                                                      "已暂存" (queue
+                                                      occupied) so
+                                                      the user has
+                                                      immediate
+                                                      visual feedback
+                                                      that the click
+                                                      landed. Without
+                                                      the swap, the
+                                                      user would have
+                                                      to scroll up to
+                                                      the activity
+                                                      feed's
+                                                      "已暂存追加"
+                                                      system bubble
+                                                      to confirm the
+                                                      click took
+                                                      effect — a
+                                                      daily-driver
+                                                      muscle-memory
+                                                      trap on a 30s+
+                                                      run where the
+                                                      user wonders
+                                                      "is my followup
+                                                      queued or did
+                                                      I miss the
+                                                      button?".
+                                                    -->
+                                                    <StackPanel Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
+                                                        <TextBlock Text="追加要求" FontFamily="{StaticResource FontSans}" FontSize="11"/>
+                                                        <TextBlock Text=" (已暂存)" FontFamily="{StaticResource FontSans}" FontSize="11" IsVisible="{Binding AgentHost.HasPendingFollowup}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+
+                    <!-- ========== Environment panel (Sprint 0.5) ========== -->
+                    <vcontrols:EnvironmentPanelView
+                        Grid.Column="2"
+                        DataContext="{Binding EnvironmentPanel}"
+                        IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EnvironmentPanelOpen}"/>
+                </Grid>
+
+                <!-- ============== Status bar (mono, single line) ============== -->
+                <!--
+                  Sprint 0.5 polish: the status bar shows a small shield icon
+                  prefix when running in isolated mode (AICHAT_ISOLATED_DATA_ROOT
+                  env). The icon is a visual hint that the user is in a
+                  session that does not touch the system keychain — useful
+                  when reproducing bugs or testing changes without risking
+                  real credentials. Bound to AppRuntimeProfile.IsIsolated, the
+                  same flag the existing StatusMessage text reflects.
+                -->
+                <Border Grid.Row="2" Background="{DynamicResource SurfaceSunkenBrush}">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" Margin="20,0,20,0" ColumnSpacing="14">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Path Data="M12 3 L20 6 V12 a8 8 0 0 1 -8 8 a8 8 0 0 1 -8 -8 V6 Z"
+                                  Stroke="{DynamicResource AccentBrush}"
+                                  StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Width="11" Height="11" Stretch="Uniform"
+                                  VerticalAlignment="Center"
+                                  IsVisible="{Binding AppStatus.IsIsolatedMode}"/>
+                            <TextBlock Text="{Binding StatusMessage}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       MaxWidth="460"
+                                       ToolTip.Tip="{Binding StatusMessage}"/>
+                        </StackPanel>
+                        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" ColumnSpacing="6" VerticalAlignment="Center">
+                            <Border Background="{DynamicResource LineBrush}" CornerRadius="2" Height="3" Width="80" ClipToBounds="True" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="2" Height="3" HorizontalAlignment="Left" Width="{Binding AgentHost.ContextBudgetWidthInMini}"/>
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding AgentHost.ContextBudgetPercent, StringFormat={}{0}%}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="{Binding AgentHost.ContextBudgetDetails}"/>
+                        </Grid>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding AppStatus.StatusBarModel}"
+                                   FontFamily="{StaticResource FontMono}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxWidth="320"/>
+                        <!-- 2026-08-05: per-run prompt-cache
+                             hint. Mirrors the activity
+                             feed's "X% cache 命中" footer
+                             so a daily driver can see the
+                             cache ROI in the status bar at
+                             all times (no need to scroll
+                             back to the last run summary).
+                             The ring is the same shape as
+                             the context-budget bar (mini
+                             fill, accent colour) for visual
+                             consistency; the tooltip shows
+                             the full LastRunUsageText so a
+                             user hovering gets "本轮 182
+                             tokens (输入 177 / 输出 5),
+                             64.4% 命中 cache". Hidden
+                             when there's no usage / no
+                             cache hits so a fresh run
+                             doesn't show "0% cache". -->
+                        <StackPanel Grid.Column="3"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    VerticalAlignment="Center"
+                                    IsVisible="{Binding AgentHost.HasCacheHint}">
+                            <Border Background="{DynamicResource LineBrush}" CornerRadius="2" Height="3" Width="50" ClipToBounds="True" VerticalAlignment="Center">
+                                <Border Background="{DynamicResource AccentBrush}" CornerRadius="2" Height="3" HorizontalAlignment="Left" Width="{Binding AgentHost.LastRunCacheHitWidth}"/>
+                            </Border>
+                            <TextBlock Text="{Binding AgentHost.LastRunCacheHitText}"
+                                       FontFamily="{StaticResource FontMono}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       VerticalAlignment="Center"
+                                       ToolTip.Tip="{Binding AgentHost.LastRunUsageText}"/>
+                        </StackPanel>
+                        <!-- 1.0.1: trailing "+" on the
+                             right of the status bar.
+                             The previous shape was a
+                             stub toast 新建入口 - 用
+                             ⌘O 加项目 / ⌘N 新对话.
+                             Now opens the command
+                             palette (⌘K), which
+                             fuzzy-matches every
+                             "new X" action (new
+                             project / new
+                             conversation / open
+                             sites / open scheduled /
+                             open plugins / open
+                             settings) so the user
+                             doesn't need a separate
+                             picker surface. -->
+                        <Button Grid.Column="4"
+                                Classes="chrome-button"
+                                Padding="6,1"
+                                Click="StatusBarAdd_OnClick"
+                                ToolTip.Tip="新建 / 打开 — 命令面板 (⌘K)">
+                            <TextBlock Text="+" FontSize="14" FontWeight="SemiBold" FontFamily="{StaticResource FontMono}"/>
+                        </Button>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- ============== Drop-zone overlay ============== -->
+        <!--
+          Shown when the user is hovering the window with a file
+          drag (OnDragOver → IsDragOver=true). Fades a translucent
+          accent wash over the entire content area with a centred
+          "释放鼠标添加文件" prompt, so the user gets immediate
+          feedback that the drop will be accepted. Sits below
+          the toasts layer (next sibling) so a running toast
+          stays visible during the drag.
+
+          IsVisible is bound to MainWindow.IsDragOver (a
+          DirectProperty on the code-behind) via the #RootWindow
+          self-reference, since the DataContext at this level is
+          MainWindowViewModel — not the window itself.
+        -->
+        <Border IsVisible="{Binding #RootWindow.IsDragOver}"
+                Background="{DynamicResource AccentBrush}"
+                Opacity="0.12"
+                BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="2"
+                CornerRadius="18"
+                Margin="2"
+                IsHitTestVisible="False">
+            <StackPanel HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="10">
+                <Path Data="M12 4 V20 M5 11 L12 4 L19 11 M5 16 V19 a1 1 0 0 0 1 1 H18 a1 1 0 0 0 1 -1 V16"
+                      Stroke="{DynamicResource AccentBrush}"
+                      StrokeThickness="2.2"
+                      StrokeLineCap="Round"
+                      StrokeJoin="Round"
+                      Width="40" Height="40"
+                      Stretch="Uniform"
+                      HorizontalAlignment="Center"/>
+                <TextBlock Text="释放鼠标添加文件"
+                           FontFamily="{StaticResource FontSans}"
+                           FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextBrush}"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="支持图片、PDF、文档、代码等任意文件"
+                           FontFamily="{StaticResource FontSans}"
+                           FontSize="12"
+                           Foreground="{DynamicResource MutedBrush}"
+                           HorizontalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ============== Toasts (bottom-right) ============== -->
+        <ItemsControl ItemsSource="{Binding Toasts}"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Bottom"
+                      Margin="20,20,20,52">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="8" Orientation="Vertical"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="composition:ToastItem">
+                    <!--
+                      Toast surface: a thin coloured stripe on the
+                      left of the border communicates the severity
+                      (info / success / warning / error). The default
+                      level has no stripe (info reads as ambient;
+                      the user doesn't need a green/red flash for a
+                      routine "任务已停止" message — the icon would
+                      be overkill for Linear/Notion feel).
+
+                      1.0.1: click anywhere on the
+                      toast border to dismiss
+                      immediately. The Border
+                      has a Cursor=Hand so the
+                      user knows it's
+                      interactive, and a
+                      CursorHovered / pressed
+                      state is wired through the
+                      .toast-row style so the
+                      press reads as a click.
+                      Cursor=Hand is the
+                      cross-platform
+                      "this-thing-is-clickable"
+                      signal (no separate close
+                      × button — the entire row
+                      is the affordance). The
+                      handler routes back
+                      through ToastItem.Dismiss
+                      which the service wired up
+                      at Show time, so a user
+                      click and the 3s
+                      auto-dismiss timer race to
+                      the same idempotent
+                      Remove() / PromoteQueued()
+                      path.
+                    -->
+                    <Border Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource LineBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            Padding="{StaticResource Padding3}"
+                            MinWidth="240"
+                            MaxWidth="380"
+                            BoxShadow="{DynamicResource ElevationToastShadow}"
+                            Classes.toast-success="{Binding IsSuccess}"
+                            Classes.toast-warning="{Binding IsWarning}"
+                            Classes.toast-error="{Binding IsError}"
+                            Classes.toast-row="True"
+                            Cursor="Hand"
+                            PointerPressed="ToastItem_OnPointerPressed">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Message}"
+                                       Classes="body"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center"/>
+                            <!--
+                              1.0.6: optional action button. Visible only
+                              when ToastItem.HasAction is true (set via
+                              ToastService.ShowWithAction). The button
+                              has its own click handler that fires
+                              ToastItem.InvokeAction — the surface
+                              dismisses itself as part of the action, so
+                              the caller doesn't have to clean up its own
+                              visibility. e.Handled in the click handler
+                              stops the press from bubbling up to the
+                              Border's PointerPressed dismiss, otherwise
+                              clicking "撤销" would both run the action
+                              and tear down the toast before the action
+                              could finish.
+                            -->
+                            <Button Grid.Column="1"
+                                    Classes="ghost"
+                                    IsVisible="{Binding HasAction}"
+                                    Content="{Binding ActionLabel}"
+                                    Click="ToastActionButton_OnClick"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- ============== Modals (extracted to per-modal UserControls) ============== -->
+        <views:CommandPaletteView x:Name="CommandPalette" IsVisible="{Binding IsCommandPaletteOpen}" />
+        <views:SettingsView IsVisible="{Binding IsSettingsOpen}" />
+        <views:MemoryEditorView IsVisible="{Binding IsMemoryEditorOpen}" />
+        <views:GitStatusView IsVisible="{Binding IsGitStatusOpen}" />
+        <views:RunHistoryView IsVisible="{Binding IsRunHistoryOpen}" />
+        <!-- Wave 8: PluginsView inherits MainWindowViewModel as its
+             DataContext (matching the other modals). The view's
+             internal bindings route through `Plugins` (the
+             PluginsViewModel exposed on MainWindowViewModel) so the
+             list and Refresh button stay decoupled from the host. -->
+        <views:PluginsView IsVisible="{Binding IsPluginsOpen}" />
+        <!-- Wave 9: Scheduled + Sites modals. Same
+             MainWindowViewModel DataContext pattern as Plugins.
+             The inner bindings route through `Scheduled` /
+             `Sites` so the list / action commands stay on the
+             child VMs. -->
+        <views:ScheduledView IsVisible="{Binding IsScheduledOpen}" />
+        <views:SitesView IsVisible="{Binding IsSitesOpen}" />
+        <views:KeyboardShortcutsView IsVisible="{Binding IsShortcutsOpen}" />
+        <views:ToolApprovalView IsVisible="{Binding Approval.HasPendingApproval}"
+                                Focusable="True"
+                                behaviors:FocusOnLoadBehavior.IsEnabled="True" />
+    </Grid>
+</Window>

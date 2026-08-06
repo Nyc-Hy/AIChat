@@ -17,10 +17,10 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RecordsRunAndFinalStepForPlainResponse()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -58,7 +58,6 @@ public sealed class AgentHarnessTests
         Assert.Contains("planner=True", run.ExecutionPolicySummary);
         Assert.False(run.PlannerUsed);
         Assert.False(run.ExplorerUsed);
-        Assert.Equal("Completion evidence satisfied.", run.FinalStatusReason);
         Assert.Equal("user-1", run.UserMessageId);
         Assert.Equal(Environment.CurrentDirectory, run.ProjectPath);
         Assert.Equal("test", run.Model);
@@ -85,7 +84,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_StartsWithStructuredPlanWhenPlannerIsConfigured()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
@@ -104,7 +103,7 @@ public sealed class AgentHarnessTests
             """
         }]);
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService));
 
         var events = new List<AgentHarnessEvent>();
@@ -142,14 +141,14 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_SkipsPlannerForSimpleReadOnlyTask()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
             Content = """{"summary":"should not be used","phases":[]}"""
         }]);
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService));
 
         var events = new List<AgentHarnessEvent>();
@@ -201,7 +200,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_SkipsExplorerForStandardTaskWhenContextIsAvailable()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
@@ -220,9 +219,9 @@ public sealed class AgentHarnessTests
             """
         }]);
         var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "should not run" }]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -266,7 +265,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_AppliesHistoricalBudgetAdjustment()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         conversation.AgentRuns.Add(new AgentRun
         {
             Id = "old-1",
@@ -285,7 +284,7 @@ public sealed class AgentHarnessTests
         });
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -317,14 +316,14 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_SkipsPlannerWhenContinuingPausedRun()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "continued" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
             Content = """{"summary":"should not plan continuation","phases":[]}"""
         }]);
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
@@ -362,9 +361,9 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RecordsRetriedFromRunId()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "retried" }]);
-        var harness = new AgentHarness(new AgentRunner(runnerService, new AgentToolCatalog([])));
+        var harness = new AgentHarness(new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -396,7 +395,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RunsExplorerSubAgentAndRecordsResultArtifact()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
@@ -417,9 +416,9 @@ public sealed class AgentHarnessTests
             """
         }]);
         var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "Explorer found src/App.cs." }]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -475,7 +474,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RunsPlannerRequestedExplorerSubAgent()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "done" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
@@ -504,9 +503,9 @@ public sealed class AgentHarnessTests
             """
         }]);
         var subAgentService = new FakeChatCompletionService([new ChatDelta { Content = "Explorer completed planned task." }]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -552,7 +551,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RecordsFailedExplorerSubAgentAndContinuesParentRun()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var runnerService = new FakeChatCompletionService([new ChatDelta { Content = "main continued" }]);
         var plannerService = new FakeChatCompletionService([new ChatDelta
         {
@@ -581,9 +580,9 @@ public sealed class AgentHarnessTests
         var subAgentService = new FakeChatCompletionService([
             [new ChatDelta { ToolCalls = [forbiddenToolCall] }]
         ]);
-        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, new AgentToolCatalog([])));
+        var subAgentScheduler = new SubAgentScheduler(new AgentRunner(subAgentService, AgentToolRegistry.CreateForTests([])));
         var harness = new AgentHarness(
-            new AgentRunner(runnerService, new AgentToolCatalog([])),
+            new AgentRunner(runnerService, AgentToolRegistry.CreateForTests([])),
             new AgentPlanner(plannerService),
             subAgentScheduler: subAgentScheduler);
 
@@ -642,7 +641,7 @@ public sealed class AgentHarnessTests
         await File.WriteAllTextAsync(targetPath, "old value");
         await File.WriteAllTextAsync(secondTargetPath, "todo old");
 
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -669,7 +668,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已修改 notes.txt 和 todo.txt。" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -695,7 +694,6 @@ public sealed class AgentHarnessTests
         Assert.Equal("new value", await File.ReadAllTextAsync(targetPath));
         Assert.Equal("todo new", await File.ReadAllTextAsync(secondTargetPath));
         var run = Assert.Single(conversation.AgentRuns);
-        Assert.Contains("结果一致性：声明与工具记录一致", run.FinalValidationSummary);
         Assert.Equal(2, run.FileChanges.Count);
         var fileChange = run.FileChanges.Single(change => change.Path == "notes.txt");
         Assert.Equal("notes.txt", fileChange.Path);
@@ -716,7 +714,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RecordsVerificationResultsForBuildAndTestTools()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -728,7 +726,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
-            new AgentToolCatalog([new FakeVerificationTool()])));
+            AgentToolRegistry.CreateForTests([new FakeVerificationTool()])));
 
         var toolCallPhases = new List<string>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -770,7 +768,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RedactsSecretsFromVerificationOutput()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -782,7 +780,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已运行测试。" }]
             ]),
-            new AgentToolCatalog([new FakeSecretVerificationTool()])));
+            AgentToolRegistry.CreateForTests([new FakeSecretVerificationTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -817,7 +815,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_RedactsSecretsFromLargeToolResultArtifacts()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -829,7 +827,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new FakeLargeSecretReadTool()])));
+            AgentToolRegistry.CreateForTests([new FakeLargeSecretReadTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -866,7 +864,7 @@ public sealed class AgentHarnessTests
         var targetPath = Path.Combine(workspace.Path, "config.txt");
         await File.WriteAllTextAsync(targetPath, "original content");
 
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -888,7 +886,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "已运行测试，全部通过。" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -924,7 +922,7 @@ public sealed class AgentHarnessTests
         var targetPath = Path.Combine(workspace.Path, "config.txt");
         await File.WriteAllTextAsync(targetPath, "api_key=sk-test-secret-value");
 
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -946,7 +944,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "updated" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -979,10 +977,10 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_CompletesPlainResponseWithoutKeywordMutationFailure()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "done" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1005,21 +1003,19 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Completed, run.Status);
-        Assert.Equal("Completion evidence satisfied.", run.FinalStatusReason);
         Assert.False(run.RequiresProjectMutation);
         Assert.False(run.MutationToolSucceeded);
-        Assert.Contains("项目修改：未记录修改工具", run.FinalValidationSummary);
         Assert.DoesNotContain("任务未完成", events.Select(item => item.Content));
     }
 
     [Fact]
     public async Task RunAsync_CompletesReadOnlyGoalWithNegatedMutationInstruction()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var goal = "请阅读当前项目的目录结构，简要说明 src 和 tests 目录分别负责什么。不需要修改文件。";
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "src 包含应用代码，tests 包含测试代码。" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1044,264 +1040,13 @@ public sealed class AgentHarnessTests
         Assert.Equal(AgentRunStatus.Completed, run.Status);
         Assert.False(run.RequiresProjectMutation);
         Assert.DoesNotContain("任务未完成", events.Select(item => item.Content));
-        Assert.Contains("结果一致性：未检测到需校验", run.FinalValidationSummary);
     }
 
-    [Fact]
-    public async Task RunAsync_FlagsRiskWhenFinalAnswerClaimsMutationWithoutMutationTool()
-    {
-        var conversation = new Conversation { Id = "conversation-1" };
-        var harness = new AgentHarness(new AgentRunner(
-            new FakeChatCompletionService([new ChatDelta { Content = "已修改 README.md。" }]),
-            new AgentToolCatalog([])));
-        var events = new List<AgentHarnessEvent>();
-
-        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
-                       {
-                           Conversation = conversation,
-                           UserMessageId = "user-1",
-                           AssistantMessageId = "assistant-1",
-                           Goal = "update readme",
-                           ChatRequest = new ChatRequest
-                           {
-                               Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update readme" }]
-                           },
-                           Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
-                       }))
-        {
-            events.Add(item);
-        }
-
-        var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(AgentRunStatus.Completed, run.Status);
-        Assert.Equal("risk", run.CompletionEvidenceStatus);
-        Assert.False(run.CanClaimModified);
-        Assert.Contains("结果一致性：存在风险", run.FinalValidationSummary);
-        Assert.Contains("没有成功的写入或提交工具记录", run.FinalValidationSummary);
-        Assert.Contains(events, item => item.Content.Contains("完成声明已降级", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public async Task RunAsync_FlagsRiskWhenFinalAnswerClaimsVerificationWithoutVerificationTool()
-    {
-        var conversation = new Conversation { Id = "conversation-1" };
-        var harness = new AgentHarness(new AgentRunner(
-            new FakeChatCompletionService([new ChatDelta { Content = "已运行测试，全部通过。" }]),
-            new AgentToolCatalog([])));
-        var events = new List<AgentHarnessEvent>();
-
-        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
-                       {
-                           Conversation = conversation,
-                           UserMessageId = "user-1",
-                           AssistantMessageId = "assistant-1",
-                           Goal = "check tests",
-                           ChatRequest = new ChatRequest
-                           {
-                               Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "check tests" }]
-                           },
-                           Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext { ProjectPath = Environment.CurrentDirectory }
-                       }))
-        {
-            events.Add(item);
-        }
-
-        var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(AgentRunStatus.Completed, run.Status);
-        Assert.Equal("risk", run.CompletionEvidenceStatus);
-        Assert.False(run.CanClaimVerified);
-        Assert.Contains("结果一致性：存在风险", run.FinalValidationSummary);
-        Assert.Contains("没有成功的验证工具记录", run.FinalValidationSummary);
-        Assert.Contains(events, item => item.Content.Contains("完成声明已降级", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void CompletionEvidence_FlagsRiskWhenFinalAnswerClaimsVerificationButOneVerificationFailed()
-    {
-        var run = new AgentRun
-        {
-            Verifications =
-            [
-                new AgentVerification { Command = "dotnet build", IsSuccess = true },
-                new AgentVerification { Command = "dotnet test", IsSuccess = false, ExitCode = 1 }
-            ]
-        };
-        var report = new AgentCompletionEvidenceChecker().Check("已运行测试，全部通过。", run);
-
-        Assert.Equal("risk", report.Status);
-        Assert.False(report.CanClaimVerified);
-        Assert.Contains("仍有失败的验证记录", report.Risks.Single());
-    }
-
-    [Fact]
-    public async Task RunAsync_RecordsApprovalGuardrailsAndFinalValidation()
-    {
-        var conversation = new Conversation { Id = "conversation-1" };
-        var toolCall = new ChatToolCall
-        {
-            Id = "tool-call-1",
-            Name = "run_test",
-            ArgumentsJson = "{}"
-        };
-        var harness = new AgentHarness(new AgentRunner(
-            new FakeChatCompletionService([
-                [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "已运行测试，全部通过。" }]
-            ]),
-            new AgentToolCatalog([new FakeVerificationTool()])));
-
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
-                       {
-                           Conversation = conversation,
-                           UserMessageId = "user-1",
-                           AssistantMessageId = "assistant-1",
-                           Goal = "verify",
-                           ChatRequest = new ChatRequest
-                           {
-                               Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
-                           },
-                           Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext
-                           {
-                               ProjectPath = Environment.CurrentDirectory,
-                               ToolPermissionModes = new Dictionary<string, ToolPermissionMode>
-                               {
-                                   ["run_test"] = ToolPermissionMode.AllowForSession
-                               },
-                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve(allowForSession: true))
-                           }
-                       }))
-        {
-        }
-
-        var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(1, run.ToolApprovalRequiredCount);
-        Assert.Equal(0, run.ToolApprovalRejectedCount);
-        Assert.Equal(1, run.ToolSessionAllowedCount);
-        Assert.Contains("工具审批：无拒绝", run.FinalValidationSummary);
-        Assert.Contains("验证：1/1 通过", run.FinalValidationSummary);
-        Assert.Contains("结果一致性：声明与工具记录一致", run.FinalValidationSummary);
-        Assert.Contains("复查并继续", run.RecoverySuggestion);
-    }
-
-    [Fact]
-    public async Task RunAsync_FailsRunWhenVerificationToolFails()
-    {
-        var conversation = new Conversation { Id = "conversation-1" };
-        var toolCall = new ChatToolCall
-        {
-            Id = "tool-call-1",
-            Name = "run_test",
-            ArgumentsJson = "{}"
-        };
-        var harness = new AgentHarness(new AgentRunner(
-            new FakeChatCompletionService([
-                [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "done" }]
-            ]),
-            new AgentToolCatalog([new FakeFailingVerificationTool()])));
-
-        var events = new List<AgentHarnessEvent>();
-        await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
-                       {
-                           Conversation = conversation,
-                           UserMessageId = "user-1",
-                           AssistantMessageId = "assistant-1",
-                           Goal = "verify",
-                           ChatRequest = new ChatRequest
-                           {
-                               Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "verify" }]
-                           },
-                           Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext
-                           {
-                               ProjectPath = Environment.CurrentDirectory,
-                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Approve())
-                           }
-                       }))
-        {
-            events.Add(item);
-        }
-
-        var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(AgentRunStatus.Failed, run.Status);
-        Assert.Equal("At least one verification failed.", run.FinalStatusReason);
-        Assert.Contains("验证：0/1 通过", run.FinalValidationSummary);
-        Assert.Contains("上一轮验证未全部通过", run.RecoverySuggestion);
-        Assert.Contains("恢复包", run.RecoverySuggestion);
-        Assert.Contains("失败验证恢复包", run.RecoverySuggestion);
-        Assert.Contains("失败验证：1/1", run.VerificationRecoveryPacket);
-        Assert.Contains("dotnet test", run.VerificationRecoveryPacket);
-        Assert.Contains("Failed", run.VerificationRecoveryPacket);
-        Assert.Contains("恢复动作：先复现失败命令", run.VerificationRecoveryPacket);
-        Assert.Contains("最近错误", run.CheckpointSummary);
-        Assert.Contains("只修复导致验证失败的最小问题", run.RecoverySuggestion);
-        Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
-                                       item.Content.Contains("验证未通过", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task RunAsync_BuildsStructuredRecoveryPromptForRejectedToolApproval()
-    {
-        var conversation = new Conversation { Id = "conversation-1" };
-        var toolCall = new ChatToolCall
-        {
-            Id = "tool-call-1",
-            Name = "apply_patch",
-            ArgumentsJson = """
-            {
-              "changes": [
-                { "path": "file.txt", "old_text": "old", "new_text": "new" }
-              ]
-            }
-            """
-        };
-        var harness = new AgentHarness(new AgentRunner(
-            new FakeChatCompletionService([
-                [new ChatDelta { ToolCalls = [toolCall] }],
-                [new ChatDelta { Content = "blocked" }]
-            ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
-
-        await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
-                       {
-                           Conversation = conversation,
-                           UserMessageId = "user-1",
-                           AssistantMessageId = "assistant-1",
-                           Goal = "update file",
-                           ChatRequest = new ChatRequest
-                           {
-                               Model = "test",
-                               Messages = [new ChatMessage { Role = ChatRole.User, Content = "update file" }]
-                           },
-                           Settings = new AppSettings { Model = "test" },
-                           Context = new AgentRunContext
-                           {
-                               ProjectPath = Environment.CurrentDirectory,
-                               RequestToolApprovalAsync = (_, _) => Task.FromResult(ToolApprovalDecision.Reject("not now"))
-                           }
-                       }))
-        {
-        }
-
-        var run = Assert.Single(conversation.AgentRuns);
-        Assert.Equal(1, run.ToolApprovalRejectedCount);
-        Assert.Contains("工具审批：需要 1 次，拒绝 1 次", run.CheckpointSummary);
-        Assert.Contains("被工具审批中断", run.RecoverySuggestion);
-        Assert.Contains("如果用户没有重新授权", run.RecoverySuggestion);
-        Assert.Contains("恢复包", run.RecoverySuggestion);
-    }
 
     [Fact]
     public async Task RunAsync_RecordsPlanFromUpdatePlanTool()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -1322,7 +1067,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new UpdatePlanTool()])));
+            AgentToolRegistry.CreateForTests([new UpdatePlanTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -1362,7 +1107,7 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_UpdatesExistingPlanOnSubsequentCalls()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var firstCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -1397,7 +1142,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [secondCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new UpdatePlanTool()])));
+            AgentToolRegistry.CreateForTests([new UpdatePlanTool()])));
 
         await foreach (var _ in harness.RunAsync(new AgentHarnessRunRequest
                        {
@@ -1436,7 +1181,7 @@ public sealed class AgentHarnessTests
         var targetPath = Path.Combine(workspace.Path, "file.txt");
         await File.WriteAllTextAsync(targetPath, "old content");
 
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -1454,7 +1199,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool(), new FakeVerificationTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool(), new FakeVerificationTool()])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1505,7 +1250,7 @@ public sealed class AgentHarnessTests
         var targetPath = Path.Combine(workspace.Path, "file.txt");
         await File.WriteAllTextAsync(targetPath, "old content");
 
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var toolCall = new ChatToolCall
         {
             Id = "tool-call-1",
@@ -1523,7 +1268,7 @@ public sealed class AgentHarnessTests
                 [new ChatDelta { ToolCalls = [toolCall] }],
                 [new ChatDelta { Content = "done" }]
             ]),
-            new AgentToolCatalog([new ApplyPatchTool()])));
+            AgentToolRegistry.CreateForTests([new ApplyPatchTool()])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1570,14 +1315,14 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_BudgetExceededPausesRunWithCheckpointAndContinuationPrompt()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var first = new ChatToolCall { Id = "tool-call-1", Name = "read_file", ArgumentsJson = "{}" };
         var second = new ChatToolCall { Id = "tool-call-2", Name = "read_file", ArgumentsJson = "{}" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([
                 [new ChatDelta { ToolCalls = [first, second] }]
             ]),
-            new AgentToolCatalog([new FakeReadTool()])));
+            AgentToolRegistry.CreateForTests([new FakeReadTool()])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1609,15 +1354,8 @@ public sealed class AgentHarnessTests
 
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.BudgetExceeded, run.Status);
-        Assert.Equal("Tool budget exhausted; checkpoint created.", run.FinalStatusReason);
         Assert.Equal("waiting_for_user", run.Phase);
         Assert.True(run.ToolBudgetExceeded);
-        Assert.Contains("工具调用：1/1", run.CheckpointSummary);
-        Assert.Contains("工具审批：需要 0 次，拒绝 0 次", run.CheckpointSummary);
-        Assert.Contains("最终状态：Tool budget exhausted; checkpoint created.", run.CheckpointSummary);
-        Assert.Contains("恢复包", run.RecoverySuggestion);
-        Assert.Contains("先用 git_status", run.RecoverySuggestion);
-        Assert.Contains("不要重复恢复包里已经完成", run.RecoverySuggestion);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.ContentDelta &&
                                        item.Content.Contains("任务已暂停", StringComparison.Ordinal));
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunCompleted &&
@@ -1628,10 +1366,10 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_CompletesRunAsFailedWhenRunnerReportsError()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new ThrowingChatCompletionService(),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
 
         var events = new List<AgentHarnessEvent>();
         await foreach (var item in harness.RunAsync(new AgentHarnessRunRequest
@@ -1667,10 +1405,10 @@ public sealed class AgentHarnessTests
     [Fact]
     public async Task RunAsync_CompletesRunAsCancelledWhenCancellationIsReported()
     {
-        var conversation = new Conversation { Id = "conversation-1" };
+        var conversation = new Project { Id = "conversation-1" };
         var harness = new AgentHarness(new AgentRunner(
             new FakeChatCompletionService([new ChatDelta { Content = "never" }]),
-            new AgentToolCatalog([])));
+            AgentToolRegistry.CreateForTests([])));
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
@@ -1700,7 +1438,6 @@ public sealed class AgentHarnessTests
         var run = Assert.Single(conversation.AgentRuns);
         Assert.Equal(AgentRunStatus.Cancelled, run.Status);
         Assert.Equal("cancelled", run.Phase);
-        Assert.Contains("继续这个已停止", run.RecoverySuggestion);
         Assert.Contains(events, item => item.Type == AgentHarnessEventType.RunCompleted);
     }
 
