@@ -10,10 +10,12 @@ namespace AIChat.App.Avalonia.ViewModels;
 //
 // The counter is bumped from the ScrollChanged handler in
 // MainWindow when the user has scrolled up and a new activity
-// item lands. The pill's click handler, the same ScrollChanged
-// listener when the user scrolls back to the bottom, and the
-// ConversationList's conversation-switch / Clear flow all reset
-// it to zero.
+// item lands. It is reset to zero from three call sites: the
+// pill's click handler (jump to bottom), the ScrollChanged
+// listener when the user scrolls back to the bottom on their
+// own, and the host's OnConversationSelected handler (when the
+// user picks a different conversation — the new feed loads
+// at offset 0 so the previous counter would otherwise leak).
 public sealed partial class MessageScrollState : ObservableObject
 {
     [ObservableProperty]
