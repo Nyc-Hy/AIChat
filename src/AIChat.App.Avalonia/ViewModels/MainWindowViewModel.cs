@@ -1168,21 +1168,28 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         _agentHost.ClearRunState();
         // 1.0.6: switch-conversation must
         // reset the scroll-position
-        // signals. The new conversation
-        // loads at the bottom (the
-        // ScrollViewer's OffsetY resets
-        // to 0 + the new content size),
-        // so the unseen counter and
-        // "↑ 顶部" button both belong
-        // to the previous conversation
-        // and would otherwise show a
-        // stale "↓ 100 条新消息" pill
-        // or a "↑ 顶部" button on a
+        // signals. The unseen counter
+        // and "↑ 顶部" button both
+        // belong to the previous
+        // conversation and would
+        // otherwise show a stale
+        // "↓ 100 条新消息" pill or a
+        // "↑ 顶部" button on a
         // conversation the user is now
         // viewing fresh. Clear the VM
         // side eagerly; the code-behind
         // resets its own _isUserAtBottom
         // in the same handler.
+        // ActivityFeed.LoadConversation
+        // raises Loaded at the end; the
+        // view uses that to ScrollToEnd
+        // at DispatcherPriority.Loaded
+        // (the ScrollViewer does NOT
+        // auto-scroll on ItemsSource
+        // swap — relying on the per-Add
+        // posts races the layout pass
+        // and the user lands at the
+        // top of long conversations).
         ClearUnseenMessageCount();
         MessageScroll.IsScrolledFromTop = false;
         ActivityFeed.LoadConversation(args.Conversation);

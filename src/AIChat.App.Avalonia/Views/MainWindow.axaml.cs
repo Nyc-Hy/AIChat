@@ -533,6 +533,21 @@ internal partial class MainWindow : Window
             }
         };
 
+        // 2026-08-06: ActivityFeedViewModel raises Loaded exactly once
+        // at the end of LoadConversation, after the bulk Clear+Add
+        // loop has placed all the messages. We scroll to the bottom at
+        // DispatcherPriority.Loaded (later than Background) so the
+        // ItemsControl has finished laying out the N added rows before
+        // ScrollToEnd asks for the extent — without this, the last
+        // per-Add ScrollToEnd post races the layout pass and the user
+        // lands at the top of long conversations instead of the bottom.
+        viewModel.ActivityFeed.Loaded += (_, _) =>
+        {
+            Dispatcher.UIThread.Post(() =>
+                ConversationScroll.ScrollToEnd(),
+                DispatcherPriority.Loaded);
+        };
+
         // Focus the command-palette search input every time the palette opens
         // so the user can start typing immediately.
         viewModel.PropertyChanged += (_, e) =>

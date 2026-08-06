@@ -23,6 +23,19 @@ public sealed partial class ActivityFeedViewModel : ViewModelBase
     [ObservableProperty]
     private bool hasConversation;
 
+    // 2026-08-06: raised exactly once at the end of LoadConversation
+    // (and never from the streaming Add path). The View uses this to
+    // scroll the freshly-loaded feed to the bottom at
+    // DispatcherPriority.Loaded — late enough that the ItemsControl
+    // has finished laying out the bulk-inserted items, so the
+    // ScrollToEnd call sees the full extent instead of an intermediate
+    // one. Relying on the CollectionChanged.Add branch alone is not
+    // enough: each Add posts a ScrollToEnd at Background priority,
+    // and the last Add's Post runs before the ItemsControl has re-
+    // measured the N added rows, so the final offset is wrong on long
+    // conversations (the user lands at the top instead of the bottom).
+    public event EventHandler? Loaded;
+
     public ActivityFeedViewModel()
     {
         Activity.CollectionChanged += (_, _) =>
@@ -46,11 +59,18 @@ public sealed partial class ActivityFeedViewModel : ViewModelBase
     // HasConversation for every Add; if we let it run mid-loop the empty
     // state and the conversation panel swap multiple times in one frame.
     // Suppress notifications for the bulk update, then recompute once.
+    //
+    // 2026-08-06: raises Loaded exactly once at the end so the View
+    // can scroll to the bottom at DispatcherPriority.Loaded (after
+    // layout) instead of racing the per-Add ScrollToEnd posts. A null
+    // conversation still raises Loaded so subscribers (the View) can
+    // reset their own state in lockstep with the empty feed.
     public void LoadConversation(ChatSession? conversation)
     {
         if (conversation is null)
         {
             Clear();
+            Loaded?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -75,5 +95,6 @@ public sealed partial class ActivityFeedViewModel : ViewModelBase
             _suppressHasConversation = false;
         }
         HasConversation = Activity.Count > 0;
+        Loaded?.Invoke(this, EventArgs.Empty);
     }
 }
