@@ -212,6 +212,173 @@ public class MarkdownTextBlockTests
     }
 
     [Fact]
+    public void Render_NumberedList_KeepsUserNumberedMarker()
+    {
+        // 1. text → "1. text" verbatim
+        // (number + period + space). The
+        // user-typed number is kept so
+        // non-sequential lists ("1. then
+        // 3. then 5.") keep their
+        // meaning — auto-renumbering
+        // would silently change the
+        // agent's intent.
+        var text = RenderText("1. first\n2. second\n3. third");
+        Assert.Equal("1. first\n2. second\n3. third", text);
+    }
+
+    [Fact]
+    public void Render_NumberedList_NonSequential_PreservesGaps()
+    {
+        // "1. then 3." stays "1. then
+        // 3." — the user (or agent)
+        // explicitly skipped 2, and the
+        // renderer must not silently
+        // re-number.
+        var text = RenderText("1. first\n3. third");
+        Assert.Equal("1. first\n3. third", text);
+    }
+
+    [Fact]
+    public void Render_NumberedList_IndentedNumberedList_PreservesIndent()
+    {
+        // 2-space indent before the
+        // marker, like a nested list.
+        // The indent is preserved in the
+        // rendered text (the visual
+        // hierarchy comes from the
+        // leading spaces, just like the
+        // bullet path).
+        var text = RenderText("  1. nested");
+        Assert.Equal("  1. nested", text);
+    }
+
+    [Fact]
+    public void Render_NumberedList_BodyHasInlineElements_RendersThem()
+    {
+        // The numbered list body is
+        // routed through the inline
+        // parser, so inline code /
+        // bold / italic inside a list
+        // item still get the same
+        // styling as in a plain
+        // paragraph. The test pins
+        // both the marker preservation
+        // and the inline rendering.
+        var text = RenderText("1. run `dotnet test`");
+        Assert.Equal("1. run dotnet test", text);
+    }
+
+    [Fact]
+    public void Render_InlineItalic_SingleAsterisk()
+    {
+        // *italic* → italic Run. The
+        // lookarounds in the pattern
+        // ensure the * is not part of
+        // a ** pair, so **bold** still
+        // wins (verified by the
+        // Render_BoldAndItalicTogether
+        // test).
+        var text = RenderText("this is *italic* text");
+        Assert.Equal("this is italic text", text);
+    }
+
+    [Fact]
+    public void Render_InlineItalic_Underscore()
+    {
+        // _italic_ → italic Run. The
+        // word-boundary lookarounds
+        // keep var_name (where _ sits
+        // between word characters) from
+        // being mistaken for italic
+        // markers.
+        var text = RenderText("this is _italic_ text");
+        Assert.Equal("this is italic text", text);
+    }
+
+    [Fact]
+    public void Render_InlineItalic_DoesNotEatSnakeCaseIdentifier()
+    {
+        // var_name has _ between two
+        // word characters — the
+        // word-boundary lookarounds
+        // (?![\w] / (?<![\w]) on the
+        // underscore alternative)
+        // must keep the renderer from
+        // splitting it as `var` +
+        // italic(`name`). The visible
+        // result is the verbatim text.
+        var text = RenderText("use var_name here");
+        Assert.Equal("use var_name here", text);
+    }
+
+    [Fact]
+    public void Render_InlineBoldAndItalic_DoNotConflict()
+    {
+        // The single-* italic lookarounds
+        // keep it from eating one half
+        // of the **bold** pair. The
+        // **bold** match must still
+        // happen first; the *italic*
+        // match only fires on its own
+        // *…* runs.
+        var text = RenderText("**bold** and *italic*");
+        Assert.Equal("bold and italic", text);
+    }
+
+    [Fact]
+    public void Render_InlineLink_BoldsTextAndAppendsDimmedUrl()
+    {
+        // [text](url) renders as "text"
+        // (the link text, bolded) +
+        // " (url)" (the URL in the
+        // muted brush, in parens). The
+        // user can read the URL and
+        // copy it via the existing
+        // 复制 button or by drag-
+        // selecting the dimmed run.
+        // Flattened, the visible text
+        // is "text (url)" — bold
+        // styling on the link text is
+        // visual, the test only pins
+        // the character content.
+        var text = RenderText("see [the docs](https://example.com)");
+        Assert.Equal("see the docs (https://example.com)", text);
+    }
+
+    [Fact]
+    public void Render_InlineLink_LinkTextStillPicksUpInlineElements()
+    {
+        // The link text is rendered
+        // through the same inline
+        // path as plain text, so
+        // [text with **bold**](url)
+        // bolds inside the link text
+        // as well. Flattened: "link
+        // text (url)" — the bold is
+        // a visual property of the
+        // text run, not reflected in
+        // the test assertion.
+        var text = RenderText("[**link text**](https://example.com)");
+        Assert.Equal("link text (https://example.com)", text);
+    }
+
+    [Fact]
+    public void Render_InlineLink_InsideParagraph()
+    {
+        // A paragraph that mixes
+        // prose, a link, and trailing
+        // prose — common agent output
+        // shape ("see [the API
+        // docs](https://...) for
+        // details"). All the inline
+        // elements on either side of
+        // the link should still come
+        // through.
+        var text = RenderText("see [the docs](https://example.com) for details");
+        Assert.Equal("see the docs (https://example.com) for details", text);
+    }
+
+    [Fact]
     public void Render_BlankLineBetweenParagraphs_BreaksParagraph()
     {
         // The block-level state machine
