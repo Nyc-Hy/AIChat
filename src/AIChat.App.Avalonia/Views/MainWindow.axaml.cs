@@ -66,9 +66,24 @@ internal partial class MainWindow : Window
         if (!_isUserAtBottom)
         {
             // User is reading something older;
-            // don't yank them back. The
-            // "↓ N 条新消息" pill is the
-            // affordance for the next chunk.
+            // don't yank them back. Bump the
+            // unseen counter so the
+            // "↓ N 条新消息" pill surfaces —
+            // a streaming response emits many
+            // Detail updates, not Add events,
+            // and the previous logic only
+            // counted Adds. A user who scrolled
+            // up during a long stream would
+            // otherwise see no indication that
+            // new content was landing below
+            // them. Now every chunk bumps the
+            // counter; the pill's "↓ N 条新消息"
+            // label is the affordance to jump
+            // back.
+            if (DataContext is MainWindowViewModel viewModel)
+            {
+                viewModel.IncrementUnseenMessageCount();
+            }
             return;
         }
         // Use a small post so the
