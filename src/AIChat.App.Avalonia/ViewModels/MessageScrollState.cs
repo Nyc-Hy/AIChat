@@ -29,4 +29,33 @@ public sealed partial class MessageScrollState : ObservableObject
 
     public void IncrementUnseenMessageCount() => UnseenMessageCount++;
     public void ClearUnseenMessageCount() => UnseenMessageCount = 0;
+
+    // 2026-08-05: tracks whether the
+    // user has scrolled away from the
+    // top of the conversation. Drives
+    // the visibility of the "↑ 顶部"
+    // affordance at the top of the
+    // panel — the inverse of the
+    // "↓ N 条新消息" pill at the bottom.
+    // Long conversations (50+ turns)
+    // are hard to navigate without a
+    // quick "back to the beginning"
+    // button once the user has read
+    // deep into the middle.
+    //
+    // The flag is bumped by the
+    // ScrollChanged handler in
+    // MainWindow when the offset > 0
+    // (i.e. the user is not parked at
+    // the very top) and cleared when
+    // they scroll back to the start.
+    // The XAML IsVisible binding
+    // picks it up directly — no
+    // intermediary host property
+    // needed.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanScrollToTop))]
+    private bool isScrolledFromTop;
+
+    public bool CanScrollToTop => IsScrolledFromTop;
 }

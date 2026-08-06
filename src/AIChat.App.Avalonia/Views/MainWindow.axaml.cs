@@ -425,6 +425,27 @@ internal partial class MainWindow : Window
             var extent = ConversationScroll.Extent.Height;
             var viewport = ConversationScroll.Viewport.Height;
             _isUserAtBottom = (offsetY + viewport) >= (extent - AtBottomThreshold);
+            // 2026-08-05: track the
+            // opposite direction too
+            // — when the user is
+            // scrolled past the top
+            // (i.e. any scroll has
+            // happened), surface the
+            // "↑ 顶部" button. The
+            // threshold is small (8px)
+            // because the button's job
+            // is to let the user snap
+            // back to the very top
+            // from anywhere below it;
+            // firing it the moment
+            // they nudge the wheel
+            // makes the affordance
+            // discoverable on a
+            // 3-line conversation
+            // without the user
+            // having to scroll far
+            // first.
+            viewModel.MessageScroll.IsScrolledFromTop = offsetY > 8;
             if (_isUserAtBottom && viewModel.MessageScroll.UnseenMessageCount > 0)
             {
                 viewModel.ClearUnseenMessageCount();
@@ -824,6 +845,25 @@ internal partial class MainWindow : Window
         viewModel.MessageScroll.ClearUnseenMessageCount();
         _isUserAtBottom = true;
         ConversationScroll.ScrollToEnd();
+    }
+
+    // 2026-08-05: "↑ 顶部" button click —
+    // jump to the start of the conversation
+    // and flip the IsScrolledFromTop flag
+    // eagerly so the very next wheel-down
+    // event (which can land before the
+    // ScrollChanged listener has a chance
+    // to fire) re-shows the button without
+    // a one-frame "where did it go"
+    // flicker.
+    private void ScrollToTop_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+        {
+            return;
+        }
+        viewModel.MessageScroll.IsScrolledFromTop = false;
+        ConversationScroll.ScrollToHome();
     }
 
     private void ProjectButton_OnClick(object? sender, RoutedEventArgs e)

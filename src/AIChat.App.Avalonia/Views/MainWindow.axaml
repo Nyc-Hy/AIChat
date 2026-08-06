@@ -896,6 +896,35 @@
                                              A floating "↓ N 条新消息" pill anchors to the bottom-right; it only shows
                                              when new activity has arrived while the user is scrolled up. -->
                                         <Panel IsVisible="{Binding ActivityFeed.HasConversation}">
+                                        <!--
+                                          2026-08-05: "↑ 顶部" button. The
+                                          inverse of the "↓ N 条新消息"
+                                          pill at the bottom — visible
+                                          whenever the user has scrolled
+                                          away from the very top of a
+                                          long conversation. Anchored to
+                                          the top-right of the panel so
+                                          it doesn't fight with the
+                                          user-bubble's right alignment.
+                                          Click scrolls back to the
+                                          beginning in one frame;
+                                          MessageScroll.IsScrolledFromTop
+                                          is set back to false on click
+                                          eagerly so the very next
+                                          wheel-up event doesn't re-show
+                                          the button before the
+                                          ScrollChanged listener has a
+                                          chance to clear it.
+                                        -->
+                                        <Button Classes="scroll-to-top-pill"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top"
+                                                Margin="0,8,14,0"
+                                                IsVisible="{Binding MessageScroll.CanScrollToTop}"
+                                                Click="ScrollToTop_OnClick"
+                                                ToolTip.Tip="跳到对话开头">
+                                            <TextBlock Text="↑ 顶部" FontSize="11" FontFamily="{StaticResource FontSans}"/>
+                                        </Button>
                                         <ScrollViewer x:Name="ConversationScroll" Padding="20,12">
                                             <ItemsControl ItemsSource="{Binding ActivityFeed.Activity}">
                                                 <!--

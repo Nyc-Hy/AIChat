@@ -800,6 +800,31 @@
         <Style Selector="Button.new-message-pill:pointerover">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
+        <!--
+          2026-08-05: "↑ 顶部" pill at the top of
+          the conversation panel. Inverse of the
+          "↓ N 条新消息" pill (different
+          background tone so the two aren't
+          confused at a glance). The
+          scroll-to-top affordance is for the
+          "I'm 50 turns deep, want to go back to
+          the beginning" flow; a small button is
+          enough because the affordance is rare
+          (most users scroll back via wheel /
+          trackpad).
+        -->
+        <Style Selector="Button.scroll-to-top-pill">
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineSoftBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="Button.scroll-to-top-pill:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        </Style>
         <Style Selector="Border.badge.success">
             <Setter Property="Background" Value="{DynamicResource SuccessBgBrush}" />
         </Style>
