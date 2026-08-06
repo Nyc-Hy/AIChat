@@ -107,6 +107,19 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     partial void OnRetryMaxAttemptsChanged(int value)
     {
+        // 2026-08-05: clamp at the write site
+        // (same pattern as MaxOutputTokens
+        // above). The default retry range is
+        // [0, 10] — a user who types 99
+        // should see the TextBox snap back
+        // to 10 immediately, not after the
+        // next save roundtrip.
+        var clamped = Math.Clamp(value, 0, 10);
+        if (clamped != value)
+        {
+            RetryMaxAttempts = clamped;
+            return;
+        }
         if (_settings.RetryMaxAttempts == value)
         {
             return;
@@ -157,6 +170,22 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     partial void OnMaxAutoFixRoundsChanged(int value)
     {
+        // 2026-08-05: same write-site
+        // clamp pattern as the other
+        // integer knobs. [0, 10] is
+        // the MainWindowViewModel
+        // ctor's defensive range; a
+        // user typing a 3-digit value
+        // should see the TextBox
+        // correct itself in the same
+        // frame rather than after
+        // the next save.
+        var clamped = Math.Clamp(value, 0, 10);
+        if (clamped != value)
+        {
+            MaxAutoFixRounds = clamped;
+            return;
+        }
         if (_settings.MaxAutoFixRounds == value)
         {
             return;
