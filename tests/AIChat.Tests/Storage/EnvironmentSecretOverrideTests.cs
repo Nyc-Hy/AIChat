@@ -9,6 +9,7 @@ namespace AIChat.Tests.Storage;
 // invisible at startup AND keeps settings.json's stored keychain reference
 // intact, so the user can `unset` the env var to fall back to the keychain
 // without losing their secret.
+[Collection(ProcessEnvMutatingCollection.Name)]
 public sealed class EnvironmentSecretOverrideTests : IDisposable
 {
     private readonly string _dataDirectory;

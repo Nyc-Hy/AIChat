@@ -5,6 +5,7 @@ using AIChat.Storage.Json;
 
 namespace AIChat.Tests.Storage;
 
+[Collection(ProcessEnvMutatingCollection.Name)]
 public sealed class JsonAppRepositoryTests : IDisposable
 {
     private readonly string _dataDirectory;
