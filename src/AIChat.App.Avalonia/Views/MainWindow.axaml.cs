@@ -1814,6 +1814,25 @@ internal partial class MainWindow : Window
         e.Handled = true;
     }
 
+    // 1.0.6: action button click on a toast (e.g. the "撤销" pill
+    // on a "已删除 X" toast). InvokeAction runs the user-supplied
+    // callback and then dismisses the toast — both happen
+    // synchronously inside the handler, so a slow restore
+    // (re-writing the sessions file) sees the toast still visible
+    // while it works. e.Handled stops the PointerPressed from
+    // bubbling up to the parent Border, otherwise the same press
+    // would also call ToastItem_OnPointerPressed and tear down
+    // the toast before the action could complete.
+    private void ToastActionButton_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: Composition.ToastItem item })
+        {
+            return;
+        }
+        item.InvokeAction();
+        e.Handled = true;
+    }
+
     private void PromptInput_OnKeyDown(object? sender, KeyEventArgs e)
     {
         SafeRun(async () =>

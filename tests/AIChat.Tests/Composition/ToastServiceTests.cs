@@ -258,4 +258,113 @@ public class ToastServiceTests
         Assert.Equal("3", service.Toasts[1].Message);
         Assert.Equal("4", service.Toasts[2].Message);
     }
+
+    // ---- 1.0.6: ShowWithAction (toast with inline button) ----
+
+    [Fact]
+    public void ShowWithAction_AttachesLabelAndCallback()
+    {
+        // The XAML renders the button only
+        // when HasAction is true (set via
+        // ShowWithAction). Show() callers
+        // get HasAction=false (no button).
+        var service = NewService();
+        var fired = 0;
+        service.ShowWithAction(
+            "已删除 X", ToastLevel.Warning, "撤销",
+            () => fired++);
+
+        Assert.Single(service.Toasts);
+        var item = service.Toasts[0];
+        Assert.True(item.HasAction);
+        Assert.Equal("撤销", item.ActionLabel);
+    }
+
+    [Fact]
+    public void ShowWithAction_EmptyLabel_Throws()
+    {
+        // An empty label means the XAML
+        // would render no button — the
+        // caller is wrong. The service
+        // throws instead of silently
+        // rendering a message-only toast
+        // (the caller expects a button).
+        var service = NewService();
+        Assert.Throws<ArgumentException>(() =>
+            service.ShowWithAction(
+                "msg", ToastLevel.Info, "", () => { }));
+    }
+
+    [Fact]
+    public void ShowWithAction_NullCallback_Throws()
+    {
+        var service = NewService();
+        Assert.Throws<ArgumentNullException>(() =>
+            service.ShowWithAction(
+                "msg", ToastLevel.Info, "撤销", null!));
+    }
+
+    [Fact]
+    public void ToastItem_InvokeAction_RunsActionAndDismisses()
+    {
+        // The XAML click handler calls
+        // ToastItem.InvokeAction() — it
+        // must fire the user-supplied
+        // callback AND dismiss the toast
+        // so a slow action (e.g. restoring
+        // a deleted conversation) does
+        // not see the surface torn down
+        // before the action finishes.
+        // The action and the dismiss both
+        // run in one synchronous sequence,
+        // so the toast leaves the visible
+        // collection the instant the
+        // action returns.
+        var fired = 0;
+        var service = NewService();
+        service.ShowWithAction(
+            "msg", ToastLevel.Warning, "撤销",
+            () => fired++);
+        var item = service.Toasts[0];
+        // Re-wire OnDismiss so the test
+        // can observe the dismiss call.
+        // The service already wired it
+        // through Dismiss(); we just
+        // count by tracking the visible
+        // collection before/after.
+        Assert.Single(service.Toasts);
+
+        item.InvokeAction();
+
+        Assert.Equal(1, fired);
+        Assert.Empty(service.Toasts);
+    }
+
+    [Fact]
+    public void ToastItem_InvokeAction_OnItemWithoutAction_IsNoOp()
+    {
+        // A plain Show() toast has no
+        // action — calling InvokeAction
+        // must not throw and must not
+        // dismiss (it would defeat the
+        // purpose of the click-to-dismiss
+        // Border handler that the
+        // message-only toasts use).
+        var item = new ToastItem { Message = "x" };
+        item.InvokeAction();
+        // No throw, no state change.
+    }
+
+    [Fact]
+    public void Show_PlainItem_HasActionIsFalse()
+    {
+        // Show() callers don't pass an
+        // action — HasAction must be
+        // false so the XAML does not
+        // render a button for a
+        // message-only toast.
+        var service = NewService();
+        service.Show("hello");
+        Assert.False(service.Toasts[0].HasAction);
+    }
 }

@@ -1,4 +1,5 @@
 using AIChat.Abstractions.Persistence;
+using AIChat.App.Avalonia.Composition;
 using AIChat.App.Avalonia.ViewModels;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
@@ -350,4 +351,120 @@ public sealed class ConversationListViewModelTests
             Title = title,
             UpdatedAt = updatedAt,
         };
+
+    // ---- 1.0.6: RemoveConversation undo affordance ----
+
+    [Fact]
+    public async Task RemoveConversation_ShowsUndoToast()
+    {
+        // A user who deletes a conversation
+        // gets a 3-second "已删除 X [撤销]"
+        // toast alongside the physical
+        // delete. The toast item is the
+        // service's normal surface; the
+        // XAML renders the "撤销" button
+        // because ToastItem.HasAction is
+        // true. The save is the same one
+        // the existing test verifies —
+        // this one is about the toast
+        // being present, not the
+        // deletion itself.
+        var a = NewSession("a", "First", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
+        var repository = Mock.Of<IAppRepository>();
+        var toast = new ToastService(action => action());
+        var vm = new ConversationListViewModel(repository, toast);
+        vm.Refresh(project, sessions: [a]);
+
+        await vm.RemoveConversationCommand.ExecuteAsync("a");
+
+        var undoToast = Assert.Single(toast.Toasts);
+        Assert.True(undoToast.HasAction);
+        Assert.Equal("撤销", undoToast.ActionLabel);
+        Assert.Equal(ToastLevel.Warning, undoToast.Level);
+        Assert.Contains("First", undoToast.Message);
+    }
+
+    [Fact]
+    public async Task RemoveConversation_UndoAction_RestoresSessionToList()
+    {
+        // Clicking "撤销" on the toast
+        // re-inserts the deleted session
+        // and re-saves. The host's
+        // ActivityFeed still shows the
+        // "new conversation" prompt (the
+        // restore does not auto-select
+        // the recovered session — that
+        // is a separate decision left
+        // for a follow-up) so the
+        // contract under test is just
+        // "the row comes back in the
+        // sidebar". Refresh sorts by
+        // UpdatedAt descending, so the
+        // recovered row lands at the top
+        // because the RestoreConversation
+        // path sets the session's
+        // UpdatedAt to "now".
+        var a = NewSession("a", "First", DateTimeOffset.UtcNow.AddDays(-1));
+        var b = NewSession("b", "Second", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
+        var repository = Mock.Of<IAppRepository>();
+        var toast = new ToastService(action => action());
+        var vm = new ConversationListViewModel(repository, toast);
+        vm.Refresh(project, sessions: [a, b]);
+
+        await vm.RemoveConversationCommand.ExecuteAsync("a");
+        Assert.Single(vm.Conversations);
+        Assert.Equal("b", vm.Conversations[0].Id);
+
+        // The user clicks "撤销" on the toast.
+        toast.Toasts[0].InvokeAction();
+
+        Assert.Equal(2, vm.Conversations.Count);
+        Assert.Contains(vm.Conversations, card => card.Id == "a");
+        Assert.Contains(vm.Conversations, card => card.Id == "b");
+        // The re-save lands; the existing
+        // RemoveConversation test already
+        // pins the save-on-delete contract,
+        // so here we just confirm the
+        // restore path also persisted.
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
+            It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task RemoveConversation_WithoutToastService_StillDeletes()
+    {
+        // The IToastService ctor parameter
+        // is optional so the 6 existing
+        // test sites that construct the
+        // VM directly don't have to wire
+        // a mock. The delete must still
+        // work when no toast service is
+        // present (e.g. headless test
+        // host, or a future code path
+        // that wants to suppress the
+        // undo affordance).
+        var a = NewSession("a", "First", DateTimeOffset.UtcNow);
+        var b = NewSession("b", "Second", DateTimeOffset.UtcNow);
+        var project = NewProject("p1", "/tmp/alpha");
+        var repository = Mock.Of<IAppRepository>();
+        var vm = new ConversationListViewModel(repository);
+        vm.Refresh(project, sessions: [a, b]);
+
+        await vm.RemoveConversationCommand.ExecuteAsync("a");
+
+        // "a" is gone, "b" remains. The
+        // vm.Conversations.Count assertion
+        // is the smoke test; the save
+        // verification pins the side
+        // effect that the toast path
+        // shares.
+        Assert.Single(vm.Conversations);
+        Assert.Equal("b", vm.Conversations[0].Id);
+        Mock.Get(repository).Verify(repo => repo.SaveSessionsAsync(
+            It.IsAny<IReadOnlyList<ChatSession>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

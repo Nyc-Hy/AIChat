@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using AIChat.Abstractions.Persistence;
+using AIChat.App.Avalonia.Composition;
 using AIChat.Application.Chat;
 using AIChat.Domain.Chat;
 using AIChat.Domain.Projects;
@@ -23,6 +24,14 @@ public sealed partial class ConversationListViewModel : ViewModelBase
     private const string NewConversationId = "new";
 
     private readonly IAppRepository _repository;
+    // 1.0.6: optional toast surface for the
+    // "已删除 [撤销]" affordance on RemoveConversationAsync.
+    // Nullable so the 6 unit-test sites that
+    // `new ConversationListViewModel(repository)`
+    // directly don't have to wire a mock — the
+    // production path always injects a real
+    // IToastService through the DI container.
+    private readonly IToastService? _toast;
     private bool _isApplyingConversationSelection;
     private WorkspaceProject? _currentProject;
     private IReadOnlyList<ChatSession> _sessions = [];
@@ -35,9 +44,10 @@ public sealed partial class ConversationListViewModel : ViewModelBase
 
     public event EventHandler<ConversationSelectedEventArgs>? ConversationSelected;
 
-    public ConversationListViewModel(IAppRepository repository)
+    public ConversationListViewModel(IAppRepository repository, IToastService? toast = null)
     {
         _repository = repository;
+        _toast = toast;
     }
 
     // The card's onTitleChange callback. Splits out so the
@@ -212,6 +222,16 @@ public sealed partial class ConversationListViewModel : ViewModelBase
     // refresh — the conversation list drops the row, the activity
     // feed switches to a fresh "new conversation" prompt via
     // ConversationSelected.
+    //
+    // 1.0.6: a "已删除 [撤销]" toast is surfaced alongside the
+    // physical delete so a misclick can be rescued within the
+    // 3-second auto-dismiss window. The session object itself
+    // stays alive in the snapshot reference for that window —
+    // removing it from _sessions is a list mutation, not a
+    // heap free, so restoreConversation can re-insert the same
+    // instance without a re-fetch from disk. The save is also
+    // re-issued on restore so the file matches the in-memory
+    // state when the user closes the app.
     [RelayCommand]
     public async Task RemoveConversationAsync(string? conversationId)
     {
@@ -242,6 +262,64 @@ public sealed partial class ConversationListViewModel : ViewModelBase
             Conversation = null,
             StatusMessage = $"已删除对话：{target.Title}"
         });
+
+        // 1.0.6: undo affordance. The toast's auto-dismiss
+        // (3s) is the window — a user who realises they
+        // misclicked has 3 seconds to tap "撤销" and the
+        // session reappears in the sidebar. The action
+        // captures `target` by reference; target is still
+        // rooted in memory (it's just been removed from
+        // _sessions) so the closure does not need to
+        // re-load anything. The toast is only shown when
+        // IToastService was injected (the production
+        // path) — unit tests that construct this VM
+        // without a toast surface skip the affordance
+        // entirely.
+        if (_toast is not null)
+        {
+            _toast.ShowWithAction(
+                $"已删除对话：{target.Title}",
+                ToastLevel.Warning,
+                "撤销",
+                () =>
+                {
+                    // Discard the Task — the action
+                    // runs synchronously enough (in-memory
+                    // re-insert + a SaveSessionsAsync
+                    // fire-and-forget) that the user
+                    // never sees the toast "stuck open"
+                    // while restore finishes. Restore
+                    // itself awaits the save before
+                    // returning; if the save throws the
+                    // exception surfaces through the
+                    // discarded task's faulted state,
+                    // which the global handler will
+                    // surface.
+                    _ = RestoreConversation(target);
+                });
+        }
+    }
+
+    // 1.0.6: re-insert a deleted conversation at the head of
+    // the list. Called from the "撤销" toast button via the
+    // closure captured in RemoveConversationAsync. No-ops if
+    // the id is already present (defensive — a rapid second
+    // delete + restore on the same id should not duplicate the
+    // row), and silently re-saves the in-memory state to
+    // settings.json so the file matches the sidebar.
+    private async Task RestoreConversation(ChatSession snapshot)
+    {
+        if (_sessions.Any(session => string.Equals(session.Id, snapshot.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        var restored = new List<ChatSession>(_sessions.Count + 1) { snapshot };
+        restored.AddRange(_sessions);
+        _sessions = restored;
+
+        await _repository.SaveSessionsAsync(_sessions);
+        Refresh(_currentProject, _sessions);
     }
 
     // 2026-08-03: render the named conversation as Markdown and

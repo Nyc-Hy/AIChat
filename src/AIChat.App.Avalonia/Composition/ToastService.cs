@@ -44,6 +44,54 @@ public sealed class ToastService : IToastService
 
     public void Show(string message, ToastLevel level = ToastLevel.Info)
     {
+        EnqueueToast(new ToastItem
+        {
+            Message = message,
+            Level = level,
+            OnDismiss = Dismiss
+        });
+    }
+
+    // 2026-08-06: show a toast with an inline action button. The
+    // XAML renders the actionLabel button next to the message; the
+    // user clicking it fires onAction and dismisses the toast.
+    // Auto-dismiss still runs after AutoDismissMs, so an unused
+    // action is the same as a non-actionable toast — the callback
+    // is only invoked on the user click path, never on the
+    // auto-dismiss path (an unclicked action is "user chose not to
+    // undo", not "user accepted the default action").
+    public void ShowWithAction(
+        string message,
+        ToastLevel level,
+        string actionLabel,
+        Action onAction)
+    {
+        if (string.IsNullOrEmpty(actionLabel))
+        {
+            throw new ArgumentException("Action label is required.", nameof(actionLabel));
+        }
+        if (onAction is null)
+        {
+            throw new ArgumentNullException(nameof(onAction));
+        }
+        EnqueueToast(new ToastItem
+        {
+            Message = message,
+            Level = level,
+            OnDismiss = Dismiss,
+            ActionLabel = actionLabel,
+            OnAction = onAction
+        });
+    }
+
+    // Shared enqueue path — keeps the FIFO + auto-dismiss wiring
+    // in one place so Show() and ShowWithAction() cannot drift.
+    // The dispatch + AutoDismissAsync pair is what gives the
+    // service its 3s visible-window guarantee and its at-most-3
+    // concurrency limit, regardless of which public entry point
+    // built the item.
+    private void EnqueueToast(ToastItem item)
+    {
         // 1.0.1: wire the click-to-dismiss
         // callback so the XAML can close a
         // toast immediately when the user
@@ -60,12 +108,6 @@ public sealed class ToastService : IToastService
         // path — Toasts.Remove returns false
         // if the item is already gone, which
         // is the right idempotent behaviour.
-        var item = new ToastItem
-        {
-            Message = message,
-            Level = level,
-            OnDismiss = Dismiss
-        };
         _dispatchToUi(() =>
         {
             if (Toasts.Count >= MaxVisible)

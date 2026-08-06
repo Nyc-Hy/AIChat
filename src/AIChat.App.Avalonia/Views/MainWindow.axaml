@@ -2191,7 +2191,34 @@
                             Classes.toast-row="True"
                             Cursor="Hand"
                             PointerPressed="ToastItem_OnPointerPressed">
-                        <TextBlock Text="{Binding Message}" Classes="body" TextWrapping="Wrap"/>
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Message}"
+                                       Classes="body"
+                                       TextWrapping="Wrap"
+                                       VerticalAlignment="Center"/>
+                            <!--
+                              1.0.6: optional action button. Visible only
+                              when ToastItem.HasAction is true (set via
+                              ToastService.ShowWithAction). The button
+                              has its own click handler that fires
+                              ToastItem.InvokeAction — the surface
+                              dismisses itself as part of the action, so
+                              the caller doesn't have to clean up its own
+                              visibility. e.Handled in the click handler
+                              stops the press from bubbling up to the
+                              Border's PointerPressed dismiss, otherwise
+                              clicking "撤销" would both run the action
+                              and tear down the toast before the action
+                              could finish.
+                            -->
+                            <Button Grid.Column="1"
+                                    Classes="ghost"
+                                    IsVisible="{Binding HasAction}"
+                                    Content="{Binding ActionLabel}"
+                                    Click="ToastActionButton_OnClick"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
