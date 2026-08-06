@@ -21,7 +21,7 @@
     The AdapterLabel row in each site shows "本地" until an
     adapter is added.
   -->
-  <Grid Background="#80000000"
+  <Grid Background="{DynamicResource ScrimBrush}"
         IsVisible="{Binding IsSitesOpen}">
     <Border Classes="modal-card"
             Width="720" MaxHeight="640"

@@ -23,7 +23,7 @@
     needing a DataContext swap (matching the pattern used by
     SettingsView / MemoryEditorView).
   -->
-  <Grid Background="#80000000"
+  <Grid Background="{DynamicResource ScrimBrush}"
         IsVisible="{Binding IsPluginsOpen}">
     <Border Classes="modal-card"
             Width="640" MaxHeight="640"

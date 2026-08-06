@@ -108,9 +108,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
     public string ActiveModel => _appStatus.ActiveModel;
 
     [ObservableProperty]
-    private string draftPrompt = "";
-
-    [ObservableProperty]
     private string statusMessage = "就绪。";
 
     [ObservableProperty]
