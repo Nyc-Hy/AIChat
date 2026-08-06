@@ -26,6 +26,13 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
 {
     private readonly IAppRepository _repository;
     private readonly ISettingsHolder _settingsHolder;
+    // 1.0.6: optional toast surface for the
+    // "已删除 [撤销]" affordance on RemoveProjectAsync.
+    // Nullable so the 8 unit-test sites that
+    // construct this VM directly don't have to wire
+    // a mock — the production path always injects
+    // a real IToastService through the DI container.
+    private readonly IToastService? _toast;
 
     public event EventHandler<ProjectSelectionChangedEventArgs>? ProjectSelected;
     public event EventHandler<ProjectAddedEventArgs>? ProjectAdded;
@@ -53,10 +60,14 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
     // List<Project> 子类型(WorkspaceId == CurrentProject.Id);Standalone 不算。
     public IReadOnlyList<ChatSession> CurrentProjectSessions { get; private set; } = [];
 
-    public ProjectSidebarViewModel(IAppRepository repository, ISettingsHolder settingsHolder)
+    public ProjectSidebarViewModel(
+        IAppRepository repository,
+        ISettingsHolder settingsHolder,
+        IToastService? toast = null)
     {
         _repository = repository;
         _settingsHolder = settingsHolder;
+        _toast = toast;
     }
 
     // Replaces the workspace list with the supplied set and restores the
@@ -262,6 +273,17 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
     // The on-disk JSON under <AppData>/AIChat/projects.json is the
     // source of truth; everything else (sidebar, conversation list)
     // re-reads from the repo on Refresh.
+    //
+    // 1.0.6: a "已删除 [撤销]" toast is surfaced alongside
+    // the physical delete so a misclick can be rescued
+    // within the 3-second auto-dismiss window. The
+    // workspace object stays alive in the snapshot
+    // reference for that window — the in-memory list
+    // removal is not a heap free, so the restore path
+    // re-inserts the same instance without a
+    // re-load from disk. The save is re-issued on
+    // restore so the file matches the in-memory state
+    // when the user closes the app.
     [RelayCommand]
     public async Task RemoveProjectAsync(string? projectId)
     {
@@ -278,13 +300,27 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
             return;
         }
 
+        // 1.0.6: snapshot before the
+        // physical delete. The active-
+        // project pointer is also
+        // captured so restore can
+        // re-apply it (clearing the
+        // pointer is part of the
+        // delete path below; undoing
+        // the delete means undoing
+        // the pointer clear too).
+        var snapshot = target;
+        var snapshotIndex = workspaces.IndexOf(target);
+        var wasActive = string.Equals(
+            _settingsHolder.Current.LastActiveProjectId, projectId, StringComparison.OrdinalIgnoreCase);
+
         workspaces.Remove(target);
         await _repository.SaveWorkspacesAsync(workspaces);
 
         // If we just removed the active workspace, clear the last-active
         // pointer so the next startup doesn't try to restore a workspace
         // that's gone.
-        if (string.Equals(_settingsHolder.Current.LastActiveProjectId, projectId, StringComparison.OrdinalIgnoreCase))
+        if (wasActive)
         {
             _settingsHolder.Current.LastActiveProjectId = "";
             await _repository.SaveSettingsAsync(_settingsHolder.Current);
@@ -297,6 +333,83 @@ public sealed partial class ProjectSidebarViewModel : ViewModelBase
             Project = null,
             StatusMessage = $"已删除项目：{target.Name}"
         });
+
+        // 1.0.6: undo affordance — same
+        // shape as the conversation
+        // delete path. The toast's
+        // 3-second auto-dismiss is the
+        // window. Restore re-inserts
+        // the snapshot at the same
+        // list index, restores the
+        // active pointer, and re-saves
+        // both files so the on-disk
+        // state matches the sidebar
+        // the user sees.
+        if (_toast is not null)
+        {
+            _toast.ShowWithAction(
+                $"已删除项目：{snapshot.Name}",
+                ToastLevel.Warning,
+                "撤销",
+                () =>
+                {
+                    _ = RestoreProject(snapshot, snapshotIndex, wasActive);
+                });
+        }
+    }
+
+    // 1.0.6: re-insert a deleted workspace
+    // at its original list position, restore
+    // the active pointer if it was the
+    // active project, and re-save both
+    // files. No-ops if the id is already
+    // present (defensive against a rapid
+    // second-delete-then-undo race) and
+    // silently swallows the save exception
+    // path (SaveWorkspacesAsync failures
+    // surface through the discarded task).
+    private async Task RestoreProject(WorkspaceProject snapshot, int originalIndex, bool wasActive)
+    {
+        var workspaces = (await _repository.LoadWorkspacesAsync()).ToList();
+        if (workspaces.Any(workspace => string.Equals(workspace.Id, snapshot.Id, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        // Re-insert at the same index the
+        // workspace lived at before the
+        // delete — the order of the
+        // sidebar (which is the load
+        // order from disk) is preserved
+        // so a project that used to be
+        // the second one in the list
+        // lands at index 1 again, not
+        // at the tail.
+        var insertAt = Math.Clamp(originalIndex, 0, workspaces.Count);
+        workspaces.Insert(insertAt, snapshot);
+        await _repository.SaveWorkspacesAsync(workspaces);
+
+        if (wasActive)
+        {
+            _settingsHolder.Current.LastActiveProjectId = snapshot.Id;
+            await _repository.SaveSettingsAsync(_settingsHolder.Current);
+        }
+
+        Refresh(workspaces);
+
+        // Re-apply the snapshot as the
+        // active project so the host's
+        // ProjectSelected handler re-runs
+        // and reloads the session list.
+        // Without this, the user would
+        // see the project back in the
+        // sidebar but the main panel
+        // would still be in the
+        // "no project" state.
+        if (wasActive)
+        {
+            ApplyProject(snapshot);
+        }
     }
 
     private void ApplyProject(WorkspaceProject? project)

@@ -183,6 +183,165 @@ public class ProjectSidebarViewModelTests : IDisposable
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // ---- 1.0.6: RemoveProject undo affordance ----
+
+    private (ProjectSidebarViewModel vm, IAppRepository repository, SettingsHolder holder, ToastService toast)
+        CreateViewModelWithToast()
+    {
+        var repository = Mock.Of<IAppRepository>();
+        var holder = new SettingsHolder();
+        holder.Replace(new AppSettings());
+        var toast = new ToastService(action => action());
+        var vm = new ProjectSidebarViewModel(repository, holder, toast);
+        return (vm, repository, holder, toast);
+    }
+
+    [Fact]
+    public async Task RemoveProject_ShowsUndoToast()
+    {
+        // Same contract as the conversation
+        // delete path: a "已删除 X
+        // [撤销]" toast appears with the
+        // warning level, the action label
+        // "撤销", and a callback wired
+        // through the service's normal
+        // click handler. The XAML renders
+        // the button (HasAction=true) so
+        // the user has a 3-second window
+        // to undo a misclick.
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
+        var beta = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/beta" }], PrimaryFolderId = "f1"};
+        var (vm, repository, _, toast) = CreateViewModelWithToast();
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { alpha, beta });
+        vm.Refresh([alpha, beta]);
+
+        await vm.RemoveProjectCommand.ExecuteAsync("a");
+
+        var undoToast = Assert.Single(toast.Toasts);
+        Assert.True(undoToast.HasAction);
+        Assert.Equal("撤销", undoToast.ActionLabel);
+        Assert.Equal(ToastLevel.Warning, undoToast.Level);
+        Assert.Contains("Alpha", undoToast.Message);
+    }
+
+    [Fact]
+    public async Task RemoveProject_UndoAction_RestoresActiveProject()
+    {
+        // Clicking "撤销" on the toast
+        // re-inserts the deleted workspace
+        // at the same list index, restores
+        // the active pointer, and re-saves
+        // both files. The user also gets
+        // the workspace back as the active
+        // project — without the
+        // ApplyProject(snapshot) re-apply,
+        // the sidebar would show the row
+        // but the main panel would stay
+        // in the "no project" state.
+        //
+        // The mock is wired with a
+        // captured "current workspaces"
+        // list rather than a fixed
+        // ReturnsAsync array — without
+        // the capture, both the delete
+        // path and the restore path
+        // would see the same initial
+        // [alpha, beta] list (the
+        // in-memory mutation in
+        // RemoveProjectAsync is on a
+        // .ToList() copy, not on the
+        // mock's array), and RestoreProject
+        // would short-circuit on the
+        // "id already present" guard
+        // because the mock keeps reporting
+        // alpha as still in the list. The
+        // callback rewires the captured
+        // list on each Save, so a fresh
+        // Load returns the post-save
+        // state — which is what the
+        // on-disk repo would do in
+        // production.
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
+        var beta = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/beta" }], PrimaryFolderId = "f1"};
+        var (vm, repository, holder, toast) = CreateViewModelWithToast();
+        var diskState = new List<WorkspaceProject> { alpha, beta };
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => diskState.ToArray());
+        Mock.Get(repository)
+            .Setup(repo => repo.SaveWorkspacesAsync(It.IsAny<IReadOnlyList<WorkspaceProject>>(), It.IsAny<CancellationToken>()))
+            .Callback((IReadOnlyList<WorkspaceProject> list, CancellationToken _) =>
+            {
+                diskState.Clear();
+                diskState.AddRange(list);
+            })
+            .Returns(Task.CompletedTask);
+        holder.Current.LastActiveProjectId = "a";
+        vm.Refresh([alpha, beta]);
+        Assert.Equal(2, vm.Projects.Count);
+
+        await vm.RemoveProjectCommand.ExecuteAsync("a");
+        Assert.Single(vm.Projects);
+        Assert.Equal("b", vm.Projects[0].Id);
+        Assert.Equal("", holder.Current.LastActiveProjectId);
+
+        // The user clicks "撤销" on the toast.
+        // RestoreProject runs as a fire-and-
+        // forget Task — the action callback
+        // discards it. The test polls the
+        // visible state to avoid a fixed
+        // delay dependency.
+        toast.Toasts[0].InvokeAction();
+
+        // The restore path is itself async
+        // (re-loads workspaces, re-saves, then
+        // re-applies the active project). We
+        // poll for the visible state to land
+        // so the test does not depend on a
+        // fixed delay.
+        for (var i = 0; i < 100 && vm.Projects.Count != 2; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.Equal(2, vm.Projects.Count);
+        Assert.Contains(vm.Projects, card => card.Id == "a");
+        Assert.Contains(vm.Projects, card => card.Id == "b");
+        Assert.Equal("a", holder.Current.LastActiveProjectId);
+        Assert.Same(alpha, vm.CurrentProject);
+    }
+
+    [Fact]
+    public async Task RemoveProject_WithoutToastService_StillDeletes()
+    {
+        // Regression guard: the IToastService
+        // ctor parameter is optional so the
+        // 8 existing test sites that build
+        // the VM directly don't have to
+        // wire a mock. The delete must
+        // still work when no toast service
+        // is present.
+        var alpha = new WorkspaceProject { Id = "a", Name = "Alpha", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/alpha" }], PrimaryFolderId = "f1"};
+        var beta = new WorkspaceProject { Id = "b", Name = "Beta", Folders = [new WorkspaceFolder { Id = "f1", Path = "/tmp/beta" }], PrimaryFolderId = "f1"};
+        var (vm, repository, holder) = CreateViewModel();
+        Mock.Get(repository)
+            .Setup(repo => repo.LoadWorkspacesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new[] { alpha, beta });
+        holder.Current.LastActiveProjectId = "a";
+        vm.Refresh([alpha, beta]);
+
+        await vm.RemoveProjectCommand.ExecuteAsync("a");
+
+        Assert.Single(vm.Projects);
+        Assert.Equal("b", vm.Projects[0].Id);
+        Assert.Equal("", holder.Current.LastActiveProjectId);
+        Mock.Get(repository).Verify(repo => repo.SaveWorkspacesAsync(
+            It.IsAny<List<WorkspaceProject>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public void Refresh_WithProjects_RaisesProjectSelected_ForStartupRestore()
     {
