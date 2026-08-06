@@ -266,6 +266,30 @@ titlebar `?` 按钮 + ⌘/ 全局快捷键，调出 18+ 快捷键 cheat sheet（
 **Provider prune 升级 BaseUrl 修复**（2026-08-03 ship）：
 0.5 升级用户的 settings.json 里 BaseUrl 指向已删 provider（`api.anthropic.com` / `api.deepseek.com` / `token-plan-cn.xiaomimimo.com` / `api.xiaomimimo.com`）→ 1.0 静默发送消息到错误端点 → 401/404。`ProviderSettingsService.Normalize` 加 `LegacyProviderHosts` 名单，命中即重写为 `provider.DefaultBaseUrl`。`NormalizeConfiguredProvider` 同样处理。Self-hosted proxy（如 `proxy.example.com`）不受影响。Test 4 个 InlineData 覆盖 4 个 legacy host + 1 个 custom host 保留 + 1 个 configuredProviders 列表路径。
 
+## 1.0 架构（2026-08-06 wholesale refactor）
+
+`MainWindowViewModel` 在 1.0 refactor 拆成 3 个 sub-VM + 5 个 per-modal `UserControl`,主 VM 从 1500 行瘦到 460 行(`codex/desktop-rebuild` 分支):
+
+| Sub-VM | 职责 | 路径 |
+|---|---|---|
+| `MainWindowViewModel` | 跨切关注:activity feed / sidebar 接线 / conversation 接线 / approval 冒泡 / modals 开关 / settings surface / theme / toast / `StatusMessage` + `NoWriteMode` + `Provider` / `Settings` / `AgentHost` 子属性 | `src/AIChat.App.Avalonia/ViewModels/MainWindowViewModel.cs` |
+| `SettingsViewModel` | AppSettings schema 镜像: Temperature / MaxOutputTokens / RetryMaxAttempts / UseTokenizerEstimation / MaxAutoFixRounds / AgentExecutionMode / AutoVerify + Tools 权限矩阵 + Options 列表。每个 `[ObservableProperty]` 有 `OnXxxChanged` partial 写回 `_settingsHolder.Current` + 触发 fire-and-forget save;skip-if-same-value guard 防 load 时多余 save | `src/AIChat.App.Avalonia/ViewModels/SettingsViewModel.cs` |
+| `AgentHostViewModel` | Agent 运行状态: `IsRunning` / `LastAssistantStatus` / `InputTokens` / `DraftPrompt` / `PendingAttachments` / `PlanItems` / `SubAgentRuns` + `SendTask` / `StopTask` / `RetryLastTask` 命令 + 上下文预算重算 + pending attachment 提升。构造时同时 new `AgentRunnerViewModel`(`this` 传入,runner 直接调 `host.X` 字段,不再 10+ Action/Func 回调)。Host 通过 3 个 `Action` / `Func` 桥接共享状态(setStatusMessage / getSettings / getNoWriteMode) | `src/AIChat.App.Avalonia/ViewModels/AgentHostViewModel.cs` |
+
+**5 个 per-modal UserControl**(`Views/Controls/`): `SettingsView` / `CommandPaletteView` / `MemoryEditorView` / `GitStatusView` / `ToolApprovalView`。每个 UserControl 继承 parent DataContext(host)所以内联 binding 不动,`IsVisible` 绑 host 的 `IsXxxOpen`。Scrim click / content click 处理器搬到各 UserControl 自己的 code-behind,`MainWindow.axaml.cs` 不再持有 modal 处理器。
+
+**`MainWindow.axaml`**: 1464 → 803 行(45% 瘦下来,只留 page header + sidebar + conversation + composer + toasts)。
+
+**`AgentRunnerViewModel`**: callback 10+ → 1 host 引用。`AgentHarness` 已是 5 partial-class 拆分(Setup / Policy / SubAgent / AutoVerifyLoop / Recording),无需再拆。
+
+### "无法绑模型" daily-driver bug 根因
+
+`ChatProviderCatalog.ResolveModel` 对非 OpenAI-compatible 提供方,如果用户输入的 model id 不在硬编码 catalog 里,会**静默回退**到 `Models.First()`。DeepSeek catalog 有 v4-pro / v4-flash / chat / reasoner,用户打 `deepseek-foo`(新发布的或私有部署),保存后值被偷换成 `deepseek-v4-pro`。修法:非空 modelId 没匹配时返回 synthetic `LlmModelInfo` 携带用户原值;empty/null 才回退到第一个。锁在 `ChatProviderCatalogTests`(6 tests)。OpenAI-compatible 之前就接受任意 id,bug 仅影响 catalog-limited providers。
+
+### "可用的提供方" 列表误导
+
+`ProviderCardViewModel` 是 `record` 只读,但 `Status` badge 用 `AccentBrush` 描"当前",视觉说"能点"实际不能。改成真 VM 加 `SelectCommand` + `.active` class。
+
 ## 产品定位（2026-07-30 用户原话）
 
 **AIChat 是 daily driver,要完全替代 ClaudeCode。** 这不是 demo,不是实验场,不是玩票。
