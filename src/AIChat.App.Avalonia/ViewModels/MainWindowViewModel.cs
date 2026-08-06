@@ -1166,6 +1166,25 @@ public sealed partial class MainWindowViewModel : ViewModelBase, ISlashCommandHo
         // preserved — see the comment on
         // ClearRunState.
         _agentHost.ClearRunState();
+        // 1.0.6: switch-conversation must
+        // reset the scroll-position
+        // signals. The new conversation
+        // loads at the bottom (the
+        // ScrollViewer's OffsetY resets
+        // to 0 + the new content size),
+        // so the unseen counter and
+        // "↑ 顶部" button both belong
+        // to the previous conversation
+        // and would otherwise show a
+        // stale "↓ 100 条新消息" pill
+        // or a "↑ 顶部" button on a
+        // conversation the user is now
+        // viewing fresh. Clear the VM
+        // side eagerly; the code-behind
+        // resets its own _isUserAtBottom
+        // in the same handler.
+        ClearUnseenMessageCount();
+        MessageScroll.IsScrolledFromTop = false;
         ActivityFeed.LoadConversation(args.Conversation);
         // 1.0.1: when the user re-clicks
         // the "new" placeholder card
